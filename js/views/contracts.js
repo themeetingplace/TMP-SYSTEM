@@ -95,81 +95,109 @@ export function renderContracts() {
         ...Object.keys(areaCounts).filter(n => !sortedAreaList.includes(n))
     ];
 
+    // 方案 B：row card 設計 — 每筆合約 = 一張橫 row card，左側彩色 rail 表狀態
     const tableRows = enriched.map(c => {
         const lifecycle = c._state;
         const isDecision = lifecycle === 'awaiting_decision' || lifecycle === 'expired';
         const isArchived = lifecycle === 'renewed' || lifecycle === 'terminated';
-
         const searchText = [c.id, c.propertyName, c.tenant].join(' ').toLowerCase();
         const days = c._daysLeft;
-
-        // 操作按鈕：未決策的合約優先顯示決策按鈕
-        const decisionButtons = isDecision ? `
-            <button class="btn btn-success contract-action" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" data-action="renew" data-id="${c.id}" title="續租">
-                <i class="ph ph-arrow-clockwise"></i> 續租
-            </button>
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-danger);" data-action="terminate" data-id="${c.id}" title="退租">
-                <i class="ph ph-door-open"></i>
-            </button>
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="snooze" data-id="${c.id}" title="暫緩">
-                <i class="ph ph-clock-clockwise"></i>
-            </button>
-        ` : '';
-
-        const signedButton = c.signedFileUrl
-            ? `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-success); border-color: var(--color-success);" data-action="view-signed" data-id="${c.id}" title="租客已回傳簽署檔，點此檢視">
-                   <i class="ph-fill ph-check-square"></i>
-               </button>`
-            : '';
-
-        const standardButtons = `
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="view" data-id="${c.id}" title="檢視合約">
-                <i class="ph ph-eye"></i>
-            </button>
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-id="${c.id}" title="編輯合約">
-                <i class="ph ph-pencil"></i>
-            </button>
-            ${isArchived ? '' : `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="download" data-id="${c.id}" title="下載 PDF">
-                <i class="ph ph-download"></i>
-            </button>`}
-            ${isArchived ? '' : `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: #06c755;" data-action="send-line" data-id="${c.id}" title="寄/重寄 合約 PDF 給租客的 LINE（連結 24 小時有效，過期再點一次重發新連結）">
-                <i class="ph ph-paper-plane-tilt"></i>
-            </button>`}
-            ${signedButton}
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-danger);" data-action="delete" data-id="${c.id}" title="刪除">
-                <i class="ph ph-trash"></i>
-            </button>
-        `;
-
+        const areaName = extractArea(c.propertyName);
         const rowClass = isDecision ? 'is-decision-row' : (isArchived ? 'is-archived-row' : '');
 
-        const areaName = extractArea(c.propertyName);
+        // 主動作（一顆大按鈕，視狀態變色）
+        const primaryAction = isDecision
+            ? `<button class="btn btn-success contract-action crc-cta" data-action="renew" data-id="${c.id}" title="續租">
+                   <i class="ph ph-arrow-clockwise"></i> 續租
+               </button>`
+            : `<button class="btn btn-outline contract-action crc-cta" data-action="view" data-id="${c.id}" title="檢視合約">
+                   <i class="ph ph-eye"></i> 檢視
+               </button>`;
+
+        // 其他動作收進 ⋯ dropdown
+        const moreItems = [];
+        if (isDecision) {
+            moreItems.push({ action: 'terminate', icon: 'ph-door-open', label: '退租', danger: true });
+            moreItems.push({ action: 'snooze', icon: 'ph-clock-clockwise', label: '暫緩' });
+            moreItems.push({ sep: true });
+            moreItems.push({ action: 'view', icon: 'ph-eye', label: '檢視合約' });
+        }
+        moreItems.push({ action: 'edit', icon: 'ph-pencil', label: '編輯合約' });
+        if (!isArchived) {
+            moreItems.push({ action: 'download', icon: 'ph-download', label: '下載 PDF' });
+            moreItems.push({ action: 'send-line', icon: 'ph-paper-plane-tilt', label: '寄合約給 LINE' });
+        }
+        if (c.signedFileUrl) {
+            moreItems.push({ action: 'view-signed', icon: 'ph-check-square', label: '檢視已簽署檔', success: true });
+        }
+        moreItems.push({ sep: true });
+        moreItems.push({ action: 'delete', icon: 'ph-trash', label: '刪除', danger: true });
+
+        const moreMenu = `
+            <div class="crc-more">
+                <button class="crc-more-trigger" type="button" title="更多操作" aria-label="更多">
+                    <i class="ph ph-dots-three-vertical"></i>
+                </button>
+                <div class="crc-more-menu" role="menu">
+                    ${moreItems.map(m => m.sep
+                        ? `<div class="crc-more-sep"></div>`
+                        : `<button class="crc-more-item ${m.danger ? 'is-danger' : ''} ${m.success ? 'is-success' : ''}" data-action="${m.action}" data-id="${c.id}" type="button">
+                               <i class="ph ${m.icon}"></i> ${m.label}
+                           </button>`
+                    ).join('')}
+                </div>
+            </div>
+        `;
+
+        // 已簽署 inline 勾標記
+        const signedFlag = c.signedFileUrl
+            ? `<span class="crc-signed-flag" title="租客已回傳簽署檔"><i class="ph-fill ph-check-square"></i></span>`
+            : '';
+
+        // 倒數視覺
+        const daysHtml = days == null || isArchived
+            ? ''
+            : `<span class="crc-countdown crc-countdown-${days < 0 ? 'danger' : days <= 14 ? 'warn' : 'normal'}">
+                   <i class="ph-fill ph-circle"></i> ${daysLabel(days)}
+               </span>`;
+        const snoozeHtml = lifecycle === 'snoozed' && c.snoozeUntil
+            ? `<span class="crc-snooze"><i class="ph ph-pause"></i> ${c.snoozeUntil} 再提醒</span>`
+            : '';
+
+        // 狀態文字（不用 badge，用文字）
+        const stateLabel = contractLifecycleLabel(lifecycle).text;
+
         return `
-            <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
-                <td>
-                    <div style="display: flex; flex-direction: column;">
-                        <strong style="font-size: 0.875rem;">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: 0.7rem; color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}</strong>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${esc(c.propertyName || '')}</span>
-                    </div>
-                </td>
-                <td><strong>${esc(c.tenant || '')}</strong></td>
-                <td>
-                    <div style="font-size: 0.875rem; font-weight: 500;">$${(c.amount || 0).toLocaleString()}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">${c.termMonths === 3 ? '3 個月期' : '1 個月期'}</div>
-                </td>
-                <td>${c.startDate ? `<span style="font-weight: 500;">${c.startDate}</span>` : '<span style="color: var(--text-muted)">—</span>'}</td>
-                <td>
-                    <div style="display: flex; flex-direction: column;">
-                        ${c.endDate ? `<span style="font-weight: 500;">${c.endDate}</span>` : '<span style="color: var(--text-muted)">—</span>'}
-                        ${!isArchived && days != null ? `<span style="font-size: 0.75rem; color: ${days < 0 ? 'var(--color-danger)' : days <= 14 ? 'var(--color-warning)' : 'var(--text-muted)'};">${daysLabel(days)}</span>` : ''}
-                        ${lifecycle === 'snoozed' && c.snoozeUntil ? `<span style="font-size: 0.7rem; color: var(--color-info);">⏸ ${c.snoozeUntil} 再提醒</span>` : ''}
-                    </div>
-                </td>
-                <td>${lifecycleBadge(lifecycle)}</td>
-                <td>
-                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-                        ${decisionButtons}
-                        ${standardButtons}
+            <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-search="${escapeAttr(searchText)}" class="${rowClass} contract-row">
+                <td class="contract-row-cell" colspan="7">
+                    <div class="contract-row-card crc-state-${esc(lifecycle)}">
+                        <div class="crc-rail" aria-hidden="true"></div>
+                        <div class="crc-body">
+                            <div class="crc-top">
+                                <div class="crc-id">
+                                    <strong>${esc(c.id)}</strong>${signedFlag}
+                                    ${c.parentContractId ? `<span class="crc-parent">續自 ${esc(c.parentContractId)}</span>` : ''}
+                                </div>
+                                <div class="crc-property">${esc(c.propertyName || '')}</div>
+                                <div class="crc-tenant"><i class="ph-fill ph-user"></i> ${esc(c.tenant || '')}</div>
+                                <div class="crc-amount">
+                                    $${(c.amount || 0).toLocaleString()}
+                                    <span class="crc-term">/ ${c.termMonths || 1} 個月</span>
+                                </div>
+                            </div>
+                            <div class="crc-bottom">
+                                <span class="crc-state">${stateLabel}</span>
+                                <span class="crc-dates">
+                                    ${c.startDate || '—'} <i class="ph ph-arrow-right" style="opacity: 0.5;"></i> ${c.endDate || '—'}
+                                </span>
+                                ${daysHtml}
+                                ${snoozeHtml}
+                            </div>
+                        </div>
+                        <div class="crc-actions">
+                            ${primaryAction}
+                            ${moreMenu}
+                        </div>
                     </div>
                 </td>
             </tr>
@@ -223,25 +251,25 @@ export function renderContracts() {
                 <button class="filter-tab" data-filter-value="terminated">已終止 (${enriched.filter(c => c._state === 'terminated').length})</button>
             </div>
 
+            <!-- 排序選項 (table thead 隱藏，改成 dropdown) -->
+            <div class="contract-sort-bar">
+                <label class="contract-sort-label">排序：</label>
+                <select class="contract-sort-select" id="contract-sort">
+                    <option value="">預設 (待決策 → 即將到期 → 進行中)</option>
+                    <option value="end-asc" ${currentSort.col === 'end' && currentSort.dir === 'asc' ? 'selected' : ''}>到期日 ▲ 最近</option>
+                    <option value="end-desc" ${currentSort.col === 'end' && currentSort.dir === 'desc' ? 'selected' : ''}>到期日 ▼ 最遠</option>
+                    <option value="start-desc" ${currentSort.col === 'start' && currentSort.dir === 'desc' ? 'selected' : ''}>起始日 ▼ 最新</option>
+                    <option value="amount-desc" ${currentSort.col === 'amount' && currentSort.dir === 'desc' ? 'selected' : ''}>租金 ▼ 高到低</option>
+                    <option value="amount-asc" ${currentSort.col === 'amount' && currentSort.dir === 'asc' ? 'selected' : ''}>租金 ▲ 低到高</option>
+                    <option value="tenant-asc" ${currentSort.col === 'tenant' && currentSort.dir === 'asc' ? 'selected' : ''}>租客 ▲ A-Z</option>
+                    <option value="info-asc" ${currentSort.col === 'info' && currentSort.dir === 'asc' ? 'selected' : ''}>合約編號 ▲</option>
+                </select>
+            </div>
+
             <div class="table-container">
-                <table class="data-table contracts-table">
-                    <colgroup>
-                        <col style="width: 220px;">
-                        <col style="width: 110px;">
-                        <col style="width: 110px;">
-                        <col style="width: 115px;">
-                        <col style="width: 115px;">
-                        <col style="width: 100px;">
-                        <col>
-                    </colgroup>
-                    <thead><tr>
-                        <th class="sortable-col" data-sort-col="info" title="點擊排序">合約資訊 ${sortArrow('info', currentSort)}</th>
-                        <th class="sortable-col" data-sort-col="tenant" title="點擊排序">租客 ${sortArrow('tenant', currentSort)}</th>
-                        <th class="sortable-col" data-sort-col="amount" title="點擊排序">租金 ${sortArrow('amount', currentSort)}</th>
-                        <th class="sortable-col" data-sort-col="start" title="點擊排序">起始日 ${sortArrow('start', currentSort)}</th>
-                        <th class="sortable-col" data-sort-col="end" title="點擊排序">到期日 ${sortArrow('end', currentSort)}</th>
-                        <th>狀態</th>
-                        <th>操作</th>
+                <table class="data-table contracts-table contracts-card-list">
+                    <thead style="display: none;"><tr>
+                        <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
                     </tr></thead>
                     <tbody>${tableRows}</tbody>
                 </table>
@@ -770,35 +798,52 @@ export function initContractActions(scope) {
     // 新增合約 → 走統一的「新增入住」流程 (建合約+帳單+床位+租客+checkin 一氣呵成)
     scope.querySelector('#btn-new-contract')?.addEventListener('click', () => showCheckinAssignmentForm());
 
-    // 點表頭排序 — 同欄切換 asc/desc，再點一次切回預設 (lifecycle)；切其他欄重置 asc
-    scope.querySelectorAll('.sortable-col').forEach(th => {
-        th.addEventListener('click', () => {
-            const col = th.dataset.sortCol;
-            const cur = getCurrentSort();
-            let next;
-            if (cur.col !== col) next = `${col}-asc`;
-            else if (cur.dir === 'asc') next = `${col}-desc`;
-            else next = ''; // 第 3 次點 = 取消，回預設 lifecycle 排序
-            if (next) localStorage.setItem(SORT_STORAGE_KEY, next);
-            else localStorage.removeItem(SORT_STORAGE_KEY);
-            refreshView();
+    // 新版 sort dropdown
+    scope.querySelector('#contract-sort')?.addEventListener('change', (e) => {
+        const v = e.target.value;
+        if (v) localStorage.setItem(SORT_STORAGE_KEY, v);
+        else localStorage.removeItem(SORT_STORAGE_KEY);
+        refreshView();
+    });
+
+    // ⋯ dropdown menu 開關
+    scope.querySelectorAll('.crc-more-trigger').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const wrap = btn.closest('.crc-more');
+            const isOpen = wrap.classList.contains('is-open');
+            // 先關所有
+            scope.querySelectorAll('.crc-more.is-open').forEach(o => o.classList.remove('is-open'));
+            if (!isOpen) wrap.classList.add('is-open');
         });
     });
-    scope.querySelectorAll('.contract-action').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const action = e.currentTarget.dataset.action;
-            const id = e.currentTarget.dataset.id;
-            const c = mockData.contracts.find(x => x.id === id);
-            if (!c) return;
-            if (action === 'view') showContractDetails(id);
-            if (action === 'edit') showContractForm(c);
-            if (action === 'download') downloadContractPdf(id);
-            if (action === 'send-line') sendContractToLine(id);
-            if (action === 'view-signed') openSignedFile(c);
-            if (action === 'delete') confirmDelete(id);
-            if (action === 'renew') confirmRenew(id);
-            if (action === 'terminate') confirmTerminate(id);
-            if (action === 'snooze') confirmSnooze(id);
-        });
+    // 點外面關
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.crc-more')) {
+            scope.querySelectorAll('.crc-more.is-open').forEach(o => o.classList.remove('is-open'));
+        }
+    });
+
+    // 所有 contract-action (含主 CTA + dropdown menu item) 統一 dispatch
+    scope.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        if (!btn.matches('.contract-action, .crc-more-item, .crc-cta')) return;
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        if (!id) return;
+        const c = mockData.contracts.find(x => x.id === id);
+        if (!c) return;
+        // 關掉 dropdown
+        scope.querySelectorAll('.crc-more.is-open').forEach(o => o.classList.remove('is-open'));
+        if (action === 'view') showContractDetails(id);
+        if (action === 'edit') showContractForm(c);
+        if (action === 'download') downloadContractPdf(id);
+        if (action === 'send-line') sendContractToLine(id);
+        if (action === 'view-signed') openSignedFile(c);
+        if (action === 'delete') confirmDelete(id);
+        if (action === 'renew') confirmRenew(id);
+        if (action === 'terminate') confirmTerminate(id);
+        if (action === 'snooze') confirmSnooze(id);
     });
 }
