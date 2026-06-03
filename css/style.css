@@ -172,20 +172,32 @@ select:focus-visible,
     flex: 1;
 }
 
-.logo-mark {
+/* Sidebar logo — 展開時用標準字 (icon + 「聚空間」)，收合時切純 icon */
+.logo-img {
+    display: inline-block;
+    height: 38px;
+    width: auto;
+    max-width: 160px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+.logo-img-collapsed { display: none; }
+.sidebar.is-collapsed .logo-img-expanded { display: none; }
+.sidebar.is-collapsed .logo-img-collapsed {
+    display: inline-block;
     width: 36px;
     height: 36px;
+    max-width: 36px;
+}
+
+/* 舊 .logo-mark / .logo-wordmark — 留 fallback 不刪，給 .ph icon 用 (萬一改回) */
+.logo-mark {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
 }
-.logo-mark img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-.logo-mark i { line-height: 1; font-size: 1.25rem; }
+.logo-mark img { width: 100%; height: 100%; object-fit: contain; }
 
 .logo-wordmark {
     display: flex;
@@ -1657,14 +1669,14 @@ select:focus-visible,
     color: var(--color-danger);
 }
 
-/* 第二行：聚空間 BMS v1.1.1 · © 2026 聚空間 — 細線分隔 */
+/* 第二行：聚空間 BMS v1.1.1 / © 2026 聚空間租賃管理顧問有限公司 — 細線分隔，上下兩行排版 */
 .brand-row {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.1rem;
     margin-top: 0.4rem;
-    padding: 0.35rem 0.4rem 0;
+    padding: 0.4rem 0.4rem 0.15rem;
     border-top: 1px solid var(--sidebar-border);
     color: var(--text-muted);
     cursor: pointer;
@@ -1672,6 +1684,7 @@ select:focus-visible,
     line-height: 1.3;
     border-radius: 0;
     transition: color var(--transition-fast);
+    text-align: center;
 }
 .brand-row:hover {
     color: var(--text-main);
@@ -1692,8 +1705,11 @@ select:focus-visible,
 }
 .brand-copy {
     opacity: 0.75;
-    white-space: nowrap;
     font-size: 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 /* sidebar collapsed mode：只剩 avatar，brand row 隱藏 */

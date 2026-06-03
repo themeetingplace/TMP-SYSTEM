@@ -226,9 +226,10 @@ window.showAboutApp = function() {
             </div>
             <div class="modal-body">
                 <div class="about-hero">
-                    <div class="about-logo"><img src="assets/logo.png?v=20260603f" alt="聚空間"></div>
+                    <div class="about-logo"><img src="assets/logo-icon.png?v=20260603g" alt="聚空間"></div>
                     <div>
                         <div class="about-name">${APP_NAME}</div>
+                        <div class="about-company" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">聚空間租賃管理顧問有限公司</div>
                         <div class="about-version">v${APP_VERSION} · ${APP_BUILD_DATE}</div>
                     </div>
                 </div>
