@@ -130,13 +130,48 @@ function showBuildingForm(building = null) {
                 return false;
             }
             if (isEdit) {
+                const oldAddress = (building.baseAddress || '').trim();
+                const newAddress = (values.baseAddress || '').trim();
+                const addressChanged = oldAddress !== newAddress && newAddress !== '';
+
                 store.updateBuilding(building.id, values);
                 showToast(`已更新：${values.name}`, 'success');
+                refreshView();
+
+                // 預設地址變更 → 詢問是否同步到該館所有床位 + 合約地址快照
+                if (addressChanged) {
+                    const affectedProps = mockData.properties.filter(p => p.buildingId === building.id);
+                    if (affectedProps.length > 0) {
+                        // 讓上一個 modal 先關掉再跳確認
+                        setTimeout(() => {
+                            openConfirm({
+                                title: '同步地址到該館床位？',
+                                message: `
+                                    <p style="margin: 0 0 0.5rem;">館別「<strong>${values.name}</strong>」預設地址已改為：</p>
+                                    <p style="margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; background: var(--bg-secondary); border-radius: 4px; font-weight: 600;">${newAddress}</p>
+                                    <p style="margin: 0 0 0.5rem;">要把它套用到該館 <strong>${affectedProps.length}</strong> 個現有床位嗎？</p>
+                                    <ul style="margin: 0; padding-left: 1.2rem; color: var(--text-muted); font-size: 0.85rem; line-height: 1.6;">
+                                        <li>床位地址會被合約 detail / 搜尋 / PDF 引用</li>
+                                        <li>若某些床位你曾自訂地址（例如加樓層），會被覆蓋</li>
+                                        <li>不同步 = 只改未來新增床位的預設值</li>
+                                    </ul>
+                                `,
+                                confirmLabel: `套用到 ${affectedProps.length} 個床位`,
+                                cancelLabel: '不同步，只改預設',
+                                onConfirm: () => {
+                                    affectedProps.forEach(p => store.updateProperty(p.id, { address: newAddress }));
+                                    showToast(`已同步 ${affectedProps.length} 個床位的地址`, 'success');
+                                    refreshView();
+                                }
+                            });
+                        }, 200);
+                    }
+                }
             } else {
                 const created = store.addBuilding(values);
                 showToast(`已新增館別：${created.name}`, 'success');
+                refreshView();
             }
-            refreshView();
         }
     });
 }

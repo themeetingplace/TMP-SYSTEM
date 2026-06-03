@@ -18,7 +18,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/zh-tw.js"></script>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=20260603d">
 </head>
 <body>
     <div class="app-container">
@@ -98,33 +98,41 @@
                 </div>
             </nav>
             <div class="sidebar-footer">
-                <div class="user-profile" role="button" tabindex="0" onclick="showAccountSettings()" data-label="管理員">
-                    <div class="avatar-wrap">
-                        <div class="avatar">A</div>
-                        <span class="avatar-status" title="線上"></span>
-                    </div>
-                    <div class="user-info">
+                <div class="user-profile user-bar" data-label="管理員">
+                    <button class="user-bar-cell user-bar-avatar" type="button" onclick="showAccountSettings()" title="帳號設定">
+                        <div class="avatar-wrap">
+                            <div class="avatar">A</div>
+                            <span class="avatar-status" title="線上"></span>
+                        </div>
+                    </button>
+                    <button class="user-bar-cell user-bar-name" type="button" onclick="showAccountSettings()" title="帳號設定">
                         <span class="user-name">管理員</span>
-                        <span class="sync-indicator" id="syncIndicator" role="button" tabindex="0" onclick="event.stopPropagation(); window.location.hash='#settings'; setTimeout(()=>{ const t = document.querySelector('[data-settings-tab=&quot;sync&quot;]'); if (t) t.click(); }, 50);" title="同步狀態 — 點擊前往設定">
-                            <i class="ph ph-cloud-slash"></i>
-                            <span class="sync-label">同步未啟用</span>
-                        </span>
+                    </button>
+                    <span class="user-bar-sep" aria-hidden="true">·</span>
+                    <button class="user-bar-cell sync-indicator" id="syncIndicator" type="button" title="同步狀態 — 點擊前往設定">
+                        <i class="ph ph-cloud-slash"></i>
+                        <span class="sync-label">同步未啟用</span>
+                    </button>
+                    <span class="user-bar-sep" aria-hidden="true">·</span>
+                    <button class="user-bar-cell user-bar-version" type="button" onclick="window.showAboutApp && window.showAboutApp()" title="關於系統 — 版本紀錄與版權">
+                        <span id="app-version-num">v—</span>
+                    </button>
+                    <div class="user-bar-more">
+                        <button class="user-bar-more-trigger" type="button" title="更多操作" aria-label="更多操作">
+                            <i class="ph ph-dots-three-vertical"></i>
+                        </button>
+                        <div class="user-bar-more-popup">
+                            <button class="profile-action" type="button" title="帳號設定" onclick="showAccountSettings();">
+                                <i class="ph ph-user-gear"></i>
+                            </button>
+                            <button class="profile-action" type="button" title="主題切換" onclick="window.toggleAppTheme && window.toggleAppTheme();">
+                                <i class="ph ph-moon"></i>
+                            </button>
+                            <button class="profile-action profile-action-danger" type="button" title="登出" onclick="window.logoutPlaceholder && window.logoutPlaceholder();">
+                                <i class="ph ph-sign-out"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="user-actions">
-                        <button class="profile-action" type="button" title="帳號設定" onclick="event.stopPropagation(); showAccountSettings();">
-                            <i class="ph ph-user-gear"></i>
-                        </button>
-                        <button class="profile-action" type="button" title="主題切換" onclick="event.stopPropagation(); window.toggleAppTheme && window.toggleAppTheme();">
-                            <i class="ph ph-moon"></i>
-                        </button>
-                        <button class="profile-action profile-action-danger" type="button" title="登出" onclick="event.stopPropagation(); window.logoutPlaceholder && window.logoutPlaceholder();">
-                            <i class="ph ph-sign-out"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="app-version" role="button" tabindex="0" onclick="window.showAboutApp && window.showAboutApp()" title="關於系統">
-                    <span class="app-version-text">聚空間 BMS <span id="app-version-num">v—</span></span>
-                    <span class="app-version-copy">© 2026 聚空間</span>
                 </div>
             </div>
         </aside>
@@ -160,6 +168,6 @@
     </div>
 
     <!-- Scripts (entry point only; the rest are imported as ES modules) -->
-    <script src="js/app.js?v=20260603b" type="module"></script>
+    <script src="js/app.js?v=20260603d" type="module"></script>
 </body>
 </html>
