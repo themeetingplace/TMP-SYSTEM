@@ -1618,6 +1618,112 @@ select:focus-visible,
     justify-content: center;
     font-weight: 700;
     font-size: 0.75rem;
+    overflow: hidden;
+}
+/* avatar icon 模式：font-size 比字母再大一點，更有存在感 */
+.avatar[data-avatar-mode="icon"] {
+    font-size: 1rem;
+    font-weight: 400;
+}
+.avatar[data-avatar-mode="icon"] i {
+    line-height: 1;
+}
+
+/* === Avatar picker (帳號設定 modal) === */
+.avatar-picker {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    margin-top: 0.4rem;
+}
+.avatar-preview-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+.avatar-preview {
+    width: 56px !important;
+    height: 56px !important;
+    font-size: 1.5rem !important;
+}
+.avatar-picker-rows {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-width: 0;
+}
+.avatar-picker-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.avatar-picker-label {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.avatar-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0.3rem;
+}
+.avatar-icon-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--color-surface);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.avatar-icon-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    transform: translateY(-1px);
+}
+.avatar-icon-btn.is-active {
+    background: var(--color-primary);
+    color: var(--text-inverse);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+}
+.avatar-color-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0.3rem;
+}
+.avatar-color-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-full);
+    border: 2px solid var(--color-surface);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    box-shadow: 0 0 0 1px var(--border-color);
+}
+.avatar-color-btn:hover {
+    transform: translateY(-1px) scale(1.05);
+}
+.avatar-color-btn.is-active {
+    box-shadow: 0 0 0 2px var(--text-main);
+    transform: scale(1.08);
+}
+.btn-sm {
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
 }
 .avatar-status {
     position: absolute;

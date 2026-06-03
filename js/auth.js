@@ -57,6 +57,15 @@ export async function updateDisplayName(fullName) {
     return data.user;
 }
 
+// 更新頭像 — avatarMeta = { icon, color } 或 null (清除回字母)
+export async function updateAvatar(avatarMeta) {
+    const { data, error } = await supabase.auth.updateUser({
+        data: { avatar: avatarMeta }
+    });
+    if (error) throw error;
+    return data.user;
+}
+
 // 修改密碼 — P2-1: 要求重輸舊密碼驗證，防被劫持 session 任意改密碼
 // 流程: 用 currentEmail + oldPassword 重新 signInWithPassword 驗證 → 通過才 updateUser
 export async function updatePassword(newPassword, oldPassword) {

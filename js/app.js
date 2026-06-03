@@ -18,8 +18,9 @@ import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
 import { bootstrap as syncBootstrap } from './sync.js'; // 雲端同步引擎
-import { getSession, signOut, updateDisplayName, updatePassword, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner } from './auth.js';
+import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner } from './auth.js';
 import { showLogin, showAccessDenied, bindPasswordToggles } from './views/login.js';
+import { applyAvatar, getAvatar, AVATAR_ICONS, AVATAR_COLORS } from './utils/avatar.js';
 import { APP_VERSION, APP_BUILD_DATE, APP_NAME, APP_COPYRIGHT, APP_CHANGELOG } from './version.js';
 
 const viewContainer = document.getElementById('view-container');
@@ -161,10 +162,8 @@ function updateUserProfile(user) {
         const displayName = user?.user_metadata?.full_name || email.split('@')[0];
         nameEl.textContent = displayName;
     }
-    if (avatarEl) {
-        const seed = (user?.email || 'A')[0].toUpperCase();
-        avatarEl.textContent = seed;
-    }
+    // applyAvatar 處理 icon 模式 / letter 模式自動切換
+    applyAvatar(avatarEl, user);
 }
 
 function showBootLoading() {
@@ -275,6 +274,38 @@ window.showAccountSettings = async function() {
                         <small style="color: var(--text-muted); font-size: 0.75rem;">顯示在 sidebar 跟操作紀錄上</small>
                     </div>
 
+                    <div class="form-group">
+                        <label>頭像</label>
+                        <div class="avatar-picker">
+                            <div class="avatar-preview-wrap">
+                                <span class="avatar avatar-preview" id="acct-avatar-preview">A</span>
+                                <button type="button" class="btn btn-outline btn-sm" id="acct-avatar-clear" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">
+                                    <i class="ph ph-letter-circle-h"></i> 改回字母
+                                </button>
+                            </div>
+                            <div class="avatar-picker-rows">
+                                <div class="avatar-picker-row">
+                                    <small class="avatar-picker-label">圖示</small>
+                                    <div class="avatar-icon-grid" id="acct-avatar-icons">
+                                        ${AVATAR_ICONS.map(i => `
+                                            <button type="button" class="avatar-icon-btn" data-icon="${i.id}" title="${i.label}">
+                                                <i class="ph-fill ph-${i.id}"></i>
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div class="avatar-picker-row">
+                                    <small class="avatar-picker-label">底色</small>
+                                    <div class="avatar-color-grid" id="acct-avatar-colors">
+                                        ${Object.entries(AVATAR_COLORS).map(([key, c]) => `
+                                            <button type="button" class="avatar-color-btn" data-color="${key}" title="${c.label}" style="background: ${c.value};"></button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-section" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
                         <h4 style="margin-bottom: 0.75rem;">變更密碼（選填）</h4>
                         <div class="form-group">
@@ -333,6 +364,47 @@ window.showAccountSettings = async function() {
     // 密碼顯示/隱藏切換
     bindPasswordToggles(modal);
 
+    // === Avatar picker 互動 ===
+    const initialAvatar = getAvatar(user);
+    // pendingAvatar 用 null 代表「字母模式」，否則是 { icon, color }
+    let pendingAvatar = initialAvatar ? { ...initialAvatar } : null;
+    const previewEl = modal.querySelector('#acct-avatar-preview');
+    const fakeUserForPreview = (avatarMeta) => ({
+        email: user.email,
+        user_metadata: { ...user.user_metadata, avatar: avatarMeta }
+    });
+    const refreshPreview = () => {
+        applyAvatar(previewEl, fakeUserForPreview(pendingAvatar));
+        // 高亮目前選的 icon / color
+        modal.querySelectorAll('.avatar-icon-btn').forEach(b => {
+            b.classList.toggle('is-active', pendingAvatar && b.dataset.icon === pendingAvatar.icon);
+        });
+        modal.querySelectorAll('.avatar-color-btn').forEach(b => {
+            b.classList.toggle('is-active', pendingAvatar && b.dataset.color === pendingAvatar.color);
+        });
+    };
+    refreshPreview();
+    modal.querySelectorAll('.avatar-icon-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            pendingAvatar = pendingAvatar || { icon: null, color: 'orange' };
+            pendingAvatar.icon = btn.dataset.icon;
+            if (!pendingAvatar.color) pendingAvatar.color = 'orange';
+            refreshPreview();
+        });
+    });
+    modal.querySelectorAll('.avatar-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            pendingAvatar = pendingAvatar || { icon: 'cat', color: null };
+            pendingAvatar.color = btn.dataset.color;
+            if (!pendingAvatar.icon) pendingAvatar.icon = 'cat';
+            refreshPreview();
+        });
+    });
+    modal.querySelector('#acct-avatar-clear').addEventListener('click', () => {
+        pendingAvatar = null;
+        refreshPreview();
+    });
+
     const errEl = modal.querySelector('#acct-error');
     const showErr = (msg) => { errEl.hidden = false; errEl.textContent = msg; };
 
@@ -348,6 +420,11 @@ window.showAccountSettings = async function() {
         if (newPw && newPw.length < 6) { showErr('密碼至少 6 字元'); return; }
         if (newPw && !oldPw) { showErr('改密碼前要先輸入目前密碼驗證身份'); return; }
 
+        // 判斷頭像是否變動
+        const initialKey = initialAvatar ? `${initialAvatar.icon}:${initialAvatar.color}` : '_letter_';
+        const pendingKey = pendingAvatar ? `${pendingAvatar.icon}:${pendingAvatar.color}` : '_letter_';
+        const avatarChanged = initialKey !== pendingKey;
+
         const submitBtn = modal.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
         submitBtn.textContent = '儲存中…';
@@ -358,6 +435,11 @@ window.showAccountSettings = async function() {
                 const updatedUser = await updateDisplayName(newName);
                 updateUserProfile(updatedUser);
                 changes.push('顯示名稱');
+            }
+            if (avatarChanged) {
+                const updatedUser = await updateAvatar(pendingAvatar);
+                updateUserProfile(updatedUser);
+                changes.push('頭像');
             }
             if (newPw) {
                 await updatePassword(newPw, oldPw);
