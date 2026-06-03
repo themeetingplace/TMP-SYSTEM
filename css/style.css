@@ -4150,6 +4150,173 @@ select.form-input {
 }
 
 /* ============================================================
+ * M-R-3 完整版：occupancy 手機垂直導航 (三層 drilldown)
+ * ============================================================ */
+.occ-mobile-nav { display: none; }
+
+@media (max-width: 768px) {
+    .occ-mobile-nav { display: block; }
+    .occ-desktop-only { display: none !important; }
+}
+
+.omn-level-header {
+    background: var(--color-surface, #fff);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 8px);
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+.omn-back {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 0.2rem 0;
+    margin-bottom: 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-weight: 500;
+}
+.omn-back:hover {
+    color: var(--color-primary-hover);
+    text-decoration: underline;
+}
+.omn-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 0.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.omn-sub {
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    display: block;
+}
+
+.omn-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.omn-card {
+    background: var(--color-surface, #fff);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 8px);
+    padding: 0.85rem 1rem;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform 0.15s;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+button.omn-card { font-family: inherit; }
+.omn-card:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 3px 8px rgba(249, 115, 22, 0.1);
+}
+.omn-card:active {
+    transform: scale(0.98);
+}
+.omn-card-main {
+    flex: 1;
+    min-width: 0;
+}
+.omn-card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 0.15rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.omn-card-title i { color: var(--color-primary); }
+.omn-card-sub {
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    line-height: 1.4;
+}
+.omn-card-stats {
+    display: flex;
+    gap: 0.85rem;
+    flex-shrink: 0;
+}
+.omn-stat {
+    text-align: center;
+    line-height: 1.1;
+}
+.omn-stat strong {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+.omn-stat small {
+    color: var(--text-muted);
+    font-size: 0.6rem;
+}
+.omn-chevron {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+/* 床位卡片 (level 3) — 含底部 action 按鈕，不是 button 本身 */
+.omn-bed-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    cursor: default;
+}
+.omn-bed-card .omn-card-main {
+    flex: none;
+}
+.omn-bed-card.is-rented {
+    border-left: 3px solid var(--color-success);
+}
+.omn-bed-card.is-vacant {
+    border-left: 3px solid var(--color-warning);
+}
+.omn-bed-meta {
+    margin-top: -0.2rem;
+}
+.omn-bed-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--border-color);
+}
+.omn-bed-actions .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 0.55rem 0.8rem;
+    font-size: var(--text-xs);
+}
+
+.omn-empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-muted);
+}
+
+/* ============================================================
  * M-R-2: data-table → card list 在 ≤ 600px 自動轉換
  * 配合 js/utils/tableDataLabels.js 自動加的 data-label 屬性
  * ============================================================ */

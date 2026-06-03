@@ -21,6 +21,11 @@ const MAX_MONTHS = END_OFFSET - START_OFFSET + 1; // 10
 // 模組層狀態：當前 active tab
 let currentBuildingId = null;
 
+// === M-R-3：手機垂直導航狀態 ===
+// 三層 drilldown：buildings → rooms → beds
+// 只在 ≤ 768px 顯示；桌面照常用矩陣表
+let mobileNavState = { level: 'buildings', buildingId: null, room: null };
+
 function calculateMonthCount() {
     // 用實際 main-content 寬度算 (排除 sidebar)，找不到才 fallback window
     // 上限 MAX_MONTHS — 即使螢幕再寬也不會超過 (今天 + 8 個月)
@@ -304,6 +309,165 @@ function renderBuildingTable(building, months, today) {
     `;
 }
 
+// === M-R-3：手機垂直導航三層 render ===
+
+function renderMobileBuildingsList() {
+    const buildings = getSortedBuildings({ activeOnly: true });
+    const today = new Date().toISOString().slice(0, 10);
+    if (!buildings.length) {
+        return `<div class="omn-empty">尚無館別資料</div>`;
+    }
+    const cards = buildings.map(b => {
+        const beds = mockData.properties.filter(p => p.buildingId === b.id);
+        const rented = beds.filter(bed => {
+            const cs = getBedContracts(bed);
+            return cs.some(c => c.startDate <= today && c.endDate >= today);
+        }).length;
+        const occRate = beds.length ? Math.round(rented / beds.length * 100) : 0;
+        const occColor = occRate >= 80 ? 'var(--color-success)'
+            : occRate >= 50 ? 'var(--color-warning)' : 'var(--color-danger)';
+        return `
+            <button class="omn-card" type="button" data-mn-action="open-building" data-id="${b.id}">
+                <div class="omn-card-main">
+                    <div class="omn-card-title"><i class="ph ph-buildings" aria-hidden="true"></i> ${b.name}</div>
+                    ${b.baseAddress ? `<div class="omn-card-sub">${b.baseAddress}</div>` : ''}
+                </div>
+                <div class="omn-card-stats">
+                    <div class="omn-stat"><strong style="color: ${occColor};">${occRate}%</strong><small>出租率</small></div>
+                    <div class="omn-stat"><strong>${rented}/${beds.length}</strong><small>已租 / 總床</small></div>
+                </div>
+                <i class="ph ph-caret-right omn-chevron" aria-hidden="true"></i>
+            </button>
+        `;
+    }).join('');
+    return `
+        <div class="omn-level-header">
+            <h3 class="omn-title"><i class="ph ph-list" aria-hidden="true"></i> 各館概況</h3>
+            <small class="omn-sub">${buildings.length} 個館別 · 點選查看房間</small>
+        </div>
+        <div class="omn-cards">${cards}</div>
+    `;
+}
+
+function renderMobileRoomsList(buildingId) {
+    const building = mockData.buildings.find(b => b.id === buildingId);
+    if (!building) return `<div class="omn-empty">館別不存在，請返回</div>`;
+    const beds = mockData.properties.filter(p => p.buildingId === buildingId);
+    const roomMap = new Map();
+    beds.forEach(b => {
+        if (!roomMap.has(b.roomNumber)) roomMap.set(b.roomNumber, []);
+        roomMap.get(b.roomNumber).push(b);
+    });
+    const roomNumbers = Array.from(roomMap.keys()).sort((a, b) => a - b);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const cards = roomNumbers.map(rn => {
+        const rmBeds = roomMap.get(rn);
+        const rented = rmBeds.filter(p => {
+            const cs = getBedContracts(p);
+            return cs.some(c => c.startDate <= today && c.endDate >= today);
+        }).length;
+        const sample = rmBeds[0];
+        const typeLabel = formatRoomType(sample?.gender, sample?.capacity);
+        return `
+            <button class="omn-card" type="button" data-mn-action="open-room" data-room="${rn}">
+                <div class="omn-card-main">
+                    <div class="omn-card-title">R${rn}</div>
+                    <div class="omn-card-sub">${typeLabel}</div>
+                </div>
+                <div class="omn-card-stats">
+                    <div class="omn-stat"><strong>${rented}/${rmBeds.length}</strong><small>已租 / 總床</small></div>
+                </div>
+                <i class="ph ph-caret-right omn-chevron" aria-hidden="true"></i>
+            </button>
+        `;
+    }).join('');
+
+    return `
+        <div class="omn-level-header">
+            <button class="omn-back" type="button" data-mn-action="back-to-buildings">
+                <i class="ph ph-caret-left" aria-hidden="true"></i> 各館概況
+            </button>
+            <h3 class="omn-title"><i class="ph ph-buildings" aria-hidden="true"></i> ${building.name}</h3>
+            <small class="omn-sub">${roomNumbers.length} 間房 · ${beds.length} 床</small>
+        </div>
+        <div class="omn-cards">${cards}</div>
+    `;
+}
+
+function renderMobileBedsList(buildingId, roomNumber) {
+    const building = mockData.buildings.find(b => b.id === buildingId);
+    if (!building) return `<div class="omn-empty">館別不存在，請返回</div>`;
+    const beds = mockData.properties
+        .filter(p => p.buildingId === buildingId && p.roomNumber === Number(roomNumber))
+        .sort((a, b) => (a.bedLetter || '').localeCompare(b.bedLetter || ''));
+    const today = new Date().toISOString().slice(0, 10);
+
+    const cards = beds.map(b => {
+        const cs = getBedContracts(b);
+        const current = cs.find(c => c.startDate <= today && c.endDate >= today);
+        const future = cs.find(c => c.startDate > today);
+        const statusBadge = current
+            ? `<span class="status-badge success">居住中</span>`
+            : (future
+                ? `<span class="status-badge warning">已預約</span>`
+                : `<span class="status-badge">空床</span>`);
+        const mainInfo = current
+            ? `<div class="omn-card-sub"><i class="ph-fill ph-user" aria-hidden="true"></i> ${current.tenant} · 至 ${current.endDate} 到期</div>`
+            : (future
+                ? `<div class="omn-card-sub">即將入住：${future.tenant} (${future.startDate})</div>`
+                : `<div class="omn-card-sub">$${(b.rent || 0).toLocaleString()}/月 · 待租</div>`);
+        return `
+            <div class="omn-card omn-bed-card ${current ? 'is-rented' : 'is-vacant'}">
+                <div class="omn-card-main">
+                    <div class="omn-card-title">R${b.roomNumber}-${b.bedLetter}</div>
+                    ${mainInfo}
+                </div>
+                <div class="omn-bed-meta">
+                    ${statusBadge}
+                </div>
+                <div class="omn-bed-actions">
+                    <button class="btn btn-outline btn-sm" type="button" data-mn-action="bed-detail" data-bed-id="${b.id}">
+                        <i class="ph ph-eye" aria-hidden="true"></i> 床位
+                    </button>
+                    ${current
+                        ? `<button class="btn btn-outline btn-sm" type="button" data-mn-action="open-contract" data-contract-id="${current.id}">
+                            <i class="ph ph-file-text" aria-hidden="true"></i> 合約
+                        </button>`
+                        : `<button class="btn btn-primary btn-sm" type="button" data-mn-action="checkin" data-bed-id="${b.id}">
+                            <i class="ph ph-key" aria-hidden="true"></i> 入住
+                        </button>`}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="omn-level-header">
+            <button class="omn-back" type="button" data-mn-action="back-to-rooms">
+                <i class="ph ph-caret-left" aria-hidden="true"></i> ${building.name}
+            </button>
+            <h3 class="omn-title">R${roomNumber} · 床位</h3>
+            <small class="omn-sub">${beds.length} 床</small>
+        </div>
+        <div class="omn-cards omn-cards-beds">${cards}</div>
+    `;
+}
+
+function renderMobileNav() {
+    let body = '';
+    if (mobileNavState.level === 'rooms' && mobileNavState.buildingId) {
+        body = renderMobileRoomsList(mobileNavState.buildingId);
+    } else if (mobileNavState.level === 'beds' && mobileNavState.buildingId && mobileNavState.room) {
+        body = renderMobileBedsList(mobileNavState.buildingId, mobileNavState.room);
+    } else {
+        // 預設或無效狀態 → 回 buildings
+        mobileNavState = { level: 'buildings', buildingId: null, room: null };
+        body = renderMobileBuildingsList();
+    }
+    return `<div class="occ-mobile-nav">${body}</div>`;
+}
+
 export function renderOccupancy() {
     const today = new Date();
     const monthCount = calculateMonthCount();
@@ -331,12 +495,17 @@ export function renderOccupancy() {
 
     return `
         <div class="occupancy-page">
-            <div class="card occ-intro">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                    <div class="occ-tabs">${tabs}</div>
+            <!-- M-R-3: 手機垂直導航 (僅 ≤ 768px 顯示) -->
+            ${renderMobileNav()}
+            <!-- 桌面矩陣 (僅 > 768px 顯示) -->
+            <div class="occ-desktop-only">
+                <div class="card occ-intro">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <div class="occ-tabs">${tabs}</div>
+                    </div>
                 </div>
+                ${section}
             </div>
-            ${section}
         </div>
     `;
 }
@@ -350,30 +519,57 @@ export function initOccupancyActions(scope) {
         });
     });
 
-    // 通用 data-action 委派 — 床位/租客/合約點擊 + 退房 checkbox
+    // 通用 data-action 委派 — 床位/租客/合約點擊 + 退房 checkbox (桌面矩陣用)
     scope.addEventListener('click', (e) => {
         const target = e.target.closest('[data-action]');
         if (!target || !scope.contains(target)) return;
         const action = target.dataset.action;
         try {
             if (action === 'show-tenant') {
-                // 在住房一覽點租客名字 → 快速編輯備註 (focused modal)
                 showTenantNoteEditor(target.dataset.tenantId);
             } else if (action === 'show-bed') {
                 showPropertyDetails(target.dataset.bedId);
             } else if (action === 'show-contract') {
                 showContractDetails(target.dataset.contractId);
             } else if (action === 'terminate-contract') {
-                // 不要直接退房 — 跳確認 modal；取消的話 checkbox 還原
                 e.preventDefault();
                 target.checked = false;
                 confirmTerminate(target.dataset.contractId);
             } else if (action === 'checkin-bed') {
-                // 空床 / 已退房 → 啟動入住流程 (預選此床位 → 一鍵建合約+指派+排程)
                 showCheckinAssignmentForm({ preselectBedId: target.dataset.bedId });
             }
         } catch (err) {
             console.error('[occupancy] action 失敗:', action, err);
+        }
+    });
+
+    // === M-R-3：手機 nav 三層 drilldown 事件委派 ===
+    scope.addEventListener('click', (e) => {
+        const t = e.target.closest('[data-mn-action]');
+        if (!t || !scope.contains(t)) return;
+        const action = t.dataset.mnAction;
+        try {
+            if (action === 'open-building') {
+                mobileNavState = { level: 'rooms', buildingId: t.dataset.id, room: null };
+                window.refreshCurrentView?.();
+            } else if (action === 'open-room') {
+                mobileNavState = { ...mobileNavState, level: 'beds', room: t.dataset.room };
+                window.refreshCurrentView?.();
+            } else if (action === 'back-to-buildings') {
+                mobileNavState = { level: 'buildings', buildingId: null, room: null };
+                window.refreshCurrentView?.();
+            } else if (action === 'back-to-rooms') {
+                mobileNavState = { ...mobileNavState, level: 'rooms', room: null };
+                window.refreshCurrentView?.();
+            } else if (action === 'bed-detail') {
+                showPropertyDetails(t.dataset.bedId);
+            } else if (action === 'open-contract') {
+                showContractDetails(t.dataset.contractId);
+            } else if (action === 'checkin') {
+                showCheckinAssignmentForm({ preselectBedId: t.dataset.bedId });
+            }
+        } catch (err) {
+            console.error('[occupancy mobile-nav] action 失敗:', action, err);
         }
     });
 }
