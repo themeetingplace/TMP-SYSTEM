@@ -4106,6 +4106,103 @@ select.form-input {
     .btn[data-mobile-as-fab] { display: none; }
 }
 
+/* ============================================================
+ * M-R-2: data-table → card list 在 ≤ 600px 自動轉換
+ * 配合 js/utils/tableDataLabels.js 自動加的 data-label 屬性
+ * ============================================================ */
+@media (max-width: 600px) {
+    /* 取消 sticky thead / overflow，table 改 block flow */
+    .table-container {
+        max-height: none;
+        overflow: visible;
+    }
+    .data-table {
+        border: none;
+        background: transparent;
+    }
+    .data-table thead {
+        /* 表頭視覺上隱藏，但仍要存在給 data-label 邏輯用 */
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+    }
+    .data-table,
+    .data-table tbody,
+    .data-table tr,
+    .data-table td {
+        display: block;
+        width: 100%;
+    }
+    .data-table tbody tr {
+        background: var(--color-surface, #fff);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md, 8px);
+        padding: 0.75rem 0.85rem;
+        margin-bottom: 0.6rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+    .data-table tbody tr:hover {
+        background: var(--color-surface, #fff);
+    }
+    .data-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.35rem 0;
+        border: none;
+        text-align: right;
+        font-size: var(--text-xs);
+    }
+    .data-table td::before {
+        content: attr(data-label);
+        color: var(--text-muted);
+        font-weight: 500;
+        font-size: var(--text-2xs);
+        text-align: left;
+        flex-shrink: 0;
+        margin-right: 0.5rem;
+        min-width: 70px;
+    }
+    /* 第一個 td 通常是主名/編號 — 拿掉 label 顯示，當作卡片標題 */
+    .data-table td:first-child {
+        font-weight: 600;
+        font-size: var(--text-sm);
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.4rem;
+        border-bottom: 1px dashed var(--border-color);
+        flex-direction: column;
+        align-items: stretch;
+        text-align: left;
+    }
+    .data-table td:first-child::before {
+        display: none;
+    }
+    /* 最後一個 td 通常是操作 — 取消 sticky right + 改靠右排 */
+    .data-table th:last-child,
+    .data-table td:last-child {
+        position: static;
+        box-shadow: none;
+    }
+    .data-table td:last-child {
+        flex-direction: row;
+        justify-content: flex-end;
+        padding-top: 0.5rem;
+        margin-top: 0.4rem;
+        border-top: 1px dashed var(--border-color);
+    }
+    /* 空狀態 row 跨欄不適用卡片 */
+    .data-table tr.empty-row td {
+        display: block;
+        text-align: center;
+    }
+    .data-table tr.empty-row td::before { display: none; }
+}
+
 
 .custom-select-search {
     position: sticky;

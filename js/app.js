@@ -16,6 +16,7 @@ import { initSidebar } from './utils/sidebar.js';
 import './utils/entityNav.js'; // UIUX #2: 暴露 window.openEntity(type, id)
 import { applyPendingRowFlash } from './utils/rowFlash.js'; // QW: CRUD 後 row 黃光閃
 import { autoFixA11y } from './utils/a11yAutoFix.js';      // C-3: icon-only button 自動補 aria-label
+import { autoAddDataLabels } from './utils/tableDataLabels.js'; // M-R-2: data-table 手機版自動轉卡片
 import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
@@ -118,6 +119,9 @@ function handleRoute() {
 
     // C-3: 自動補 aria-label / aria-hidden
     autoFixA11y(viewElement);
+
+    // M-R-2: 自動為 td 加 data-label，配合 CSS 在手機上轉卡片排版
+    autoAddDataLabels(viewElement);
 
     // M-R-5: 手機 FAB — 找 [data-fab] 主要按鈕，做一個底部固定 FAB 代理它
     updateMobileFab(viewElement);
