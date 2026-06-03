@@ -1,0 +1,570 @@
+import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings } from '../data.js';
+
+// 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
+function extractAreaName(fullName) {
+    const match = fullName.match(/聚空間 - ([^\s]+)\s/);
+    return match ? match[1] : fullName;
+}
+
+// 統計各館空床狀況（含性別分布）
+// 回傳順序跟系統設定的館別順序一致（getSortedBuildings）
+function buildEmptyBedsByProperty(properties) {
+    const sortedBuildings = getSortedBuildings({ activeOnly: true });
+    const propertiesByArea = {};
+    // 先按設定順序預建 key，確保之後 Object.keys 順序對
+    sortedBuildings.forEach(b => {
+        propertiesByArea[b.name] = {
+            total: 0,
+            vacant: 0,
+            vacantByGender: { '男': 0, '女': 0, '不限': 0 }
+        };
+    });
+
+    properties.forEach(prop => {
+        const areaName = extractAreaName(prop.name);
+        if (!propertiesByArea[areaName]) {
+            propertiesByArea[areaName] = {
+                total: 0,
+                vacant: 0,
+                vacantByGender: { '男': 0, '女': 0, '不限': 0 }
+            };
+        }
+        propertiesByArea[areaName].total++;
+        if (prop.status === '待租' || prop.status === '待簽約') {
+            propertiesByArea[areaName].vacant++;
+            const g = prop.gender || '不限';
+            if (propertiesByArea[areaName].vacantByGender[g] !== undefined) {
+                propertiesByArea[areaName].vacantByGender[g]++;
+            } else {
+                propertiesByArea[areaName].vacantByGender['不限']++;
+            }
+        }
+    });
+
+    return propertiesByArea;
+}
+
+// 構建合約類待辦：優先顯示「待決策」/ 「已過期」，其次「即將到期」/ 「待簽署」
+function buildContractTodos(contracts) {
+    const today = new Date();
+    const items = contracts
+        .map(c => ({ c, state: getContractLifecycle(c, today), days: daysUntilExpiry(c, today) }))
+        .filter(({ c, state }) => state === 'awaiting_decision' || state === 'expired' || state === 'expiring_soon' || c.status === '待簽署')
+        .sort((a, b) => {
+            const pri = { expired: 0, awaiting_decision: 1, expiring_soon: 2 };
+            return (pri[a.state] ?? 3) - (pri[b.state] ?? 3);
+        })
+        .slice(0, 3);
+
+    return items.map(({ c, state, days }) => {
+        let label, status;
+        if (state === 'expired')           { label = `已過期 ${-days} 天`; status = 'danger'; }
+        else if (state === 'awaiting_decision') { label = `${days} 天內到期`; status = 'danger'; }
+        else if (state === 'expiring_soon')     { label = `${days} 天後到期`; status = 'warning'; }
+        else                                    { label = '待簽署';          status = 'warning'; }
+
+        return {
+            status,
+            label,
+            text: `${extractAreaName(c.propertyName)} / ${c.tenant}`,
+            action: state === 'expired' || state === 'awaiting_decision' ? '決策' : '查看',
+            entityType: 'contract',
+            entityId: c.id
+        };
+    });
+}
+
+// 構建帳款類待辦（待結帳款：應收欠繳 + 應付未付）
+function buildFinanceTodos(invoices) {
+    return invoices
+        .filter(inv => inv.status === '欠繳' || inv.status === '未付')
+        .slice(0, 3)
+        .map(inv => {
+            const isIn = inv.direction === 'in';
+            const sign = isIn ? '' : '-';
+            const target = isIn
+                ? extractAreaName(inv.propertyName || '')
+                : (inv.contractId || extractAreaName(inv.propertyName || '整館'));
+            return {
+                status: 'danger',
+                label: isIn ? '欠繳' : '未付',
+                text: `${target} / ${inv.type} ${sign}$${(inv.amount ?? 0).toLocaleString()}`,
+                action: '查看',
+                entityType: 'invoice',
+                entityId: inv.id
+            };
+        });
+}
+
+// 構建維修類待辦
+function buildMaintenanceTodos(maintenances) {
+    return maintenances
+        .filter(m => m.status !== '已完成')
+        .slice(0, 3)
+        .map(m => ({
+            status: m.status === '待處理' ? 'danger' : 'warning',
+            label: m.status === '待處理' ? '待處理' : '進行中',
+            text: `${extractAreaName(m.propertyName)} / ${m.issue}`,
+            action: '派工',
+            entityType: 'maintenance',
+            entityId: m.id
+        }));
+}
+
+export function renderDashboard() {
+    const { properties, contracts, maintenances, invoices } = mockData;
+    // 即時計算 metrics — 不再讀 mockData.metrics (避免清資料後快取殘留)
+    const actualAmt = (i) => i.paidAmount != null && i.paidAmount > 0 ? i.paidAmount : (i.amount || 0);
+    const thisMonthStr = new Date().toISOString().slice(0, 7);
+    const metrics = {
+        totalProperties: properties.length,
+        rentedProperties: properties.filter(p => p.status === '已出租').length,
+        pendingContracts: contracts.filter(c => c.status === '待簽署' && c.renewalState === 'active').length,
+        pendingMaintenances: maintenances.filter(m => m.status !== '已完成').length,
+        monthlyIncome: invoices
+            .filter(i => i.direction === 'in' && (i.paidDate || i.dueDate || '').startsWith(thisMonthStr))
+            .reduce((s, i) => s + actualAmt(i), 0)
+    };
+    const emptyBedsByProperty = buildEmptyBedsByProperty(properties);
+    // 維持系統設定的館別順序（不再 .sort() 改成字典序）
+    const propertyNames = Object.keys(emptyBedsByProperty);
+    const firstProperty = propertyNames[0];
+    
+    const contractTodos = buildContractTodos(contracts);
+    const financeTodos = buildFinanceTodos(invoices);
+    const maintenanceTodos = buildMaintenanceTodos(maintenances);
+    
+    const selectedPropertyData = emptyBedsByProperty[firstProperty] || { total: 0, vacant: 0 };
+    const occupiedBeds = selectedPropertyData.total - selectedPropertyData.vacant;
+
+    // === 15 號查帳橫條 ===
+    const today = new Date();
+    const day = today.getDate();
+    const thisMonth = currentMonth();
+    const monthUnsettled = invoices.filter(inv => isUnsettled(inv) && (inv.dueDate || '').startsWith(thisMonth));
+    const monthAwaitVerify = monthUnsettled.filter(inv => inv.bankLast5 && !inv.bankVerified).length;
+    const monthUnsettledIn = monthUnsettled.filter(i => i.direction === 'in').length;
+
+    let checkBanner = '';
+    if (monthUnsettled.length > 0) {
+        if (day === 15) {
+            checkBanner = `
+                <div class="check-banner urgent">
+                    <div class="check-banner-icon"><i class="ph-fill ph-calendar-check"></i></div>
+                    <div class="check-banner-body">
+                        <strong>📅 今天是 ${day} 號查帳日！</strong>
+                        <span>本月共 <strong>${monthUnsettled.length}</strong> 筆待結${monthAwaitVerify > 0 ? `，其中 <strong style="color: var(--color-warning);">${monthAwaitVerify}</strong> 筆已回報末 5 碼待核對` : ''}</span>
+                    </div>
+                    <a href="#unsettled" class="btn btn-primary">前往查帳 →</a>
+                </div>`;
+        } else if (day >= 13 && day <= 17) {
+            const diff = 15 - day;
+            const text = diff > 0 ? `${diff} 天後是查帳日` : `查帳日已過 ${-diff} 天`;
+            checkBanner = `
+                <div class="check-banner soft">
+                    <div class="check-banner-icon"><i class="ph ph-calendar"></i></div>
+                    <div class="check-banner-body">
+                        <strong>${text}</strong>
+                        <span>本月待結 ${monthUnsettled.length} 筆${monthAwaitVerify > 0 ? `（${monthAwaitVerify} 筆待核對）` : ''}</span>
+                    </div>
+                    <a href="#unsettled" class="btn btn-outline">前往房租查帳</a>
+                </div>`;
+        } else if (monthAwaitVerify > 0) {
+            checkBanner = `
+                <div class="check-banner soft">
+                    <div class="check-banner-icon"><i class="ph ph-shield-warning"></i></div>
+                    <div class="check-banner-body">
+                        <strong>${monthAwaitVerify} 筆待核對</strong>
+                        <span>客戶已回報末 5 碼，請至房租查帳頁核對結帳</span>
+                    </div>
+                    <a href="#unsettled" class="btn btn-outline">立即處理</a>
+                </div>`;
+        }
+    }
+
+    return `
+        ${checkBanner}
+        <div class="metrics-grid">
+            <a href="#properties" class="card metric-card metric-link" title="點擊前往物件管理">
+                <div class="metric-header">
+                    <span>物件已租 / 總數</span>
+                    <div class="metric-icon primary">
+                        <i class="ph ph-buildings"></i>
+                    </div>
+                </div>
+                <div class="metric-value">${metrics.rentedProperties} / ${metrics.totalProperties}</div>
+                <div class="metric-subtext">整體出租率 ${metrics.totalProperties > 0 ? Math.round((metrics.rentedProperties / metrics.totalProperties) * 100) : 0}%</div>
+            </a>
+
+            <a href="#contracts" class="card metric-card metric-link" title="點擊前往合約管理">
+                <div class="metric-header">
+                    <span>待簽約事項</span>
+                    <div class="metric-icon warning">
+                        <i class="ph ph-signature"></i>
+                    </div>
+                </div>
+                <div class="metric-value">${metrics.pendingContracts}</div>
+                <div class="metric-subtext">請盡速完成簽署流程</div>
+            </a>
+
+            <a href="#maintenance" class="card metric-card metric-link" title="點擊前往維修管理">
+                <div class="metric-header">
+                    <span>待處理維修</span>
+                    <div class="metric-icon danger">
+                        <i class="ph ph-wrench"></i>
+                    </div>
+                </div>
+                <div class="metric-value">${metrics.pendingMaintenances}</div>
+                <div class="metric-subtext">追蹤租客報修進度</div>
+            </a>
+
+            <a href="#finance" class="card metric-card metric-link" title="點擊前往總收支表">
+                <div class="metric-header">
+                    <span>本月租金收入</span>
+                    <div class="metric-icon success">
+                        <i class="ph ph-currency-circle-dollar"></i>
+                    </div>
+                </div>
+                <div class="metric-value">$${metrics.monthlyIncome.toLocaleString()}</div>
+                <div class="metric-subtext">本月收入穩定上升</div>
+            </a>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card chart-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-chart-line-up"></i> 近半年收支概況</h2>
+                    <div class="chart-mode-toggle" role="group" aria-label="圖表模式">
+                        <button type="button" class="chart-mode-btn active" data-chart-mode="total">總和</button>
+                        <button type="button" class="chart-mode-btn" data-chart-mode="byBuilding">各館</button>
+                    </div>
+                </div>
+                <div style="height: 300px; width: 100%;">
+                    <canvas id="incomeChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div style="margin-bottom: 1rem;">
+                    <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; white-space: nowrap;">各館空床狀態</h3>
+                    <div id="property-selector" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                        ${propertyNames.map((name, idx) => `
+                            <button class="property-filter-btn ${idx === 0 ? 'active' : ''}" data-property="${name}" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; border: 1px solid var(--border-color); background: none; cursor: pointer; border-radius: var(--radius-md); white-space: nowrap; transition: all var(--transition-fast);">
+                                ${name}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+                <div id="empty-beds-display">
+                    <div style="position: relative; height: 200px; margin: 0.5rem 0;">
+                        <canvas id="emptyBedsChart"></canvas>
+                        <div id="empty-beds-center" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;">
+                            <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-primary); line-height: 1;">${selectedPropertyData.vacant}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">空床 / 共 ${selectedPropertyData.total}</div>
+                        </div>
+                    </div>
+                    <div id="empty-beds-legend" style="text-align: center; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
+                        已出租 <strong style="color: var(--color-success);">${occupiedBeds}</strong> · 空床 <strong style="color: var(--color-primary);">${selectedPropertyData.vacant}</strong>
+                    </div>
+                    <div id="empty-beds-gender" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; padding-top: 0.75rem; border-top: 1px dashed var(--border-color);">
+                        <div class="gender-chip male"><i class="ph-fill ph-person-simple"></i> 男 <strong>${selectedPropertyData.vacantByGender['男']}</strong></div>
+                        <div class="gender-chip female"><i class="ph-fill ph-person-simple"></i> 女 <strong>${selectedPropertyData.vacantByGender['女']}</strong></div>
+                        <div class="gender-chip mixed"><i class="ph-fill ph-users"></i> 不限 <strong>${selectedPropertyData.vacantByGender['不限']}</strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="todo-cards-grid">
+            <div class="card">
+                <h2 class="card-title"><i class="ph ph-file-text"></i> 合約事項</h2>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    ${contractTodos.length > 0 ? contractTodos.map(item => `
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="margin-bottom: 0.25rem;">
+                                    <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
+                                </div>
+                                <div style="font-size: 0.8rem; color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
+                            </div>
+                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
+                        </div>
+                    `).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.875rem;">暫無待辦事項</div>'}
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2 class="card-title"><i class="ph ph-wallet"></i> 帳款事項</h2>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    ${financeTodos.length > 0 ? financeTodos.map(item => `
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="margin-bottom: 0.25rem;">
+                                    <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
+                                </div>
+                                <div style="font-size: 0.8rem; color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
+                            </div>
+                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
+                        </div>
+                    `).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.875rem;">暫無待辦事項</div>'}
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2 class="card-title"><i class="ph ph-wrench"></i> 維修事項</h2>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    ${maintenanceTodos.length > 0 ? maintenanceTodos.map(item => `
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="margin-bottom: 0.25rem;">
+                                    <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
+                                </div>
+                                <div style="font-size: 0.8rem; color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
+                            </div>
+                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
+                        </div>
+                    `).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.875rem;">暫無待辦事項</div>'}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// === 收支圖表（即時聚合 invoices）===
+let incomeChartInstance = null;
+let chartMode = 'total'; // 'total' | 'byBuilding'
+
+const BUILDING_COLOR_PALETTE = ['#ff8859', '#1e56a3', '#22946e', '#b8871f', '#7c3aed', '#0891b2', '#db2777'];
+
+function aggregateInvoicesByMonth(months) {
+    // 回傳 { income: [m1, m2, ...], expense: [...] }
+    const income = months.map(() => 0);
+    const expense = months.map(() => 0);
+    mockData.invoices.forEach(inv => {
+        const m = invoiceMonth(inv);
+        const idx = months.indexOf(m);
+        if (idx < 0) return;
+        if (inv.direction === 'in') income[idx] += inv.amount || 0;
+        else if (inv.direction === 'out') expense[idx] += inv.amount || 0;
+    });
+    return { income, expense };
+}
+
+function aggregateNetByBuildingMonth(months, buildings) {
+    // 回傳 { 'B001': [m1淨, m2淨, ...], ... }
+    const result = {};
+    buildings.forEach(b => { result[b.id] = months.map(() => 0); });
+    mockData.invoices.forEach(inv => {
+        const m = invoiceMonth(inv);
+        const idx = months.indexOf(m);
+        if (idx < 0) return;
+        if (!result[inv.buildingId]) return;
+        const sign = inv.direction === 'in' ? 1 : -1;
+        result[inv.buildingId][idx] += (inv.amount || 0) * sign;
+    });
+    return result;
+}
+
+function buildChartData() {
+    const months = lastNMonths(6);
+    const monthLabels = months.map(m => `${parseInt(m.substring(5), 10)}月`);
+    const buildings = getSortedBuildings({ activeOnly: true });
+
+    if (chartMode === 'total') {
+        const { income, expense } = aggregateInvoicesByMonth(months);
+        return {
+            labels: monthLabels,
+            datasets: [
+                {
+                    label: '收入',
+                    data: income,
+                    borderColor: '#22946e',
+                    backgroundColor: 'rgba(34, 148, 110, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: '支出',
+                    data: expense,
+                    borderColor: '#b13535',
+                    backgroundColor: 'rgba(177, 53, 53, 0.08)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        };
+    }
+
+    // byBuilding：每館一條淨收益線
+    const netByBuilding = aggregateNetByBuildingMonth(months, buildings);
+    return {
+        labels: monthLabels,
+        datasets: buildings.map((b, i) => ({
+            label: b.name,
+            data: netByBuilding[b.id],
+            borderColor: BUILDING_COLOR_PALETTE[i % BUILDING_COLOR_PALETTE.length],
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: false,
+            pointRadius: 3
+        }))
+    };
+}
+
+window.initDashboardChart = function() {
+    const ctx = document.getElementById('incomeChart');
+    if (!ctx) return;
+
+    // 切頁面回來時銷毀舊 instance
+    if (incomeChartInstance) {
+        try { incomeChartInstance.destroy(); } catch (e) {}
+        incomeChartInstance = null;
+    }
+
+    incomeChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: buildChartData(),
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { boxWidth: 14, padding: 16 } },
+                tooltip: {
+                    callbacks: {
+                        label: (item) => `${item.dataset.label}：$${item.parsed.y.toLocaleString()}`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: chartMode === 'total',  // 各館淨收益可能有負值
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                    ticks: {
+                        callback: (v) => '$' + v.toLocaleString()
+                    }
+                },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // 模式切換按鈕
+    document.querySelectorAll('[data-chart-mode]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            chartMode = btn.dataset.chartMode;
+            document.querySelectorAll('[data-chart-mode]').forEach(b => {
+                b.classList.toggle('active', b === btn);
+            });
+            incomeChartInstance.data = buildChartData();
+            incomeChartInstance.options.scales.y.beginAtZero = (chartMode === 'total');
+            incomeChartInstance.update();
+        });
+    });
+};
+
+// 各館空床狀態：圓餅圖（doughnut）+ 中央數字 + 切換按鈕
+let emptyBedsChart = null;
+
+window.initDashboardInteractions = function() {
+    // 切換頁面回來時銷毀舊 chart instance（canvas 已被 re-render 替換）
+    if (emptyBedsChart) {
+        try { emptyBedsChart.destroy(); } catch (e) {}
+        emptyBedsChart = null;
+    }
+
+    const emptyBedsByProperty = buildEmptyBedsByProperty(mockData.properties);
+    const buttons = document.querySelectorAll('.property-filter-btn');
+    const ctx = document.getElementById('emptyBedsChart');
+    const centerEl = document.getElementById('empty-beds-center');
+    const legendEl = document.getElementById('empty-beds-legend');
+    if (!ctx) return;
+
+    function applyData(propertyName) {
+        const data = emptyBedsByProperty[propertyName] || { total: 0, vacant: 0, vacantByGender: { '男': 0, '女': 0, '不限': 0 } };
+        const rented = data.total - data.vacant;
+        const g = data.vacantByGender || { '男': 0, '女': 0, '不限': 0 };
+
+        if (emptyBedsChart) {
+            emptyBedsChart.data.datasets[0].data = [rented, data.vacant];
+            emptyBedsChart.update();
+        }
+        if (centerEl) {
+            centerEl.innerHTML = `
+                <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-primary); line-height: 1;">${data.vacant}</div>
+                <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">空床 / 共 ${data.total}</div>
+            `;
+        }
+        if (legendEl) {
+            legendEl.innerHTML = `
+                已出租 <strong style="color: var(--color-success);">${rented}</strong> ·
+                空床 <strong style="color: var(--color-primary);">${data.vacant}</strong>
+            `;
+        }
+        const genderEl = document.getElementById('empty-beds-gender');
+        if (genderEl) {
+            genderEl.innerHTML = `
+                <div class="gender-chip male"><i class="ph-fill ph-person-simple"></i> 男 <strong>${g['男']}</strong></div>
+                <div class="gender-chip female"><i class="ph-fill ph-person-simple"></i> 女 <strong>${g['女']}</strong></div>
+                <div class="gender-chip mixed"><i class="ph-fill ph-users"></i> 不限 <strong>${g['不限']}</strong></div>
+            `;
+        }
+    }
+
+    // 初始化第一個館的 doughnut chart
+    const firstName = buttons[0]?.dataset.property;
+    const firstData = firstName ? emptyBedsByProperty[firstName] : { total: 0, vacant: 0 };
+    const firstRented = firstData.total - firstData.vacant;
+
+    // primary: #ff8859 (空床), success: #22946e (已出租)
+    emptyBedsChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['已出租', '空床'],
+            datasets: [{
+                data: [firstRented, firstData.vacant],
+                backgroundColor: ['#22946e', '#ff8859'],
+                borderColor: '#ffffff',
+                borderWidth: 2,
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (item) => {
+                            const total = item.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total ? Math.round(item.parsed / total * 100) : 0;
+                            return `${item.label}: ${item.parsed} 張 (${pct}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // 按鈕切換
+    buttons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            buttons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            applyData(this.dataset.property);
+        });
+    });
+
+    // UIUX #2: 待辦項目「決策 / 查看 / 派工」直接打開該筆 detail modal
+    document.querySelectorAll('.todo-action').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const type = btn.dataset.entityType;
+            const id = btn.dataset.entityId;
+            if (window.openEntity && type && id) window.openEntity(type, id);
+        });
+    });
+};

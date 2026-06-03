@@ -1,0 +1,2 @@
+-- 租客備註欄位
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS note TEXT;

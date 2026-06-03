@@ -1,0 +1,36 @@
+# === 含真實住戶 / 帳務資料 — 絕對不能推 ===
+bms-backup-*.json
+*.xlsx
+data-import/
+
+# === 工作環境 ===
+.claude/
+.vscode/
+*.code-workspace
+
+# === OS junk ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Node / build artifacts (預留) ===
+node_modules/
+dist/
+build/
+.cache/
+
+# === 環境變數 (萬一未來加) ===
+.env
+.env.local
+.env.*.local
+
+# === 暫存 / log ===
+*.log
+*.tmp
+*~
+.~lock.*
+
+# === Python (data-import 內 .py 用) ===
+__pycache__/
+*.pyc
+*.pyo

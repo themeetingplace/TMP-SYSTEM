@@ -1,0 +1,296 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>聚空間 — 住客資料登記</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+    :root {
+        --brand: #ff8859;
+        --brand-hover: #ff743d;
+        --text-main: #1a1c23;
+        --text-muted: #6b7280;
+        --bg: #f4f6f8;
+        --card: #ffffff;
+        --border: #e7e9ee;
+        --success: #22946e;
+        --danger: #b13535;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+        margin: 0;
+        font-family: 'Noto Sans TC', -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text-main);
+        padding: 1rem;
+        line-height: 1.5;
+    }
+    .container {
+        max-width: 480px;
+        margin: 0 auto;
+        background: var(--card);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.3rem;
+        color: var(--brand);
+        text-align: center;
+    }
+    .subtitle {
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-bottom: 1.25rem;
+    }
+    .field { margin-bottom: 1rem; }
+    label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+        color: var(--text-main);
+    }
+    label .req { color: var(--danger); margin-left: 0.2rem; }
+    label .hint {
+        font-weight: 400;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-left: 0.4rem;
+    }
+    input, select {
+        width: 100%;
+        padding: 0.7rem 0.8rem;
+        font-size: 1rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: white;
+        font-family: inherit;
+        color: var(--text-main);
+        -webkit-appearance: none;
+        appearance: none;
+    }
+    input:focus, select:focus {
+        outline: none;
+        border-color: var(--brand);
+        box-shadow: 0 0 0 3px rgba(255, 136, 89, 0.15);
+    }
+    .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+    }
+    button.submit {
+        width: 100%;
+        padding: 0.9rem;
+        background: linear-gradient(135deg, var(--brand), var(--brand-hover));
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 0.5rem;
+        font-family: inherit;
+    }
+    button.submit:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .msg {
+        padding: 0.8rem 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+    }
+    .msg.error { background: rgba(177, 53, 53, 0.1); color: var(--danger); }
+    .msg.success { background: rgba(34, 148, 110, 0.1); color: var(--success); }
+    .loading {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--text-muted);
+    }
+    .spinner {
+        display: inline-block;
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--border);
+        border-top-color: var(--brand);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 1rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .user-card {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.6rem 0.8rem;
+        background: var(--bg);
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+    .user-card img {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+    }
+    .done-screen {
+        text-align: center;
+        padding: 2rem 1rem;
+    }
+    .done-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+</style>
+</head>
+<body>
+
+<div class="container" id="root">
+    <div class="loading">
+        <div class="spinner"></div>
+        <div>載入中…</div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// 已填入聚空間 BMS 的設定
+// ============================================================
+const LIFF_ID = '2010185822-G7D3N3Gw';
+const SUPABASE_URL = 'https://zkwkycpfcyecebstmotc.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_qsFrMoFYyM5DMcSt9nvNcg_pah5nruy';
+const EDGE_FUNCTION = `${SUPABASE_URL}/functions/v1/tenant-register`;
+
+async function main() {
+    try {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) {
+            liff.login();
+            return;
+        }
+        const profile = await liff.getProfile();
+        renderForm(profile);
+    } catch (e) {
+        showError(`LIFF 初始化失敗：${e.message}`);
+    }
+}
+
+function renderForm(profile) {
+    document.getElementById('root').innerHTML = `
+        <h1>聚空間 住客登記</h1>
+        <div class="subtitle">填完送出，立刻完成 LINE 綁定 ✨</div>
+
+        <div class="user-card">
+            <img src="${profile.pictureUrl || ''}" alt="" onerror="this.style.display='none'">
+            <span>已透過 LINE 登入：<strong>${profile.displayName}</strong></span>
+        </div>
+
+        <form id="form">
+            <div class="field">
+                <label>姓名<span class="req">*</span></label>
+                <input type="text" name="name" required autocomplete="name">
+            </div>
+
+            <div class="field">
+                <label>手機<span class="req">*</span><span class="hint">用來建立帳單</span></label>
+                <input type="tel" name="phone" required pattern="09[0-9]{8}" placeholder="0912345678" autocomplete="tel">
+            </div>
+
+            <div class="field">
+                <label>Email<span class="hint">選填</span></label>
+                <input type="email" name="email" autocomplete="email">
+            </div>
+
+            <div class="field">
+                <label>緊急聯絡人<span class="hint">選填，例：王媽媽 0911-222-333</span></label>
+                <input type="text" name="emergencyContact" placeholder="姓名 + 電話">
+            </div>
+
+            <div id="msg-area"></div>
+
+            <button type="submit" class="submit" id="submitBtn">送出登記</button>
+        </form>
+    `;
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await handleSubmit(profile);
+    });
+}
+
+async function handleSubmit(profile) {
+    const form = document.getElementById('form');
+    const data = Object.fromEntries(new FormData(form).entries());
+    const btn = document.getElementById('submitBtn');
+    const msg = document.getElementById('msg-area');
+
+    btn.disabled = true;
+    btn.textContent = '送出中…';
+    msg.innerHTML = '';
+
+    try {
+        const idToken = liff.getIDToken();
+        const resp = await fetch(EDGE_FUNCTION, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({
+                idToken,
+                userId: profile.userId,
+                displayName: profile.displayName,
+                pictureUrl: profile.pictureUrl,
+                form: data
+            })
+        });
+
+        const result = await resp.json();
+        if (!resp.ok || result.error) {
+            throw new Error(result.error || `HTTP ${resp.status}`);
+        }
+
+        renderDone(profile, data);
+    } catch (e) {
+        msg.innerHTML = `<div class="msg error">送出失敗：${e.message}</div>`;
+        btn.disabled = false;
+        btn.textContent = '重試';
+    }
+}
+
+function renderDone(profile, data) {
+    document.getElementById('root').innerHTML = `
+        <div class="done-screen">
+            <div class="done-icon">✅</div>
+            <h1>登記完成！</h1>
+            <p style="color: var(--text-muted); margin: 1rem 0;">
+                ${profile.displayName} 您好<br>
+                您的資料已送出，LINE 也綁定完成<br>
+                之後合約 / 帳單通知會傳到這裡 ✨
+            </p>
+            <button class="submit" onclick="liff.closeWindow()" style="max-width: 200px; margin: 1rem auto 0;">關閉視窗</button>
+        </div>
+    `;
+}
+
+function showError(msg) {
+    document.getElementById('root').innerHTML = `
+        <div class="msg error" style="margin: 2rem 0;">${msg}</div>
+        <button class="submit" onclick="location.reload()">重試</button>
+    `;
+}
+
+main();
+</script>
+
+</body>
+</html>

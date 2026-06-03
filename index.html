@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>聚空間 BMS 物件管理系統</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
+    <!-- Flatpickr 日期選擇器 (取代瀏覽器原生) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/zh-tw.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <a href="#dashboard" class="logo" aria-label="聚空間首頁">
+                    <span class="logo-mark"><i class="ph-fill ph-buildings"></i></span>
+                    <span class="logo-wordmark">
+                        <span class="logo-name">聚空間</span>
+                    </span>
+                </a>
+                <button class="sidebar-toggle" data-action="toggle-sidebar" type="button" aria-label="收合側邊欄" title="收合 / 展開">
+                    <i class="ph ph-sidebar-simple"></i>
+                </button>
+            </div>
+            <nav class="sidebar-nav" aria-label="主要導覽">
+                <div class="nav-group">
+                    <span class="nav-section-label">總覽</span>
+                    <a href="#dashboard" class="nav-item active" data-view="dashboard" data-label="首頁">
+                        <i class="ph ph-squares-four"></i>
+                        <span class="nav-label">首頁</span>
+                    </a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-section-label">營運</span>
+
+                    <a href="#properties" class="nav-item nav-item-parent" data-view="properties" data-parent-key="properties" data-label="物件管理">
+                        <i class="ph ph-house-line"></i>
+                        <span class="nav-label">物件管理</span>
+                        <button class="nav-collapse-btn" type="button" data-collapse-target="properties" aria-label="收合 / 展開" title="收合 / 展開">
+                            <i class="ph ph-caret-down"></i>
+                        </button>
+                    </a>
+                    <div class="nav-children" data-children-of="properties">
+                        <a href="#occupancy" class="nav-item nav-item-child" data-view="occupancy" data-label="住房一覽">
+                            <i class="ph ph-table"></i>
+                            <span class="nav-label">住房一覽</span>
+                        </a>
+                    </div>
+
+                    <a href="#contracts" class="nav-item" data-view="contracts" data-label="合約管理">
+                        <i class="ph ph-file-text"></i>
+                        <span class="nav-label">合約管理</span>
+                    </a>
+
+                    <a href="#finance" class="nav-item" data-view="finance" data-label="帳務管理">
+                        <i class="ph ph-wallet"></i>
+                        <span class="nav-label">帳務管理</span>
+                    </a>
+                    <a href="#maintenance" class="nav-item" data-view="maintenance" data-label="維修管理">
+                        <i class="ph ph-wrench"></i>
+                        <span class="nav-label">維修管理</span>
+                    </a>
+                    <a href="#tenants" class="nav-item" data-view="tenants" data-label="租客清單">
+                        <i class="ph ph-users"></i>
+                        <span class="nav-label">租客清單</span>
+                    </a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-section-label">報表</span>
+                    <a href="#reports" class="nav-item" data-view="reports" data-label="各館收入報表">
+                        <i class="ph ph-chart-line-up"></i>
+                        <span class="nav-label">各館收入報表</span>
+                    </a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-section-label">系統</span>
+                    <a href="#settings" class="nav-item" data-view="settings" data-label="系統設定">
+                        <i class="ph ph-gear-six"></i>
+                        <span class="nav-label">系統設定</span>
+                    </a>
+                    <a href="#admin-users" class="nav-item" data-view="admin-users" data-label="帳號管理" id="nav-admin-users" style="display: none;">
+                        <i class="ph ph-user-gear"></i>
+                        <span class="nav-label">帳號管理</span>
+                    </a>
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-profile" role="button" tabindex="0" onclick="showAccountSettings()" data-label="管理員">
+                    <div class="avatar-wrap">
+                        <div class="avatar">A</div>
+                        <span class="avatar-status" title="線上"></span>
+                    </div>
+                    <div class="user-info">
+                        <span class="user-name">管理員</span>
+                        <span class="sync-indicator" id="syncIndicator" role="button" tabindex="0" onclick="event.stopPropagation(); window.location.hash='#settings'; setTimeout(()=>{ const t = document.querySelector('[data-settings-tab=&quot;sync&quot;]'); if (t) t.click(); }, 50);" title="同步狀態 — 點擊前往設定">
+                            <i class="ph ph-cloud-slash"></i>
+                            <span class="sync-label">同步未啟用</span>
+                        </span>
+                    </div>
+                    <div class="user-actions">
+                        <button class="profile-action" type="button" title="帳號設定" onclick="event.stopPropagation(); showAccountSettings();">
+                            <i class="ph ph-user-gear"></i>
+                        </button>
+                        <button class="profile-action" type="button" title="主題切換" onclick="event.stopPropagation(); window.toggleAppTheme && window.toggleAppTheme();">
+                            <i class="ph ph-moon"></i>
+                        </button>
+                        <button class="profile-action profile-action-danger" type="button" title="登出" onclick="event.stopPropagation(); window.logoutPlaceholder && window.logoutPlaceholder();">
+                            <i class="ph ph-sign-out"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="app-version" role="button" tabindex="0" onclick="window.showAboutApp && window.showAboutApp()" title="關於系統">
+                    <span class="app-version-text">聚空間 BMS <span id="app-version-num">v—</span></span>
+                    <span class="app-version-copy">© 2026 聚空間</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <div class="topbar-title">
+                        <span class="page-eyebrow">聚空間</span>
+                        <h1 id="page-title">即時數據報表</h1>
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <div class="search-bar">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" placeholder="搜尋物件、租客或合約...">
+                        <kbd class="search-kbd">/</kbd>
+                    </div>
+                    <button class="icon-btn notification-btn" title="通知">
+                        <i class="ph ph-bell"></i>
+                        <span class="badge">0</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Dynamic Views Container -->
+            <div id="view-container" class="view-container">
+                <!-- Views will be injected here by app.js -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts (entry point only; the rest are imported as ES modules) -->
+    <script src="js/app.js?v=20260603b" type="module"></script>
+</body>
+</html>
