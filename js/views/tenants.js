@@ -98,7 +98,7 @@ export function renderTenants() {
                         <i class="ph ph-magnifying-glass"></i>
                         <input type="text" placeholder="搜尋租客姓名或電話..." style="font-size: 0.875rem;">
                     </div>
-                    <button class="btn btn-primary" id="btn-new-tenant">
+                    <button class="btn btn-primary" id="btn-new-tenant" data-fab="ph-user-plus">
                         <i class="ph ph-user-plus"></i> 新增租客
                     </button>
                 </div>

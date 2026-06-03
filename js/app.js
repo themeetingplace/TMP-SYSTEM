@@ -15,6 +15,7 @@ import { initGlobalSearch, initNotifications } from './utils/topbar.js';
 import { initSidebar } from './utils/sidebar.js';
 import './utils/entityNav.js'; // UIUX #2: 暴露 window.openEntity(type, id)
 import { applyPendingRowFlash } from './utils/rowFlash.js'; // QW: CRUD 後 row 黃光閃
+import { autoFixA11y } from './utils/a11yAutoFix.js';      // C-3: icon-only button 自動補 aria-label
 import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
@@ -29,18 +30,18 @@ const pageTitle = document.getElementById('page-title');
 const navItems = document.querySelectorAll('.nav-item');
 
 const routes = {
-    dashboard: { title: '首頁', render: renderDashboard },
-    properties: { title: '物件管理', render: renderProperties, init: initPropertyActions },
-    occupancy: { title: '住房一覽', render: renderOccupancy, init: initOccupancyActions },
-    contracts: { title: '合約管理', render: renderContracts, init: initContractActions },
-    finance: { title: '總收支表', render: renderFinance, init: initFinanceActions },
-    analysis: { title: '收支分析', render: renderAnalysis, init: initAnalysisActions },
-    unsettled: { title: '房租查帳', render: renderUnsettled, init: initUnsettledActions },
-    reports: { title: '各館收入報表', render: renderReports, init: initReportsActions },
-    maintenance: { title: '維修管理', render: renderMaintenance, init: initMaintenanceActions },
-    tenants: { title: '租客清單', render: renderTenants, init: initTenantActions },
-    settings: { title: '系統設定', render: renderSettings, init: initSettingsActions },
-    'admin-users': { title: '帳號管理', render: renderAdminUsers, init: initAdminUsersActions, ownerOnly: true }
+    dashboard:     { title: '首頁',         group: '總覽', render: renderDashboard },
+    properties:    { title: '物件管理',     group: '營運', render: renderProperties, init: initPropertyActions },
+    occupancy:     { title: '住房一覽',     group: '營運', render: renderOccupancy,  init: initOccupancyActions },
+    contracts:     { title: '合約管理',     group: '營運', render: renderContracts,  init: initContractActions },
+    finance:       { title: '總收支表',     group: '帳務', render: renderFinance,    init: initFinanceActions },
+    analysis:      { title: '收支分析',     group: '帳務', render: renderAnalysis,   init: initAnalysisActions },
+    unsettled:     { title: '房租查帳',     group: '帳務', render: renderUnsettled,  init: initUnsettledActions },
+    reports:       { title: '各館收入報表', group: '報表', render: renderReports,    init: initReportsActions },
+    maintenance:   { title: '維修管理',     group: '營運', render: renderMaintenance,init: initMaintenanceActions },
+    tenants:       { title: '租客清單',     group: '營運', render: renderTenants,    init: initTenantActions },
+    settings:      { title: '系統設定',     group: '系統', render: renderSettings,   init: initSettingsActions },
+    'admin-users': { title: '帳號管理',     group: '系統', render: renderAdminUsers, init: initAdminUsersActions, ownerOnly: true }
 };
 
 function handleRoute() {
@@ -59,6 +60,17 @@ function handleRoute() {
         return;
     }
     pageTitle.textContent = route.title;
+    // M-2: 更新 breadcrumb (取代寫死的「聚空間」eyebrow)
+    const breadcrumbEl = document.getElementById('page-breadcrumb');
+    if (breadcrumbEl) {
+        if (route.group) {
+            breadcrumbEl.innerHTML = `${route.group} <span class="pb-sep">›</span> <span class="pb-current">${route.title}</span>`;
+        } else {
+            breadcrumbEl.textContent = route.title;
+        }
+    }
+    // M-R-1: 切頁後自動關閉手機 drawer
+    closeMobileDrawer();
 
     // Update Nav Activity
     // UIUX #1: finance/analysis/unsettled 都映射到 sidebar 的「帳務管理」(data-view='finance')
@@ -103,11 +115,53 @@ function handleRoute() {
 
     // QW: 若 store 操作前有排程 row-flash，這裡套用
     applyPendingRowFlash();
+
+    // C-3: 自動補 aria-label / aria-hidden
+    autoFixA11y(viewElement);
+
+    // M-R-5: 手機 FAB — 找 [data-fab] 主要按鈕，做一個底部固定 FAB 代理它
+    updateMobileFab(viewElement);
+}
+
+function updateMobileFab(viewElement) {
+    document.querySelector('.mobile-fab')?.remove();
+    const primary = viewElement.querySelector('[data-fab]');
+    if (!primary) return;
+    const icon = primary.dataset.fab || 'ph-plus';
+    const label = primary.textContent.replace(/\s+/g, ' ').trim() || '新增';
+    const fab = document.createElement('button');
+    fab.className = 'mobile-fab';
+    fab.type = 'button';
+    fab.setAttribute('aria-label', label);
+    fab.title = label;
+    fab.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`;
+    fab.addEventListener('click', () => primary.click());
+    document.body.appendChild(fab);
 }
 
 // P1-15: localStorage 滿時跳 toast 警告
 window.addEventListener('bms:storage-full', () => {
     showToast('本機儲存空間已滿，編輯可能無法保留到下次重整。請聯絡開發者改用 IndexedDB', 'danger', 8000);
+});
+
+// M-R-1: 手機 sidebar drawer 開關
+function openMobileDrawer() {
+    document.querySelector('.sidebar')?.classList.add('is-mobile-open');
+    document.getElementById('sidebar-backdrop')?.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+}
+function closeMobileDrawer() {
+    document.querySelector('.sidebar')?.classList.remove('is-mobile-open');
+    document.getElementById('sidebar-backdrop')?.classList.remove('is-open');
+    document.body.style.overflow = '';
+}
+window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('topbar-hamburger')?.addEventListener('click', openMobileDrawer);
+    document.getElementById('sidebar-backdrop')?.addEventListener('click', closeMobileDrawer);
+    // ESC 關閉
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeMobileDrawer();
+    });
 });
 
 // QW-C5: 全域 "/" 鍵聚焦 topbar 搜尋 (UI 上已有 kbd 提示)

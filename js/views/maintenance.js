@@ -87,7 +87,7 @@ export function renderMaintenance() {
                         <i class="ph ph-magnifying-glass"></i>
                         <input type="text" placeholder="搜尋工單編號或物件..." style="font-size: 0.875rem;">
                     </div>
-                    <button class="btn btn-primary" id="btn-new-maintenance">
+                    <button class="btn btn-primary" id="btn-new-maintenance" data-fab="ph-wrench">
                         <i class="ph ph-plus"></i> 新增報修
                     </button>
                 </div>

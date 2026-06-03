@@ -192,7 +192,7 @@ export function renderContracts() {
                         <i class="ph ph-magnifying-glass"></i>
                         <input type="text" placeholder="搜尋合約編號或租客..." style="font-size: 0.875rem;">
                     </div>
-                    <button class="btn btn-primary" id="btn-new-contract">
+                    <button class="btn btn-primary" id="btn-new-contract" data-fab="ph-file-plus">
                         <i class="ph ph-plus"></i> 建立合約
                     </button>
                 </div>

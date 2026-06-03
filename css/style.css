@@ -3909,6 +3909,203 @@ select.form-input {
     }
 }
 
+/* ============================================================
+ * Audit 第二輪 (2026-06-03)
+ * 對應 UIUX_AUDIT_REPORT 的 C-2/C-3/C-4/M-2/M-4 + M-R-1/M-R-5
+ * ============================================================ */
+
+/* C-2: data-table 加 sticky thead — 滾下去仍能看欄位 */
+.table-container {
+    max-height: calc(100vh - 320px);
+    overflow: auto;
+}
+.data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-secondary, #fafbfc);
+}
+/* 修正 sticky-right action 欄跟 sticky thead 交疊時的層級 */
+.data-table thead th:last-child { z-index: 3; }
+
+/* C-4: 抽 6 個基礎 utility class 打底，未來分批替換 inline style */
+.text-2xs   { font-size: var(--text-2xs); }
+.text-xs    { font-size: var(--text-xs); }
+.text-sm    { font-size: var(--text-sm); }
+.text-muted { color: var(--text-muted); }
+.text-success { color: var(--color-success); }
+.text-danger { color: var(--color-danger); }
+.text-warning { color: var(--color-warning); }
+.text-primary { color: var(--color-primary); }
+.cell-stack { display: flex; flex-direction: column; gap: 0.25rem; }
+.cell-primary { font-weight: 600; color: var(--text-main); }
+.cell-sub { font-size: var(--text-2xs); color: var(--text-muted); }
+.flex-1 { flex: 1; }
+.gap-1 { gap: 0.25rem; }
+.gap-3 { gap: 0.75rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* M-4: 空狀態通用樣式 (給 dashboard 待辦 / 列表空無資料) */
+.empty-state-friendly {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.5rem 1rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+.empty-state-friendly .esf-icon {
+    font-size: 2rem;
+    color: var(--color-success);
+    opacity: 0.7;
+    animation: float-idle 3s ease-in-out infinite alternate;
+}
+.empty-state-friendly .esf-title {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+.empty-state-friendly .esf-hint {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+@keyframes float-idle {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .empty-state-friendly .esf-icon { animation: none; }
+}
+
+/* M-2: topbar breadcrumb 樣式 (取代寫死「聚空間」eyebrow) */
+.page-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+.page-eyebrow .pb-sep {
+    opacity: 0.5;
+    font-size: 0.65rem;
+}
+.page-eyebrow .pb-current {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* M-R-1: 手機 sidebar → drawer
+   ≤ 768：sidebar 變 fixed drawer (預設藏在 -100%)，點漢堡 → 展開
+   桌面：照常 (上面的 ≤1100 規則 + 預設 260px) */
+.topbar-hamburger {
+    display: none;
+    width: 40px;
+    height: 40px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 1.4rem;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0.5rem;
+    transition: background var(--transition-fast);
+}
+.topbar-hamburger:hover {
+    background: var(--bg-secondary);
+    color: var(--color-primary);
+}
+
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 998;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.sidebar-backdrop.is-open {
+    display: block;
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .topbar-hamburger { display: inline-flex; }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 280px !important;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 999;
+        box-shadow: 0 0 24px rgba(0, 0, 0, 0.15);
+    }
+    .sidebar.is-mobile-open {
+        transform: translateX(0);
+    }
+    /* 手機 drawer 內回到完整版面 (蓋掉 ≤1100 的 icon-only 規則) */
+    .sidebar.is-mobile-open:not(.is-collapsed) {
+        width: 280px !important;
+    }
+    .sidebar.is-mobile-open .nav-label,
+    .sidebar.is-mobile-open .nav-section-label,
+    .sidebar.is-mobile-open .logo-img-wordmark,
+    .sidebar.is-mobile-open .user-info,
+    .sidebar.is-mobile-open .user-actions,
+    .sidebar.is-mobile-open .brand-row {
+        display: revert;
+    }
+    .sidebar.is-mobile-open .nav-item,
+    .sidebar.is-mobile-open .user-profile {
+        justify-content: flex-start;
+    }
+    /* main-content 不再被 sidebar push */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+}
+
+/* M-R-5: 手機「新增」FAB (fixed bottom-right) */
+.mobile-fab {
+    display: none;
+    position: fixed;
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    box-shadow: 0 6px 16px rgba(249, 115, 22, 0.35);
+    font-size: 1.6rem;
+    cursor: pointer;
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.mobile-fab:hover,
+.mobile-fab:active {
+    transform: scale(1.05);
+    box-shadow: 0 8px 20px rgba(249, 115, 22, 0.45);
+}
+@media (max-width: 768px) {
+    .mobile-fab { display: inline-flex; }
+    /* 同時讓桌面版「新增」按鈕在手機上隱藏（避免重複） */
+    .btn[data-mobile-as-fab] { display: none; }
+}
+
 
 .custom-select-search {
     position: sticky;

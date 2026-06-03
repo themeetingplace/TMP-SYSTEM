@@ -1,4 +1,5 @@
 import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings } from '../data.js';
+import { emptyState } from '../utils/emptyState.js';
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
 function extractAreaName(fullName) {
@@ -289,10 +290,10 @@ export function renderDashboard() {
                             </div>
                             <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
                         </div>
-                    `).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.875rem;">暫無待辦事項</div>'}
+                    `).join('') : emptyState({ icon: 'ph-check-circle', title: '本月合約都安全', hint: '沒有即將到期 / 待簽 / 需決策的合約' })}
                 </div>
             </div>
-            
+
             <div class="card">
                 <h2 class="card-title"><i class="ph ph-wallet"></i> 帳款事項</h2>
                 <div style="display: flex; flex-direction: column; gap: 0.75rem;">
@@ -306,10 +307,10 @@ export function renderDashboard() {
                             </div>
                             <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
                         </div>
-                    `).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.875rem;">暫無待辦事項</div>'}
+                    `).join('') : emptyState({ icon: 'ph-coffee', title: '所有帳款都清光了', hint: '沒有待繳款或未對帳的項目' })}
                 </div>
             </div>
-            
+
             <div class="card">
                 <h2 class="card-title"><i class="ph ph-wrench"></i> 維修事項</h2>
                 <div style="display: flex; flex-direction: column; gap: 0.75rem;">
@@ -323,7 +324,7 @@ export function renderDashboard() {
                             </div>
                             <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
                         </div>
-                    `).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.875rem;">暫無待辦事項</div>'}
+                    `).join('') : emptyState({ icon: 'ph-confetti', title: '沒有未處理的維修', hint: '所有報修都已完成或進行中' })}
                 </div>
             </div>
         </div>

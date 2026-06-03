@@ -7,8 +7,8 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>聚空間 BMS 物件管理系統</title>
-    <link rel="icon" type="image/png" href="assets/logo-icon.png?v=20260603j">
-    <link rel="apple-touch-icon" href="assets/logo-icon.png?v=20260603j">
+    <link rel="icon" type="image/png" href="assets/logo-icon.png?v=20260603k">
+    <link rel="apple-touch-icon" href="assets/logo-icon.png?v=20260603k">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -24,12 +24,14 @@
 </head>
 <body>
     <div class="app-container">
+        <!-- Mobile sidebar backdrop (drawer 開啟時的灰色遮罩) -->
+        <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <a href="#dashboard" class="logo" aria-label="聚空間首頁">
-                    <img src="assets/logo-icon.png?v=20260603j" class="logo-img-icon" alt="聚空間 icon">
-                    <img src="assets/logo-full.png?v=20260603j" class="logo-img-wordmark" alt="聚空間">
+                    <img src="assets/logo-icon.png?v=20260603k" class="logo-img-icon" alt="聚空間 icon">
+                    <img src="assets/logo-full.png?v=20260603k" class="logo-img-wordmark" alt="聚空間">
                 </a>
                 <button class="sidebar-toggle" data-action="toggle-sidebar" type="button" aria-label="收合側邊欄" title="收合 / 展開">
                     <i class="ph ph-sidebar-simple"></i>
@@ -134,8 +136,11 @@
             <!-- Topbar -->
             <header class="topbar">
                 <div class="topbar-left">
+                    <button class="topbar-hamburger" type="button" id="topbar-hamburger" aria-label="開啟側邊選單" title="選單">
+                        <i class="ph ph-list" aria-hidden="true"></i>
+                    </button>
                     <div class="topbar-title">
-                        <span class="page-eyebrow">聚空間</span>
+                        <span class="page-eyebrow" id="page-breadcrumb">總覽</span>
                         <h1 id="page-title">即時數據報表</h1>
                     </div>
                 </div>
