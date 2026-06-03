@@ -4039,18 +4039,22 @@ select.form-input {
     color: var(--color-primary);
 }
 
+/* backdrop: 改用 visibility 切換 (display 切換不能 transition opacity)
+   桌面始終看不見、不可點；手機 .is-open 才出現 */
 .sidebar-backdrop {
-    display: none;
     position: fixed;
     inset: 0;
     background: rgba(15, 23, 42, 0.45);
     z-index: 998;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 .sidebar-backdrop.is-open {
-    display: block;
     opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
 }
 
 @media (max-width: 768px) {
@@ -4066,10 +4070,17 @@ select.form-input {
         transition: transform 0.25s ease, width 0.2s ease;
         z-index: 999;
         box-shadow: 0 0 24px rgba(0, 0, 0, 0.15);
+        /* drawer 關閉狀態完全不接受互動，避免「隱形 sidebar 擋住主內容左邊」 */
+        pointer-events: none;
+        visibility: hidden;
     }
     .sidebar.is-mobile-open {
         transform: translateX(0);
+        pointer-events: auto;
+        visibility: visible;
     }
+    /* 手機：原 sidebar-toggle 收合功能在 drawer 內無意義，直接隱藏；用 backdrop / 漢堡 / nav-item 切頁來關 */
+    .sidebar-toggle { display: none; }
     /* 手機 drawer 內回到完整版面 (蓋掉 ≤1100 的 icon-only 規則) */
     .sidebar.is-mobile-open:not(.is-collapsed) {
         width: 280px !important;

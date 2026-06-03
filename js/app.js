@@ -149,6 +149,9 @@ window.addEventListener('bms:storage-full', () => {
 });
 
 // M-R-1: 手機 sidebar drawer 開關
+function isMobileDrawerOpen() {
+    return document.querySelector('.sidebar')?.classList.contains('is-mobile-open');
+}
 function openMobileDrawer() {
     document.querySelector('.sidebar')?.classList.add('is-mobile-open');
     document.getElementById('sidebar-backdrop')?.classList.add('is-open');
@@ -159,13 +162,27 @@ function closeMobileDrawer() {
     document.getElementById('sidebar-backdrop')?.classList.remove('is-open');
     document.body.style.overflow = '';
 }
+function toggleMobileDrawer() {
+    if (isMobileDrawerOpen()) closeMobileDrawer(); else openMobileDrawer();
+}
+
 window.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('topbar-hamburger')?.addEventListener('click', openMobileDrawer);
+    // 漢堡 = toggle (不是只能開)
+    document.getElementById('topbar-hamburger')?.addEventListener('click', toggleMobileDrawer);
+    // 點 backdrop 關
     document.getElementById('sidebar-backdrop')?.addEventListener('click', closeMobileDrawer);
     // ESC 關閉
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeMobileDrawer();
     });
+    // 手機在 drawer 內點原本的 sidebar-toggle (sidebar header 內) → 也關 drawer
+    document.querySelector('.sidebar-toggle')?.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768) {
+            e.stopPropagation();   // 不讓原本的 is-collapsed toggle 行為觸發
+            e.preventDefault();
+            closeMobileDrawer();
+        }
+    }, true);  // capture phase 確保比 sidebar.js 的 handler 先跑
     // T3-M-3: 視窗放大過 768 時自動關 drawer，避免桌面殘留
     let _resizeTimer;
     window.addEventListener('resize', () => {
