@@ -172,22 +172,30 @@ select:focus-visible,
     flex: 1;
 }
 
-/* Sidebar logo — 展開時用標準字 (icon + 「聚空間」)，收合時切純 icon */
-.logo-img {
-    display: inline-block;
-    height: 38px;
-    width: auto;
-    max-width: 160px;
+/* Sidebar logo — 展開時 icon + 標準字 (聚空間) 併排；收合時只剩 icon */
+.logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.logo-img-icon {
+    width: 34px;
+    height: 34px;
     object-fit: contain;
     flex-shrink: 0;
 }
-.logo-img-collapsed { display: none; }
-.sidebar.is-collapsed .logo-img-expanded { display: none; }
-.sidebar.is-collapsed .logo-img-collapsed {
-    display: inline-block;
-    width: 36px;
-    height: 36px;
-    max-width: 36px;
+.logo-img-wordmark {
+    height: 22px;
+    width: auto;
+    max-width: 110px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+/* 收合時隱藏標準字，只剩 icon */
+.sidebar.is-collapsed .logo-img-wordmark { display: none; }
+.sidebar.is-collapsed .logo {
+    gap: 0;
+    justify-content: center;
 }
 
 /* 舊 .logo-mark / .logo-wordmark — 留 fallback 不刪，給 .ph icon 用 (萬一改回) */
