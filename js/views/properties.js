@@ -190,7 +190,7 @@ export function renderProperties() {
             <div class="card metric-card">
                 <div class="metric-header"><span>已出租</span><div class="metric-icon success"><i class="ph ph-house-line"></i></div></div>
                 <div class="metric-value">${rentedCount}</div>
-                <div class="metric-subtext">出租率 ${Math.round(rentedCount / totalProperties * 100)}%</div>
+                <div class="metric-subtext">出租率 ${totalProperties > 0 ? Math.round(rentedCount / totalProperties * 100) : 0}%</div>
             </div>
             <div class="card metric-card">
                 <div class="metric-header"><span>空床中</span><div class="metric-icon warning"><i class="ph ph-house"></i></div></div>

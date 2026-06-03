@@ -1571,7 +1571,7 @@ select:focus-visible,
 .sync-indicator.status-idle    { color: var(--color-success); }
 .sync-indicator.status-pulling i,
 .sync-indicator.status-pushing i {
-    animation: sync-spin 1.5s linear infinite;
+    animation: sync-spin 0.8s linear infinite;  /* A-M-2: 1.5s 太慢，看不出進行中 */
 }
 .sync-indicator.status-pulling { color: var(--color-info, #3b82f6); }
 .sync-indicator.status-pushing { color: var(--color-info, #3b82f6); }
@@ -2185,9 +2185,8 @@ select:focus-visible,
     border-color: var(--border-strong);
 }
 
-.metric-card.card:hover {
-    transform: translateY(-2px);
-}
+/* A-M-1: 拿掉 metric-card 額外 translateY，避免 dashboard 一片 card 同步抖
+   .card:hover 的 shadow + border 已足夠 feedback */
 
 .card-title {
     font-size: 0.9375rem;
@@ -3734,6 +3733,182 @@ select.form-input {
 .custom-select-panel[hidden] {
     display: none !important;
 }
+
+/* ============================================================
+ * Audit Quick Wins (2026-06-03)
+ * 對應 UIUX_AUDIT_REPORT_2026-06-03.md 的快速改善
+ * ============================================================ */
+
+/* QW-P11: 金額/數字欄使用 tabular-nums，欄位對齊不抖動 */
+.data-table td,
+.data-table th,
+.metric-value,
+.cell-value,
+#app-version-num,
+.brand-text {
+    font-variant-numeric: tabular-nums;
+}
+
+/* QW-AM4: 表單欄位 required 沒填時，input-error 加 shake 一次 */
+@keyframes input-shake {
+    0%, 100% { transform: translateX(0); }
+    25%      { transform: translateX(-4px); }
+    75%      { transform: translateX(4px); }
+}
+.input-error {
+    animation: input-shake 0.3s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+    .input-error { animation: none; }
+}
+
+/* QW-AP7: modal 退場動畫 (對稱於進場) */
+.modal-overlay.is-closing {
+    animation: modalOverlayOut 0.18s ease-in forwards;
+}
+.modal-overlay.is-closing .modal-content {
+    animation: modalContentOut 0.18s ease-in forwards;
+}
+@keyframes modalOverlayOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}
+@keyframes modalContentOut {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateY(8px) scale(0.99); }
+}
+
+/* QW: undo toast 底部 5 秒倒數進度條 */
+.undo-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    border-radius: 0 0 var(--radius-md, 8px) var(--radius-md, 8px);
+}
+.undo-progress-fill {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: var(--color-primary);
+    transform-origin: left center;
+}
+.toast.toast-undo {
+    position: relative;
+    padding-bottom: 0.65rem;  /* 多留一點空間給進度條 */
+}
+
+/* row-flash 顏色從 hardcoded 改用 token */
+@keyframes row-flash-anim-tokenized {
+    0%   { background-color: rgba(255, 136, 89, 0); }
+    20%  { background-color: rgba(255, 136, 89, 0.18); }
+    100% { background-color: rgba(255, 136, 89, 0); }
+}
+
+/* ============================================================
+ * 響應式 Quick Wins (2026-06-03)
+ * 對應 UIUX_AUDIT_REPORT_2026-06-03.md Part 4 響應式 QW 1-5
+ * ============================================================ */
+
+/* R-C-1: sidebar 在 ≤ 1100 強制自動收合（icon-only 模式） */
+@media (max-width: 1100px) {
+    .sidebar:not(.is-collapsed) {
+        width: var(--sidebar-width-collapsed, 76px);
+    }
+    .sidebar:not(.is-collapsed) .nav-label,
+    .sidebar:not(.is-collapsed) .nav-section-label,
+    .sidebar:not(.is-collapsed) .logo-img-wordmark,
+    .sidebar:not(.is-collapsed) .user-info,
+    .sidebar:not(.is-collapsed) .user-actions,
+    .sidebar:not(.is-collapsed) .brand-row,
+    .sidebar:not(.is-collapsed) .nav-item-toggle {
+        display: none;
+    }
+    .sidebar:not(.is-collapsed) .nav-item,
+    .sidebar:not(.is-collapsed) .user-profile {
+        justify-content: center;
+    }
+}
+
+/* R-C-2 / M-C-2: 所有 data-table 操作欄 sticky right，6-9 欄表格永遠看得到操作 */
+.data-table th:last-child,
+.data-table td:last-child {
+    position: sticky;
+    right: 0;
+    background: var(--color-surface);
+    box-shadow: -4px 0 6px -4px rgba(0, 0, 0, 0.06);
+    z-index: 1;
+}
+.data-table tbody tr:hover td:last-child {
+    background: var(--bg-secondary, #fafbfc);
+}
+
+/* M-C-3: modal 在 ≤ 600px 改 bottom sheet (全螢幕貼底) */
+@media (max-width: 600px) {
+    .modal-overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+    .modal-content {
+        max-width: 100% !important;
+        width: 100%;
+        max-height: 95vh;
+        border-radius: 16px 16px 0 0;
+    }
+    .modal-footer {
+        padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+}
+
+/* R-M-1: page-level toolbar 在 ≤ 900 自動換行 (properties / contracts / finance / maintenance / tenants 共 5 頁) */
+@media (max-width: 900px) {
+    .card > .flex.justify-between {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .card > .flex.justify-between > .flex {
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+    }
+    .card > .flex.justify-between .search-bar {
+        width: auto !important;
+        flex: 1 1 180px;
+        min-width: 160px;
+    }
+}
+
+/* R-M-4: settings-tabs 在 ≤ 720 改橫向捲動，不再爆排版 */
+@media (max-width: 720px) {
+    .settings-tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    .settings-tabs::-webkit-scrollbar { display: none; }
+    .settings-tab {
+        flex-shrink: 0;
+    }
+}
+
+/* M-P-4: toast 在手機補上 safe-area-inset 避免被底部 home indicator 遮 */
+#toast-container {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* M-P-5: 觸控設備 icon-btn 最小 44×44 觸控目標 */
+@media (max-width: 768px) {
+    .icon-btn,
+    .profile-action,
+    .pg-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
 
 .custom-select-search {
     position: sticky;

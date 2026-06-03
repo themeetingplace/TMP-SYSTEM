@@ -14,6 +14,7 @@ import { initTableInteractions } from './utils/tableFilter.js';
 import { initGlobalSearch, initNotifications } from './utils/topbar.js';
 import { initSidebar } from './utils/sidebar.js';
 import './utils/entityNav.js'; // UIUX #2: 暴露 window.openEntity(type, id)
+import { applyPendingRowFlash } from './utils/rowFlash.js'; // QW: CRUD 後 row 黃光閃
 import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
@@ -99,12 +100,38 @@ function handleRoute() {
             window.initDashboardInteractions();
         }
     }
+
+    // QW: 若 store 操作前有排程 row-flash，這裡套用
+    applyPendingRowFlash();
 }
 
 // P1-15: localStorage 滿時跳 toast 警告
 window.addEventListener('bms:storage-full', () => {
     showToast('本機儲存空間已滿，編輯可能無法保留到下次重整。請聯絡開發者改用 IndexedDB', 'danger', 8000);
 });
+
+// QW-C5: 全域 "/" 鍵聚焦 topbar 搜尋 (UI 上已有 kbd 提示)
+window.addEventListener('keydown', (e) => {
+    if (e.key !== '/') return;
+    // 不要在輸入欄位裡攔截
+    const t = e.target;
+    if (t.matches && t.matches('input, textarea, [contenteditable="true"]')) return;
+    const searchInput = document.querySelector('.search-bar input');
+    if (searchInput) {
+        e.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+    }
+});
+
+// QW-AC1: Chart.js 全域動畫縮短 (從 1000ms 預設改成 250ms)，並 respect prefers-reduced-motion
+if (typeof window.Chart !== 'undefined') {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.Chart.defaults.animation = {
+        duration: reduceMotion ? 0 : 250,
+        easing: 'easeOutCubic'
+    };
+}
 
 window.addEventListener('hashchange', handleRoute);
 window.addEventListener('DOMContentLoaded', async () => {

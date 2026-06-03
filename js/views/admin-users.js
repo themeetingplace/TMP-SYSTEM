@@ -27,12 +27,12 @@ async function loadAdmins() {
 
 function roleBadge(role) {
     if (role === 'owner') {
-        return `<span class="status-badge primary" title="可管理其他帳號">👑 Owner</span>`;
+        return `<span class="status-badge primary" title="可管理其他帳號"><i class="ph-fill ph-crown" aria-hidden="true"></i> Owner</span>`;
     }
     if (role === 'viewer') {
-        return `<span class="status-badge" style="background: var(--bg-tertiary); color: var(--text-muted);">👁 Viewer</span>`;
+        return `<span class="status-badge" style="background: var(--bg-tertiary); color: var(--text-muted);"><i class="ph-fill ph-eye" aria-hidden="true"></i> Viewer</span>`;
     }
-    return `<span class="status-badge" style="background: var(--bg-secondary);">Admin</span>`;
+    return `<span class="status-badge" style="background: var(--bg-secondary);"><i class="ph-fill ph-wrench" aria-hidden="true"></i> Admin</span>`;
 }
 
 function formatDate(iso) {
@@ -86,11 +86,11 @@ export function renderAdminUsers() {
             </div>
 
             <div style="background: var(--bg-secondary); border-left: 3px solid var(--color-info, #0ea5e9); padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 4px; font-size: 0.8rem; color: var(--text-secondary);">
-                <strong>📋 角色說明</strong>
-                <div style="margin-top: 0.4rem; line-height: 1.6;">
-                    👑 <strong>Owner</strong> — 完整權限，可管理其他帳號（你跟老闆）<br>
-                    🛠 <strong>Admin</strong> — 完整 BMS 操作權限，但無法管理帳號（員工）<br>
-                    👁 <strong>Viewer</strong> — 預留給未來「只能看」的角色（目前等同 Admin）
+                <strong><i class="ph ph-info" aria-hidden="true"></i> 角色說明</strong>
+                <div style="margin-top: 0.4rem; line-height: 1.8; display: grid; gap: 0.25rem;">
+                    <div><i class="ph-fill ph-crown" aria-hidden="true" style="color: var(--color-primary);"></i> <strong>Owner</strong> — 完整權限，可管理其他帳號（你跟老闆）</div>
+                    <div><i class="ph-fill ph-wrench" aria-hidden="true" style="color: var(--text-secondary);"></i> <strong>Admin</strong> — 完整 BMS 操作權限，但無法管理帳號（員工）</div>
+                    <div><i class="ph-fill ph-eye" aria-hidden="true" style="color: var(--text-muted);"></i> <strong>Viewer</strong> — 預留給未來「只能看」的角色（目前等同 Admin）</div>
                 </div>
             </div>
 

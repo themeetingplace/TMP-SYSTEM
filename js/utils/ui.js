@@ -39,10 +39,14 @@ export function openModal({ title, bodyHtml, footerHtml = '', maxWidth = 600, on
     function close() {
         const idx = modalStack.indexOf(overlay);
         if (idx >= 0) modalStack.splice(idx, 1);
-        overlay.remove();
-        sweepOrphanSelectPanels();
+        // QW-AP7: modal 退場動畫 (對稱於進場 modalOverlayIn / modalContentIn)
+        overlay.classList.add('is-closing');
         document.removeEventListener('keydown', escClose);
-        if (onClose) onClose();
+        setTimeout(() => {
+            overlay.remove();
+            sweepOrphanSelectPanels();
+            if (onClose) onClose();
+        }, 180);
     }
 
     overlay.querySelector('.modal-close').addEventListener('click', close);
@@ -486,21 +490,32 @@ export function openDetailModal({ title, items = [], extraHtml = '', maxWidth = 
 
 // Toast 提示
 let toastContainer = null;
+function ensureToastContainer() {
+    if (toastContainer) return toastContainer;
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    // QW-M3: 加 ARIA — 螢幕閱讀器會自動朗讀 polite 區的新訊息
+    toastContainer.setAttribute('role', 'region');
+    toastContainer.setAttribute('aria-live', 'polite');
+    toastContainer.setAttribute('aria-label', '系統通知');
+    document.body.appendChild(toastContainer);
+    return toastContainer;
+}
+
 export function showToast(message, type = 'success', duration = 2500) {
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toast-container';
-        document.body.appendChild(toastContainer);
-    }
+    ensureToastContainer();
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
+    // danger 類額外標 alert (打斷現在朗讀，立刻播)
+    if (type === 'danger') toast.setAttribute('role', 'alert');
     const icon = type === 'success' ? 'ph-check-circle' : type === 'danger' ? 'ph-x-circle' : type === 'warning' ? 'ph-warning' : 'ph-info';
-    toast.innerHTML = `<i class="ph-fill ${icon}"></i> <span>${message}</span>`;
+    toast.innerHTML = `<i class="ph-fill ${icon}" aria-hidden="true"></i> <span>${message}</span>`;
     toastContainer.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('show'));
     setTimeout(() => {
         toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 200);
+        // QW-AM3: dismiss timer 200 → 260，配合 CSS transition 0.25s 完整跑完
+        setTimeout(() => toast.remove(), 260);
     }, duration);
 }
 
@@ -509,21 +524,27 @@ export function showToast(message, type = 'success', duration = 2500) {
 // - 倒數期間點 toast 上「復原」→ 觸發 onUndo
 // - 5 秒過後 toast 消失 → 觸發 onCommit (例如真的推 cloud DELETE)
 export function showUndoToast({ message, onUndo, onCommit, durationMs = 5000 }) {
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toast-container';
-        document.body.appendChild(toastContainer);
-    }
+    ensureToastContainer();
     const toast = document.createElement('div');
     toast.className = 'toast toast-undo';
+    toast.setAttribute('role', 'status');
     toast.innerHTML = `
-        <i class="ph-fill ph-arrow-counter-clockwise"></i>
+        <i class="ph-fill ph-arrow-counter-clockwise" aria-hidden="true"></i>
         <span class="undo-msg">${message}</span>
         <button class="undo-btn" type="button">復原</button>
-        <span class="undo-countdown">${Math.ceil(durationMs / 1000)}</span>
+        <span class="undo-countdown" aria-hidden="true">${Math.ceil(durationMs / 1000)}</span>
+        <span class="undo-progress" aria-hidden="true"><span class="undo-progress-fill"></span></span>
     `;
     toastContainer.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('show'));
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+        // QW: 啟動底部進度條 (從 100% → 0%)
+        const fill = toast.querySelector('.undo-progress-fill');
+        if (fill) {
+            fill.style.transition = `width ${durationMs}ms linear`;
+            requestAnimationFrame(() => { fill.style.width = '0%'; });
+        }
+    });
 
     let secondsLeft = Math.ceil(durationMs / 1000);
     const countdownEl = toast.querySelector('.undo-countdown');
@@ -537,7 +558,7 @@ export function showUndoToast({ message, onUndo, onCommit, durationMs = 5000 }) 
         clearInterval(tick);
         clearTimeout(timer);
         toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 200);
+        setTimeout(() => toast.remove(), 260);
     };
 
     toast.querySelector('.undo-btn').addEventListener('click', () => {
