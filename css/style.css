@@ -3899,12 +3899,13 @@ select.form-input {
     }
 }
 
-/* M-P-4: toast 在手機補上 safe-area-inset 避免被底部 home indicator 遮 */
+/* T3R-#2: toast 在手機補 safe-area-inset-top (toast 容器是 top-right，原本擋 Dynamic Island)
+   bottom 那條無效，移除 */
 #toast-container {
-    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-top: env(safe-area-inset-top, 0);
 }
 
-/* M-P-5: 觸控設備觸控目標 ≥ 44×44 */
+/* M-P-5 + T3R-#4: 觸控設備觸控目標 ≥ 44×44 (擴大涵蓋) */
 @media (max-width: 768px) {
     .icon-btn,
     .profile-action,
@@ -3913,13 +3914,92 @@ select.form-input {
     .area-filter-btn,
     .data-table:not(.occ-table) .btn-outline,
     .data-table:not(.occ-table) .btn-sm,
-    .data-table:not(.occ-table) td button {
+    .data-table:not(.occ-table) td button,
+    .omn-back,
+    .omn-bed-actions .btn,
+    .modal-close,
+    .chart-mode-btn,
+    .month-switcher .btn,
+    .report-export-btn,
+    .occ-tab,
+    .settings-tab,
+    .fst-link,
+    .tenant-link,
+    .password-toggle {
         min-width: 44px;
         min-height: 44px;
     }
     .data-table:not(.occ-table) .btn-outline,
     .data-table:not(.occ-table) .btn-sm {
         padding: 0.55rem 0.8rem;
+    }
+    /* .omn-back 是 inline 字 + icon，要確保有 padding 撐高 */
+    .omn-back {
+        padding: 0.6rem 0.5rem;
+        font-size: 0.875rem;
+    }
+}
+
+/* T3R-#5: metric-card 在手機改 2 欄 + 字級縮小 (從 4 張縱排變 2×2 緊湊) */
+@media (max-width: 768px) {
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+    .metric-value {
+        font-size: 1.25rem;
+    }
+    .metric-card {
+        padding: 0.85rem 0.9rem;
+    }
+    .metric-card .metric-subtext {
+        font-size: 0.65rem;
+    }
+}
+
+/* T3R-#6: finance/analysis/unsettled sub-tabs 改保留 label 但縮短 */
+@media (max-width: 640px) {
+    .finance-sub-tab .fst-label {
+        display: inline !important;
+        font-size: 0.7rem;
+        margin-left: 0.25rem;
+    }
+    .finance-sub-tab {
+        padding: 0.55rem 0.6rem;
+    }
+}
+
+/* T3R-#8: area-filter-row 改橫向 scroll (≤768)，省垂直空間 */
+@media (max-width: 768px) {
+    .area-filter-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    .area-filter-row::-webkit-scrollbar { height: 4px; }
+    .area-filter-btn {
+        flex-shrink: 0;
+        scroll-snap-align: start;
+        min-width: auto;
+        padding: 0.6rem 0.85rem;
+    }
+}
+
+/* T3R-#9: month-switcher 在手機 wrap 避免擠爆 */
+@media (max-width: 640px) {
+    .month-switcher {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.4rem;
+    }
+    .month-switcher strong {
+        flex-basis: 100%;
+        text-align: center;
+        order: -1;
     }
 }
 

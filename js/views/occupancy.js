@@ -469,6 +469,18 @@ function renderMobileNav() {
 }
 
 export function renderOccupancy() {
+    // T3R-#3: 手機只 render 垂直導航，不渲染桌面矩陣表 (避免 N 床 × 10 月份的 reflow 卡頓)
+    const isMobile = typeof window !== 'undefined'
+        && window.matchMedia?.('(max-width: 768px)').matches;
+
+    if (isMobile) {
+        return `
+            <div class="occupancy-page">
+                ${renderMobileNav()}
+            </div>
+        `;
+    }
+
     const today = new Date();
     const monthCount = calculateMonthCount();
     const months = buildMonths(today, monthCount);
@@ -493,22 +505,31 @@ export function renderOccupancy() {
 
     const section = activeBuilding ? renderBuildingTable(activeBuilding, months, today) : '';
 
+    // 桌面：只 render 桌面矩陣 (手機已在前面 early-return)
     return `
         <div class="occupancy-page">
-            <!-- M-R-3: 手機垂直導航 (僅 ≤ 768px 顯示) -->
-            ${renderMobileNav()}
-            <!-- 桌面矩陣 (僅 > 768px 顯示) -->
-            <div class="occ-desktop-only">
-                <div class="card occ-intro">
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                        <div class="occ-tabs">${tabs}</div>
-                    </div>
+            <div class="card occ-intro">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <div class="occ-tabs">${tabs}</div>
                 </div>
-                ${section}
             </div>
+            ${section}
         </div>
     `;
 }
+
+// 視窗 resize 跨越 768 邊界時自動觸發 view 重新 render
+let _viewportTier = null;
+window.addEventListener('resize', () => {
+    const tier = window.matchMedia('(max-width: 768px)').matches ? 'mobile' : 'desktop';
+    if (_viewportTier === null) { _viewportTier = tier; return; }
+    if (tier !== _viewportTier && window.location.hash === '#occupancy') {
+        _viewportTier = tier;
+        window.refreshCurrentView?.();
+    } else {
+        _viewportTier = tier;
+    }
+});
 
 export function initOccupancyActions(scope) {
     // Tab 切換

@@ -44,9 +44,9 @@ export function initSidebar() {
         btn.addEventListener('click', (e) => e.stopPropagation());
     });
 
-    // 清掉舊版可能殘留的 mobile drawer DOM
-    document.querySelectorAll('.sidebar-backdrop').forEach(b => b.remove());
-    sidebar.classList.remove('is-open');
+    // 重置手機 drawer 狀態 (不刪 backdrop — 它是 M-R-1 drawer 的主元素)
+    sidebar.classList.remove('is-mobile-open');
+    document.getElementById('sidebar-backdrop')?.classList.remove('is-open');
 
     // === Nav 父項收合 (物件管理 / 帳務管理 等)
     const collapsed = readCollapsedGroups();
