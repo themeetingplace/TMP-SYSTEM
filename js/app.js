@@ -226,7 +226,7 @@ window.showAboutApp = function() {
             </div>
             <div class="modal-body">
                 <div class="about-hero">
-                    <div class="about-logo"><i class="ph-fill ph-buildings"></i></div>
+                    <div class="about-logo"><img src="assets/logo.png?v=20260603f" alt="聚空間"></div>
                     <div>
                         <div class="about-name">${APP_NAME}</div>
                         <div class="about-version">v${APP_VERSION} · ${APP_BUILD_DATE}</div>

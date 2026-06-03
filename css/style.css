@@ -175,18 +175,17 @@ select:focus-visible,
 .logo-mark {
     width: 36px;
     height: 36px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-    color: var(--text-inverse);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
-    box-shadow: 0 6px 14px -6px rgba(255, 116, 61, 0.55);
     flex-shrink: 0;
 }
-
-.logo-mark i { line-height: 1; }
+.logo-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.logo-mark i { line-height: 1; font-size: 1.25rem; }
 
 .logo-wordmark {
     display: flex;
@@ -491,16 +490,19 @@ select:focus-visible,
     margin-bottom: 1.75rem;
 }
 .auth-logo {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, var(--color-primary), var(--color-primary));
+    width: 52px;
+    height: 52px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
     font-size: 1.4rem;
     flex-shrink: 0;
+}
+.auth-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 .auth-brand-text {
     display: flex;
@@ -1719,16 +1721,17 @@ select:focus-visible,
     border-bottom: 1px solid var(--border-color);
 }
 .about-logo {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background: var(--color-primary, #4f46e5);
-    color: white;
+    width: 56px;
+    height: 56px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
     flex-shrink: 0;
+}
+.about-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 .about-name {
     font-size: 1.05rem;
