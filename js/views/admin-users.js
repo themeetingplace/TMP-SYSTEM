@@ -80,7 +80,7 @@ export function renderAdminUsers() {
                         管理可登入系統的 Google 帳號白名單。新增後該 email 需用 Google 登入一次才會啟用。
                     </p>
                 </div>
-                <button class="btn btn-primary" id="btn-add-admin">
+                <button class="btn btn-primary" id="btn-add-admin" data-fab="ph-user-plus">
                     <i class="ph ph-plus"></i> 新增管理員
                 </button>
             </div>

@@ -2121,8 +2121,12 @@ select:focus-visible,
     .topbar {
         padding: 0 1rem;
     }
+    /* T3-M-1: breadcrumb 在手機顯示縮小版（取代舊的全隱藏） */
     .page-eyebrow {
-        display: none;
+        display: inline-flex !important;
+        font-size: 0.6875rem;
+        letter-spacing: 0;
+        text-transform: none;
     }
     .topbar-left h1 {
         font-size: 1.0625rem;
@@ -3833,16 +3837,17 @@ select.form-input {
     }
 }
 
-/* R-C-2 / M-C-2: 所有 data-table 操作欄 sticky right，6-9 欄表格永遠看得到操作 */
-.data-table th:last-child,
-.data-table td:last-child {
+/* R-C-2 / M-C-2: 所有 data-table 操作欄 sticky right
+   T3 修正：排除 occupancy 矩陣（.occ-table）+ 排除 colspan 列（空狀態） */
+.data-table:not(.occ-table) thead th:last-child,
+.data-table:not(.occ-table) tbody td:last-child:not([colspan]) {
     position: sticky;
     right: 0;
     background: var(--color-surface);
     box-shadow: -4px 0 6px -4px rgba(0, 0, 0, 0.06);
     z-index: 1;
 }
-.data-table tbody tr:hover td:last-child {
+.data-table:not(.occ-table) tbody tr:hover td:last-child {
     background: var(--bg-secondary, #fafbfc);
 }
 
@@ -3899,13 +3904,22 @@ select.form-input {
     padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-/* M-P-5: 觸控設備 icon-btn 最小 44×44 觸控目標 */
+/* M-P-5: 觸控設備觸控目標 ≥ 44×44 */
 @media (max-width: 768px) {
     .icon-btn,
     .profile-action,
-    .pg-btn {
+    .pg-btn,
+    .filter-tab,
+    .area-filter-btn,
+    .data-table:not(.occ-table) .btn-outline,
+    .data-table:not(.occ-table) .btn-sm,
+    .data-table:not(.occ-table) td button {
         min-width: 44px;
         min-height: 44px;
+    }
+    .data-table:not(.occ-table) .btn-outline,
+    .data-table:not(.occ-table) .btn-sm {
+        padding: 0.55rem 0.8rem;
     }
 }
 
@@ -3914,19 +3928,22 @@ select.form-input {
  * 對應 UIUX_AUDIT_REPORT 的 C-2/C-3/C-4/M-2/M-4 + M-R-1/M-R-5
  * ============================================================ */
 
-/* C-2: data-table 加 sticky thead — 滾下去仍能看欄位 */
-.table-container {
-    max-height: calc(100vh - 320px);
-    overflow: auto;
-}
-.data-table thead th {
+/* C-2: data-table 加 sticky thead — 滾下去仍能看欄位 (純樣式，不強制 max-height) */
+.data-table:not(.occ-table) thead th {
     position: sticky;
     top: 0;
     z-index: 2;
     background: var(--bg-secondary, #fafbfc);
 }
 /* 修正 sticky-right action 欄跟 sticky thead 交疊時的層級 */
-.data-table thead th:last-child { z-index: 3; }
+.data-table:not(.occ-table) thead th:last-child { z-index: 3; }
+
+/* opt-in 才開內部捲動：在需要的 view 用 .table-container--scroll
+   全域不再強制 max-height，避免小表也吃內部捲動軸 */
+.table-container--scroll {
+    max-height: calc(100vh - 320px);
+    overflow: auto;
+}
 
 /* C-4: 抽 6 個基礎 utility class 打底，未來分批替換 inline style */
 .text-2xs   { font-size: var(--text-2xs); }
@@ -3962,7 +3979,12 @@ select.form-input {
     font-size: 2rem;
     color: var(--color-success);
     opacity: 0.7;
-    animation: float-idle 3s ease-in-out infinite alternate;
+    /* T3-P-1: 進場輕輕上移再回位 (一次性，不再無限循環)，避免三張卡同時抖 */
+    animation: esf-enter 0.6s ease-out;
+}
+@keyframes esf-enter {
+    from { transform: translateY(6px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 0.7; }
 }
 .empty-state-friendly .esf-title {
     font-size: var(--text-sm);
@@ -3972,10 +3994,6 @@ select.form-input {
 .empty-state-friendly .esf-hint {
     font-size: var(--text-xs);
     color: var(--text-muted);
-}
-@keyframes float-idle {
-    from { transform: translateY(0); }
-    to   { transform: translateY(-4px); }
 }
 @media (prefers-reduced-motion: reduce) {
     .empty-state-friendly .esf-icon { animation: none; }
@@ -4045,7 +4063,7 @@ select.form-input {
         height: 100vh;
         width: 280px !important;
         transform: translateX(-100%);
-        transition: transform 0.25s ease;
+        transition: transform 0.25s ease, width 0.2s ease;
         z-index: 999;
         box-shadow: 0 0 24px rgba(0, 0, 0, 0.15);
     }
@@ -4115,12 +4133,19 @@ select.form-input {
     .occ-table {
         min-width: 720px;
     }
+    /* 床位欄 sticky；其他固定資訊欄保留橫向捲動但有清晰標題 */
     .occ-table td.occ-bed-label {
         position: sticky;
         left: 0;
         background: var(--color-surface);
         z-index: 1;
         box-shadow: 4px 0 6px -4px rgba(0, 0, 0, 0.08);
+    }
+    .occ-table thead th:first-child {
+        position: sticky;
+        left: 0;
+        background: var(--bg-secondary, #fafbfc);
+        z-index: 4;  /* 高於 sticky thead 跟 sticky 床位欄 */
     }
 }
 
@@ -4148,14 +4173,14 @@ select.form-input {
         overflow: hidden;
         clip: rect(0, 0, 0, 0);
     }
-    .data-table,
-    .data-table tbody,
-    .data-table tr,
-    .data-table td {
+    .data-table:not(.occ-table),
+    .data-table:not(.occ-table) tbody,
+    .data-table:not(.occ-table) tr,
+    .data-table:not(.occ-table) td {
         display: block;
         width: 100%;
     }
-    .data-table tbody tr {
+    .data-table:not(.occ-table) tbody tr {
         background: var(--color-surface, #fff);
         border: 1px solid var(--border-color);
         border-radius: var(--radius-md, 8px);
@@ -4163,10 +4188,10 @@ select.form-input {
         margin-bottom: 0.6rem;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     }
-    .data-table tbody tr:hover {
+    .data-table:not(.occ-table) tbody tr:hover {
         background: var(--color-surface, #fff);
     }
-    .data-table td {
+    .data-table:not(.occ-table) td {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
@@ -4176,7 +4201,7 @@ select.form-input {
         text-align: right;
         font-size: var(--text-xs);
     }
-    .data-table td::before {
+    .data-table:not(.occ-table) td::before {
         content: attr(data-label);
         color: var(--text-muted);
         font-weight: 500;
@@ -4187,7 +4212,7 @@ select.form-input {
         min-width: 70px;
     }
     /* 第一個 td 通常是主名/編號 — 拿掉 label 顯示，當作卡片標題 */
-    .data-table td:first-child {
+    .data-table:not(.occ-table) td:first-child {
         font-weight: 600;
         font-size: var(--text-sm);
         padding-bottom: 0.5rem;
@@ -4197,16 +4222,16 @@ select.form-input {
         align-items: stretch;
         text-align: left;
     }
-    .data-table td:first-child::before {
+    .data-table:not(.occ-table) td:first-child::before {
         display: none;
     }
     /* 最後一個 td 通常是操作 — 取消 sticky right + 改靠右排 */
-    .data-table th:last-child,
-    .data-table td:last-child {
+    .data-table:not(.occ-table) th:last-child,
+    .data-table:not(.occ-table) td:last-child {
         position: static;
         box-shadow: none;
     }
-    .data-table td:last-child {
+    .data-table:not(.occ-table) td:last-child {
         flex-direction: row;
         justify-content: flex-end;
         padding-top: 0.5rem;
@@ -4214,11 +4239,13 @@ select.form-input {
         border-top: 1px dashed var(--border-color);
     }
     /* 空狀態 row 跨欄不適用卡片 */
-    .data-table tr.empty-row td {
+    .data-table:not(.occ-table) tr.empty-row td,
+    .data-table:not(.occ-table) td[colspan] {
         display: block;
         text-align: center;
     }
-    .data-table tr.empty-row td::before { display: none; }
+    .data-table:not(.occ-table) tr.empty-row td::before,
+    .data-table:not(.occ-table) td[colspan]::before { display: none; }
 }
 
 

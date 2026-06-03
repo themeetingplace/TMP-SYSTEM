@@ -166,6 +166,14 @@ window.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeMobileDrawer();
     });
+    // T3-M-3: 視窗放大過 768 時自動關 drawer，避免桌面殘留
+    let _resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(() => {
+            if (window.innerWidth > 768) closeMobileDrawer();
+        }, 100);
+    });
 });
 
 // QW-C5: 全域 "/" 鍵聚焦 topbar 搜尋 (UI 上已有 kbd 提示)
