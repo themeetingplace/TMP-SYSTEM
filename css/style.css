@@ -4102,8 +4102,26 @@ select.form-input {
 }
 @media (max-width: 768px) {
     .mobile-fab { display: inline-flex; }
-    /* 同時讓桌面版「新增」按鈕在手機上隱藏（避免重複） */
-    .btn[data-mobile-as-fab] { display: none; }
+    /* 同時讓桌面版有 data-fab 的「新增」按鈕在手機上隱藏（避免重複） */
+    .btn[data-fab] { display: none; }
+}
+
+/* M-R-3 (簡化版): occupancy 矩陣手機橫向捲動 + 床位欄 sticky left */
+@media (max-width: 768px) {
+    .occ-table-wrap {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .occ-table {
+        min-width: 720px;
+    }
+    .occ-table td.occ-bed-label {
+        position: sticky;
+        left: 0;
+        background: var(--color-surface);
+        z-index: 1;
+        box-shadow: 4px 0 6px -4px rgba(0, 0, 0, 0.08);
+    }
 }
 
 /* ============================================================
