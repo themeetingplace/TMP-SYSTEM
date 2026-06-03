@@ -469,18 +469,8 @@ function renderMobileNav() {
 }
 
 export function renderOccupancy() {
-    // T3R-#3: 手機只 render 垂直導航，不渲染桌面矩陣表 (避免 N 床 × 10 月份的 reflow 卡頓)
-    const isMobile = typeof window !== 'undefined'
-        && window.matchMedia?.('(max-width: 768px)').matches;
-
-    if (isMobile) {
-        return `
-            <div class="occupancy-page">
-                ${renderMobileNav()}
-            </div>
-        `;
-    }
-
+    // 不再條件切手機版 — 用戶要求保留矩陣表（最直觀），手機改靠橫向捲動 + sticky 床位欄
+    // 三層 nav (renderMobileBuildingsList 等) 暫不用，留作未來「切換顯示模式」備用
     const today = new Date();
     const monthCount = calculateMonthCount();
     const months = buildMonths(today, monthCount);
@@ -505,7 +495,6 @@ export function renderOccupancy() {
 
     const section = activeBuilding ? renderBuildingTable(activeBuilding, months, today) : '';
 
-    // 桌面：只 render 桌面矩陣 (手機已在前面 early-return)
     return `
         <div class="occupancy-page">
             <div class="card occ-intro">
@@ -517,19 +506,6 @@ export function renderOccupancy() {
         </div>
     `;
 }
-
-// 視窗 resize 跨越 768 邊界時自動觸發 view 重新 render
-let _viewportTier = null;
-window.addEventListener('resize', () => {
-    const tier = window.matchMedia('(max-width: 768px)').matches ? 'mobile' : 'desktop';
-    if (_viewportTier === null) { _viewportTier = tier; return; }
-    if (tier !== _viewportTier && window.location.hash === '#occupancy') {
-        _viewportTier = tier;
-        window.refreshCurrentView?.();
-    } else {
-        _viewportTier = tier;
-    }
-});
 
 export function initOccupancyActions(scope) {
     // Tab 切換

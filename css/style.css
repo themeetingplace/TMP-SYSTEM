@@ -4215,16 +4215,39 @@ select.form-input {
     .btn[data-fab] { display: none; }
 }
 
-/* M-R-3 (簡化版): occupancy 矩陣手機橫向捲動 + 床位欄 sticky left */
+/* M-R-3 (簡化版 v2): occupancy 矩陣手機橫向捲動
+   - 床位欄 sticky left
+   - 縮窄固定欄寬讓更多月份格塞得進畫面
+   - 右側漸層提示「還能往右滑」 */
 @media (max-width: 768px) {
     .occ-table-wrap {
         overflow-x: auto !important;
+        overflow-y: visible;
         -webkit-overflow-scrolling: touch;
+        position: relative;
     }
-    .occ-table {
-        min-width: 720px;
+    /* 右側漸層提示有東西可以捲 */
+    .occ-table-wrap::after {
+        content: '';
+        position: sticky;
+        right: 0;
+        top: 0;
+        height: 100%;
+        width: 24px;
+        background: linear-gradient(to left, var(--color-surface, #fff), transparent);
+        pointer-events: none;
+        display: block;
+        margin-left: -24px;
     }
-    /* 床位欄 sticky；其他固定資訊欄保留橫向捲動但有清晰標題 */
+    /* 縮窄固定欄 + 整體字級 */
+    .occ-table { font-size: 0.72rem; }
+    .occ-table thead th,
+    .occ-table tbody td { padding: 0.4rem 0.3rem; }
+    .occ-table thead th:nth-child(1) { width: 60px !important; min-width: 60px; }
+    .occ-table thead th:nth-child(2) { width: 90px !important; min-width: 90px; }
+    .occ-table thead th:nth-child(3) { width: 90px !important; min-width: 90px; }
+    .occ-table thead th:nth-child(4) { width: 48px !important; min-width: 48px; }
+    /* 床位 + 標題 sticky left */
     .occ-table td.occ-bed-label {
         position: sticky;
         left: 0;
@@ -4236,19 +4259,27 @@ select.form-input {
         position: sticky;
         left: 0;
         background: var(--bg-secondary, #fafbfc);
-        z-index: 4;  /* 高於 sticky thead 跟 sticky 床位欄 */
+        z-index: 4;
+        box-shadow: 4px 0 6px -4px rgba(0, 0, 0, 0.08);
+    }
+    /* 各館 tab 列改橫向捲動，避免多館換行佔垂直 */
+    .occ-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+    .occ-tab {
+        flex-shrink: 0;
+        scroll-snap-align: start;
     }
 }
 
 /* ============================================================
- * M-R-3 完整版：occupancy 手機垂直導航 (三層 drilldown)
+ * M-R-3：垂直導航三層 drilldown (CSS 留著，但 occupancy.js 暫不渲染)
+ * 用戶偏好矩陣表 — 手機改靠橫向捲動 + sticky 床位欄解決
  * ============================================================ */
 .occ-mobile-nav { display: none; }
-
-@media (max-width: 768px) {
-    .occ-mobile-nav { display: block; }
-    .occ-desktop-only { display: none !important; }
-}
 
 .omn-level-header {
     background: var(--color-surface, #fff);
