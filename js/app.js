@@ -191,6 +191,44 @@ window.addEventListener('DOMContentLoaded', () => {
             if (window.innerWidth > 768) closeMobileDrawer();
         }, 100);
     });
+
+    // T3R-#10: drawer swipe-to-close 手勢
+    // 在 sidebar 上偵測左滑：startX 在 drawer 內、deltaX < -60 即關閉
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        let startX = 0, startY = 0, isTracking = false;
+        sidebar.addEventListener('touchstart', (e) => {
+            if (!isMobileDrawerOpen()) return;
+            if (e.touches.length !== 1) return;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            isTracking = true;
+            sidebar.style.transition = 'none';   // 暫停 css transition，跟手指
+        }, { passive: true });
+        sidebar.addEventListener('touchmove', (e) => {
+            if (!isTracking) return;
+            const dx = e.touches[0].clientX - startX;
+            const dy = e.touches[0].clientY - startY;
+            // 垂直滑動為主 (例如想滑 nav) → 不攔截
+            if (Math.abs(dy) > Math.abs(dx)) { isTracking = false; sidebar.style.transition = ''; return; }
+            // 只允許往左拖（dx < 0），往右拖固定 0
+            const tx = Math.min(0, dx);
+            sidebar.style.transform = `translateX(${tx}px)`;
+            // backdrop 透明度隨拖動變化
+            const bd = document.getElementById('sidebar-backdrop');
+            if (bd) bd.style.opacity = String(Math.max(0, 1 + tx / 280));
+        }, { passive: true });
+        sidebar.addEventListener('touchend', (e) => {
+            if (!isTracking) return;
+            isTracking = false;
+            sidebar.style.transition = '';   // 還原 transition
+            sidebar.style.transform = '';
+            const bd = document.getElementById('sidebar-backdrop');
+            if (bd) bd.style.opacity = '';
+            const dx = (e.changedTouches[0]?.clientX || startX) - startX;
+            if (dx < -60) closeMobileDrawer();
+        }, { passive: true });
+    }
 });
 
 // QW-C5: 全域 "/" 鍵聚焦 topbar 搜尋 (UI 上已有 kbd 提示)

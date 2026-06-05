@@ -61,7 +61,42 @@ export function openModal({ title, bodyHtml, footerHtml = '', maxWidth = 600, on
     document.addEventListener('keydown', escClose);
 
     if (onMount) onMount(overlay, close);
+
+    // T3R-#7: 手機軟鍵盤彈起時動態縮 modal 高度，讓 footer / submit 按鈕仍在視野內
+    attachKeyboardAdjustment(overlay);
+
     return { overlay, close };
+}
+
+// === Modal 在手機軟鍵盤彈起時自動調整 ===
+// iOS Safari + Android Chrome 都支援 visualViewport API
+function attachKeyboardAdjustment(overlay) {
+    if (!window.visualViewport) return;
+    const content = overlay.querySelector('.modal-content');
+    if (!content) return;
+
+    const onResize = () => {
+        if (!document.body.contains(overlay)) {
+            window.visualViewport.removeEventListener('resize', onResize);
+            window.visualViewport.removeEventListener('scroll', onResize);
+            return;
+        }
+        // 只在小螢幕 (bottom sheet 模式) 處理；桌面 modal 居中不需要
+        if (window.innerWidth > 600) {
+            content.style.maxHeight = '';
+            return;
+        }
+        const vv = window.visualViewport;
+        // visualViewport.height = 可見區高度 (鍵盤彈起時會變小)
+        // 我們把 modal max-height 設成 visualViewport.height，並把 modal 推上去靠 viewport top
+        content.style.maxHeight = `${vv.height}px`;
+        content.style.transform = `translateY(${vv.offsetTop}px)`;
+    };
+
+    window.visualViewport.addEventListener('resize', onResize);
+    window.visualViewport.addEventListener('scroll', onResize);
+    // 初始化一次
+    requestAnimationFrame(onResize);
 }
 
 function sweepOrphanSelectPanels() {

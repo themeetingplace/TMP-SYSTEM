@@ -3862,7 +3862,23 @@ select.form-input {
         width: 100%;
         max-height: 95vh;
         border-radius: 16px 16px 0 0;
+        position: relative;
+        padding-top: 0.5rem;   /* 給 drag handle 留空間 */
     }
+    /* drag handle 視覺提示：頂端一條小灰條，暗示「這是可下拉的 sheet」 */
+    .modal-content::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 4px;
+        border-radius: 4px;
+        background: var(--border-color, #d1d5db);
+        opacity: 0.7;
+    }
+    .modal-header { padding-top: 0.5rem; }
     .modal-footer {
         padding-bottom: max(1rem, env(safe-area-inset-bottom));
     }
