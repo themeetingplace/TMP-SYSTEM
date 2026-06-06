@@ -14,8 +14,8 @@
   Strict-Transport-Security: max-age=31536000
   # ── 權限 ──
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
-  # ── CSP：暫時移除做 LIFF 診斷；確認 LIFF 通了再加回來精修 ──
-  # 原 CSP: default-src 'self'; script-src ... (見 git log)
+  # ── CSP：自己 + 第三方 CDN + Supabase + LINE wildcard ──
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com https://*.line-scdn.net https://*.line.me; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://*.line-scdn.net https://*.line.me https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.line.me https://*.line-scdn.net; frame-src 'self' https://*.line.me; object-src 'none'; base-uri 'self';
 
 # LIFF 子目錄 — 因為要被 LINE 嵌 iframe，X-Frame-Options 改 SAMEORIGIN
 /liff/*

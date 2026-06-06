@@ -170,68 +170,25 @@ const SUPABASE_URL = 'https://zkwkycpfcyecebstmotc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_qsFrMoFYyM5DMcSt9nvNcg_pah5nruy';
 const EDGE_FUNCTION = `${SUPABASE_URL}/functions/v1/tenant-register`;
 
-// 把每一步進度直接畫到畫面上，方便手機端 debug
-function dbg(label, ok, extra) {
-    const root = document.getElementById('root');
-    if (!root) return;
-    const line = document.createElement('div');
-    line.style.cssText = 'font-size:11px;font-family:monospace;padding:4px 8px;border-bottom:1px solid #eee;text-align:left';
-    const status = ok === true ? '✅' : ok === false ? '❌' : '…';
-    line.textContent = `${status} ${label}${extra ? ` — ${extra}` : ''}`;
-    root.appendChild(line);
-}
-
 async function main() {
-    const root = document.getElementById('root');
-    if (root) root.innerHTML = '<div style="padding:1rem"><strong>LIFF 診斷模式</strong></div>';
-
-    dbg('1. SDK 載入', typeof liff !== 'undefined', `liff=${typeof liff}`);
-    dbg('2. URL hash 有 token', location.hash.includes('access_token'), location.hash.slice(0, 60) + '...');
-
     try {
-        dbg('3a. liff.init() 呼叫中', null);
         await liff.init({ liffId: LIFF_ID });
-        dbg('3b. liff.init() OK', true);
-    } catch (e) {
-        const code = e.code || e.name || '(no code)';
-        const msg  = e.message || String(e);
-        dbg('3b. liff.init() 失敗', false, `${code}: ${msg}`);
-        dbg('extra: e.stack', null, (e.stack || '').slice(0, 200));
-        console.error('[LIFF init]', e);
-        return;
-    }
-
-    try {
-        const inClient = liff.isInClient();
-        const loggedIn = liff.isLoggedIn();
-        const osType = liff.getOS ? liff.getOS() : '?';
-        const lang = liff.getLanguage ? liff.getLanguage() : '?';
-        dbg('4. 基本狀態', true, `client=${inClient} loggedIn=${loggedIn} os=${osType} lang=${lang}`);
-    } catch (e) {
-        dbg('4. 基本狀態查詢失敗', false, e.message);
-    }
-
-    try {
         if (!liff.isLoggedIn()) {
-            dbg('5. 未登入，呼叫 liff.login()', null);
             liff.login();
             return;
         }
-        dbg('5. 已登入', true);
-    } catch (e) {
-        dbg('5. login 失敗', false, e.message);
-        return;
-    }
-
-    try {
-        dbg('6a. liff.getProfile() 呼叫中', null);
         const profile = await liff.getProfile();
-        dbg('6b. getProfile OK', true, `displayName=${profile.displayName}`);
         renderForm(profile);
     } catch (e) {
         const code = e.code || e.name || '(no code)';
-        dbg('6b. getProfile 失敗', false, `${code}: ${e.message}`);
-        console.error('[LIFF getProfile]', e);
+        const msg  = e.message || String(e);
+        showError(
+            `LIFF 初始化失敗：${msg}\n\n` +
+            `code: ${code}\n` +
+            `URL: ${location.href}\n\n` +
+            `請聯絡小編並附上這段訊息`
+        );
+        console.error('[LIFF init error]', e);
     }
 }
 
