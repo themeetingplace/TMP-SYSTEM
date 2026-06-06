@@ -381,6 +381,17 @@ window.showAboutApp = function() {
                     </div>
                 </div>
                 <div class="about-section">
+                    <div class="about-section-label">說明文件</div>
+                    <a href="docs/USER-MANUAL.html" target="_blank" rel="noopener" class="about-manual-link">
+                        <i class="ph ph-book-open"></i>
+                        <span>
+                            <strong>使用手冊</strong>
+                            <small>入住 / 退房 / 收支 / LINE 自動回覆 對照</small>
+                        </span>
+                        <i class="ph ph-arrow-up-right"></i>
+                    </a>
+                </div>
+                <div class="about-section">
                     <div class="about-section-label">版本紀錄</div>
                     <div class="changelog-list">${changelogHtml}</div>
                 </div>
