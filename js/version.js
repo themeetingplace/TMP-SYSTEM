@@ -3,7 +3,7 @@
 export const APP_VERSION = '1.1.1';
 export const APP_BUILD_DATE = '2026-05-31';
 export const APP_NAME = '聚空間 BMS';
-export const APP_COPYRIGHT = '© 2026 聚空間 Juu Space';
+export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
