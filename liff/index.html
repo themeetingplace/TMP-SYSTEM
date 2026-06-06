@@ -180,7 +180,19 @@ async function main() {
         const profile = await liff.getProfile();
         renderForm(profile);
     } catch (e) {
-        showError(`LIFF 初始化失敗：${e.message}`);
+        // 更詳細的錯誤資訊，方便除錯
+        const code = e.code || e.name || '(no code)';
+        const msg  = e.message || String(e);
+        const inLine = typeof liff !== 'undefined' && liff.isInClient ? liff.isInClient() : '(unknown)';
+        showError(
+            `LIFF 初始化失敗：${msg}\n\n` +
+            `code: ${code}\n` +
+            `isInClient: ${inLine}\n` +
+            `URL: ${location.href}\n` +
+            `LIFF ID: ${LIFF_ID}\n\n` +
+            `請聯絡小編並附上這段訊息`
+        );
+        console.error('[LIFF init error]', e);
     }
 }
 

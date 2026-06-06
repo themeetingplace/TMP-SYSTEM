@@ -16,7 +16,7 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
   # ── CSP：只允許自己 + 第三方 CDN + Supabase + LINE ──
   # 用 default-src 'self' 為基底；script/style 加白名單
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.line.me https://api-data.line.me; frame-src 'self' https://liff.line.me; object-src 'none'; base-uri 'self';
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.line.me https://api-data.line.me https://access.line.me https://liff.line.me https://static.line-scdn.net; frame-src 'self' https://liff.line.me; object-src 'none'; base-uri 'self';
 
 # LIFF 子目錄 — 因為要被 LINE 嵌 iframe，X-Frame-Options 改 SAMEORIGIN
 /liff/*
