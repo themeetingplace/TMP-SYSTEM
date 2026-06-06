@@ -355,7 +355,8 @@ async function handleMessage(event: any) {
     if (/館別|關於/.test(text)) return;
 
     // 入住詢問 / 預約看房 / 詢問空房 — 共用同一份填空模板
-    if (/預約|看房|參觀|空房|租房|價錢|價格|租金|床位/.test(text)) {
+    // 注意：quick reply 按鈕「🏠 入住詢問」送的是「入住詢問」，必須在 regex 內
+    if (/入住|詢問|預約|看房|參觀|空房|租房|價錢|價格|租金|床位/.test(text)) {
         await lineReply(event.replyToken, [
             {
                 type: 'text',
