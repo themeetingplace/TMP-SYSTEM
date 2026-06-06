@@ -4,8 +4,8 @@
 # 路徑語法：/* 代表所有 URL；可細分如 /api/* 個別覆蓋
 
 /*
-  # ── 反 clickjacking ──
-  X-Frame-Options: DENY
+  # ── 反 clickjacking — 改 SAMEORIGIN 避免跟 /liff/* 設定衝突合併成無效值 ──
+  X-Frame-Options: SAMEORIGIN
   # ── 阻止 MIME sniffing ──
   X-Content-Type-Options: nosniff
   # ── referrer 隱藏 ──
