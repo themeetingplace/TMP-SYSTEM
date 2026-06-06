@@ -137,6 +137,7 @@ select:focus-visible,
 
 /* === Sidebar === */
 .sidebar {
+    position: relative;
     width: var(--sidebar-width);
     background-color: var(--sidebar-bg);
     border-right: 1px solid var(--sidebar-border);
@@ -196,6 +197,11 @@ select:focus-visible,
 .sidebar.is-collapsed .logo {
     gap: 0;
     justify-content: center;
+    width: 100%;
+}
+.sidebar.is-collapsed .logo-img-icon {
+    width: 38px;
+    height: 38px;
 }
 
 /* 舊 .logo-mark / .logo-wordmark — 留 fallback 不刪，給 .ph icon 用 (萬一改回) */
@@ -253,23 +259,37 @@ select:focus-visible,
 
 .sidebar.is-collapsed .logo-wordmark { display: none; }
 .sidebar.is-collapsed .sidebar-header {
-    flex-direction: column;
+    flex-direction: row;
     justify-content: center;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    height: auto;
-    min-height: var(--topbar-height);
+    gap: 0;
+    padding: 0 0.5rem;
+    height: var(--topbar-height);
+    min-height: auto;
 }
 .sidebar.is-collapsed .logo {
     justify-content: center;
     flex: 0 0 auto;
 }
-/* 收合時 toggle 仍可見（旋轉 180 度視覺暗示「往右展開」） */
+/* 收合時：toggle 變成右側邊緣懸停才出現的圓形小 tab (Notion / VSCode 風格) */
 .sidebar.is-collapsed .sidebar-toggle {
-    width: 28px;
-    height: 28px;
-    font-size: 1rem;
+    position: absolute;
+    top: 22px;
+    right: -13px;
+    width: 26px;
+    height: 26px;
+    font-size: 0.85rem;
+    background: var(--sidebar-bg);
+    border: 1px solid var(--sidebar-border);
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    opacity: 0;
+    z-index: 32;
+    transition: opacity 0.18s ease, background 0.15s, color 0.15s;
+}
+.sidebar.is-collapsed:hover .sidebar-toggle,
+.sidebar.is-collapsed .sidebar-toggle:focus-visible {
+    opacity: 1;
 }
 .sidebar.is-collapsed .sidebar-toggle i {
     transform: rotate(180deg);
