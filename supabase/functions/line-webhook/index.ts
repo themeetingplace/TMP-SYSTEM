@@ -393,6 +393,24 @@ Email：
         return;
     }
 
+    // 找小編 — 已綁定 / 未綁定都要回覆 (放在 bound 區塊前避免被「沉默」吃掉)
+    // 關鍵字含舊版「管理員」，老用戶記憶猶新；新標準稱呼 = 小編
+    if (/小編|管理員|找人|聯絡|客服/.test(text)) {
+        if (!(await shouldSendCanned(userId))) {
+            console.log(`[handleMessage] canned reply cooldown — silent skip (找小編) for ${userId.slice(-6)}`);
+            return;
+        }
+        await logCannedSent(userId, '小編會盡快回覆您');
+        await lineReply(event.replyToken, [
+            {
+                type: 'text',
+                text: '💬 小編會盡快回覆您，您可以直接在此留言詳細需求。',
+                quickReply: welcomeQuickReply()
+            }
+        ]);
+        return;
+    }
+
     // ───────────── 已綁定房客專屬 ─────────────
     if (bound) {
 
@@ -575,24 +593,7 @@ Email：
 
     // ── 未綁定 (新好友 / 詢問者) ──
     // 詢問空房 / 預約看房 → 已被上方共用入住詢問模板處理
-
-    // 找小編 — 加 cooldown，避免小編手動聊天時被洗版
-    // 關鍵字含舊版「管理員」，以免老用戶記憶猶新；新標準稱呼 = 小編
-    if (/小編|管理員|找人|聯絡|客服/.test(text)) {
-        if (!(await shouldSendCanned(userId))) {
-            console.log(`[handleMessage] canned reply cooldown — silent skip (找小編) for ${userId.slice(-6)}`);
-            return;
-        }
-        await logCannedSent(userId, '小編會盡快回覆您');
-        await lineReply(event.replyToken, [
-            {
-                type: 'text',
-                text: '💬 小編會盡快回覆您，您可以直接在此留言詳細需求。',
-                quickReply: welcomeQuickReply()
-            }
-        ]);
-        return;
-    }
+    // 找小編 → 已在最上方統一處理
 
     // 想綁定 / 登記
     if (/綁定|我是房客|我是租客|帳號|登記/.test(text)) {
