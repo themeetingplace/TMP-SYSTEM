@@ -169,7 +169,7 @@ function welcomeQuickReply() {
         items: [
             { type: 'action', action: { type: 'message', label: '🏠 入住詢問', text: '入住詢問' } },
             { type: 'action', action: { type: 'uri', label: '🔗 住客登記', uri: 'https://liff.line.me/2010185822-G7D3N3Gw' } },
-            { type: 'action', action: { type: 'message', label: '💬 找管理員', text: '找管理員' } }
+            { type: 'action', action: { type: 'message', label: '💬 找小編', text: '找小編' } }
         ]
     };
 }
@@ -285,7 +285,7 @@ async function handleMessage(event: any) {
 
         if (!contracts || contracts.length === 0) {
             await lineReply(event.replyToken, [
-                { type: 'text', text: `⚠️ ${bound.name} 您好，目前找不到您的進行中合約，無法附上簽署檔。\n請聯絡管理員確認。`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `⚠️ ${bound.name} 您好，目前找不到您的進行中合約，無法附上簽署檔。\n請聯絡小編確認。`, quickReply: welcomeQuickReply() }
             ]);
             return;
         }
@@ -317,7 +317,7 @@ async function handleMessage(event: any) {
         } catch (e: any) {
             console.error('[file upload] failed:', e);
             await lineReply(event.replyToken, [
-                { type: 'text', text: `❌ 檔案處理失敗：${e.message}\n請聯絡管理員協助。`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `❌ 檔案處理失敗：${e.message}\n請聯絡小編協助。`, quickReply: welcomeQuickReply() }
             ]);
         }
         return;
@@ -347,7 +347,7 @@ async function handleMessage(event: any) {
     // 管理員工具：傳「/myid」取得自己的 userId，方便設定 ADMIN_LINE_USER_IDS
     if (text === '/myid' || text === '/我的id' || text === '/id') {
         await lineReply(event.replyToken, [
-            { type: 'text', text: `您的 LINE userId：\n\n${userId}\n\n📌 將此 ID 加到 Supabase Edge Functions Secrets：\nADMIN_LINE_USER_IDS = ${userId}\n\n多位管理員用逗號分隔。設定後重新部署 webhook，就會收到租客通知 ✨` }
+            { type: 'text', text: `您的 LINE userId：\n\n${userId}\n\n📌 將此 ID 加到 Supabase Edge Functions Secrets：\nADMIN_LINE_USER_IDS = ${userId}\n\n多位小編用逗號分隔。設定後重新部署 webhook，就會收到租客通知 ✨` }
         ]);
         return;
     }
@@ -370,22 +370,22 @@ async function handleMessage(event: any) {
 📝 入住詢問
 
 姓名：
-性別：男 / 女
+性別：(男或女)
 電話：
 Email：
-欲入住館別：松山 / 信義 / 中山 / 古亭1 / 古亭2 / 師大
-入住人數：1 / 2 / 3 / 4+ 人
-欲入住時間：
-入住時長：1月 / 3月 / 半年 / 1年 / 1年以上
-方便看房的時段：(例：平日晚上 7 點後 / 週末下午)
-怎麼知道我們的：臉書 / 朋友介紹 / Google / 591 / 其他
+欲入住館別：(松山 / 信義 / 中山 / 古亭1 / 古亭2 / 師大)
+入住人數：(ex. 1人、4人...)
+欲入住日期：
+入住時長：(ex. 1個月、半年...)
+方便看房的時段：(ex. 平日晚上 7 點後 / 週末下午)
+怎麼知道我們的：(ex. 臉書 / 朋友介紹 / Google / 591 / 其他)
 
 關於你（簡單介紹～職業、習慣、興趣都歡迎）：
 
 為什麼選聚空間：
 ━━━━━━━━━
 
-填好直接貼回來就好，看房時段先告訴我們，後續會由管理員聯繫你 ✨`,
+填好直接貼回來就好，看房時段先告訴我們，後續會由小編聯繫與你約時間 ✨`,
                 quickReply: welcomeQuickReply()
             }
         ]);
@@ -415,7 +415,7 @@ Email：
                 await lineReply(event.replyToken, [
                     {
                         type: 'text',
-                        text: `✅ ${bound.name} 您的繳款已記錄\n\n• 帳單：${inv.type} $${(inv.amount || 0).toLocaleString()}\n• 到期日：${inv.due_date || '未定'}\n• 末 5 碼：${text}\n\n管理員核對銀行對帳單後會通知您 ✨`,
+                        text: `✅ ${bound.name} 您的繳款已記錄\n\n• 帳單：${inv.type} $${(inv.amount || 0).toLocaleString()}\n• 到期日：${inv.due_date || '未定'}\n• 末 5 碼：${text}\n\n小編核對銀行對帳單後會通知您 ✨`,
                         quickReply: welcomeQuickReply()
                     }
                 ]);
@@ -427,7 +427,7 @@ Email：
             await lineReply(event.replyToken, [
                 {
                     type: 'text',
-                    text: `✅ 已收到您的末 5 碼 ${text}\n\n${bound.name} 您好，目前無待繳帳單，將視為「續約預繳款」處理。\n管理員會盡快為您建立續約合約並聯絡您 ✨`,
+                    text: `✅ 已收到您的末 5 碼 ${text}\n\n${bound.name} 您好，目前無待繳帳單，將視為「續約預繳款」處理。\n小編會盡快為您建立續約合約並聯絡您 ✨`,
                     quickReply: welcomeQuickReply()
                 }
             ]);
@@ -468,7 +468,7 @@ Email：
             // 情境 F：完全無帳單
             if (invoices.length === 0) {
                 await lineReply(event.replyToken, [
-                    { type: 'text', text: `${bound.name} 您好~ 目前沒有任何帳單紀錄\n\n如有疑問請傳「找管理員」`, quickReply: welcomeQuickReply() }
+                    { type: 'text', text: `${bound.name} 您好~ 目前沒有任何帳單紀錄\n\n如有疑問請傳「找小編」`, quickReply: welcomeQuickReply() }
                 ]);
                 return;
             }
@@ -499,7 +499,7 @@ Email：
                 const due = (i.amount || 0) - (i.discount || 0);
                 return (i.paid_amount || 0) < due;
             });
-            const tail = hasUnpaid ? '繳費後請傳「末 5 碼」' : '如有疑問請傳「找管理員」';
+            const tail = hasUnpaid ? '繳費後請傳「末 5 碼」' : '如有疑問請傳「找小編」';
 
             // 情境 A-D：1 筆帳單
             if (invoices.length === 1) {
@@ -532,7 +532,7 @@ Email：
         // 維修申報 (引導格式)
         if (text === '維修申報') {
             await lineReply(event.replyToken, [
-                { type: 'text', text: `🔧 維修申報\n\n請以「維修：問題描述」格式傳訊息\n\n例如：\n維修：冷氣不冷會滴水\n維修：浴室水管堵塞\n\n管理員收到後會盡快安排處理。`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `🔧 維修申報\n\n請以「維修：問題描述」格式傳訊息\n\n例如：\n維修：冷氣不冷會滴水\n維修：浴室水管堵塞\n\n小編收到後會盡快安排處理。`, quickReply: welcomeQuickReply() }
             ]);
             return;
         }
@@ -563,7 +563,7 @@ Email：
                 cost: null
             });
             await lineReply(event.replyToken, [
-                { type: 'text', text: `✅ 已收到維修申報 (${newId})\n\n位置：${bound.current_property || '未指定'}\n問題：${issue}\n\n管理員會盡快聯絡您。`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `✅ 已收到維修申報 (${newId})\n\n位置：${bound.current_property || '未指定'}\n問題：${issue}\n\n小編會盡快聯絡您。`, quickReply: welcomeQuickReply() }
             ]);
             return;
         }
@@ -575,17 +575,18 @@ Email：
     // ── 未綁定 (新好友 / 詢問者) ──
     // 詢問空房 / 預約看房 → 已被上方共用入住詢問模板處理
 
-    // 找管理員 — 加 cooldown，避免管理員手動聊天時被洗版
-    if (/管理員|找人|聯絡|客服/.test(text)) {
+    // 找小編 — 加 cooldown，避免小編手動聊天時被洗版
+    // 關鍵字含舊版「管理員」，以免老用戶記憶猶新；新標準稱呼 = 小編
+    if (/小編|管理員|找人|聯絡|客服/.test(text)) {
         if (!(await shouldSendCanned(userId))) {
-            console.log(`[handleMessage] canned reply cooldown — silent skip (找管理員) for ${userId.slice(-6)}`);
+            console.log(`[handleMessage] canned reply cooldown — silent skip (找小編) for ${userId.slice(-6)}`);
             return;
         }
-        await logCannedSent(userId, '管理員會盡快回覆您');
+        await logCannedSent(userId, '小編會盡快回覆您');
         await lineReply(event.replyToken, [
             {
                 type: 'text',
-                text: '💬 管理員會盡快回覆您，您可以直接在此留言詳細需求。',
+                text: '💬 小編會盡快回覆您，您可以直接在此留言詳細需求。',
                 quickReply: welcomeQuickReply()
             }
         ]);
@@ -601,7 +602,7 @@ Email：
                 quickReply: {
                     items: [
                         { type: 'action', action: { type: 'uri', label: '📝 立即登記', uri: 'https://liff.line.me/2010185822-G7D3N3Gw' } },
-                        { type: 'action', action: { type: 'message', label: '💬 找管理員', text: '找管理員' } }
+                        { type: 'action', action: { type: 'message', label: '💬 找小編', text: '找小編' } }
                     ]
                 }
             }
@@ -633,7 +634,7 @@ Email：
             await lineReply(event.replyToken, [
                 {
                     type: 'text',
-                    text: '⚠️ 找不到此手機號碼的租客資料。\n要詢問租屋請點「詢問空房」，已是房客請聯絡管理員確認。',
+                    text: '⚠️ 找不到此手機號碼的租客資料。\n要詢問租屋請點「詢問空房」，已是房客請聯絡小編確認。',
                     quickReply: welcomeQuickReply()
                 }
             ]);
@@ -646,11 +647,11 @@ Email：
         console.log(`[handleMessage] canned reply cooldown — silent skip (catch-all) for ${userId.slice(-6)}`);
         return;
     }
-    await logCannedSent(userId, '收到您的訊息！管理員會回覆');
+    await logCannedSent(userId, '收到您的訊息！小編會回覆');
     await lineReply(event.replyToken, [
         {
             type: 'text',
-            text: '收到您的訊息！管理員會回覆，或您可以選下方按鈕：',
+            text: '收到您的訊息！小編會回覆，或您可以選下方按鈕：',
             quickReply: welcomeQuickReply()
         }
     ]);

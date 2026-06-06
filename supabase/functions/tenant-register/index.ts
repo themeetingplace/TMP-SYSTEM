@@ -92,7 +92,7 @@ serve(async (req) => {
             .eq('line_user_id', userId)
             .maybeSingle();
         if (alreadyBound) {
-            throw new Error(`此 LINE 已綁定「${alreadyBound.name}」，請聯絡管理員協助`);
+            throw new Error(`此 LINE 已綁定「${alreadyBound.name}」，請聯絡小編協助`);
         }
 
         // 6. 找 / 建 tenant
