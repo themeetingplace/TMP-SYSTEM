@@ -192,16 +192,37 @@ export function showTenantDetails(id) {
         return { text: '進行中', cls: 'success' };
     };
 
+    // 偵測「歷史資料異常金額」— 舊系統匯入時沒有 合約↔床位 概念，amount 欄可能是 null / 總額 / 怪數
+    // 規則：amount 為 null/0，或 amount 跟床位設定月租差距超過 50% (>1.5x or <0.5x)
+    // 只是視覺提示，不會自動修改資料
+    const isAmountSuspect = (c) => {
+        const amount = Number(c.amount) || 0;
+        if (amount === 0) return { suspect: true, reason: '未填月租 (舊系統匯入)' };
+        const bed = mockData.properties.find(p => p.name === c.propertyName);
+        const bedRent = Number(bed?.rent) || 0;
+        if (bedRent > 0 && (amount > bedRent * 1.5 || amount < bedRent * 0.5)) {
+            return { suspect: true, reason: `跟床位月租 $${bedRent.toLocaleString()} 差距大，可能是舊系統匯入時把總額存進月租欄` };
+        }
+        return { suspect: false };
+    };
+
     const historyRows = allContracts.length === 0
         ? `<tr><td colspan="5" style="text-align: center; padding: 1.25rem; color: var(--text-muted); font-size: 0.85rem;">尚無入住紀錄</td></tr>`
         : allContracts.map(c => {
             const s = stateLabel(c);
+            const sus = isAmountSuspect(c);
+            const amountCell = sus.suspect
+                ? `<td style="text-align: right; font-weight: 500; font-style: italic; color: var(--text-muted);" title="⚠ ${sus.reason}（歷史資料，僅供參考）">
+                       $${(c.amount || 0).toLocaleString()}
+                       <i class="ph ph-warning-circle" style="color: var(--color-warning, #b8871f); margin-left: 0.25rem; font-size: 0.9em; vertical-align: -1px;"></i>
+                   </td>`
+                : `<td style="text-align: right; font-weight: 600;">$${(c.amount || 0).toLocaleString()}</td>`;
             return `
                 <tr>
                     <td style="font-family: monospace; font-size: 0.8rem;">${c.id}</td>
                     <td>${(c.propertyName || '—').replace('聚空間 - ', '')}</td>
                     <td style="font-size: 0.78rem; color: var(--text-secondary);">${c.startDate || '—'} ~ ${c.endDate || '—'}</td>
-                    <td style="text-align: right; font-weight: 600;">$${(c.amount || 0).toLocaleString()}</td>
+                    ${amountCell}
                     <td><span class="status-badge ${s.cls}" style="font-size: 0.7rem;">${s.text}</span></td>
                 </tr>
             `;
