@@ -15,7 +15,7 @@
 // modal 堆疊：支援 modal 內再開 modal
 const modalStack = [];
 
-export function openModal({ title, bodyHtml, footerHtml = '', maxWidth = 600, onMount, onClose }) {
+export function openModal({ title, bodyHtml, footerHtml = '', maxWidth = 600, onMount, onClose, lockOutsideClose = false }) {
     // 開新 modal 前，先清掉孤兒下拉面板（穩定 portal 狀態）
     sweepOrphanSelectPanels();
 
@@ -50,12 +50,28 @@ export function openModal({ title, bodyHtml, footerHtml = '', maxWidth = 600, on
     }
 
     overlay.querySelector('.modal-close').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+    // 編輯類 modal：點外面 / Esc 不關閉，改用震動動畫提醒「請按 X 或 取消」
+    function shakeContent() {
+        const content = overlay.querySelector('.modal-content');
+        if (!content) return;
+        content.classList.remove('modal-shake');
+        // 強迫 reflow 讓 animation 可重播
+        void content.offsetWidth;
+        content.classList.add('modal-shake');
+    }
+
+    overlay.addEventListener('click', e => {
+        if (e.target !== overlay) return;
+        if (lockOutsideClose) { shakeContent(); return; }
+        close();
+    });
 
     function escClose(e) {
         if (e.key !== 'Escape') return;
         // 只有最上層 modal 響應 Esc
         if (modalStack[modalStack.length - 1] !== overlay) return;
+        if (lockOutsideClose) { shakeContent(); return; }
         close();
     }
     document.addEventListener('keydown', escClose);
@@ -136,6 +152,7 @@ export function openFormModal({ title, fields = [], values = {}, submitLabel = '
         bodyHtml,
         footerHtml,
         maxWidth,
+        lockOutsideClose: true,  // 編輯中誤點外面 → 震動提醒，不直接關掉
         onMount: (overlay, close) => {
             const form = overlay.querySelector('#form-modal-form');
             overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
@@ -500,6 +517,7 @@ export function openConfirm({ title = '確認操作', message, confirmLabel = '�
         bodyHtml,
         footerHtml,
         maxWidth,
+        lockOutsideClose: true,  // 確認彈窗也鎖外點，避免不小心關掉
         onMount: (overlay, close) => {
             overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
             overlay.querySelector('[data-action="confirm"]').addEventListener('click', () => {
