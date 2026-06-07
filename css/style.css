@@ -2767,6 +2767,45 @@ select:focus-visible,
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* 折扣 / 加收 分段切換按鈕（取代醜醜的 native <select>) */
+.adj-kind-toggle {
+    display: inline-flex;
+    background: var(--bg-tertiary, #f1f5f9);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 0;
+    border: 1px solid var(--border-color);
+}
+.adj-kind-btn {
+    border: none;
+    background: transparent;
+    padding: 0.32rem 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 4px;
+    color: var(--text-muted);
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+    font-family: inherit;
+    white-space: nowrap;
+    flex: 1;
+    text-align: center;
+}
+.adj-kind-btn:hover {
+    color: var(--text-main);
+    background: rgba(0,0,0,0.03);
+}
+.adj-kind-btn.is-active {
+    color: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.adj-kind-btn.is-active[data-kind="sub"] {
+    background: var(--color-danger, #b13535);
+}
+.adj-kind-btn.is-active[data-kind="add"] {
+    background: var(--color-success, #22946e);
+}
+
 /* 編輯中誤點外面：modal 震動提醒 + 邊框閃一下橘色 (lockOutsideClose) */
 .modal-content.modal-shake {
     animation: modalShake 0.4s cubic-bezier(.36,.07,.19,.97) both;

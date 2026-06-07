@@ -449,10 +449,15 @@ export function showCheckinAssignmentForm(opts = {}) {
 
     const initialBuildingId = preselectBed?.buildingId || activeBuildings[0]?.id || '';
 
-    // 床位欄位（預選時跳過）
-    const bedFields = preselectBed ? [] : [
+    // 床位欄位（預選時跳過 building/bed select，但仍可加額外床位）
+    const bedFields = preselectBed ? [
+        { name: 'extraBeds', type: 'placeholder', span: 2 },
+        { name: 'extraBedIds', type: 'hidden', value: '[]' }
+    ] : [
         { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions, value: initialBuildingId },
-        { name: 'bedId', label: '床位', type: 'select', required: true, options: getAvailableBeds(initialBuildingId), placeholder: getAvailableBeds(initialBuildingId).length ? '請選擇床位' : '此館目前無空床' }
+        { name: 'bedId', label: '床位', type: 'select', required: true, options: getAvailableBeds(initialBuildingId), placeholder: getAvailableBeds(initialBuildingId).length ? '請選擇床位' : '此館目前無空床' },
+        { name: 'extraBeds', type: 'placeholder', span: 2 },
+        { name: 'extraBedIds', type: 'hidden', value: '[]' }
     ];
     // 租客資訊 — 永遠顯示完整欄位；輸入姓名/電話會自動跳出舊客建議
     const sourceOptions = (mockData.tenantSources || []).map(s => ({ value: s.name, label: s.name }));
@@ -659,12 +664,14 @@ export function showCheckinAssignmentForm(opts = {}) {
             dateInput?.addEventListener('change', updateTermLabels);
             dateInput?.addEventListener('input', updateTermLabels);
 
-            // 應收總額自動計算 = 月租金 × 合約期 - 折扣 + 加項
+            // 應收總額自動計算 = (月租金 + 額外床位月租加總) × 合約期 - 折扣 + 加項
             const amountInput2 = form.querySelector('[name="amount"]');
             const termHidden = form.querySelector('[name="termMonths"]');  // custom-select 的 hidden input
             const discountInput = form.querySelector('[name="discount"]');
             const discountReasonInput = form.querySelector('[name="discountReason"]');
             const totalDueInput = form.querySelector('[name="totalDue"]');
+            // 額外床位的月租加總 — 在下方額外床位區塊更新；先宣告避免 TDZ
+            let extraBedRentSum = 0;
 
             // === 加減項目子表單 (新需求 #1) ===
             // 渲染到 #ph-adjustments；每筆 = { kind: 'sub'|'add', label, amount }
@@ -685,17 +692,18 @@ export function showCheckinAssignmentForm(opts = {}) {
                 if (totalDueInput && amountInput2 && termHidden) {
                     const rent = Number(amountInput2.value) || 0;
                     const term = parseInt(termHidden.value, 10) || 1;
-                    totalDueInput.value = Math.max(0, rent * term - net);
+                    totalDueInput.value = Math.max(0, (rent + extraBedRentSum) * term - net);
                 }
             };
             const adjRowHtml = (row = { kind: 'sub', label: '', amount: '' }) => `
-                <div class="adj-row" style="display: grid; grid-template-columns: 80px 1fr 110px 32px; gap: 0.5rem; align-items: center; padding: 0.5rem; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 0.4rem;">
-                    <select data-adj="kind" class="form-input" style="font-size: 0.85rem; padding: 0.3rem;">
-                        <option value="sub" ${row.kind === 'sub' ? 'selected' : ''}>− 折扣</option>
-                        <option value="add" ${row.kind === 'add' ? 'selected' : ''}>+ 加收</option>
-                    </select>
+                <div class="adj-row" style="display: grid; grid-template-columns: 130px 1fr 120px 32px; gap: 0.5rem; align-items: center; padding: 0.55rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 0.4rem;">
+                    <div class="adj-kind-toggle">
+                        <button type="button" class="adj-kind-btn ${row.kind === 'sub' ? 'is-active' : ''}" data-kind="sub" title="折扣 / 減項">− 折扣</button>
+                        <button type="button" class="adj-kind-btn ${row.kind === 'add' ? 'is-active' : ''}" data-kind="add" title="加收 / 額外費用">+ 加收</button>
+                    </div>
+                    <input type="hidden" data-adj="kind" value="${row.kind || 'sub'}">
                     <input data-adj="label" type="text" class="form-input" placeholder="說明 (例：季繳優惠 / 能源費)" value="${row.label || ''}" style="font-size: 0.85rem;">
-                    <input data-adj="amount" type="number" class="form-input" placeholder="金額" value="${row.amount || ''}" style="font-size: 0.85rem;">
+                    <input data-adj="amount" type="number" class="form-input" placeholder="金額" value="${row.amount || ''}" style="font-size: 0.85rem; text-align: right;">
                     <button type="button" class="adj-del" title="移除這筆" style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: 1rem; padding: 0.2rem;"><i class="ph ph-x"></i></button>
                 </div>
             `;
@@ -716,11 +724,105 @@ export function showCheckinAssignmentForm(opts = {}) {
                     div.innerHTML = adjRowHtml(row).trim();
                     const rowEl = div.firstChild;
                     listEl.appendChild(rowEl);
-                    rowEl.querySelectorAll('input, select').forEach(inp => inp.addEventListener('input', recalcAdjustments));
+                    rowEl.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recalcAdjustments));
                     rowEl.querySelector('.adj-del').addEventListener('click', () => { rowEl.remove(); recalcAdjustments(); });
+                    // 分段切換 (折扣 / 加收)
+                    rowEl.querySelectorAll('.adj-kind-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const kind = btn.dataset.kind;
+                            rowEl.querySelectorAll('.adj-kind-btn').forEach(b => b.classList.toggle('is-active', b.dataset.kind === kind));
+                            rowEl.querySelector('[data-adj="kind"]').value = kind;
+                            recalcAdjustments();
+                        });
+                    });
                 };
                 adjustPh.querySelector('#adj-add').addEventListener('click', () => addRow());
                 recalcAdjustments();
+            }
+
+            // === 額外床位 (多床位合約) — 同租客 / 同期間，每張額外床位獨立建合約 ===
+            const extraBedsPh = form.querySelector('#ph-extraBeds');
+            const extraBedIdsInput = form.querySelector('input[name="extraBedIds"]');
+
+            const recalcTotalDue = () => {
+                if (!totalDueInput) return;
+                const rent = Number(amountInput2?.value) || 0;
+                const term = parseInt(termHidden?.value, 10) || 1;
+                const discount = Number(discountInput?.value) || 0;
+                const total = Math.max(0, (rent + extraBedRentSum) * term - discount);
+                totalDueInput.value = total;
+            };
+
+            if (extraBedsPh && extraBedIdsInput) {
+                const getCurrentBuildingId = () => {
+                    if (preselectBed) return preselectBed.buildingId;
+                    return form.querySelector('input[name="buildingId"]')?.value || '';
+                };
+                const getPrimaryBedId = () => {
+                    if (preselectBed) return preselectBed.id;
+                    return form.querySelector('input[name="bedId"]')?.value || '';
+                };
+                const buildBedOptions = (currentValue, excludeIds = []) => {
+                    const buildingId = getCurrentBuildingId();
+                    if (!buildingId) return '<option value="">請先選館別</option>';
+                    const primaryBedId = getPrimaryBedId();
+                    const beds = mockData.properties
+                        .filter(p => p.buildingId === buildingId && p.id !== primaryBedId && !excludeIds.includes(p.id))
+                        .sort((a, b) => (a.roomNumber - b.roomNumber) || (a.bedLetter || '').localeCompare(b.bedLetter || ''));
+                    const opts = beds.map(p => {
+                        const active = activeContractFor(p.name);
+                        const tag = active ? ` ⚠ ${active.tenant}住至${active.endDate}` : ' (空床)';
+                        return `<option value="${p.id}" ${currentValue === p.id ? 'selected' : ''}>R${p.roomNumber}-${p.bedLetter} · $${(p.rent||0).toLocaleString()}${tag}</option>`;
+                    }).join('');
+                    return `<option value="">請選擇額外床位</option>${opts}`;
+                };
+                const refreshExtraBeds = () => {
+                    const selects = Array.from(extraBedsPh.querySelectorAll('select[data-extra-bed]'));
+                    const ids = selects.map(s => s.value).filter(Boolean);
+                    extraBedIdsInput.value = JSON.stringify(ids);
+                    extraBedRentSum = ids.reduce((sum, id) => {
+                        const b = mockData.properties.find(p => p.id === id);
+                        return sum + (Number(b?.rent) || 0);
+                    }, 0);
+                    recalcTotalDue();
+                };
+                const addExtraBedRow = (preselectedId = '') => {
+                    const row = document.createElement('div');
+                    row.className = 'extra-bed-row';
+                    row.style.cssText = 'display: grid; grid-template-columns: 1fr 32px; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;';
+                    row.innerHTML = `
+                        <select data-extra-bed class="form-input" style="font-size: 0.85rem;">${buildBedOptions(preselectedId)}</select>
+                        <button type="button" class="extra-bed-del" title="移除這張床位" style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: 1rem; padding: 0.2rem;"><i class="ph ph-x"></i></button>
+                    `;
+                    extraBedsPh.querySelector('#extra-beds-list').appendChild(row);
+                    row.querySelector('select').addEventListener('change', refreshExtraBeds);
+                    row.querySelector('.extra-bed-del').addEventListener('click', () => { row.remove(); refreshExtraBeds(); });
+                };
+                extraBedsPh.innerHTML = `
+                    <div style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; border: 1px dashed var(--border-color); margin-top: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <label style="font-weight: 500; font-size: 0.875rem;">
+                                <i class="ph ph-stack-plus"></i> 額外床位 <small style="color: var(--text-muted); font-weight: 400;">(可選 — 同租客同期間 = 多張合約)</small>
+                            </label>
+                            <button type="button" id="add-extra-bed-btn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.3rem 0.7rem;">
+                                <i class="ph ph-plus"></i> 增加床位
+                            </button>
+                        </div>
+                        <div id="extra-beds-list"></div>
+                        <small class="form-hint" style="color: var(--text-muted); font-size: 0.7rem; display: block; margin-top: 0.4rem;">每多選一張床位 = 多建一份合約，月租自動加總；折扣 / 收款只記在主合約，額外床位的房租可至帳務管理收款</small>
+                    </div>
+                `;
+                extraBedsPh.querySelector('#add-extra-bed-btn').addEventListener('click', () => addExtraBedRow());
+                // 主館別 / 主床位變更：清空額外床位（避免跨館 + 主床位選項衝突）
+                const buildingHidden = form.querySelector('input[name="buildingId"]');
+                const bedHidden = form.querySelector('input[name="bedId"]');
+                [buildingHidden, bedHidden].forEach(input => {
+                    input?.addEventListener('change', () => {
+                        extraBedsPh.querySelector('#extra-beds-list').innerHTML = '';
+                        refreshExtraBeds();
+                    });
+                });
+                refreshExtraBeds();
             }
 
             if (totalDueInput) {
@@ -731,13 +833,6 @@ export function showCheckinAssignmentForm(opts = {}) {
                 totalDueInput.style.fontWeight = '700';
                 totalDueInput.style.color = 'var(--color-primary)';
 
-                const recalcTotalDue = () => {
-                    const rent = Number(amountInput2?.value) || 0;
-                    const term = parseInt(termHidden?.value, 10) || 1;
-                    const discount = Number(discountInput?.value) || 0;
-                    const total = Math.max(0, rent * term - discount);
-                    totalDueInput.value = total;
-                };
                 amountInput2?.addEventListener('input', recalcTotalDue);
                 // termMonths 是 custom-select，要監聽 hidden input 的 change
                 termHidden?.addEventListener('change', recalcTotalDue);
@@ -746,7 +841,7 @@ export function showCheckinAssignmentForm(opts = {}) {
 
             // === UIUX #5: 3 步 wizard (床位+租客 → 合約條件 → 收款) ===
             const STEP_MAP = {
-                buildingId: 1, bedId: 1,
+                buildingId: 1, bedId: 1, extraBeds: 1,
                 source: 1, tenantName: 1, tenantPhone: 1, tenantEmail: 1, tenantEmergency: 1,
                 scheduledDate: 2, termMonths: 2, amount: 2,
                 __sep_payment: 3, adjustments: 3, discount: 3, discountReason: 3,
@@ -931,9 +1026,17 @@ export function showCheckinAssignmentForm(opts = {}) {
             // 解析多筆加減項目 (新需求 #1) — 從 discountReason hidden input 取 JSON
             let adjItems = [];
             try { adjItems = values.discountReason ? JSON.parse(values.discountReason) : []; } catch {}
+            // 解析額外床位 IDs — 去重 + 排除主床位 (防呆)
+            let extraBedIdArr = [];
+            try { extraBedIdArr = values.extraBedIds ? JSON.parse(values.extraBedIds) : []; } catch {}
+            extraBedIdArr = [...new Set(extraBedIdArr)].filter(id => id !== bed.id);
+            const extraBeds = extraBedIdArr
+                .map(id => mockData.properties.find(p => p.id === id))
+                .filter(Boolean);
+            const extraBedRentTotal = extraBeds.reduce((s, b) => s + (Number(b.rent) || 0), 0);
             // 已收金額留空 → 0 (未收)
             const paidAmount = values.paidAmount != null && values.paidAmount !== '' ? Number(values.paidAmount) : 0;
-            const due = amount * term - discount;
+            const due = (amount + extraBedRentTotal) * term - discount;
             // 加減項目 breakdown 顯示
             const adjustmentLines = adjItems.length
                 ? adjItems.map(x => {
@@ -942,9 +1045,17 @@ export function showCheckinAssignmentForm(opts = {}) {
                     return `<div style="font-size: 0.8rem; color: ${color}; padding-left: 0.5rem;">${sign} $${x.amount.toLocaleString()} ${x.label || '(無說明)'}</div>`;
                 }).join('')
                 : '';
+            const bedSummary = extraBeds.length === 0
+                ? `${(bed.name || '').replace('聚空間 - ', '')} · 月租 $${(bed.rent || 0).toLocaleString()}`
+                : `<div><strong>主床位：</strong>${(bed.name || '').replace('聚空間 - ', '')} · $${(bed.rent || 0).toLocaleString()}/月</div>` +
+                  extraBeds.map(b => `<div style="color: var(--text-secondary); font-size: 0.82rem; padding-left: 0.5rem; margin-top: 0.2rem;"><i class="ph ph-stack-plus" style="font-size: 0.85em;"></i> 額外：${(b.name || '').replace('聚空間 - ', '')} · $${(b.rent || 0).toLocaleString()}/月</div>`).join('') +
+                  `<div style="color: var(--text-muted); font-size: 0.78rem; margin-top: 0.25rem;">共 ${extraBeds.length + 1} 張床位 · 合計月租 $${(amount + extraBedRentTotal).toLocaleString()}</div>`;
+            const contractIdLabel = extraBeds.length === 0
+                ? `<strong style="font-family: monospace;">${predictedContractId}</strong>`
+                : `<strong style="font-family: monospace;">${predictedContractId}</strong> <span style="color: var(--text-muted); font-size: 0.78rem;">+ 額外 ${extraBeds.length} 份</span>`;
             const reviewRows = [
-                ['新合約編號', `<strong style="font-family: monospace;">${predictedContractId}</strong>`],
-                ['床位', `${(bed.name || '').replace('聚空間 - ', '')} · 月租 $${(bed.rent || 0).toLocaleString()}`],
+                ['新合約編號', contractIdLabel],
+                ['床位', bedSummary],
                 ['租客', `${inputName} <span style="color: var(--text-muted); font-size: 0.8rem;">${tenantStatusLabel}</span>`],
                 ['電話', values.tenantPhone || '<span style="color: var(--text-muted)">未填</span>'],
                 ['Email', values.tenantEmail || '<span style="color: var(--text-muted)">未填</span>'],
@@ -953,8 +1064,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                 ['入住日', startDate],
                 ['到期日', endDate],
                 ['合約期', term === 3 ? '3 個月（季繳）' : '1 個月'],
-                ['月租金', `$${amount.toLocaleString()}`],
-                ['應收總額', `<div><strong>$${due.toLocaleString()}</strong> <span style="color: var(--text-muted); font-size: 0.8rem;">(月租 × ${term} = $${(amount * term).toLocaleString()})</span></div>${adjustmentLines}`],
+                ['月租金', `$${(amount + extraBedRentTotal).toLocaleString()}${extraBeds.length ? ` <span style="color: var(--text-muted); font-size: 0.78rem;">(主 $${amount.toLocaleString()} + 額外 $${extraBedRentTotal.toLocaleString()})</span>` : ''}`],
+                ['應收總額', `<div><strong>$${due.toLocaleString()}</strong> <span style="color: var(--text-muted); font-size: 0.8rem;">(月租 × ${term} = $${((amount + extraBedRentTotal) * term).toLocaleString()})</span></div>${adjustmentLines}`],
                 ['已收金額', `$${paidAmount.toLocaleString()}${paidAmount >= due ? ' <span style="color: var(--color-success);">✅ 已收訖</span>' : paidAmount > 0 ? ` <span style="color: var(--color-warning);">部分繳款 (餘 $${(due - paidAmount).toLocaleString()})</span>` : ' <span style="color: var(--color-danger);">❌ 未繳</span>'}`],
                 ['付款方式', values.paymentMethod || '匯款']
             ];
@@ -1028,7 +1139,43 @@ export function showCheckinAssignmentForm(opts = {}) {
                         contractId: contract.id, contractEnd: endDate
                     });
                     store.updateTenant(tenant.id, { currentProperty: bed.name, status: '居住中' });
-                    showToast(`✅ 合約 ${contract.id} 建立完成 — ${tenant.name} → ${bed.name}`, 'success', 4000);
+
+                    // 額外床位 — 各建一份合約 (相同期間、各自月租，不套用折扣 / 已收金額)
+                    const extraContractIds = [];
+                    extraBeds.forEach(eb => {
+                        const ec = store.addContract({
+                            propertyId: eb.id,
+                            propertyName: eb.name,
+                            tenant: tenant.name,
+                            signDate: startDate,
+                            startDate, endDate,
+                            termMonths: term,
+                            status: '已簽署',
+                            amount: Number(eb.rent) || 0,
+                            depositAmount: 0,
+                            parentContractId: null,
+                            renewalState: 'active',
+                            snoozeUntil: null,
+                            signedFileUrl: null,
+                            terminatedDate: null,
+                            __payment: {
+                                discount: 0,
+                                discountReason: null,
+                                paidAmount: null,   // 未收 — 帳務管理單獨處理
+                                paymentMethod: values.paymentMethod || '匯款'
+                            }
+                        });
+                        store.updateProperty(eb.id, {
+                            tenant: tenant.name, status: '已出租',
+                            contractId: ec.id, contractEnd: endDate
+                        });
+                        extraContractIds.push(ec.id);
+                    });
+
+                    const msg = extraContractIds.length
+                        ? `✅ 合約 ${contract.id} + 額外 ${extraContractIds.length} 份 (${extraContractIds.join(', ')}) 建立完成 — ${tenant.name}`
+                        : `✅ 合約 ${contract.id} 建立完成 — ${tenant.name} → ${bed.name}`;
+                    showToast(msg, 'success', 5000);
                     formModal.close();
                     refreshView();
                 }

@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.1.3';
+export const APP_VERSION = '1.1.4';
 export const APP_BUILD_DATE = '2026-06-07';
 export const APP_NAME = '聚空間 BMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.1.4', date: '2026-06-07', notes: '新增合約支援多床位 (同租客同期間 = 多份合約) / 折扣加收項目改成分段切換按鈕 (取代醜下拉)' },
     { version: '1.1.3', date: '2026-06-07', notes: '編輯 / 確認彈窗鎖外點 — 誤點 backdrop 或 Esc 會震動提醒，要按 X 或取消才會關閉，避免新增合約時誤關失去輸入' },
     { version: '1.1.2', date: '2026-06-06', notes: 'LINE 客服改稱「小編」/ 找小編按鈕修正 / 入住詢問關鍵字補上 / 使用手冊入口 (📖 在關於彈窗) / 側邊欄收合 polish / 入住紀錄歷史異常金額 ⚠ 提示 / 英文品牌 THE MEETING PLACE' },
     { version: '1.1.1', date: '2026-05-31', notes: '分頁升級 (頁碼/頁筆選擇) / 退租 summary 預告影響 / signed URL 縮 24h / Toast z-index / HTTP security headers / 表單必填錯誤訊息帶欄位名' },
