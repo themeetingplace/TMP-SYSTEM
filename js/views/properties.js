@@ -1187,6 +1187,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                         });
                     }
 
+                    // 多床位 bundle: 主合約 invoice 自動含 額外床位月租；額外床位不獨立開 invoice
+                    const extraBedRentList = extraBeds.map(eb => Number(eb.rent) || 0);
                     const contract = store.addContract({
                         propertyId: bed.id,
                         propertyName: bed.name,
@@ -1207,7 +1209,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                             discount,
                             discountReason: values.discountReason || null,
                             paidAmount: values.paidAmount != null && values.paidAmount !== '' ? Number(values.paidAmount) : null,
-                            paymentMethod: values.paymentMethod || '匯款'
+                            paymentMethod: values.paymentMethod || '匯款',
+                            __bundleExtraRents: extraBedRentList   // ← 自動累加進首張 invoice
                         }
                     });
                     store.updateProperty(bed.id, {
@@ -1216,7 +1219,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                     });
                     store.updateTenant(tenant.id, { currentProperty: bed.name, status: '居住中' });
 
-                    // 額外床位 — 各建一份合約 (相同期間、各自月租，不套用折扣 / 已收金額)
+                    // 額外床位 — 各建一份合約 (相同期間、各自月租，無 __payment → 不獨立開 invoice，避免「主已收完、額外待繳」怪狀態)
                     const extraContractIds = [];
                     extraBeds.forEach(eb => {
                         const ec = store.addContract({
@@ -1233,13 +1236,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                             renewalState: 'active',
                             snoozeUntil: null,
                             signedFileUrl: null,
-                            terminatedDate: null,
-                            __payment: {
-                                discount: 0,
-                                discountReason: null,
-                                paidAmount: null,   // 未收 — 帳務管理單獨處理
-                                paymentMethod: values.paymentMethod || '匯款'
-                            }
+                            terminatedDate: null
+                            // 不傳 __payment → 不會產生獨立 invoice (帳務全部走主合約那張)
                         });
                         store.updateProperty(eb.id, {
                             tenant: tenant.name, status: '已出租',
@@ -1249,7 +1247,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                     });
 
                     const msg = extraContractIds.length
-                        ? `✅ 合約 ${contract.id} + 額外 ${extraContractIds.length} 份 (${extraContractIds.join(', ')}) 建立完成 — ${tenant.name}`
+                        ? `✅ 合約 ${contract.id} + 綁定 ${extraContractIds.length} 張床位 (${extraContractIds.join(', ')}) 建立完成 — 帳務全走主合約那張`
                         : `✅ 合約 ${contract.id} 建立完成 — ${tenant.name} → ${bed.name}`;
                     showToast(msg, 'success', 5000);
                     formModal.close();

@@ -679,13 +679,22 @@ export function isSettled(inv) {
 // 帳單金額 = 月租 × termMonths，期間 = 合約全期，應結日 = startDate
 // 1 合約 = 1 張全期 invoice，預設已繳清 (現實規則：先收錢才簽合約)
 // 1 月合約 = 1 月房租；3 月合約 = 3 月房租 (季繳優惠)
+// 多床位 bundle: 主合約 invoice 自動累加 payment.__bundleExtraRents 裡的額外床位月租；
+//   額外床位合約呼叫 addContract 時不傳 __payment，就不會產生獨立 invoice (避免出現「主已收完、額外待繳」的怪狀態)
 function buildContractInvoice(contract, payment = {}) {
     if (!contract || !contract.startDate) return null;
     const property = mockData.properties.find(p => p.name === contract.propertyName);
     const buildingId = property?.buildingId || null;
     const term = contract.termMonths || 1;
-    const totalAmount = (contract.amount || 0) * term;
+    // 多床位 bundle：主合約 invoice 把額外床位月租一起算進去
+    const extraRents = Array.isArray(payment.__bundleExtraRents) ? payment.__bundleExtraRents : [];
+    const extraRentSum = extraRents.reduce((s, r) => s + (Number(r) || 0), 0);
+    const baseRent = (Number(contract.amount) || 0) + extraRentSum;
+    const totalAmount = baseRent * term;
     const termLabel = term === 3 ? '3 個月 (季繳)' : `${term} 個月`;
+    const bundleNote = extraRents.length
+        ? ` · 含額外 ${extraRents.length} 張床位`
+        : '';
     const today = new Date().toISOString().slice(0, 10);
 
     const discount = Number(payment.discount) || 0;
@@ -709,7 +718,7 @@ function buildContractInvoice(contract, payment = {}) {
         paidDate: today,
         periodStart: contract.startDate,
         periodEnd: contract.endDate,
-        note: `${contract.id} ${termLabel} 房租` + (payment.note ? ` · ${payment.note}` : (paidAmount >= due ? ' · 簽約已收' : '')),
+        note: `${contract.id} ${termLabel} 房租${bundleNote}` + (payment.note ? ` · ${payment.note}` : (paidAmount >= due ? ' · 簽約已收' : '')),
         contractId: contract.id,
         bankLast5: null,
         bankVerified: paidAmount >= due,
