@@ -792,18 +792,29 @@ function renderContractTemplatesTab() {
         <div class="card" style="margin-bottom: 1.25rem;">
             <h2 class="card-title"><i class="ph ph-info"></i> 樣板準備說明</h2>
             <div style="font-size: 0.875rem; line-height: 1.7;">
-                <p style="margin: 0 0 0.75rem;">每個館別上傳一份 <strong>含可填入欄位</strong> 的 PDF 合約樣板。系統會在產生合約時自動填入 5 個變數：</p>
+                <p style="margin: 0 0 0.75rem;">每個館別上傳一份 <strong>含可填入欄位</strong> 的 PDF 合約樣板。系統產生合約時會自動填入下列欄位：</p>
                 <table style="width: auto; font-size: 0.85rem; border-collapse: collapse; margin-bottom: 0.75rem;">
+                    <thead>
+                        <tr><th colspan="3" style="text-align: left; padding: 0.3rem 0; color: var(--text-secondary); font-size: 0.78rem; border-bottom: 1px solid var(--border-color);">必要欄位</th></tr>
+                    </thead>
                     <tbody>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">bed_no</code></td><td style="color: var(--text-muted);">床號（例：R1-A）</td></tr>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">tenant_name</code></td><td style="color: var(--text-muted);">乙方姓名（例：王大明）</td></tr>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">rental_period</code></td><td style="color: var(--text-muted);">租賃期間（例：2026/05/01 ~ 2026/07/30）</td></tr>
-                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">rent_amount</code></td><td style="color: var(--text-muted);">租金金額（例：18,000，已含千分位）</td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">rent_amount</code></td><td style="color: var(--text-muted);">月租金（例：18,000，已含千分位）</td></tr>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">deposit_amount</code></td><td style="color: var(--text-muted);">押金金額（例：0 或 18,000）</td></tr>
+                    </tbody>
+                    <thead>
+                        <tr><th colspan="3" style="text-align: left; padding: 0.65rem 0 0.3rem; color: var(--text-secondary); font-size: 0.78rem; border-bottom: 1px solid var(--border-color);">選填欄位 — 折扣 / 加收 (季繳優惠、能源費等)</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">adjustments</code></td><td style="color: var(--text-muted);">加減項目明細，多筆換行（例：<br>− 季繳優惠：−$1,000<br>+ 能源費：+$500）<br><small>欄位請設為「多行文字」(Multi-line)</small></td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">total_amount</code></td><td style="color: var(--text-muted);">套用加減後的最終月租（例：9,000）</td></tr>
                     </tbody>
                 </table>
                 <p style="margin: 0; color: var(--text-muted); font-size: 0.8rem;">
-                    💡 在 Adobe Acrobat 或 <a href="https://www.pdfescape.com/open/" target="_blank" rel="noopener" style="color: var(--color-primary);">PDFescape</a>（免費線上）等工具中，到「準備表單」功能加入 5 個文字欄位，命名為上述名稱，存檔後上傳即可。地址、單位（NT$、元）等其他欄位請事先在原稿寫死。
+                    💡 在 Adobe Acrobat 或 <a href="https://www.pdfescape.com/open/" target="_blank" rel="noopener" style="color: var(--color-primary);">PDFescape</a>（免費線上）等工具中，到「準備表單」功能加入這些文字欄位，命名為上述名稱。<br>
+                    📝 沒有加減項目時，<code>adjustments</code> 會填空字串、<code>total_amount</code> 等於 <code>rent_amount</code>。樣板沒加這兩個欄位也沒影響，只是合約上不會印出折扣 / 加收明細。
                 </p>
             </div>
         </div>

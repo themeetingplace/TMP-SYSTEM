@@ -1,11 +1,13 @@
 // PDF 套版工具
 // 用 pdf-lib 載入樣板 PDF → 填入 form fields → 下載最終 PDF
-// 樣板 PDF 需要在 Acrobat 等工具中先建立 5 個 text form field：
-//   bed_no          (床號，例：R1-A)
-//   tenant_name     (乙方姓名，例：王大明)
-//   rental_period   (租賃期間，例：2026/05/01 ~ 2026/07/30)
-//   rent_amount     (租金金額，例：18,000)
-//   deposit_amount  (押金金額，例：0 或 18,000)
+// 樣板 PDF 在 Acrobat 等工具中建立 text form field：
+//   [必要] bed_no          (床號，例：R1-A)
+//   [必要] tenant_name     (乙方姓名，例：王大明)
+//   [必要] rental_period   (租賃期間，例：2026/05/01 ~ 2026/07/30)
+//   [必要] rent_amount     (月租金，例：18,000)
+//   [必要] deposit_amount  (押金金額，例：0 或 18,000)
+//   [選填] adjustments     (折扣 / 加收明細多行文字 — 設成 multi-line 欄位)
+//   [選填] total_amount    (套用加減後的最終月租)
 
 // === Base64 ↔ Uint8Array (分段處理避免 stack overflow) ===
 

@@ -15,6 +15,43 @@ const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'
 const TODAY_DATE = new Date();
 const TODAY = TODAY_DATE.toISOString().split('T')[0];
 
+// 從合約的首張帳單抓加減項目 (季繳優惠 / 能源費等)，給合約 PDF 填入用
+function getContractAdjustments(contract) {
+    if (!contract?.id) return [];
+    const invoice = mockData.invoices
+        .filter(i => i.contractId === contract.id)
+        .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))[0];
+    if (!invoice || !invoice.discountReason) return [];
+    try {
+        const arr = JSON.parse(invoice.discountReason);
+        return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+}
+
+// 把加減項目格式化成多行文字塞進 PDF (一行一項)，計算最終月租
+function buildAdjustmentValues(contract) {
+    const adjustments = getContractAdjustments(contract);
+    const base = Number(contract?.amount) || 0;
+    if (!adjustments.length) {
+        return { adjustments: '', total_amount: base.toLocaleString() };
+    }
+    const lines = adjustments.map(a => {
+        const sign = a.kind === 'add' ? '+' : '−';
+        const label = a.label || (a.kind === 'add' ? '加收項目' : '折扣');
+        const amount = Number(a.amount) || 0;
+        return `${sign} ${label}：${sign}$${amount.toLocaleString()}`;
+    });
+    const net = adjustments.reduce((s, a) => {
+        const v = Number(a.amount) || 0;
+        return s + (a.kind === 'add' ? v : -v);
+    }, 0);
+    const total = base + net;
+    return {
+        adjustments: lines.join('\n'),
+        total_amount: total.toLocaleString()
+    };
+}
+
 // 每欄的排序 comparator (升冪)
 const SORT_COLS = {
     info:   { cmp: (a, b) => (a.id || '').localeCompare(b.id || '') },
@@ -554,12 +591,15 @@ async function downloadContractPdf(id) {
     }
 
     try {
+        const adj = buildAdjustmentValues(c);
         const values = {
             bed_no: getBedNo(c),
             tenant_name: c.tenant || '',
             rental_period: formatRentalPeriod(c.startDate, c.endDate),
             rent_amount: (c.amount || 0).toLocaleString(),
-            deposit_amount: (c.depositAmount || 0).toLocaleString()
+            deposit_amount: (c.depositAmount || 0).toLocaleString(),
+            adjustments: adj.adjustments,      // 折扣 / 加收 多行文字 (樣板選填欄位)
+            total_amount: adj.total_amount     // 套用加減後的最終月租 (樣板選填欄位)
         };
         const { bytes, filledFields, missingFields } = await fillContractPdf(tpl.pdfBase64, values);
 
@@ -601,12 +641,15 @@ async function sendContractToLine(id) {
 
     showToast('產生 PDF 中…', 'info');
     try {
+        const adj = buildAdjustmentValues(c);
         const values = {
             bed_no: getBedNo(c),
             tenant_name: c.tenant || '',
             rental_period: formatRentalPeriod(c.startDate, c.endDate),
             rent_amount: (c.amount || 0).toLocaleString(),
-            deposit_amount: (c.depositAmount || 0).toLocaleString()
+            deposit_amount: (c.depositAmount || 0).toLocaleString(),
+            adjustments: adj.adjustments,
+            total_amount: adj.total_amount
         };
         const { bytes } = await fillContractPdf(tpl.pdfBase64, values);
         const filename = `合約_${c.id}_${c.tenant}.pdf`;
