@@ -450,7 +450,9 @@ export function showCheckinAssignmentForm(opts = {}) {
     const initialBuildingId = preselectBed?.buildingId || activeBuildings[0]?.id || '';
 
     // 床位欄位（預選時跳過 building/bed select，但仍可加額外床位）
+    // bedHeader = 入住床位摘要 banner (永遠顯示在 form-grid 第一列，span 2 撐滿整列)
     const bedFields = preselectBed ? [
+        { name: 'bedHeader', type: 'placeholder', span: 2 },
         { name: 'extraBeds', type: 'placeholder', span: 2 },
         { name: 'extraBedIds', type: 'hidden', value: '[]' }
     ] : [
@@ -509,9 +511,8 @@ export function showCheckinAssignmentForm(opts = {}) {
         return `C${String(max + 1).padStart(3, '0')}`;
     })();
 
-    const headerHtml = preselectBed
-        ? `<div id="wizard-bed-header" style="width: 100%; box-sizing: border-box; background: var(--bg-secondary); border-left: 3px solid var(--color-warning); padding: 0.7rem 1rem; margin-bottom: 1rem; border-radius: 6px;"></div>`
-        : '';
+    // bed-header banner 改成 form-grid 內部 placeholder 渲染 (span 2 撐滿整列)，不再用 headerHtml
+    const headerHtml = '';
 
     const formModal = openFormModal({
         title: preselectBed
@@ -781,8 +782,11 @@ export function showCheckinAssignmentForm(opts = {}) {
                     recalcTotalDue();
                     updateBedHeader();
                 };
-                // 同步「入住床位」摘要框 — banner 排版：左主資訊 + 右合計徽章 (justify-between 填滿一整列)
-                const headerEl = document.getElementById('wizard-bed-header');
+                // 同步「入住床位」摘要框 — 用 form-grid 內部 placeholder 渲染，span 2 自然撐滿整列
+                const headerEl = form.querySelector('#ph-bedHeader');
+                if (headerEl && preselectBed) {
+                    headerEl.style.cssText = 'grid-column: 1 / -1; width: 100%; box-sizing: border-box; background: var(--bg-secondary); border-left: 3px solid var(--color-warning); padding: 0.7rem 1rem; border-radius: 6px;';
+                }
                 const updateBedHeader = () => {
                     if (!headerEl || !preselectBed) return;
                     const extraIds = JSON.parse(extraBedIdsInput.value || '[]');
