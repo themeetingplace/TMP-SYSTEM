@@ -789,7 +789,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                     recalcTotalDue();
                     updateBedHeader();
                 };
-                // 同步「入住床位」摘要框 (上方那塊) — 緊湊水平排版，額外床位用 chip 並排
+                // 同步「入住床位」摘要框 (上方那塊) — 三段式 (主床位 / 額外 chips / 合計)
                 const headerEl = document.getElementById('wizard-bed-header');
                 const updateBedHeader = () => {
                     if (!headerEl || !preselectBed) return;
@@ -798,26 +798,32 @@ export function showCheckinAssignmentForm(opts = {}) {
                     const primaryRent = Number(preselectBed.rent) || 0;
                     const totalRent = primaryRent + extraBedRentSum;
                     const extraChips = extras.map(b => `
-                        <span style="background: var(--color-surface, #fff); border: 1px solid var(--border-color); padding: 0.2rem 0.55rem; border-radius: 999px; display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--text-main);">
-                            <i class="ph ph-stack-plus" style="color: var(--color-primary); font-size: 0.9em;"></i>
+                        <span style="background: var(--color-surface, #fff); border: 1px solid var(--border-color); padding: 0.2rem 0.55rem; border-radius: 999px; display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--text-main); white-space: nowrap;">
+                            <i class="ph ph-stack-plus" style="color: var(--color-primary); font-size: 0.85em;"></i>
                             <strong>${(b.name || '').replace('聚空間 - ', '')}</strong>
                             <span style="color: var(--text-muted);">$${(b.rent || 0).toLocaleString()}</span>
                         </span>
                     `).join('');
+                    const extrasRow = extras.length
+                        ? `<div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
+                              <span style="font-size: 0.72rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.25rem;">
+                                  <i class="ph ph-plus-circle" style="color: var(--color-primary);"></i> 額外
+                              </span>
+                              ${extraChips}
+                           </div>`
+                        : '';
                     const totalLine = extras.length
-                        ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px dashed var(--border-color);">
+                        ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.55rem; padding-top: 0.45rem; border-top: 1px dashed var(--border-color);">
                               共 <strong style="color: var(--color-primary);">${extras.length + 1}</strong> 張床位 · 合計月租 <strong style="color: var(--color-primary);">$${totalRent.toLocaleString()}</strong>
                            </div>`
                         : '';
                     headerEl.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-                            <div style="display: flex; flex-direction: column; gap: 0.1rem; min-width: 0;">
-                                <span style="font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.04em;">入住床位</span>
-                                <span style="font-weight: 600; font-size: 0.95rem;">${preselectBuilding?.name || ''} R${preselectBed.roomNumber}-${preselectBed.bedLetter}</span>
-                            </div>
-                            <span style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">${formatRoomType(preselectBed.gender, preselectBed.capacity)} · $${primaryRent.toLocaleString()}/月</span>
-                            ${extras.length ? `<div style="display: flex; gap: 0.35rem; flex-wrap: wrap; flex: 1; justify-content: flex-end;">${extraChips}</div>` : ''}
+                        <div style="display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;">
+                            <span style="font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.04em; flex-shrink: 0;">入住床位</span>
+                            <span style="font-weight: 600; font-size: 0.95rem;">${preselectBuilding?.name || ''} R${preselectBed.roomNumber}-${preselectBed.bedLetter}</span>
+                            <span style="font-size: 0.78rem; color: var(--text-muted);">${formatRoomType(preselectBed.gender, preselectBed.capacity)} · $${primaryRent.toLocaleString()}/月</span>
                         </div>
+                        ${extrasRow}
                         ${totalLine}
                     `;
                 };
