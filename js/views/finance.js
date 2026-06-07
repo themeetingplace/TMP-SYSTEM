@@ -280,8 +280,9 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'propertyName', label: '物件', type: 'select', required: true, options: propertyOptions },
             { name: 'tenant', label: '租客', type: 'select', required: true, options: tenantOptions, searchable: true, placeholder: '輸入姓名或電話搜尋...' },
             { name: 'amount', label: '應收金額', type: 'number', required: true },
-            { name: 'discount', label: '折扣金額', type: 'number', value: invoice?.discount ?? 0 },
-            { name: 'discountReason', label: '折扣原因', type: 'text', value: invoice?.discountReason ?? '', placeholder: '例：季繳優惠' },
+            // 顯示時翻轉正負號 — 使用者直覺：+加收 / -折扣 (但 DB 存的是 -input，這樣 due = amount - discount 公式不變)
+            { name: 'discount', label: '調整金額', type: 'number', value: -Number(invoice?.discount ?? 0), hint: '+ 加收 (能源費等) ／ − 折扣 (季繳優惠等)' },
+            { name: 'discountReason', label: '調整原因', type: 'text', value: formatDiscountReason(invoice?.discountReason), placeholder: '例：能源費 / 季繳優惠' },
             { name: 'paymentMethod', label: '付款方式', type: 'select', options: paymentMethodOptions, value: invoice?.paymentMethod ?? defaultPaymentMethod },
             { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: TODAY },
             { name: 'periodStart', label: '租期起', type: 'date', hint: '此筆房租涵蓋的起始日' },
@@ -310,9 +311,11 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             }
         },
         onSubmit: (values) => {
-            const discount = Number(values.discount) || 0;
+            // 使用者輸入 + 加收 / − 折扣 (直覺方向)；DB 儲存翻轉成 「- 加收 / + 折扣」(讓 due = amount - discount 公式不變)
+            const userAdjustment = Number(values.discount) || 0;
+            const discount = isExpense ? userAdjustment : -userAdjustment;
             const amt = Number(values.amount) || 0;
-            // 總收支表新增 = 已收/已付，paidAmount = 應收 - 折扣
+            // 總收支表新增 = 已收/已付，paidAmount = 應收 - discount (儲存後的負負得正)
             const paidAmount = amt - discount;
             const payload = {
                 ...values,
