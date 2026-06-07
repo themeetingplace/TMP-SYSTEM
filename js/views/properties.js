@@ -1,6 +1,6 @@
 import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
-import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
+import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
 import { showTenantDetails } from './tenants.js';
 
 const PROPERTY_STATUSES = ['已出租', '待租', '待簽約'];
@@ -762,23 +762,23 @@ export function showCheckinAssignmentForm(opts = {}) {
                     if (preselectBed) return preselectBed.id;
                     return form.querySelector('input[name="bedId"]')?.value || '';
                 };
-                const buildBedOptions = (currentValue, excludeIds = []) => {
+                const getBedOptions = (excludeIds = []) => {
                     const buildingId = getCurrentBuildingId();
-                    if (!buildingId) return '<option value="">請先選館別</option>';
+                    if (!buildingId) return [];
                     const primaryBedId = getPrimaryBedId();
-                    const beds = mockData.properties
+                    return mockData.properties
                         .filter(p => p.buildingId === buildingId && p.id !== primaryBedId && !excludeIds.includes(p.id))
-                        .sort((a, b) => (a.roomNumber - b.roomNumber) || (a.bedLetter || '').localeCompare(b.bedLetter || ''));
-                    const opts = beds.map(p => {
-                        const active = activeContractFor(p.name);
-                        const tag = active ? ` ⚠ ${active.tenant}住至${active.endDate}` : ' (空床)';
-                        return `<option value="${p.id}" ${currentValue === p.id ? 'selected' : ''}>R${p.roomNumber}-${p.bedLetter} · $${(p.rent||0).toLocaleString()}${tag}</option>`;
-                    }).join('');
-                    return `<option value="">請選擇額外床位</option>${opts}`;
+                        .sort((a, b) => (a.roomNumber - b.roomNumber) || (a.bedLetter || '').localeCompare(b.bedLetter || ''))
+                        .map(p => {
+                            const active = activeContractFor(p.name);
+                            const tag = active ? ` ⚠ ${active.tenant}住至${active.endDate}` : ' · 空床';
+                            return { value: p.id, label: `R${p.roomNumber}-${p.bedLetter} · $${(p.rent||0).toLocaleString()}${tag}` };
+                        });
                 };
+                let extraRowCounter = 0;
                 const refreshExtraBeds = () => {
-                    const selects = Array.from(extraBedsPh.querySelectorAll('select[data-extra-bed]'));
-                    const ids = selects.map(s => s.value).filter(Boolean);
+                    const hiddenInputs = Array.from(extraBedsPh.querySelectorAll('input[data-extra-bed-id]'));
+                    const ids = hiddenInputs.map(s => s.value).filter(Boolean);
                     extraBedIdsInput.value = JSON.stringify(ids);
                     extraBedRentSum = ids.reduce((sum, id) => {
                         const b = mockData.properties.find(p => p.id === id);
@@ -786,16 +786,47 @@ export function showCheckinAssignmentForm(opts = {}) {
                     }, 0);
                     recalcTotalDue();
                 };
-                const addExtraBedRow = (preselectedId = '') => {
+                const buildExtraBedSelectHtml = (rowId) => {
+                    const opts = getBedOptions();
+                    const placeholder = opts.length ? '請選擇額外床位' : '此館目前無其他可選床位';
+                    const optsHtml = opts.map(o => `
+                        <button type="button" class="custom-select-option" data-value="${o.value}">
+                            <span>${o.label}</span>
+                            <i class="ph ph-check"></i>
+                        </button>
+                    `).join('');
+                    return `
+                        <div class="custom-select" data-name="extraBed_${rowId}">
+                            <button type="button" class="custom-select-trigger">
+                                <span class="custom-select-value placeholder">${placeholder}</span>
+                                <i class="ph ph-caret-down custom-select-icon"></i>
+                            </button>
+                            <input type="hidden" name="extraBed_${rowId}" data-extra-bed-id value="">
+                            <div class="custom-select-panel" hidden>
+                                <div class="custom-select-options-wrap">
+                                    <button type="button" class="custom-select-option is-selected" data-value="">
+                                        <span>${placeholder}</span>
+                                    </button>
+                                    ${optsHtml}
+                                </div>
+                                <div class="custom-select-empty" hidden>查無符合項目</div>
+                            </div>
+                        </div>
+                    `;
+                };
+                const addExtraBedRow = () => {
+                    const rowId = ++extraRowCounter;
                     const row = document.createElement('div');
                     row.className = 'extra-bed-row';
                     row.style.cssText = 'display: grid; grid-template-columns: 1fr 32px; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;';
                     row.innerHTML = `
-                        <select data-extra-bed class="form-input" style="font-size: 0.85rem;">${buildBedOptions(preselectedId)}</select>
-                        <button type="button" class="extra-bed-del" title="移除這張床位" style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: 1rem; padding: 0.2rem;"><i class="ph ph-x"></i></button>
+                        ${buildExtraBedSelectHtml(rowId)}
+                        <button type="button" class="extra-bed-del" title="移除這張床位" style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: 1.1rem; padding: 0.3rem; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;"><i class="ph ph-x-circle"></i></button>
                     `;
                     extraBedsPh.querySelector('#extra-beds-list').appendChild(row);
-                    row.querySelector('select').addEventListener('change', refreshExtraBeds);
+                    initCustomSelects(row);
+                    // 監聽 hidden input 變動 (custom-select 在 selectValue 時派發 change event)
+                    row.querySelector('input[data-extra-bed-id]').addEventListener('change', refreshExtraBeds);
                     row.querySelector('.extra-bed-del').addEventListener('click', () => { row.remove(); refreshExtraBeds(); });
                 };
                 extraBedsPh.innerHTML = `

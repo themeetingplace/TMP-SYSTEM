@@ -233,7 +233,7 @@ function initFlatpickr(scope) {
 }
 
 // === 客製化下拉選單 ===
-function initCustomSelects(scope) {
+export function initCustomSelects(scope) {
     scope.querySelectorAll('.custom-select').forEach(sel => {
         const trigger = sel.querySelector('.custom-select-trigger');
         const valueEl = sel.querySelector('.custom-select-value');
