@@ -748,7 +748,8 @@ function renderContractTemplatesTab() {
     const rows = buildings.map(b => {
         const tpl = templates.find(t => t.buildingId === b.id);
         const uploaded = tpl ? new Date(tpl.uploadedAt).toLocaleString('zh-TW', { hour12: false }) : null;
-        const sizeKB = tpl ? Math.round(tpl.pdfBase64.length * 0.75 / 1024) : 0;
+        // 防呆: pdfBase64 可能是 null (雲端同步沒回傳) — 顯示 0 KB，不要炸
+        const sizeKB = tpl?.pdfBase64 ? Math.round(tpl.pdfBase64.length * 0.75 / 1024) : 0;
 
         return `
             <tr>
@@ -846,6 +847,10 @@ async function testFillTemplate(buildingId) {
     const tpl = store.getContractTemplate(buildingId);
     const building = mockData.buildings.find(b => b.id === buildingId);
     if (!tpl || !building) return;
+    if (!tpl.pdfBase64) {
+        showToast('樣板資料不完整 (PDF 內容缺失)，請重新上傳', 'danger', 5000);
+        return;
+    }
 
     try {
         const result = await fillContractPdf(tpl.pdfBase64, {
@@ -869,6 +874,10 @@ async function testFillTemplate(buildingId) {
 async function inspectTemplate(buildingId) {
     const tpl = store.getContractTemplate(buildingId);
     if (!tpl) return;
+    if (!tpl.pdfBase64) {
+        showToast('樣板資料不完整 (PDF 內容缺失)，請重新上傳', 'danger', 5000);
+        return;
+    }
     try {
         const fields = await listPdfFields(tpl.pdfBase64);
         if (fields.length === 0) {

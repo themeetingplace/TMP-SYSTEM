@@ -593,6 +593,10 @@ async function downloadContractPdf(id) {
         showToast(`「${building?.name || '此館'}」尚未上傳合約樣板，請至 系統設定 → 合約範本 上傳`, 'warning', 5000);
         return;
     }
+    if (!tpl.pdfBase64) {
+        showToast(`合約樣板資料不完整 (PDF 內容缺失)，請至 系統設定 → 合約範本 重新上傳`, 'danger', 5000);
+        return;
+    }
 
     try {
         const adj = buildAdjustmentValues(c);
@@ -641,6 +645,10 @@ async function sendContractToLine(id) {
     const tpl = store.getContractTemplate(buildingId);
     if (!tpl) {
         showToast(`此館尚未上傳合約樣板`, 'warning');
+        return;
+    }
+    if (!tpl.pdfBase64) {
+        showToast(`合約樣板資料不完整 (PDF 內容缺失)，請重新上傳`, 'danger', 5000);
         return;
     }
 
