@@ -889,15 +889,21 @@ async function inspectTemplate(buildingId) {
             });
             return;
         }
-        const requiredFields = ['bed_no', 'tenant_name', 'rental_period', 'rent_amount', 'deposit_amount'];
+        // 必要：bed_no / tenant_name / rental_period 是最基本識別
+        // 選填：所有金額欄位 (用戶可只用 total_amount + monthly_amount 也行，不一定要 rent_amount)
+        const REQUIRED = ['bed_no', 'tenant_name', 'rental_period'];
+        const OPTIONAL = ['rent_amount', 'deposit_amount', 'adjustments', 'total_amount', 'monthly_amount'];
+        const KNOWN = [...REQUIRED, ...OPTIONAL];
         const list = fields.map(f => {
-            const ok = requiredFields.includes(f.name);
-            return `<li style="font-family: monospace;">${ok ? '✅' : '⚠️'} <code>${f.name}</code> <span style="color: var(--text-muted); font-family: inherit;">${f.type.replace('PDF', '').replace('Field', '')}</span></li>`;
+            const isKnown = KNOWN.includes(f.name);
+            const icon = isKnown ? '✅' : '⚠️';
+            const note = isKnown ? '' : ' <small style="color: var(--text-muted); font-family: inherit;">(系統不認識，不會自動填)</small>';
+            return `<li style="font-family: monospace;">${icon} <code>${f.name}</code> <span style="color: var(--text-muted); font-family: inherit;">${f.type.replace('PDF', '').replace('Field', '')}</span>${note}</li>`;
         }).join('');
-        const missing = requiredFields.filter(r => !fields.find(f => f.name === r));
+        const missing = REQUIRED.filter(r => !fields.find(f => f.name === r));
         const missingHtml = missing.length
-            ? `<p style="color: var(--color-danger); margin-top: 0.75rem;">缺少欄位：${missing.map(m => `<code>${m}</code>`).join(', ')}</p>`
-            : '<p style="color: var(--color-success); margin-top: 0.75rem;">✅ 所有必要欄位都齊全</p>';
+            ? `<p style="color: var(--color-danger); margin-top: 0.75rem;">缺少必要欄位：${missing.map(m => `<code>${m}</code>`).join(', ')}</p>`
+            : '<p style="color: var(--color-success); margin-top: 0.75rem;">✅ 必要欄位都齊全</p>';
         openConfirm({
             title: `${tpl.fileName} 內的欄位`,
             message: `<ul style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem;">${list}</ul>${missingHtml}`,

@@ -1358,6 +1358,11 @@ export const store = {
         if (!Array.isArray(mockData.contractTemplates)) return;
         mockData.contractTemplates = mockData.contractTemplates.filter(t => t.buildingId !== buildingId);
         try { persist(); } catch (e) {}
+        // 重要: 觸發雲端 DELETE — pushLarge 只跑 upsert，不會清孤兒列；
+        // 沒這個事件刪完下次 pull 又會把樣板從 Supabase 拉回來
+        window.dispatchEvent(new CustomEvent('bms:delete', {
+            detail: { table: 'contract_templates', id: buildingId }
+        }));
         window.dispatchEvent(new CustomEvent('bms:template-changed'));
     },
     getContractTemplate(buildingId) {
