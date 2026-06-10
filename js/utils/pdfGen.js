@@ -4,10 +4,11 @@
 //   [必要] bed_no          (床號，例：R1-A)
 //   [必要] tenant_name     (乙方姓名，例：王大明)
 //   [必要] rental_period   (租賃期間，例：2026/05/01 ~ 2026/07/30)
-//   [必要] rent_amount     (月租金，例：18,000)
+//   [必要] rent_amount     (月租金 — 基底，例：10,000)
 //   [必要] deposit_amount  (押金金額，例：0 或 18,000)
 //   [選填] adjustments     (折扣 / 加收明細多行文字 — 設成 multi-line 欄位)
-//   [選填] total_amount    (套用加減後的最終月租)
+//   [選填] total_amount    (租金總額 = 月租 × 合約期 + 加 − 折，例：29,000)
+//   [選填] monthly_amount  (月付金額 = 租金總額 ÷ 合約期，1 期等於 total，3 期÷3)
 
 // === Base64 ↔ Uint8Array (分段處理避免 stack overflow) ===
 

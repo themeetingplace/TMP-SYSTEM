@@ -809,7 +809,8 @@ function renderContractTemplatesTab() {
                     </thead>
                     <tbody>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">adjustments</code></td><td style="color: var(--text-muted);">加減項目明細，多筆換行（例：<br>− 季繳優惠：−$1,000<br>+ 能源費：+$500）<br><small>欄位請設為「多行文字」(Multi-line)</small></td></tr>
-                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">total_amount</code></td><td style="color: var(--text-muted);">套用加減後的最終月租（例：9,000）</td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">total_amount</code></td><td style="color: var(--text-muted);"><strong>租金總額</strong>（整個合約期，加減後）<br>= 月租 × 合約期 + 加收 − 折扣<br><small>例：月租 $10,000 × 3 月 − 季繳優惠 $1,000 = 29,000</small></td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">monthly_amount</code></td><td style="color: var(--text-muted);"><strong>月付金額</strong>（每月實際付多少）= 租金總額 ÷ 合約期<br><small>1 個月 → 跟 total_amount 相同；3 個月合約 → 平均到每月（四捨五入到整數）</small></td></tr>
                     </tbody>
                 </table>
                 <p style="margin: 0; color: var(--text-muted); font-size: 0.8rem;">
