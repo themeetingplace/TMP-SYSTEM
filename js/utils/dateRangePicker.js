@@ -55,6 +55,35 @@ function initGlobalDocClick() {
     });
 }
 
+// 套 Flatpickr 在 range picker 的兩個 date input 上 (跟其他表單 date input 一致的視覺)
+function attachFlatpickr(input, onChange) {
+    if (!input || typeof window.flatpickr !== 'function') return;
+    if (input.dataset.fpAttached === '1') return;
+    input.dataset.fpAttached = '1';
+    const baseLocale = window.flatpickr.l10ns?.zh_tw || {};
+    const tightLocale = {
+        ...baseLocale,
+        weekdays: {
+            shorthand: ['日', '一', '二', '三', '四', '五', '六'],
+            longhand: ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+        },
+        months: {
+            shorthand: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+            longhand: ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月']
+        },
+        firstDayOfWeek: 1
+    };
+    window.flatpickr(input, {
+        locale: tightLocale,
+        dateFormat: 'Y-m-d',
+        allowInput: true,
+        disableMobile: true,
+        position: 'auto',
+        monthSelectorType: 'static',
+        onChange: () => onChange?.()
+    });
+}
+
 // 綁定事件 — 區間改變時呼叫 onChange()
 export function initRangePicker(scope, onChange) {
     initGlobalDocClick();
@@ -68,7 +97,6 @@ export function initRangePicker(scope, onChange) {
     // 開 / 關 panel
     trigger?.addEventListener('click', (e) => {
         e.stopPropagation();
-        // 開啟此 picker 前，先把其他 picker 的 panel 都關掉
         document.querySelectorAll('.range-picker-preset-panel').forEach(p => {
             if (p !== panel) p.hidden = true;
         });
@@ -86,15 +114,18 @@ export function initRangePicker(scope, onChange) {
         });
     });
 
-    // 自訂日期 change
-    const onDateChange = () => {
+    // 自訂日期 change (Flatpickr 也會觸發 input 的 change 事件)
+    const handleDateChange = () => {
         const start = startInput.value;
         const end = endInput.value;
         if (!start || !end) return;
         const [s, e] = start <= end ? [start, end] : [end, start];
+        // 避免重複觸發 (Flatpickr + change event)
+        if (reportState.viewRange.start === s && reportState.viewRange.end === e) return;
         reportState.viewRange = { start: s, end: e, preset: 'custom' };
         onChange?.();
     };
-    startInput?.addEventListener('change', onDateChange);
-    endInput?.addEventListener('change', onDateChange);
+    // 套 Flatpickr 取代瀏覽器預設醜醜的 native date picker
+    attachFlatpickr(startInput, handleDateChange);
+    attachFlatpickr(endInput, handleDateChange);
 }
