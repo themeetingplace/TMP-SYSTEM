@@ -2806,6 +2806,10 @@ select:focus-visible,
     gap: 0.2rem;
     min-width: 240px;
 }
+/* 重要: HTML hidden 屬性預設是 display:none，被上面的 display:grid 蓋掉 → 強制覆寫 */
+.range-picker-preset-panel[hidden] {
+    display: none !important;
+}
 .rp-preset-option {
     background: none;
     border: none;
