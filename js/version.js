@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.1.4';
-export const APP_BUILD_DATE = '2026-06-07';
+export const APP_VERSION = '1.2.0';
+export const APP_BUILD_DATE = '2026-06-11';
 export const APP_NAME = '聚空間 BMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.2.0', date: '2026-06-11', notes: '報表大改版 — 4 tab hub (總覽 / 各館 / 交叉 / 對帳單) + 共用區間 picker (本月/本季/本年/自訂) / 帳務管理只留 總收支 + 房租查帳 / 收支分析搬到報表 / 合約 PDF 加 total_amount + monthly_amount / 多床位合約只開 1 張 invoice / 帳單編輯折扣加收正負號修正' },
     { version: '1.1.4', date: '2026-06-07', notes: '新增合約支援多床位 (同租客同期間 = 多份合約) / 折扣加收項目改成分段切換按鈕 (取代醜下拉)' },
     { version: '1.1.3', date: '2026-06-07', notes: '編輯 / 確認彈窗鎖外點 — 誤點 backdrop 或 Esc 會震動提醒，要按 X 或取消才會關閉，避免新增合約時誤關失去輸入' },
     { version: '1.1.2', date: '2026-06-06', notes: 'LINE 客服改稱「小編」/ 找小編按鈕修正 / 入住詢問關鍵字補上 / 使用手冊入口 (📖 在關於彈窗) / 側邊欄收合 polish / 入住紀錄歷史異常金額 ⚠ 提示 / 英文品牌 THE MEETING PLACE' },

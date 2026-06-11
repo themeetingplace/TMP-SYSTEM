@@ -3,8 +3,8 @@
 
 const TABS = [
     { hash: 'finance',   icon: 'ph-table',          label: '總收支表',   subtitle: '所有進出帳明細' },
-    { hash: 'analysis',  icon: 'ph-chart-bar',      label: '收支分析',   subtitle: '各館 / 分類交叉統計' },
     { hash: 'unsettled', icon: 'ph-warning-circle', label: '房租查帳',   subtitle: '欠繳 / 未付追蹤' },
+    // 收支分析 已搬到 報表 → 交叉分析 tab
 ];
 
 export const FINANCE_TAB_KEYS = TABS.map(t => t.hash);

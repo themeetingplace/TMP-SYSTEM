@@ -5,7 +5,7 @@ import { renderContracts, initContractActions } from './views/contracts.js';
 import { renderFinance, initFinanceActions } from './views/finance.js';
 import { renderUnsettled, initUnsettledActions } from './views/unsettled.js';
 import { renderReports, initReportsActions } from './views/reports.js';
-import { renderAnalysis, initAnalysisActions } from './views/analysis.js';
+import { reportState } from './views/report-state.js';
 import { renderMaintenance, initMaintenanceActions } from './views/maintenance.js';
 import { renderTenants, initTenantActions } from './views/tenants.js';
 import { renderSettings, initSettingsActions } from './views/settings.js';
@@ -36,9 +36,8 @@ const routes = {
     occupancy:     { title: '住房一覽',     group: '營運', render: renderOccupancy,  init: initOccupancyActions },
     contracts:     { title: '合約管理',     group: '營運', render: renderContracts,  init: initContractActions },
     finance:       { title: '總收支表',     group: '帳務', render: renderFinance,    init: initFinanceActions },
-    analysis:      { title: '收支分析',     group: '帳務', render: renderAnalysis,   init: initAnalysisActions },
     unsettled:     { title: '房租查帳',     group: '帳務', render: renderUnsettled,  init: initUnsettledActions },
-    reports:       { title: '各館收入報表', group: '報表', render: renderReports,    init: initReportsActions },
+    reports:       { title: '報表',         group: '分析', render: renderReports,    init: initReportsActions },
     maintenance:   { title: '維修管理',     group: '營運', render: renderMaintenance,init: initMaintenanceActions },
     tenants:       { title: '租客清單',     group: '營運', render: renderTenants,    init: initTenantActions },
     settings:      { title: '系統設定',     group: '系統', render: renderSettings,   init: initSettingsActions },
@@ -47,6 +46,12 @@ const routes = {
 
 function handleRoute() {
     let hash = window.location.hash.substring(1);
+    // 舊 URL #analysis 重定向到 #reports 並切到交叉分析 tab (不破壞 bookmark)
+    if (hash === 'analysis') {
+        reportState.activeTab = 'analysis';
+        window.location.hash = 'reports';
+        return;
+    }
     if (!hash || !routes[hash]) {
         hash = 'dashboard';
         window.location.hash = hash;
@@ -74,8 +79,9 @@ function handleRoute() {
     closeMobileDrawer();
 
     // Update Nav Activity
-    // UIUX #1: finance/analysis/unsettled 都映射到 sidebar 的「帳務管理」(data-view='finance')
-    const FINANCE_GROUP = ['finance', 'analysis', 'unsettled'];
+    // 帳務管理: finance / unsettled → 映射到 sidebar 的「帳務管理」
+    // 收支分析已搬到 reports (報表) 之下
+    const FINANCE_GROUP = ['finance', 'unsettled'];
     const sidebarHash = FINANCE_GROUP.includes(hash) ? 'finance' : hash;
     navItems.forEach(item => {
         if (item.dataset.view === sidebarHash) {
