@@ -282,86 +282,185 @@ function statsForBuildingRange(building, range) {
     };
 }
 
-function renderBuildingsTab() {
-    const range = reportState.viewRange;
+// 各館子標籤列 — Tab 2 / Tab 3 共用
+function renderBuildingSubTabs() {
     const buildings = getSortedBuildings({ activeOnly: true });
-    const allStats = buildings.map(b => statsForBuildingRange(b, range));
-    const totals = allStats.reduce((acc, s) => ({
-        income: acc.income + s.actualIncome,
-        expense: acc.expense + s.expenseTotal,
-        net: acc.net + s.net,
-        totalBeds: acc.totalBeds + s.totalBeds,
-        rentedBeds: acc.rentedBeds + s.rentedBeds
-    }), { income: 0, expense: 0, net: 0, totalBeds: 0, rentedBeds: 0 });
-    const totalOccRate = totals.totalBeds ? totals.rentedBeds / totals.totalBeds : 0;
-
+    const active = reportState.activeBuilding || 'all';
     return `
-        <div class="card" style="margin-bottom: 1rem; padding: 1rem 1.25rem;">
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
-                <div><div style="font-size: 0.72rem; color: var(--text-muted);">總收入</div><div style="font-size: 1.2rem; font-weight: 700; color: var(--color-success);">$${totals.income.toLocaleString()}</div></div>
-                <div><div style="font-size: 0.72rem; color: var(--text-muted);">總支出</div><div style="font-size: 1.2rem; font-weight: 700; color: var(--color-warning);">$${totals.expense.toLocaleString()}</div></div>
-                <div><div style="font-size: 0.72rem; color: var(--text-muted);">淨利</div><div style="font-size: 1.2rem; font-weight: 700; color: ${totals.net >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">$${totals.net.toLocaleString()}</div></div>
-                <div><div style="font-size: 0.72rem; color: var(--text-muted);">總出租率</div><div style="font-size: 1.2rem; font-weight: 700;">${pct(totalOccRate)} <small style="color: var(--text-muted); font-size: 0.7rem; font-weight: 500;">${totals.rentedBeds}/${totals.totalBeds}</small></div></div>
-            </div>
-        </div>
-
-        <div class="building-report-grid">
-            ${allStats.map(s => renderBuildingCard(s)).join('')}
+        <div class="bldg-subtab-row">
+            <button type="button" class="bldg-subtab ${active === 'all' ? 'is-active' : ''}" data-building-sub="all">
+                <i class="ph ph-stack"></i> 全館合計
+            </button>
+            ${buildings.map(b => `
+                <button type="button" class="bldg-subtab ${active === b.id ? 'is-active' : ''}" data-building-sub="${b.id}">
+                    ${b.name}
+                </button>
+            `).join('')}
         </div>
     `;
 }
 
-function renderBuildingCard(s) {
+// 大數字 stat tile (Hero 樣式)
+function renderStatTile(opts) {
+    const { label, value, sub, accent, valueColor, iconClass } = opts;
+    return `
+        <div class="stat-tile" style="--accent: ${accent};">
+            <div class="stat-tile-label"><i class="ph ${iconClass}"></i> ${label}</div>
+            <div class="stat-tile-value" style="color: ${valueColor || 'var(--text-main)'};">$${value.toLocaleString()}</div>
+            ${sub ? `<div class="stat-tile-sub">${sub}</div>` : ''}
+        </div>
+    `;
+}
+
+function renderBuildingsTab() {
+    const range = reportState.viewRange;
+    const buildings = getSortedBuildings({ activeOnly: true });
+    const active = reportState.activeBuilding || 'all';
+
+    const subTabs = renderBuildingSubTabs();
+
+    // 全館合計 view
+    if (active === 'all') {
+        const allStats = buildings.map(b => statsForBuildingRange(b, range));
+        const totals = allStats.reduce((acc, s) => ({
+            income: acc.income + s.actualIncome,
+            expense: acc.expense + s.expenseTotal,
+            net: acc.net + s.net,
+            totalBeds: acc.totalBeds + s.totalBeds,
+            rentedBeds: acc.rentedBeds + s.rentedBeds
+        }), { income: 0, expense: 0, net: 0, totalBeds: 0, rentedBeds: 0 });
+        const totalOccRate = totals.totalBeds ? totals.rentedBeds / totals.totalBeds : 0;
+        const maxIncome = Math.max(1, ...allStats.map(s => s.actualIncome));
+
+        return `
+            ${subTabs}
+            <div class="stat-tile-grid">
+                ${renderStatTile({ label: '總收入', value: totals.income, sub: `${buildings.length} 個館別`, accent: '#22946e', valueColor: 'var(--color-success)', iconClass: 'ph-arrow-down-right' })}
+                ${renderStatTile({ label: '總支出', value: totals.expense, sub: '已付出帳', accent: '#b13535', valueColor: 'var(--color-danger)', iconClass: 'ph-arrow-up-right' })}
+                ${renderStatTile({ label: '淨利', value: totals.net, sub: `毛利率 ${totals.income ? pct((totals.income - totals.expense) / totals.income) : '—'}`, accent: '#3b82f6', valueColor: totals.net >= 0 ? 'var(--color-success)' : 'var(--color-danger)', iconClass: 'ph-trend-up' })}
+                <div class="stat-tile" style="--accent: #8b5cf6;">
+                    <div class="stat-tile-label"><i class="ph ph-house-line"></i> 總出租率</div>
+                    <div class="stat-tile-value">${pct(totalOccRate)}</div>
+                    <div class="stat-tile-sub">${totals.rentedBeds} / ${totals.totalBeds} 床</div>
+                </div>
+            </div>
+
+            <div class="report-chart-card">
+                <div class="report-chart-title"><i class="ph ph-ranking"></i> 各館收入排行</div>
+                <div>
+                    ${allStats.sort((a, b) => b.actualIncome - a.actualIncome).map(s => {
+                        const w = (s.actualIncome / maxIncome) * 100;
+                        return `
+                            <div class="bar-chart-row" style="cursor: pointer;" data-building-sub="${s.building.id}" title="點擊查看 ${s.building.name} 詳細">
+                                <span class="bar-chart-label">${s.building.name}</span>
+                                <div class="bar-chart-bar-wrap"><div class="bar-chart-bar" style="width: ${w}%;"></div></div>
+                                <span class="bar-chart-value">$${s.actualIncome.toLocaleString()}</span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // 單一館 view (重設計)
+    const building = buildings.find(b => b.id === active);
+    if (!building) {
+        reportState.activeBuilding = 'all';
+        return renderBuildingsTab();
+    }
+    const s = statsForBuildingRange(building, range);
+    return `${subTabs}${renderSingleBuildingDashboard(s)}`;
+}
+
+// 單一館的儀表板版面 (Tab 2 用，重點：數字大、好讀)
+function renderSingleBuildingDashboard(s) {
     const netColor = s.net >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
     const occColor = s.occRate >= 0.8 ? 'var(--color-success)' : s.occRate >= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)';
-    const expenseRows = Object.entries(s.byType)
-        .sort((a, b) => b[1] - a[1])
-        .map(([type, amt]) => `
-            <tr>
-                <td>${type}</td>
-                <td style="text-align: right; color: var(--color-danger); font-weight: 500;">$${amt.toLocaleString()}</td>
-            </tr>
-        `).join('');
+
+    // 收入分類 (從 invoices 重算，以細節展示)
+    const range = reportState.viewRange;
+    const inInvoices = settledInRange(range).filter(i => i.buildingId === s.building.id && i.direction === 'in');
+    const incomeByType = {};
+    inInvoices.forEach(i => {
+        incomeByType[i.type || '其他'] = (incomeByType[i.type || '其他'] || 0) + actualAmount(i);
+    });
+    const incomeRows = Object.entries(incomeByType).sort((a, b) => b[1] - a[1]);
+    const maxIncomeAmt = Math.max(1, ...incomeRows.map(r => r[1]));
+    const maxExpenseAmt = Math.max(1, ...Object.values(s.byType));
+    const expenseRows = Object.entries(s.byType).sort((a, b) => b[1] - a[1]);
 
     return `
-        <div class="card report-card">
-            <div class="report-card-header">
-                <div class="report-card-title">
-                    <h3>${s.building.name}</h3>
-                    <p>${s.building.baseAddress || ''}</p>
-                </div>
-                <button class="btn btn-outline report-export-btn" data-action="export-pdf" data-building-id="${s.building.id}" title="匯出本館營運報告 PDF">
-                    <i class="ph ph-file-pdf"></i> 匯出 PDF
-                </button>
+        <!-- 館別 hero -->
+        <div class="bldg-hero">
+            <div class="bldg-hero-info">
+                <h2>${s.building.name}</h2>
+                <p>${s.building.baseAddress || ''}</p>
             </div>
-            <div class="report-summary-grid">
-                <div class="report-summary-item">
-                    <div class="rsi-label">出租率</div>
-                    <div class="rsi-value" style="color: ${occColor};">${pct(s.occRate)}</div>
-                    <div class="rsi-sub">${s.rentedBeds} / ${s.totalBeds} 床</div>
-                </div>
-                <div class="report-summary-item">
-                    <div class="rsi-label">區間收入</div>
-                    <div class="rsi-value" style="color: var(--color-success);">$${s.actualIncome.toLocaleString()}</div>
-                </div>
-                <div class="report-summary-item">
-                    <div class="rsi-label">區間支出</div>
-                    <div class="rsi-value" style="color: var(--color-warning);">$${s.expenseTotal.toLocaleString()}</div>
-                </div>
-                <div class="report-summary-item">
-                    <div class="rsi-label">淨利</div>
-                    <div class="rsi-value" style="color: ${netColor};">$${s.net.toLocaleString()}</div>
-                    <div class="rsi-sub">毛利率 ${s.actualIncome > 0 ? pct(s.grossMargin) : '—'}</div>
-                </div>
+            <button class="btn btn-outline" data-action="export-pdf" data-building-id="${s.building.id}">
+                <i class="ph ph-file-pdf"></i> 匯出 PDF
+            </button>
+        </div>
+
+        <!-- 4 stat tiles -->
+        <div class="stat-tile-grid">
+            ${renderStatTile({ label: '區間收入', value: s.actualIncome, sub: `${inInvoices.length} 筆`, accent: '#22946e', valueColor: 'var(--color-success)', iconClass: 'ph-arrow-down-right' })}
+            ${renderStatTile({ label: '區間支出', value: s.expenseTotal, sub: `${Object.keys(s.byType).length} 類`, accent: '#b13535', valueColor: 'var(--color-danger)', iconClass: 'ph-arrow-up-right' })}
+            ${renderStatTile({ label: '淨利', value: s.net, sub: `毛利率 ${s.actualIncome > 0 ? pct(s.grossMargin) : '—'}`, accent: '#3b82f6', valueColor: netColor, iconClass: 'ph-trend-up' })}
+            <div class="stat-tile" style="--accent: #8b5cf6;">
+                <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率</div>
+                <div class="stat-tile-value" style="color: ${occColor};">${pct(s.occRate)}</div>
+                <div class="stat-tile-sub">${s.rentedBeds} / ${s.totalBeds} 床位</div>
             </div>
-            ${expenseRows ? `
-                <details class="report-expense-details">
-                    <summary>支出明細 (${Object.keys(s.byType).length} 類)</summary>
-                    <table class="report-expense-table">
-                        <tbody>${expenseRows}</tbody>
-                    </table>
-                </details>
-            ` : '<div style="font-size: 0.8rem; color: var(--text-muted); padding: 0.75rem 0 0;">區間內無支出紀錄</div>'}
+        </div>
+
+        <!-- 收入 vs 支出 對照 -->
+        <div class="io-compare-grid">
+            <div class="io-card io-card-income">
+                <div class="io-card-head">
+                    <div class="io-card-title"><i class="ph ph-arrow-down-right"></i> 收入</div>
+                    <div class="io-card-total">$${s.actualIncome.toLocaleString()}</div>
+                </div>
+                ${incomeRows.length === 0 ? `
+                    <div class="io-empty">區間內無收入</div>
+                ` : incomeRows.map(([type, amt]) => {
+                    const w = (amt / maxIncomeAmt) * 100;
+                    const ratio = s.actualIncome ? (amt / s.actualIncome * 100).toFixed(0) : '0';
+                    return `
+                        <div class="io-row">
+                            <div class="io-row-label">${type}</div>
+                            <div class="io-row-bar"><div class="io-row-bar-fill is-income" style="width: ${w}%;"></div></div>
+                            <div class="io-row-amount">
+                                <strong>$${amt.toLocaleString()}</strong>
+                                <span class="io-row-pct">${ratio}%</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+
+            <div class="io-card io-card-expense">
+                <div class="io-card-head">
+                    <div class="io-card-title"><i class="ph ph-arrow-up-right"></i> 支出</div>
+                    <div class="io-card-total">$${s.expenseTotal.toLocaleString()}</div>
+                </div>
+                ${expenseRows.length === 0 ? `
+                    <div class="io-empty">區間內無支出</div>
+                ` : expenseRows.map(([type, amt]) => {
+                    const w = (amt / maxExpenseAmt) * 100;
+                    const ratio = s.expenseTotal ? (amt / s.expenseTotal * 100).toFixed(0) : '0';
+                    return `
+                        <div class="io-row">
+                            <div class="io-row-label">${type}</div>
+                            <div class="io-row-bar"><div class="io-row-bar-fill is-expense" style="width: ${w}%;"></div></div>
+                            <div class="io-row-amount">
+                                <strong>$${amt.toLocaleString()}</strong>
+                                <span class="io-row-pct">${ratio}%</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
         </div>
     `;
 }
@@ -378,6 +477,124 @@ function computeAggForInvoices(invoices) {
 }
 
 function renderAnalysisTab() {
+    const active = reportState.activeBuilding || 'all';
+    const subTabs = renderBuildingSubTabs();
+    if (active !== 'all') {
+        return `${subTabs}${renderSingleBuildingAnalysis(active)}`;
+    }
+    return `${subTabs}${renderAnalysisAllBuildings()}`;
+}
+
+// 單一館的交叉分析 (按帳單類型細部 + 月度趨勢)
+function renderSingleBuildingAnalysis(buildingId) {
+    const range = reportState.viewRange;
+    const buildings = getSortedBuildings({ activeOnly: true });
+    const building = buildings.find(b => b.id === buildingId);
+    if (!building) {
+        reportState.activeBuilding = 'all';
+        return renderAnalysisAllBuildings();
+    }
+    const invoices = settledInRange(range).filter(i => i.buildingId === buildingId);
+    const agg = computeAggForInvoices(invoices);
+
+    // 收入 / 支出按類型
+    const incomeByType = {};
+    const expenseByType = {};
+    invoices.forEach(i => {
+        const key = i.type || '其他';
+        if (i.direction === 'in') incomeByType[key] = (incomeByType[key] || 0) + actualAmount(i);
+        else expenseByType[key] = (expenseByType[key] || 0) + actualAmount(i);
+    });
+    const incomeRows = Object.entries(incomeByType).sort((a, b) => b[1] - a[1]);
+    const expenseRows = Object.entries(expenseByType).sort((a, b) => b[1] - a[1]);
+    const maxIn = Math.max(1, ...incomeRows.map(r => r[1]));
+    const maxOut = Math.max(1, ...expenseRows.map(r => r[1]));
+
+    // 月度趨勢 (6 個月)
+    const end = new Date(range.end);
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const monthKey = `${yyyy}-${mm}`;
+        const monthStart = `${monthKey}-01`;
+        const lastDay = new Date(yyyy, d.getMonth() + 1, 0).getDate();
+        const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
+        const monthRange = { start: monthStart, end: monthEnd, preset: 'custom' };
+        const monthInvoices = settledInRange(monthRange).filter(i => i.buildingId === buildingId);
+        const inc = monthInvoices.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
+        const exp = monthInvoices.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
+        months.push({ label: `${d.getMonth() + 1}月`, income: inc, expense: exp, net: inc - exp });
+    }
+
+    return `
+        <div class="bldg-hero">
+            <div class="bldg-hero-info">
+                <h2>${building.name}</h2>
+                <p>${building.baseAddress || ''}</p>
+            </div>
+            <button class="btn btn-outline" id="btn-export-analysis-pdf">
+                <i class="ph ph-file-pdf"></i> 匯出 PDF
+            </button>
+        </div>
+
+        <div class="stat-tile-grid">
+            ${renderStatTile({ label: '收入合計', value: agg.inAll, sub: `${incomeRows.length} 類`, accent: '#22946e', valueColor: 'var(--color-success)', iconClass: 'ph-arrow-down-right' })}
+            ${renderStatTile({ label: '支出合計', value: agg.outAll, sub: `${expenseRows.length} 類`, accent: '#b13535', valueColor: 'var(--color-danger)', iconClass: 'ph-arrow-up-right' })}
+            ${renderStatTile({ label: '淨收益', value: agg.net, sub: `淨利率 ${agg.inAll > 0 ? pct(agg.netMargin) : '—'}`, accent: '#3b82f6', valueColor: agg.net >= 0 ? 'var(--color-success)' : 'var(--color-danger)', iconClass: 'ph-trend-up' })}
+            <div class="stat-tile" style="--accent: #f59e0b;">
+                <div class="stat-tile-label"><i class="ph ph-chart-pie"></i> 毛利率</div>
+                <div class="stat-tile-value">${agg.inAll > 0 ? pct(agg.grossMargin) : '—'}</div>
+                <div class="stat-tile-sub">扣房東租金後</div>
+            </div>
+        </div>
+
+        <div class="io-compare-grid">
+            <div class="io-card io-card-income">
+                <div class="io-card-head">
+                    <div class="io-card-title"><i class="ph ph-arrow-down-right"></i> 收入分類</div>
+                    <div class="io-card-total">$${agg.inAll.toLocaleString()}</div>
+                </div>
+                ${incomeRows.length === 0 ? `<div class="io-empty">無收入</div>` : incomeRows.map(([type, amt]) => {
+                    const w = (amt / maxIn) * 100;
+                    const ratio = agg.inAll ? (amt / agg.inAll * 100).toFixed(0) : '0';
+                    return `
+                        <div class="io-row">
+                            <div class="io-row-label">${type}</div>
+                            <div class="io-row-bar"><div class="io-row-bar-fill is-income" style="width: ${w}%;"></div></div>
+                            <div class="io-row-amount"><strong>$${amt.toLocaleString()}</strong><span class="io-row-pct">${ratio}%</span></div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            <div class="io-card io-card-expense">
+                <div class="io-card-head">
+                    <div class="io-card-title"><i class="ph ph-arrow-up-right"></i> 支出分類</div>
+                    <div class="io-card-total">$${agg.outAll.toLocaleString()}</div>
+                </div>
+                ${expenseRows.length === 0 ? `<div class="io-empty">無支出</div>` : expenseRows.map(([type, amt]) => {
+                    const w = (amt / maxOut) * 100;
+                    const ratio = agg.outAll ? (amt / agg.outAll * 100).toFixed(0) : '0';
+                    return `
+                        <div class="io-row">
+                            <div class="io-row-label">${type}</div>
+                            <div class="io-row-bar"><div class="io-row-bar-fill is-expense" style="width: ${w}%;"></div></div>
+                            <div class="io-row-amount"><strong>$${amt.toLocaleString()}</strong><span class="io-row-pct">${ratio}%</span></div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+
+        <div class="report-chart-card">
+            <div class="report-chart-title"><i class="ph ph-chart-line"></i> ${building.name} 月度趨勢 (過去 6 個月)</div>
+            ${renderTrendChart(months)}
+        </div>
+    `;
+}
+
+function renderAnalysisAllBuildings() {
     const range = reportState.viewRange;
     const rangeInvoices = settledInRange(range);
     const summary = computeAggForInvoices(rangeInvoices);
@@ -530,26 +747,12 @@ function renderAnalysisTab() {
     `;
 }
 
-// ───────────────────── Tab 4: 對帳單 (placeholder) ─────────────────────
-function renderStatementTab() {
-    return `
-        <div class="card" style="padding: 3rem 2rem; text-align: center;">
-            <i class="ph ph-receipt" style="font-size: 3rem; color: var(--color-primary); margin-bottom: 1rem; display: block;"></i>
-            <h2 style="margin: 0 0 0.5rem; color: var(--text-main);">對帳單功能規劃中</h2>
-            <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 1rem;">
-                此分頁將提供「給屋主的月度結算單」PDF，整合代管模式（屋主主檔）一起推出。
-            </p>
-            <p style="color: var(--text-muted); font-size: 0.85rem;">敬請期待 🚧</p>
-        </div>
-    `;
-}
-
 // ───────────────────── Hub: tab bar + entry ─────────────────────
 const TABS = [
     { key: 'overview',  icon: 'ph-gauge',       label: '總覽' },
     { key: 'buildings', icon: 'ph-buildings',   label: '各館報表' },
-    { key: 'analysis',  icon: 'ph-chart-bar',   label: '交叉分析' },
-    { key: 'statement', icon: 'ph-receipt',     label: '對帳單' }
+    { key: 'analysis',  icon: 'ph-chart-bar',   label: '交叉分析' }
+    // 對帳單已拿掉，等代管模式一起推出
 ];
 
 function renderTabBar() {
@@ -565,11 +768,12 @@ function renderTabBar() {
 }
 
 export function renderReports() {
+    // statement tab 被拿掉了，若 activeTab 還停在 statement 強制切回 overview
+    if (reportState.activeTab === 'statement') reportState.activeTab = 'overview';
     let tabContent;
     switch (reportState.activeTab) {
         case 'buildings': tabContent = renderBuildingsTab(); break;
         case 'analysis':  tabContent = renderAnalysisTab(); break;
-        case 'statement': tabContent = renderStatementTab(); break;
         case 'overview':
         default:          tabContent = renderOverviewTab(); break;
     }
@@ -583,21 +787,30 @@ export function renderReports() {
 }
 
 export function initReportsActions(scope) {
-    // 區間 picker → 重新渲染
     initRangePicker(scope, () => refreshView());
 
-    // Tab 切換
+    // Tab 切換 (上層: 總覽 / 各館 / 交叉)
     scope.querySelectorAll('[data-tab]').forEach(btn => {
         btn.addEventListener('click', () => {
             reportState.activeTab = btn.dataset.tab;
+            // 切換上層 tab 時，重置子 tab 到「全館合計」
+            reportState.activeBuilding = 'all';
             refreshView();
         });
     });
 
-    // 各館報表的 PDF 匯出 / 交叉分析的 PDF 匯出
+    // 子館 sub-tab 切換 (Tab 2 / Tab 3 共用)
+    scope.querySelectorAll('[data-building-sub]').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.preventDefault();
+            reportState.activeBuilding = el.dataset.buildingSub;
+            refreshView();
+        });
+    });
+
+    // 匯出 PDF
     scope.querySelectorAll('[data-action="export-pdf"]').forEach(btn => {
         btn.addEventListener('click', () => {
-            // 用區間結束的當月當作報表月份 (舊匯出仍是按月計算)
             const range = reportState.viewRange;
             const ym = range.end.slice(0, 7);
             exportLandlordReport(btn.dataset.buildingId, ym);

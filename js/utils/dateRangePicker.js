@@ -36,8 +36,28 @@ export function renderRangePicker() {
     `;
 }
 
+// 全域只註冊一次的「點外面關閉」(避免 refreshView 後 listener 累積 + 卡舊 DOM)
+let _globalDocClickInitialized = false;
+function initGlobalDocClick() {
+    if (_globalDocClickInitialized) return;
+    _globalDocClickInitialized = true;
+    document.addEventListener('click', (e) => {
+        document.querySelectorAll('.range-picker').forEach(picker => {
+            const panel = picker.querySelector('.range-picker-preset-panel');
+            if (!panel || panel.hidden) return;
+            if (!picker.contains(e.target)) panel.hidden = true;
+        });
+    });
+    // 也讓 Esc 關
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        document.querySelectorAll('.range-picker-preset-panel').forEach(p => p.hidden = true);
+    });
+}
+
 // 綁定事件 — 區間改變時呼叫 onChange()
 export function initRangePicker(scope, onChange) {
+    initGlobalDocClick();
     const root = scope.querySelector('.range-picker');
     if (!root) return;
     const trigger = root.querySelector('[data-action="open-presets"]');
@@ -46,23 +66,22 @@ export function initRangePicker(scope, onChange) {
     const endInput = root.querySelector('[data-rp-input="end"]');
 
     // 開 / 關 panel
-    const closePanel = () => panel.hidden = true;
-    const openPanel = () => panel.hidden = false;
     trigger?.addEventListener('click', (e) => {
         e.stopPropagation();
-        panel.hidden ? openPanel() : closePanel();
-    });
-    // 點外面關
-    document.addEventListener('click', (e) => {
-        if (!root.contains(e.target)) closePanel();
+        // 開啟此 picker 前，先把其他 picker 的 panel 都關掉
+        document.querySelectorAll('.range-picker-preset-panel').forEach(p => {
+            if (p !== panel) p.hidden = true;
+        });
+        panel.hidden = !panel.hidden;
     });
 
     // 預設選項 click
     panel.querySelectorAll('.rp-preset-option').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const key = btn.dataset.preset;
             applyRangePreset(key);
-            closePanel();
+            panel.hidden = true;
             onChange?.();
         });
     });
@@ -72,7 +91,6 @@ export function initRangePicker(scope, onChange) {
         const start = startInput.value;
         const end = endInput.value;
         if (!start || !end) return;
-        // 若 start > end 自動 swap
         const [s, e] = start <= end ? [start, end] : [end, start];
         reportState.viewRange = { start: s, end: e, preset: 'custom' };
         onChange?.();

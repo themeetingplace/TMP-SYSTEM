@@ -3124,6 +3124,245 @@ select:focus-visible,
     font-variant-numeric: tabular-nums;
 }
 
+/* === 各館子標籤列 === */
+.bldg-subtab-row {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.4rem;
+    margin-bottom: 1.25rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+.bldg-subtab-row::-webkit-scrollbar { display: none; }
+.bldg-subtab {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.95rem;
+    border-radius: 99px;
+    border: 1.5px solid var(--border-color);
+    background: var(--color-surface);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.bldg-subtab:hover {
+    border-color: rgba(255, 136, 89, 0.4);
+    color: var(--text-main);
+}
+.bldg-subtab.is-active {
+    background: linear-gradient(135deg, var(--color-primary), #ff743d);
+    color: white;
+    border-color: var(--color-primary);
+    box-shadow: 0 3px 10px rgba(255, 136, 89, 0.25);
+}
+.bldg-subtab i { font-size: 1rem; }
+
+/* === 館別 Hero (單館頁面上方) === */
+.bldg-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.1rem 1.25rem;
+    background: linear-gradient(135deg, var(--bg-secondary, #f8fafc), var(--color-surface));
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--color-primary);
+    border-radius: 14px;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow-sm);
+}
+.bldg-hero-info h2 {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+.bldg-hero-info p {
+    margin: 0.25rem 0 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+/* === 大數字 stat tile === */
+.stat-tile-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+@media (max-width: 900px) {
+    .stat-tile-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.stat-tile {
+    background: var(--color-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+.stat-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(0,0,0,0.07);
+}
+.stat-tile::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--accent);
+}
+.stat-tile-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.5rem;
+}
+.stat-tile-label .ph {
+    font-size: 0.95rem;
+    color: var(--accent);
+}
+.stat-tile-value {
+    font-size: 1.85rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.02em;
+}
+.stat-tile-sub {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 0.4rem;
+}
+@media (max-width: 640px) {
+    .stat-tile-value { font-size: 1.45rem; }
+    .stat-tile { padding: 0.85rem 0.95rem; }
+}
+
+/* === 收入 vs 支出 對照卡片 === */
+.io-compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+@media (max-width: 900px) {
+    .io-compare-grid { grid-template-columns: 1fr; }
+}
+.io-card {
+    background: var(--color-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+.io-card-income { border-left: 4px solid var(--color-success); }
+.io-card-expense { border-left: 4px solid var(--color-danger); }
+.io-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 0.85rem;
+    margin-bottom: 0.85rem;
+    border-bottom: 1px dashed var(--border-color);
+}
+.io-card-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.io-card-income .io-card-title .ph { color: var(--color-success); }
+.io-card-expense .io-card-title .ph { color: var(--color-danger); }
+.io-card-total {
+    font-size: 1.35rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+.io-card-income .io-card-total { color: var(--color-success); }
+.io-card-expense .io-card-total { color: var(--color-danger); }
+
+.io-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 110px;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0;
+}
+@media (max-width: 480px) {
+    .io-row { grid-template-columns: 80px 1fr 90px; gap: 0.4rem; }
+}
+.io-row-label {
+    font-size: 0.83rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.io-row-bar {
+    background: var(--bg-tertiary, #f1f5f9);
+    border-radius: 99px;
+    height: 8px;
+    overflow: hidden;
+}
+.io-row-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.4s ease-out;
+}
+.io-row-bar-fill.is-income {
+    background: linear-gradient(90deg, #22946e, #4ade80);
+}
+.io-row-bar-fill.is-expense {
+    background: linear-gradient(90deg, #b13535, #f87171);
+}
+.io-row-amount {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.15;
+}
+.io-row-amount strong {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+.io-row-pct {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+}
+.io-empty {
+    padding: 1.5rem 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
 /* 月度趨勢折線圖 (SVG) */
 .trend-chart-wrap {
     width: 100%;

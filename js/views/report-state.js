@@ -26,7 +26,8 @@ function toIso(d) {
 export const reportState = {
     viewRange: defaultRange(),
     viewGrouping: 'building', // 'building' | 'group'
-    activeTab: 'overview'     // 'overview' | 'buildings' | 'analysis' | 'statement'
+    activeTab: 'overview',    // 'overview' | 'buildings' | 'analysis'
+    activeBuilding: 'all',    // 'all' | <buildingId> — 各館報表 / 交叉分析 子分頁
 };
 
 // 預設區間選項，傳給 picker 用
