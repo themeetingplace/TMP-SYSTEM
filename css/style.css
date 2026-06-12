@@ -2651,21 +2651,6 @@ body[data-role="helper"] .occ-note-btn {
 }
 body[data-role="helper"] .occ-note-empty { display: none; }
 /* 住房一覽 — 床位 / 租客 link 還是可點 (詳細視窗是只讀的) */
-/* 小幫手身分提示條 — sidebar footer 上方 */
-body[data-role="helper"] .sidebar-footer::before {
-    content: '🤝 小幫手 · 唯讀模式';
-    display: block;
-    padding: 0.5rem 1rem;
-    margin: 0.5rem 1rem;
-    background: rgba(30, 86, 163, 0.1);
-    color: var(--color-info, #1e56a3);
-    font-size: 0.72rem;
-    font-weight: 600;
-    border-radius: 8px;
-    text-align: center;
-    border: 1px solid rgba(30, 86, 163, 0.2);
-}
-
 /* === 續租意願通知 banner === */
 .renew-intent-banner {
     display: flex;
