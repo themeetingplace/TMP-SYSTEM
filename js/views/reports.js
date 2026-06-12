@@ -30,6 +30,19 @@ function rangeDayCount(range = reportState.viewRange) {
     return Math.max(1, Math.round((e - s) / 86400000) + 1);
 }
 
+// 月度趨勢圖要顯示幾個月 — 按區間動態：
+//   區間 < 6 個月 → 顯示 6 個月 (避免圖太稀疏)
+//   區間 6~12 個月 → 顯示區間實際月數
+//   區間 > 12 個月 → cap 在 12 個月 (避免圖太擠)
+function rangeMonthCount(range = reportState.viewRange) {
+    const s = new Date(range.start);
+    const e = new Date(range.end);
+    const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
+    if (months <= 6) return 6;
+    if (months >= 12) return 12;
+    return months;
+}
+
 // ───────────────────── Tab 1: 總覽 (老闆視角: NOI / 收款率 / 出租率 / 到期) ─────────────────────
 function computeOverviewKPIs(range) {
     const allIncome = mockData.invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
@@ -89,11 +102,12 @@ function computeReceivableByBuilding(range) {
     }).sort((a, b) => b.receivable - a.receivable);
 }
 
-// 月度趨勢 (last 6 months ending at range end)
-function computeMonthlyTrend(range) {
+// 月度趨勢 — monthCount 由區間動態決定 (6 / 6~12 / 12)
+function computeMonthlyTrend(range, buildingId = null) {
     const end = new Date(range.end);
+    const monthCount = rangeMonthCount(range);
     const months = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = monthCount - 1; i >= 0; i--) {
         const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -102,16 +116,15 @@ function computeMonthlyTrend(range) {
         const lastDay = new Date(yyyy, d.getMonth() + 1, 0).getDate();
         const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
         const monthRange = { start: monthStart, end: monthEnd, preset: 'custom' };
-        const monthInvoices = settledInRange(monthRange);
+        let monthInvoices = settledInRange(monthRange);
+        if (buildingId) monthInvoices = monthInvoices.filter(i => i.buildingId === buildingId);
         const income = monthInvoices.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
         const expense = monthInvoices.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
-        months.push({
-            label: `${d.getMonth() + 1}月`,
-            monthKey,
-            income,
-            expense,
-            net: income - expense
-        });
+        // 月份 label：跨年時加西元
+        const labelTxt = i >= monthCount - 1 || d.getMonth() === 0
+            ? `${yyyy}/${d.getMonth() + 1}月`
+            : `${d.getMonth() + 1}月`;
+        months.push({ label: labelTxt, monthKey, income, expense, net: income - expense });
     }
     return months;
 }
@@ -272,7 +285,7 @@ function renderOverviewTab() {
         </div>
 
         <div class="report-chart-card">
-            <div class="report-chart-title"><i class="ph ph-chart-line"></i> 月度趨勢 (過去 6 個月)</div>
+            <div class="report-chart-title"><span><i class="ph ph-chart-line"></i> 月度趨勢 · 近 ${trend.length} 個月</span></div>
             ${renderTrendChart(trend)}
         </div>
     `;
@@ -460,7 +473,8 @@ function renderBuildingsTab() {
     if (active === 'all') {
         const totals = computeOperationalKPIs(null, range);
         const perBuilding = buildings.map(b => ({ building: b, ...computeOperationalKPIs(b, range) }));
-        const moveTrend = computeMoveInOutTrend(null, range.end, 6);
+        const moveCount = rangeMonthCount(range);
+        const moveTrend = computeMoveInOutTrend(null, range.end, moveCount);
         const maxMoveVal = Math.max(1, ...moveTrend.flatMap(m => [m.moveIn, m.moveOut]));
         const maxVacancyDays = Math.max(1, ...perBuilding.map(p => p.avgVacancyDays));
 
@@ -508,7 +522,7 @@ function renderBuildingsTab() {
             </div>
 
             <div class="report-chart-card">
-                <div class="report-chart-title"><i class="ph ph-user-switch"></i> 月度入住 vs 退租 (過去 6 個月)</div>
+                <div class="report-chart-title"><i class="ph ph-user-switch"></i> 月度入住 vs 退租 · 近 ${moveCount} 個月</div>
                 ${renderMoveInOutChart(moveTrend, maxMoveVal)}
             </div>
         `;
@@ -521,7 +535,8 @@ function renderBuildingsTab() {
         return renderBuildingsTab();
     }
     const k = computeOperationalKPIs(building, range);
-    const moveTrend = computeMoveInOutTrend(building, range.end, 6);
+    const moveMonthCount = rangeMonthCount(range);
+    const moveTrend = computeMoveInOutTrend(building, range.end, moveMonthCount);
     const maxMoveVal = Math.max(1, ...moveTrend.flatMap(m => [m.moveIn, m.moveOut]));
 
     return `${subTabs}
@@ -557,7 +572,7 @@ function renderBuildingsTab() {
         </div>
 
         <div class="report-chart-card">
-            <div class="report-chart-title"><i class="ph ph-user-switch"></i> ${building.name} 月度入住 vs 退租 (過去 6 個月)</div>
+            <div class="report-chart-title"><i class="ph ph-user-switch"></i> ${building.name} 月度入住 vs 退租 · 近 ${moveMonthCount} 個月</div>
             ${renderMoveInOutChart(moveTrend, maxMoveVal)}
         </div>
     `;
@@ -677,8 +692,18 @@ function computeExpensePareto(invoices) {
     });
 }
 
-// 圓餅圖配色 — brand 橘為主、其他用同色系明度漸層 (避免亂)
-const PIE_COLORS = ['#ff8859', '#ffa580', '#ffc7a8', '#d2741b', '#8b5cf6', '#22946e', '#3b82f6', '#9ca3af'];
+// 圓餅配色 — 暖系設計師色盤，brand 橘為首，其餘協調的低飽和度地球色系
+// 8 色循環，輪到第 9 個會回到第 1 個 (一般類別 5-6 個夠用)
+const PIE_COLORS = [
+    '#ff8859', // brand 橘 (top)
+    '#3f7c8a', // teal blue (互補冷色，與橘對比但不搶)
+    '#d4a574', // 暖駝
+    '#7a9a6a', // 抹茶綠
+    '#b67d7d', // 暗玫瑰
+    '#9c8aaa', // 霧紫
+    '#c4a486', // 米卡其
+    '#7a7c80'  // 暖深灰
+];
 
 function arcPath(cx, cy, r, startAngle, endAngle) {
     const x1 = cx + r * Math.cos(startAngle);
@@ -813,24 +838,8 @@ function renderSingleBuildingAnalysis(buildingId) {
     const invoices = settledInRange(range).filter(i => i.buildingId === buildingId);
     const agg = computeAggForInvoices(invoices);
     const pareto = computeExpensePareto(invoices);
-
-    // 月度趨勢 (6 個月)
-    const end = new Date(range.end);
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-        const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const monthKey = `${yyyy}-${mm}`;
-        const monthStart = `${monthKey}-01`;
-        const lastDay = new Date(yyyy, d.getMonth() + 1, 0).getDate();
-        const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
-        const monthRange = { start: monthStart, end: monthEnd, preset: 'custom' };
-        const monthInvoices = settledInRange(monthRange).filter(i => i.buildingId === buildingId);
-        const inc = monthInvoices.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
-        const exp = monthInvoices.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
-        months.push({ label: `${d.getMonth() + 1}月`, income: inc, expense: exp, net: inc - exp });
-    }
+    const months = computeMonthlyTrend(range, buildingId);
+    const monthCount = months.length;
 
     return `
         <div class="bldg-hero">
@@ -850,7 +859,7 @@ function renderSingleBuildingAnalysis(buildingId) {
                 ${renderExpensePie(pareto)}
             </div>
             <div class="report-chart-card">
-                <div class="report-chart-title"><span><i class="ph ph-chart-bar"></i> 月度趨勢 (過去 6 個月)</span></div>
+                <div class="report-chart-title"><span><i class="ph ph-chart-bar"></i> 月度趨勢 · 近 ${monthCount} 個月</span></div>
                 ${renderTrendChart(months)}
             </div>
         </div>
@@ -864,23 +873,9 @@ function renderAnalysisAllBuildings() {
     const pareto = computeExpensePareto(rangeInvoices);
     const activeBuildings = getSortedBuildings({ activeOnly: true });
 
-    // 過去 6 個月趨勢 (全館合計)
-    const end = new Date(range.end);
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-        const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const monthKey = `${yyyy}-${mm}`;
-        const monthStart = `${monthKey}-01`;
-        const lastDay = new Date(yyyy, d.getMonth() + 1, 0).getDate();
-        const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
-        const monthRange = { start: monthStart, end: monthEnd, preset: 'custom' };
-        const monthInvoices = settledInRange(monthRange);
-        const inc = monthInvoices.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
-        const exp = monthInvoices.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
-        months.push({ label: `${d.getMonth() + 1}月`, income: inc, expense: exp, net: inc - exp });
-    }
+    // 月度趨勢 (全館合計，月數依區間動態)
+    const months = computeMonthlyTrend(range);
+    const monthCount = months.length;
 
     // 各館 P&L 對比
     const perBuilding = activeBuildings.map(b => {
@@ -897,7 +892,7 @@ function renderAnalysisAllBuildings() {
                 ${renderExpensePie(pareto)}
             </div>
             <div class="report-chart-card">
-                <div class="report-chart-title"><span><i class="ph ph-chart-bar"></i> 月度趨勢 (過去 6 個月)</span></div>
+                <div class="report-chart-title"><span><i class="ph ph-chart-bar"></i> 月度趨勢 · 近 ${monthCount} 個月</span></div>
                 ${renderTrendChart(months)}
             </div>
         </div>
