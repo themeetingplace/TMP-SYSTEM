@@ -248,7 +248,7 @@ export function renderContracts() {
                         <i class="ph ph-magnifying-glass"></i>
                         <input type="text" placeholder="搜尋合約編號或租客..." style="font-size: 0.875rem;">
                     </div>
-                    <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 30 天內到期的合約，自動發 LINE 問租客要不要續租">
+                    <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 15 天內到期的合約，自動發 LINE 問租客要不要續租">
                         <i class="ph ph-chat-circle-dots"></i> 詢問續租
                     </button>
                     <button class="btn btn-primary" id="btn-new-contract" data-fab="ph-file-plus">
@@ -845,29 +845,29 @@ export function initContractActions(scope) {
     // 新增合約 → 走統一的「新增入住」流程 (建合約+帳單+床位+租客+checkin 一氣呵成)
     scope.querySelector('#btn-new-contract')?.addEventListener('click', () => showCheckinAssignmentForm());
 
-    // 詢問續租 — 觸發 Edge Function renewal-poll
+    // 詢問續租 — 觸發 Edge Function renewal-poll (15 天前發)
     scope.querySelector('#btn-ask-renewal')?.addEventListener('click', async () => {
         const expiringSoon = mockData.contracts.filter(c => {
             if (c.renewalState !== 'active') return false;
             if (!c.endDate) return false;
             const today = new Date().toISOString().slice(0, 10);
-            const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-            return c.endDate >= today && c.endDate <= in30;
+            const in15 = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10);
+            return c.endDate >= today && c.endDate <= in15;
         });
         if (expiringSoon.length === 0) {
-            showToast('30 天內沒有要到期的合約，不用發', 'info', 3000);
+            showToast('15 天內沒有要到期的合約，不用發', 'info', 3000);
             return;
         }
         openConfirm({
             title: '詢問續租意願',
-            message: `將自動掃描 <strong>30 天內到期</strong>的合約，發 LINE 問租客是否續租。<br><br>` +
+            message: `將自動掃描 <strong>15 天內到期</strong>的合約，發 LINE 問租客是否續租。<br><br>` +
                      `目前符合條件的合約有 <strong>${expiringSoon.length}</strong> 筆。<br>` +
                      `<small style="color: var(--text-muted);">注意：7 天內已問過的會自動跳過。租客未綁 LINE 的也會跳過。</small>`,
             confirmLabel: `🚀 開始發送`,
             onConfirm: async () => {
                 showToast('掃描中…', 'info', 2000);
                 try {
-                    const result = await triggerRenewalPoll({ daysAhead: 30 });
+                    const result = await triggerRenewalPoll({ daysAhead: 15 });
                     const lines = [
                         `✅ 發送完成`,
                         `· 已發 ${result.sent || 0} 筆`,

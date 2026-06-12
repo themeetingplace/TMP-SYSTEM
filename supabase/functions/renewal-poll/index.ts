@@ -102,7 +102,7 @@ serve(async (req) => {
 
     try {
         const body = await req.json().catch(() => ({}));
-        const daysAhead = Math.max(1, Math.min(90, Number(body.daysAhead) || 30));
+        const daysAhead = Math.max(1, Math.min(90, Number(body.daysAhead) || 15));
         const force = !!body.force; // 即使最近問過也再問一次 (測試用)
 
         const today = new Date();
