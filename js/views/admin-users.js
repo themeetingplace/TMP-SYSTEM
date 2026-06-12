@@ -29,6 +29,9 @@ function roleBadge(role) {
     if (role === 'owner') {
         return `<span class="status-badge primary" title="可管理其他帳號"><i class="ph-fill ph-crown" aria-hidden="true"></i> Owner</span>`;
     }
+    if (role === 'helper') {
+        return `<span class="status-badge info" title="小幫手 — 只能檢視 物件/住房/租客"><i class="ph-fill ph-hand-heart" aria-hidden="true"></i> 小幫手</span>`;
+    }
     if (role === 'viewer') {
         return `<span class="status-badge" style="background: var(--bg-tertiary); color: var(--text-muted);"><i class="ph-fill ph-eye" aria-hidden="true"></i> Viewer</span>`;
     }
@@ -90,7 +93,8 @@ export function renderAdminUsers() {
                 <div style="margin-top: 0.4rem; line-height: 1.8; display: grid; gap: 0.25rem;">
                     <div><i class="ph-fill ph-crown" aria-hidden="true" style="color: var(--color-primary);"></i> <strong>Owner</strong> — 完整權限，可管理其他帳號（你跟老闆）</div>
                     <div><i class="ph-fill ph-wrench" aria-hidden="true" style="color: var(--text-secondary);"></i> <strong>Admin</strong> — 完整 BMS 操作權限，但無法管理帳號（員工）</div>
-                    <div><i class="ph-fill ph-eye" aria-hidden="true" style="color: var(--text-muted);"></i> <strong>Viewer</strong> — 預留給未來「只能看」的角色（目前等同 Admin）</div>
+                    <div><i class="ph-fill ph-hand-heart" aria-hidden="true" style="color: var(--color-info, #0ea5e9);"></i> <strong>小幫手 Helper</strong> — 只能檢視 物件管理 / 住房一覽 / 租客清單，所有寫入按鈕都隱藏</div>
+                    <div><i class="ph-fill ph-eye" aria-hidden="true" style="color: var(--text-muted);"></i> <strong>Viewer</strong> — 預留給未來「全頁只能看」的角色（目前等同 Admin）</div>
                 </div>
             </div>
 
@@ -155,6 +159,7 @@ function openAddAdminForm() {
             { name: 'role', label: '角色', type: 'select', required: true, value: 'admin', options: [
                 { value: 'admin', label: '🛠 Admin (完整 BMS 操作)' },
                 { value: 'owner', label: '👑 Owner (可管理其他帳號)' },
+                { value: 'helper', label: '🤝 小幫手 (只看 物件/住房/租客)' },
                 { value: 'viewer', label: '👁 Viewer (預留)' }
             ] }
         ],

@@ -109,6 +109,17 @@ export async function checkIsOwner() {
     return data === true;
 }
 
+// 取得當前登入帳號的 role 字串 ('owner'/'admin'/'helper'/'viewer')
+// 沒登入 / 不在白名單 → 回 null
+export async function getCurrentRole() {
+    const { data, error } = await supabase.rpc('get_my_role');
+    if (error) {
+        console.error('[auth] getCurrentRole failed:', error);
+        return null;
+    }
+    return data || null;
+}
+
 // 監聽 auth 狀態變更（其他分頁登入/登出時也會觸發）
 export function onAuthChange(cb) {
     return supabase.auth.onAuthStateChange((event, session) => cb(event, session));

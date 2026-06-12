@@ -21,7 +21,7 @@ import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
 import { bootstrap as syncBootstrap } from './sync.js'; // 雲端同步引擎
-import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner } from './auth.js';
+import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole } from './auth.js';
 import { showLogin, showAccessDenied, bindPasswordToggles } from './views/login.js';
 import { applyAvatar, getAvatar, AVATAR_ICONS, AVATAR_COLORS } from './utils/avatar.js';
 import { APP_VERSION, APP_BUILD_DATE, APP_NAME, APP_COPYRIGHT, APP_CHANGELOG } from './version.js';
@@ -30,6 +30,10 @@ const viewContainer = document.getElementById('view-container');
 const pageTitle = document.getElementById('page-title');
 const navItems = document.querySelectorAll('.nav-item');
 
+// 角色說明：
+//   owner / admin / viewer = 看得到全部分頁 (差別在能不能管帳號 / 寫入)
+//   helper = 小幫手 → 只能看 helperPages 裡列的 4 頁，且按鈕都隱藏 (純檢視)
+const HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'tenants']);
 const routes = {
     dashboard:     { title: '首頁',         group: '總覽', render: renderDashboard },
     properties:    { title: '物件管理',     group: '營運', render: renderProperties, init: initPropertyActions },
@@ -63,6 +67,12 @@ function handleRoute() {
     if (route.ownerOnly && window.__currentRole !== 'owner') {
         showToast('此頁僅限 Owner 存取', 'warning');
         window.location.hash = 'dashboard';
+        return;
+    }
+    // helper-only route guard：小幫手只能看白名單裡的頁面
+    if (window.__currentRole === 'helper' && !HELPER_ALLOWED.has(hash)) {
+        showToast('小幫手只能檢視 物件管理 / 住房一覽 / 租客清單', 'warning', 4000);
+        window.location.hash = 'properties';
         return;
     }
     pageTitle.textContent = route.title;
@@ -279,12 +289,26 @@ window.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // 1.6 取 owner 狀態 — owner 才能看「帳號管理」nav
-    const isOwner = await checkIsOwner();
-    window.__currentRole = isOwner ? 'owner' : 'admin';
-    if (isOwner) {
+    // 1.6 取實際角色 (owner / admin / helper / viewer) — 給 nav 顯示控制 + route guard 用
+    const myRole = await getCurrentRole();
+    window.__currentRole = myRole || 'admin'; // null → 預設 admin 避免破前端
+    document.body.dataset.role = window.__currentRole;
+    if (window.__currentRole === 'owner') {
         const navAdminUsers = document.getElementById('nav-admin-users');
         if (navAdminUsers) navAdminUsers.style.display = '';
+    }
+    // helper → 隱藏非白名單的 nav 項目
+    if (window.__currentRole === 'helper') {
+        const allowed = new Set(['dashboard', 'properties', 'occupancy', 'tenants']);
+        document.querySelectorAll('.nav-item[data-view]').forEach(el => {
+            const view = el.dataset.view;
+            if (!allowed.has(view)) el.style.display = 'none';
+        });
+        // 也隱藏 nav 群組標題 (整個 group 都 hidden 的話也順手隱藏 label)
+        document.querySelectorAll('.nav-group').forEach(group => {
+            const visibleItems = Array.from(group.querySelectorAll('.nav-item')).filter(el => el.style.display !== 'none');
+            if (visibleItems.length === 0) group.style.display = 'none';
+        });
     }
 
     // 2. 顯示登入者資訊在 sidebar
