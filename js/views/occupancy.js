@@ -7,7 +7,7 @@
 //   * 顏色：今天=綠 / 本月=橘 / 過去=灰 / 未來=藍 / 已退房 row 整列灰
 
 import { mockData, formatRoomType, getSortedBuildings, isSettled } from '../data.js';
-import { showTenantNoteEditor } from './tenants.js';
+import { showTenantNoteEditor, showTenantDetails } from './tenants.js';
 import { showPropertyDetails, showCheckinAssignmentForm } from './properties.js';
 import { showContractDetails, confirmTerminate } from './contracts.js';
 
@@ -139,7 +139,7 @@ function renderContractRow(bed, contract, months, today, stripeClass, todayStr) 
 
     const tenantObj = mockData.tenants.find(t => t.name === contract.tenant);
     const tenantInner = tenantObj
-        ? `<button class="occ-link" data-action="show-tenant" data-tenant-id="${tenantObj.id}" title="點擊編輯備註">${contract.tenant}</button>`
+        ? `<button class="occ-link" data-action="show-tenant" data-tenant-id="${tenantObj.id}" title="點擊看租客詳細資料">${contract.tenant}</button>`
         : contract.tenant;
 
     // 未來合約 (start_date > today) 標記為「預入住」
@@ -154,9 +154,12 @@ function renderContractRow(bed, contract, months, today, stripeClass, todayStr) 
     } else {
         tenantCell = `<strong>${tenantInner}</strong>`;
     }
-    // 備註欄：最多 2 行，超過顯示 … hover 看全文
-    const noteCell = tenantObj?.note
-        ? `<span class="occ-note-clamp" title="${tenantObj.note.replace(/"/g, '&quot;')}">${tenantObj.note}</span>`
+    // 備註欄：點擊編輯 (helper 透過 CSS pointer-events 鎖掉)；空白也可點新增備註
+    const noteContent = tenantObj?.note
+        ? `<span class="occ-note-clamp">${tenantObj.note}</span>`
+        : `<span class="occ-note-empty">+ 編輯</span>`;
+    const noteCell = tenantObj
+        ? `<button class="occ-note-btn" data-action="edit-note" data-tenant-id="${tenantObj.id}" title="${tenantObj.note ? tenantObj.note.replace(/"/g, '&quot;') : '點擊新增備註'}">${noteContent}</button>`
         : (isSnoozed ? `<span style="font-size: 0.7rem;">暫緩中</span>` : '');
 
     const cells = months.map(m => {
@@ -523,6 +526,8 @@ export function initOccupancyActions(scope) {
         const action = target.dataset.action;
         try {
             if (action === 'show-tenant') {
+                showTenantDetails(target.dataset.tenantId);
+            } else if (action === 'edit-note') {
                 showTenantNoteEditor(target.dataset.tenantId);
             } else if (action === 'show-bed') {
                 showPropertyDetails(target.dataset.bedId);

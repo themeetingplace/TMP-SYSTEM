@@ -1243,6 +1243,31 @@ select:focus-visible,
     white-space: normal;
 }
 
+.occ-note-btn {
+    background: transparent;
+    border: 1px dashed transparent;
+    border-radius: 6px;
+    padding: 0.2rem 0.4rem;
+    margin: -0.2rem -0.4rem;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+    width: 100%;
+    transition: border-color 0.15s, background 0.15s;
+}
+.occ-note-btn:hover {
+    border-color: var(--border-color);
+    background: rgba(255, 136, 89, 0.05);
+}
+.occ-note-empty {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    opacity: 0.55;
+}
+.occ-note-btn:hover .occ-note-empty { opacity: 1; }
 .occ-note-clamp {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -2612,6 +2637,20 @@ body[data-role="helper"] .data-table tbody td:last-child {
 }
 /* 顯式標 data-write="1" 的按鈕 (其他地方寫入按鈕的逃生口) */
 body[data-role="helper"] [data-write] { display: none !important; }
+/* 住房一覽 — 入住按鈕 + 退房 checkbox 隱藏 */
+body[data-role="helper"] .occ-checkin-btn,
+body[data-role="helper"] .occ-terminate-check { display: none !important; }
+/* 住房一覽 — 備註欄: helper 還是看得到備註文字，但不可點 (顯示為純文字) */
+body[data-role="helper"] .occ-note-btn {
+    pointer-events: none;
+    cursor: default;
+    background: transparent;
+    border: none;
+    padding: 0;
+    text-align: left;
+}
+body[data-role="helper"] .occ-note-empty { display: none; }
+/* 住房一覽 — 床位 / 租客 link 還是可點 (詳細視窗是只讀的) */
 /* 小幫手身分提示條 — sidebar footer 上方 */
 body[data-role="helper"] .sidebar-footer::before {
     content: '🤝 小幫手 · 唯讀模式';

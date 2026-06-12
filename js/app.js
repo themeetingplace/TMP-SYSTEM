@@ -32,8 +32,10 @@ const navItems = document.querySelectorAll('.nav-item');
 
 // 角色說明：
 //   owner / admin / viewer = 看得到全部分頁 (差別在能不能管帳號 / 寫入)
-//   helper = 小幫手 → 只能看 helperPages 裡列的 4 頁，且按鈕都隱藏 (純檢視)
-const HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'tenants']);
+//   helper = 小幫手 → 只能看 物件管理 / 住房一覽 / 租客清單，且寫入按鈕全隱藏
+//   helper 預設首頁 = 住房一覽 (#occupancy)，不給看 dashboard
+const HELPER_ALLOWED = new Set(['properties', 'occupancy', 'tenants']);
+const HELPER_DEFAULT_HASH = 'occupancy';
 const routes = {
     dashboard:     { title: '首頁',         group: '總覽', render: renderDashboard },
     properties:    { title: '物件管理',     group: '營運', render: renderProperties, init: initPropertyActions },
@@ -57,7 +59,8 @@ function handleRoute() {
         return;
     }
     if (!hash || !routes[hash]) {
-        hash = 'dashboard';
+        // helper 預設進住房一覽，其他角色進首頁
+        hash = window.__currentRole === 'helper' ? HELPER_DEFAULT_HASH : 'dashboard';
         window.location.hash = hash;
         return;
     }
@@ -72,7 +75,7 @@ function handleRoute() {
     // helper-only route guard：小幫手只能看白名單裡的頁面
     if (window.__currentRole === 'helper' && !HELPER_ALLOWED.has(hash)) {
         showToast('小幫手只能檢視 物件管理 / 住房一覽 / 租客清單', 'warning', 4000);
-        window.location.hash = 'properties';
+        window.location.hash = HELPER_DEFAULT_HASH;
         return;
     }
     pageTitle.textContent = route.title;
@@ -297,18 +300,21 @@ window.addEventListener('DOMContentLoaded', async () => {
         const navAdminUsers = document.getElementById('nav-admin-users');
         if (navAdminUsers) navAdminUsers.style.display = '';
     }
-    // helper → 隱藏非白名單的 nav 項目
+    // helper → 隱藏非白名單的 nav 項目 (包含首頁)
     if (window.__currentRole === 'helper') {
-        const allowed = new Set(['dashboard', 'properties', 'occupancy', 'tenants']);
         document.querySelectorAll('.nav-item[data-view]').forEach(el => {
             const view = el.dataset.view;
-            if (!allowed.has(view)) el.style.display = 'none';
+            if (!HELPER_ALLOWED.has(view)) el.style.display = 'none';
         });
-        // 也隱藏 nav 群組標題 (整個 group 都 hidden 的話也順手隱藏 label)
+        // 整個 group 都被隱掉的話順手收起 label
         document.querySelectorAll('.nav-group').forEach(group => {
             const visibleItems = Array.from(group.querySelectorAll('.nav-item')).filter(el => el.style.display !== 'none');
             if (visibleItems.length === 0) group.style.display = 'none';
         });
+        // 強制把當前路徑改成 helper 預設頁 (避免登入時還停在 #dashboard)
+        if (!HELPER_ALLOWED.has(window.location.hash.substring(1))) {
+            window.location.hash = HELPER_DEFAULT_HASH;
+        }
     }
 
     // 2. 顯示登入者資訊在 sidebar
