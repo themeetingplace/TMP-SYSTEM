@@ -640,35 +640,31 @@ function renderMoveInOutChart(months, maxVal) {
 }
 
 // ───────────────────── Tab 3: 財務分析 (獲利面) ─────────────────────
-// 偵測「房東租金」用的 type 名字 (有些用戶可能改名了，自動掃)
-const LANDLORD_RENT_KEYWORDS = ['房東租金', '房東', '給房東', '房租支出', '房東房租'];
-function detectLandlordRentType(invoices) {
-    // 先精準匹配
-    for (const kw of LANDLORD_RENT_KEYWORDS) {
-        if (invoices.some(i => i.direction === 'out' && i.type === kw)) return kw;
-    }
-    // 再模糊匹配 (type 字串包含「房東」)
-    const hit = invoices.find(i => i.direction === 'out' && typeof i.type === 'string' && i.type.includes('房東'));
-    return hit ? hit.type : null;
+// 偵測「房東租金」支出 — 房東租金是「租金」這個分類底下，direction='out' 的那種
+// 抓所有 direction='out' 且 type 含「租金 / 房租 / 房東」字眼的 invoice，全部加總視為房東租金
+function detectLandlordRentInvoices(invoices) {
+    return invoices.filter(i =>
+        i.direction === 'out' &&
+        typeof i.type === 'string' &&
+        /租金|房租|房東/.test(i.type)
+    );
 }
 
 function computeAggForInvoices(invoices) {
     const inAll = invoices.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
     const outAll = invoices.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
-    const landlordType = detectLandlordRentType(invoices);
-    const landlordRent = landlordType
-        ? invoices.filter(i => i.direction === 'out' && i.type === landlordType).reduce((s, i) => s + actualAmount(i), 0)
-        : 0;
+    const landlordInvoices = detectLandlordRentInvoices(invoices);
+    const landlordRent = landlordInvoices.reduce((s, i) => s + actualAmount(i), 0);
+    const detectedTypes = [...new Set(landlordInvoices.map(i => i.type))];
     const otherExpense = outAll - landlordRent;
     const net = inAll - outAll;
     const grossMargin = inAll > 0 ? (inAll - landlordRent) / inAll : 0;
     const netMargin = inAll > 0 ? net / inAll : 0;
     const landlordRatio = inAll > 0 ? landlordRent / inAll : 0;
     const opexRatio = inAll > 0 ? outAll / inAll : 0;
-    // 列出所有支出 type 給警告框用
     const allExpenseTypes = [...new Set(invoices.filter(i => i.direction === 'out').map(i => i.type))].filter(Boolean);
     return {
-        inAll, outAll, landlordRent, landlordType, otherExpense, net,
+        inAll, outAll, landlordRent, detectedTypes, otherExpense, net,
         grossMargin, netMargin, landlordRatio, opexRatio,
         noi: net,
         allExpenseTypes
@@ -783,23 +779,35 @@ function renderFinancialKpiTiles(agg) {
     `;
 }
 
-// 房東租金 0% 但有支出 → 警告框
+// 房東租金 偵測結果說明
 function renderLandlordWarning(agg) {
     if (agg.outAll === 0) return '';
-    if (agg.landlordRent > 0) return '';
-    // 有支出但沒抓到房東租金 → 顯示警告 + 列出可選 type
+
+    // 有抓到 → 顯示資訊條 (讓你驗證有抓對)
+    if (agg.landlordRent > 0) {
+        return `
+            <div class="report-info-card">
+                <div class="report-info-icon"><i class="ph ph-info"></i></div>
+                <div class="report-info-body">
+                    <strong>房東租金偵測：$${agg.landlordRent.toLocaleString()}</strong>
+                    <small>包含 type 為：${agg.detectedTypes.map(t => `<span class="report-info-type">${t}</span>`).join(' ')} 且 direction = 已付 的所有帳目</small>
+                </div>
+            </div>
+        `;
+    }
+
+    // 真的沒抓到 → 警告
     const types = agg.allExpenseTypes;
     if (types.length === 0) return '';
     return `
         <div class="report-warning-card">
             <div class="report-warning-icon"><i class="ph ph-warning-circle"></i></div>
             <div class="report-warning-body">
-                <strong>未偵測到「房東租金」支出</strong>
-                <small>區間內有 $${agg.outAll.toLocaleString()} 已付支出，但都沒被歸類為房東租金，所以毛利率算成 100%。請檢查支出 type 是否命名正確 (應為「房東租金」)，或從以下類型中找出對應的：</small>
+                <strong>未偵測到房東租金支出</strong>
+                <small>區間內有 $${agg.outAll.toLocaleString()} 已付支出，但沒有 type 含「租金 / 房租 / 房東」字眼的，所以毛利率算成 100%。從以下類型中找出對應的，並到「<a href="#settings" style="color: var(--color-primary-text);">系統設定 → 帳單類型</a>」改名，或直接編輯帳目把 type 改一下：</small>
                 <div class="report-warning-types">
                     ${types.map(t => `<span class="report-warning-type">${t}</span>`).join('')}
                 </div>
-                <small style="margin-top: 0.4rem;">→ 到「<a href="#settings" style="color: var(--color-primary-text);">系統設定 → 帳單類型</a>」確認設定，或直接編輯該帳目把 type 改成「房東租金」</small>
             </div>
         </div>
     `;

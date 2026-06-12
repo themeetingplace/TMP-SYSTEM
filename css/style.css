@@ -3614,6 +3614,58 @@ select:focus-visible,
     font-weight: 500;
 }
 
+/* === 報表資訊卡 (房東租金偵測成功時) === */
+.report-info-card {
+    display: flex;
+    gap: 0.85rem;
+    padding: 0.7rem 1rem;
+    background: rgba(34, 148, 110, 0.06);
+    border: 1px solid rgba(34, 148, 110, 0.2);
+    border-left: 3px solid var(--color-success);
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
+.report-info-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(34, 148, 110, 0.15);
+    color: var(--color-success);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.report-info-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    line-height: 1.45;
+}
+.report-info-body strong {
+    font-size: 0.88rem;
+    color: var(--text-main);
+    font-weight: 700;
+}
+.report-info-body small {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.report-info-type {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    background: var(--color-surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 99px;
+    font-size: 0.7rem;
+    color: var(--text-main);
+    font-weight: 500;
+    margin: 0 0.15rem;
+}
+
 /* === Bar 目標虛線 (Tab 2: 出租率 95% 目標) === */
 .bar-target-line {
     position: absolute;
