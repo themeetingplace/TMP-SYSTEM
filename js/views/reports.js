@@ -30,60 +30,51 @@ function rangeDayCount(range = reportState.viewRange) {
     return Math.max(1, Math.round((e - s) / 86400000) + 1);
 }
 
-// ───────────────────── Tab 1: 總覽 ─────────────────────
+// ───────────────────── Tab 1: 總覽 (現金流為主) ─────────────────────
 function computeOverviewKPIs(range) {
-    const invoices = settledInRange(range);
-    // 應收 = 所有 income invoices 的 amount - discount 加總
-    const receivableTotal = invoices
-        .filter(i => i.direction === 'in')
-        .reduce((s, i) => s + ((Number(i.amount) || 0) - (Number(i.discount) || 0)), 0);
-    // 已收 = 所有 income invoices 的 paidAmount 加總 (用 actualAmount)
-    const paidTotal = invoices
-        .filter(i => i.direction === 'in')
-        .reduce((s, i) => s + actualAmount(i), 0);
-    // 淨利 = 已收 - 已付 (out invoices actualAmount)
-    const expenseTotal = invoices
-        .filter(i => i.direction === 'out')
-        .reduce((s, i) => s + actualAmount(i), 0);
+    // 區間內所有 income invoice (含未結算的，才能算「應收 vs 已收」)
+    const allIncome = mockData.invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
+    const settledOnly = settledInRange(range);
+    // 應收總額 = 所有 income invoice 的 (amount − discount)
+    const receivableTotal = allIncome.reduce((s, i) => s + ((Number(i.amount) || 0) - (Number(i.discount) || 0)), 0);
+    // 已收 = 所有 income invoice 的 paidAmount 總和 (含部分繳款)
+    const paidTotal = allIncome.reduce((s, i) => s + (Number(i.paidAmount) || 0), 0);
+    // 待收 = 應收 − 已收 (該收還沒收的)
+    const outstanding = Math.max(0, receivableTotal - paidTotal);
+    // 收款率
+    const collectionRate = receivableTotal > 0 ? paidTotal / receivableTotal : 0;
+    // 已付支出 (已結算)
+    const expenseTotal = settledOnly.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
     const net = paidTotal - expenseTotal;
-    // 出租率 (current snapshot — not range-based)
-    const allBeds = mockData.properties || [];
-    const rentedBeds = allBeds.filter(p => activeContractFor(p.name));
-    const occRate = allBeds.length ? rentedBeds.length / allBeds.length : 0;
     return {
         receivableTotal,
         paidTotal,
+        outstanding,
+        collectionRate,
         expenseTotal,
         net,
-        occRate,
-        totalBeds: allBeds.length,
-        rentedBeds: rentedBeds.length,
-        invoiceCount: invoices.length
+        invoiceCount: allIncome.length,
+        unpaidCount: allIncome.filter(i => (Number(i.paidAmount) || 0) < ((Number(i.amount) || 0) - (Number(i.discount) || 0))).length
     };
 }
 
-// 收入結構 (by type) — donut data
-function computeIncomeByType(range) {
-    const invoices = settledInRange(range).filter(i => i.direction === 'in');
-    const byType = {};
-    invoices.forEach(i => {
-        const t = i.type || '其他';
-        byType[t] = (byType[t] || 0) + actualAmount(i);
-    });
-    const total = Object.values(byType).reduce((s, v) => s + v, 0);
-    return Object.entries(byType)
-        .map(([type, amount]) => ({ type, amount, pct: total ? amount / total : 0 }))
-        .sort((a, b) => b.amount - a.amount);
-}
-
-// 各館收入 (bar data)
-function computeIncomeByBuilding(range) {
+// 各館 應收/已收/待收 (取代收入結構 donut — 更有意義)
+function computeReceivableByBuilding(range) {
     const buildings = getSortedBuildings({ activeOnly: true });
-    const invoices = settledInRange(range).filter(i => i.direction === 'in');
+    const allIncome = mockData.invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
     return buildings.map(b => {
-        const amount = invoices.filter(i => i.buildingId === b.id).reduce((s, i) => s + actualAmount(i), 0);
-        return { label: b.name, amount };
-    }).sort((a, b) => b.amount - a.amount);
+        const rows = allIncome.filter(i => i.buildingId === b.id);
+        const receivable = rows.reduce((s, i) => s + ((Number(i.amount) || 0) - (Number(i.discount) || 0)), 0);
+        const paid = rows.reduce((s, i) => s + (Number(i.paidAmount) || 0), 0);
+        const outstanding = Math.max(0, receivable - paid);
+        return {
+            label: b.name,
+            receivable,
+            paid,
+            outstanding,
+            collectionRate: receivable > 0 ? paid / receivable : 0
+        };
+    }).sort((a, b) => b.receivable - a.receivable);
 }
 
 // 月度趨勢 (last 6 months ending at range end)
@@ -113,140 +104,168 @@ function computeMonthlyTrend(range) {
     return months;
 }
 
-const DONUT_COLORS = ['#ff8859', '#22946e', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6', '#6b7280'];
-
-function renderDonut(items, centerValue, centerLabel) {
-    if (items.length === 0 || items.every(it => it.amount === 0)) {
-        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無收入資料</div>`;
+// 各館 應收 vs 已收 stacked bar (取代 donut — 顯示現金流缺口)
+function renderReceivableStackedBars(items) {
+    if (items.length === 0 || items.every(it => it.receivable === 0)) {
+        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無應收資料</div>`;
     }
-    let cumulative = 0;
-    const total = items.reduce((s, it) => s + it.amount, 0);
-    const stops = items.map((it, idx) => {
-        const startPct = (cumulative / total) * 100;
-        cumulative += it.amount;
-        const endPct = (cumulative / total) * 100;
-        return `${DONUT_COLORS[idx % DONUT_COLORS.length]} ${startPct}% ${endPct}%`;
-    }).join(', ');
+    const maxReceivable = Math.max(...items.map(it => it.receivable), 1);
     return `
-        <div class="donut-chart-wrap">
-            <div class="donut-chart" style="background: conic-gradient(${stops});">
-                <div class="donut-chart-center">
-                    <div class="donut-chart-center-value">$${(centerValue / 1000).toFixed(0)}k</div>
-                    <div class="donut-chart-center-label">${centerLabel}</div>
-                </div>
-            </div>
-            <div class="donut-chart-legend">
-                ${items.map((it, idx) => `
-                    <div class="donut-legend-item">
-                        <span class="donut-legend-dot" style="background: ${DONUT_COLORS[idx % DONUT_COLORS.length]};"></span>
-                        <span class="donut-legend-label">${it.type}</span>
-                        <span class="donut-legend-value">${(it.pct * 100).toFixed(0)}%</span>
+        <div class="stacked-bar-list">
+            ${items.map(it => {
+                const paidPct = it.receivable > 0 ? (it.paid / it.receivable) * 100 : 0;
+                const totalW = (it.receivable / maxReceivable) * 100;
+                const collectionPct = (it.collectionRate * 100).toFixed(0);
+                return `
+                    <div class="stacked-bar-row">
+                        <div class="stacked-bar-head">
+                            <span class="stacked-bar-label">${it.label}</span>
+                            <span class="stacked-bar-rate ${it.collectionRate >= 0.95 ? 'good' : it.collectionRate >= 0.85 ? 'mid' : 'bad'}">收款 ${collectionPct}%</span>
+                        </div>
+                        <div class="stacked-bar-track" style="width: ${totalW}%;">
+                            <div class="stacked-bar-paid" style="width: ${paidPct}%;"></div>
+                        </div>
+                        <div class="stacked-bar-vals">
+                            <span class="sb-val-paid">已收 $${it.paid.toLocaleString()}</span>
+                            ${it.outstanding > 0 ? `<span class="sb-val-out">待收 $${it.outstanding.toLocaleString()}</span>` : ''}
+                            <span class="sb-val-total">/ 應收 $${it.receivable.toLocaleString()}</span>
+                        </div>
                     </div>
-                `).join('')}
-            </div>
+                `;
+            }).join('')}
         </div>
     `;
 }
 
-function renderBarChart(items, max) {
-    if (items.length === 0 || items.every(it => it.amount === 0)) {
-        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無資料</div>`;
-    }
-    const ceiling = Math.max(1, max || Math.max(...items.map(it => it.amount)));
-    return items.map(it => {
-        const w = (it.amount / ceiling) * 100;
-        return `
-            <div class="bar-chart-row">
-                <span class="bar-chart-label">${it.label}</span>
-                <div class="bar-chart-bar-wrap"><div class="bar-chart-bar" style="width: ${w}%;"></div></div>
-                <span class="bar-chart-value">$${(it.amount || 0).toLocaleString()}</span>
-            </div>
-        `;
-    }).join('');
-}
-
+// 月度趨勢折線圖 — 含 Y 軸刻度 / 4 條網格線 / 每點數值標 / 圖例
 function renderTrendChart(months) {
     if (months.length === 0) return '';
-    const w = 600, h = 180, pad = 28;
-    const allValues = months.flatMap(m => [m.income, m.expense, m.net]);
-    const min = Math.min(0, ...allValues);
-    const max = Math.max(1, ...allValues);
-    const range = max - min || 1;
-    const stepX = (w - pad * 2) / (months.length - 1 || 1);
-    const yFor = (v) => h - pad - ((v - min) / range) * (h - pad * 2);
-    const xFor = (i) => pad + i * stepX;
+    const w = 640, h = 260;
+    const padL = 60, padR = 16, padT = 24, padB = 36;
+    const innerW = w - padL - padR;
+    const innerH = h - padT - padB;
 
-    const line = (key, color) => {
+    const allValues = months.flatMap(m => [m.income, m.expense, m.net]);
+    const rawMin = Math.min(0, ...allValues);
+    const rawMax = Math.max(1, ...allValues);
+    // 把 max 取整到「漂亮數字」(k 位)，讓 Y 軸刻度好讀
+    const niceMax = niceCeil(rawMax);
+    const niceMin = rawMin < 0 ? -niceCeil(Math.abs(rawMin)) : 0;
+    const range = niceMax - niceMin || 1;
+
+    const stepX = innerW / (months.length - 1 || 1);
+    const yFor = (v) => padT + innerH - ((v - niceMin) / range) * innerH;
+    const xFor = (i) => padL + i * stepX;
+
+    // 4 條等距 Y 軸網格線 + 刻度標籤
+    const gridLines = [];
+    for (let i = 0; i <= 4; i++) {
+        const v = niceMin + (range * i / 4);
+        const y = yFor(v);
+        gridLines.push(`<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="${i === 0 || (niceMin < 0 && v === 0) ? '#cbd5e1' : '#e5e7eb'}" stroke-width="1" ${i > 0 && i < 4 ? 'stroke-dasharray="3,3"' : ''}/>`);
+        gridLines.push(`<text x="${padL - 8}" y="${y + 4}" font-size="10" text-anchor="end" fill="#6b7280" font-family="Inter, system-ui, sans-serif">$${formatYAxis(v)}</text>`);
+    }
+
+    const line = (key, color, label) => {
         const points = months.map((m, i) => `${xFor(i)},${yFor(m[key])}`).join(' ');
-        const dots = months.map((m, i) => `<circle cx="${xFor(i)}" cy="${yFor(m[key])}" r="3" fill="${color}" />`).join('');
-        return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
+        return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
     };
-    const labels = months.map((m, i) => `<text x="${xFor(i)}" y="${h - 6}" font-size="10" text-anchor="middle" fill="#9ca3af">${m.label}</text>`).join('');
-    const zeroLine = min < 0 && max > 0 ? `<line x1="${pad}" y1="${yFor(0)}" x2="${w - pad}" y2="${yFor(0)}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,3"/>` : '';
+    const dots = (key, color) => months.map((m, i) =>
+        `<circle cx="${xFor(i)}" cy="${yFor(m[key])}" r="3.5" fill="white" stroke="${color}" stroke-width="2"/>`
+    ).join('');
+    // 在每個點上方標數字
+    const valueLabels = (key, color, dy) => months.map((m, i) => {
+        const v = m[key];
+        if (v === 0) return '';
+        return `<text x="${xFor(i)}" y="${yFor(v) + dy}" font-size="9" text-anchor="middle" fill="${color}" font-family="Inter, system-ui, sans-serif" font-weight="600">$${formatYAxis(v)}</text>`;
+    }).join('');
+
+    const xLabels = months.map((m, i) =>
+        `<text x="${xFor(i)}" y="${h - 12}" font-size="11" text-anchor="middle" fill="#6b7280" font-family="Inter, system-ui, sans-serif">${m.label}</text>`
+    ).join('');
 
     return `
         <div class="trend-chart-wrap">
-            <svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
-                ${zeroLine}
-                ${line('income', '#22946e')}
-                ${line('expense', '#b13535')}
-                ${line('net', '#3b82f6')}
-                ${labels}
-            </svg>
             <div class="trend-chart-legend">
                 <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #22946e;"></span>收入</span>
                 <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #b13535;"></span>支出</span>
                 <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #3b82f6;"></span>淨利</span>
             </div>
+            <svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
+                ${gridLines.join('')}
+                ${line('income', '#22946e')}
+                ${line('expense', '#b13535')}
+                ${line('net', '#3b82f6')}
+                ${dots('income', '#22946e')}
+                ${dots('expense', '#b13535')}
+                ${dots('net', '#3b82f6')}
+                ${valueLabels('income', '#22946e', -10)}
+                ${valueLabels('expense', '#b13535', 18)}
+                ${xLabels}
+            </svg>
         </div>
     `;
+}
+
+// 取整到「漂亮數字」(eg. 12300 → 15000) 給 Y 軸用
+function niceCeil(n) {
+    if (n <= 0) return 0;
+    const pow = Math.pow(10, Math.floor(Math.log10(n)));
+    const r = n / pow;
+    if (r <= 1) return pow;
+    if (r <= 2) return 2 * pow;
+    if (r <= 5) return 5 * pow;
+    return 10 * pow;
+}
+
+// 格式化 Y 軸數字 (≥1000 用 k，≥1000k 用 M)
+function formatYAxis(v) {
+    const abs = Math.abs(v);
+    const sign = v < 0 ? '-' : '';
+    if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
+    if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`;
+    return `${sign}${abs}`;
 }
 
 function renderOverviewTab() {
     const range = reportState.viewRange;
     const k = computeOverviewKPIs(range);
-    const incomeByType = computeIncomeByType(range);
-    const incomeByBuilding = computeIncomeByBuilding(range);
+    const byBuilding = computeReceivableByBuilding(range);
     const trend = computeMonthlyTrend(range);
     const days = rangeDayCount(range);
+    const collectionPct = (k.collectionRate * 100).toFixed(1);
+    const collectionColor = k.collectionRate >= 0.95 ? 'var(--color-success)' : k.collectionRate >= 0.85 ? 'var(--color-warning-text)' : 'var(--color-danger)';
 
     return `
-        <div class="kpi-grid">
-            <div class="kpi-card">
-                <span class="kpi-card-accent kpi-accent-income"></span>
-                <div class="kpi-card-label"><i class="ph ph-currency-circle-dollar"></i> 應收總額</div>
-                <div class="kpi-card-value">$${k.receivableTotal.toLocaleString()}</div>
-                <div class="kpi-card-sub">區間 ${days} 天</div>
+        <div class="stat-tile-grid">
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-currency-circle-dollar"></i> 應收總額</div>
+                <div class="stat-tile-value">$${k.receivableTotal.toLocaleString()}</div>
+                <div class="stat-tile-sub">區間 ${days} 天 · ${k.invoiceCount} 筆</div>
             </div>
-            <div class="kpi-card">
-                <span class="kpi-card-accent kpi-accent-paid"></span>
-                <div class="kpi-card-label"><i class="ph ph-wallet"></i> 已收金額</div>
-                <div class="kpi-card-value">$${k.paidTotal.toLocaleString()}</div>
-                <div class="kpi-card-sub">${k.invoiceCount} 筆已結帳目</div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-wallet"></i> 已收金額</div>
+                <div class="stat-tile-value">$${k.paidTotal.toLocaleString()}</div>
+                <div class="stat-tile-sub">${k.unpaidCount > 0 ? `<strong style="color: var(--color-danger);">${k.unpaidCount}</strong> 筆未繳清` : '全部繳清'}</div>
             </div>
-            <div class="kpi-card">
-                <span class="kpi-card-accent kpi-accent-net"></span>
-                <div class="kpi-card-label"><i class="ph ph-trend-up"></i> 淨利</div>
-                <div class="kpi-card-value" style="color: ${k.net >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">$${k.net.toLocaleString()}</div>
-                <div class="kpi-card-sub">已收 − 已付 = 淨利</div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-percent"></i> 收款率</div>
+                <div class="stat-tile-value" style="color: ${collectionColor};">${collectionPct}%</div>
+                <div class="stat-tile-sub">待收 $${k.outstanding.toLocaleString()}</div>
             </div>
-            <div class="kpi-card">
-                <span class="kpi-card-accent kpi-accent-occ"></span>
-                <div class="kpi-card-label"><i class="ph ph-house-line"></i> 出租率</div>
-                <div class="kpi-card-value">${pct(k.occRate)}</div>
-                <div class="kpi-card-sub">${k.rentedBeds} / ${k.totalBeds} 床位</div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-trend-up"></i> 淨利</div>
+                <div class="stat-tile-value">$${k.net.toLocaleString()}</div>
+                <div class="stat-tile-sub">已收 $${k.paidTotal.toLocaleString()} − 已付 $${k.expenseTotal.toLocaleString()}</div>
             </div>
         </div>
 
-        <div class="report-chart-grid">
-            <div class="report-chart-card">
-                <div class="report-chart-title"><i class="ph ph-chart-donut"></i> 收入結構</div>
-                ${renderDonut(incomeByType, k.paidTotal, '已收')}
+        <div class="report-chart-card">
+            <div class="report-chart-title">
+                <span><i class="ph ph-buildings"></i> 各館應收 vs 已收</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">深色=已收 · 淺色=待收</span>
             </div>
-            <div class="report-chart-card">
-                <div class="report-chart-title"><i class="ph ph-buildings"></i> 各館收入</div>
-                <div>${renderBarChart(incomeByBuilding)}</div>
-            </div>
+            ${renderReceivableStackedBars(byBuilding)}
         </div>
 
         <div class="report-chart-card">
@@ -256,17 +275,32 @@ function renderOverviewTab() {
     `;
 }
 
-// ───────────────────── Tab 2: 各館報表 (按區間) ─────────────────────
+// ───────────────────── Tab 2: 各館報表 (營運面) ─────────────────────
 function statsForBuildingRange(building, range) {
     const beds = mockData.properties.filter(p => p.buildingId === building.id);
     const totalBeds = beds.length;
     const rentedBeds = beds.filter(p => activeContractFor(p.name)).length;
+    const vacantBeds = totalBeds - rentedBeds;
     const occRate = totalBeds ? rentedBeds / totalBeds : 0;
+
+    // 空房損失 = 空床數 × 平均床位月租 × 區間月數
+    const avgBedRent = beds.length ? beds.reduce((s, b) => s + (Number(b.rent) || 0), 0) / beds.length : 0;
+    const months = rangeDayCount(range) / 30;
+    const vacancyLoss = vacantBeds * avgBedRent * months;
+
+    // 30 天內到期 (active 合約 且 endDate 在 today ~ today+30)
+    const today = new Date().toISOString().slice(0, 10);
+    const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const expiringSoon = mockData.contracts.filter(c => {
+        if (c.renewalState !== 'active') return false;
+        if (!c.endDate) return false;
+        if (!beds.some(b => b.name === c.propertyName)) return false;
+        return c.endDate >= today && c.endDate <= in30;
+    });
 
     const inRangeInvoices = settledInRange(range).filter(i => i.buildingId === building.id);
     const incomeInvoices = inRangeInvoices.filter(i => i.direction === 'in');
     const expenseInvoices = inRangeInvoices.filter(i => i.direction === 'out');
-
     const actualIncome = incomeInvoices.reduce((s, i) => s + actualAmount(i), 0);
     const byType = {};
     expenseInvoices.forEach(inv => {
@@ -277,7 +311,8 @@ function statsForBuildingRange(building, range) {
     const grossMargin = actualIncome > 0 ? net / actualIncome : 0;
 
     return {
-        building, totalBeds, rentedBeds, occRate,
+        building, totalBeds, rentedBeds, vacantBeds, occRate,
+        avgBedRent, vacancyLoss, expiringSoon,
         actualIncome, byType, expenseTotal, net, grossMargin
     };
 }
@@ -316,45 +351,63 @@ function renderBuildingsTab() {
     const range = reportState.viewRange;
     const buildings = getSortedBuildings({ activeOnly: true });
     const active = reportState.activeBuilding || 'all';
-
     const subTabs = renderBuildingSubTabs();
 
-    // 全館合計 view
+    // 全館合計 view (營運面)
     if (active === 'all') {
         const allStats = buildings.map(b => statsForBuildingRange(b, range));
-        const totals = allStats.reduce((acc, s) => ({
-            income: acc.income + s.actualIncome,
-            expense: acc.expense + s.expenseTotal,
-            net: acc.net + s.net,
-            totalBeds: acc.totalBeds + s.totalBeds,
-            rentedBeds: acc.rentedBeds + s.rentedBeds
-        }), { income: 0, expense: 0, net: 0, totalBeds: 0, rentedBeds: 0 });
+        const totals = {
+            totalBeds: allStats.reduce((s, x) => s + x.totalBeds, 0),
+            rentedBeds: allStats.reduce((s, x) => s + x.rentedBeds, 0),
+            vacantBeds: allStats.reduce((s, x) => s + x.vacantBeds, 0),
+            vacancyLoss: allStats.reduce((s, x) => s + x.vacancyLoss, 0),
+            expiringCount: allStats.reduce((s, x) => s + x.expiringSoon.length, 0)
+        };
         const totalOccRate = totals.totalBeds ? totals.rentedBeds / totals.totalBeds : 0;
-        const maxIncome = Math.max(1, ...allStats.map(s => s.actualIncome));
+        const occColor = totalOccRate >= 0.8 ? 'var(--color-success)' : totalOccRate >= 0.5 ? 'var(--color-warning-text)' : 'var(--color-danger)';
 
         return `
             ${subTabs}
             <div class="stat-tile-grid">
-                ${renderStatTile({ label: '總收入', value: totals.income, sub: `${buildings.length} 個館別`, accent: '#22946e', valueColor: 'var(--color-success)', iconClass: 'ph-arrow-down-right' })}
-                ${renderStatTile({ label: '總支出', value: totals.expense, sub: '已付出帳', accent: '#b13535', valueColor: 'var(--color-danger)', iconClass: 'ph-arrow-up-right' })}
-                ${renderStatTile({ label: '淨利', value: totals.net, sub: `毛利率 ${totals.income ? pct((totals.income - totals.expense) / totals.income) : '—'}`, accent: '#3b82f6', valueColor: totals.net >= 0 ? 'var(--color-success)' : 'var(--color-danger)', iconClass: 'ph-trend-up' })}
-                <div class="stat-tile" style="--accent: #8b5cf6;">
-                    <div class="stat-tile-label"><i class="ph ph-house-line"></i> 總出租率</div>
-                    <div class="stat-tile-value">${pct(totalOccRate)}</div>
-                    <div class="stat-tile-sub">${totals.rentedBeds} / ${totals.totalBeds} 床</div>
+                <div class="stat-tile">
+                    <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率</div>
+                    <div class="stat-tile-value" style="color: ${occColor};">${pct(totalOccRate)}</div>
+                    <div class="stat-tile-sub">${totals.rentedBeds} / ${totals.totalBeds} 床位</div>
+                </div>
+                <div class="stat-tile">
+                    <div class="stat-tile-label"><i class="ph ph-bed"></i> 空床數</div>
+                    <div class="stat-tile-value">${totals.vacantBeds}</div>
+                    <div class="stat-tile-sub">床位待出租</div>
+                </div>
+                <div class="stat-tile">
+                    <div class="stat-tile-label"><i class="ph ph-warning"></i> 空房損失</div>
+                    <div class="stat-tile-value" style="color: var(--color-danger);">$${Math.round(totals.vacancyLoss).toLocaleString()}</div>
+                    <div class="stat-tile-sub">區間機會成本</div>
+                </div>
+                <div class="stat-tile">
+                    <div class="stat-tile-label"><i class="ph ph-clock-countdown"></i> 30 天內到期</div>
+                    <div class="stat-tile-value" style="color: ${totals.expiringCount > 0 ? 'var(--color-warning-text)' : 'var(--text-main)'};">${totals.expiringCount}</div>
+                    <div class="stat-tile-sub">需追蹤續約</div>
                 </div>
             </div>
 
             <div class="report-chart-card">
-                <div class="report-chart-title"><i class="ph ph-ranking"></i> 各館收入排行</div>
+                <div class="report-chart-title">
+                    <span><i class="ph ph-ranking"></i> 各館出租率</span>
+                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">點擊館別查看詳細</span>
+                </div>
                 <div>
-                    ${allStats.sort((a, b) => b.actualIncome - a.actualIncome).map(s => {
-                        const w = (s.actualIncome / maxIncome) * 100;
+                    ${allStats.sort((a, b) => b.occRate - a.occRate).map(s => {
+                        const w = s.occRate * 100;
+                        const c = s.occRate >= 0.8 ? 'var(--color-success)' : s.occRate >= 0.5 ? 'var(--color-warning-text)' : 'var(--color-danger)';
                         return `
-                            <div class="bar-chart-row" style="cursor: pointer;" data-building-sub="${s.building.id}" title="點擊查看 ${s.building.name} 詳細">
+                            <div class="bar-chart-row" style="cursor: pointer;" data-building-sub="${s.building.id}">
                                 <span class="bar-chart-label">${s.building.name}</span>
-                                <div class="bar-chart-bar-wrap"><div class="bar-chart-bar" style="width: ${w}%;"></div></div>
-                                <span class="bar-chart-value">$${s.actualIncome.toLocaleString()}</span>
+                                <div class="bar-chart-bar-wrap"><div class="bar-chart-bar" style="width: ${w}%; background: ${c};"></div></div>
+                                <span class="bar-chart-value">
+                                    <strong>${pct(s.occRate)}</strong>
+                                    <small style="color: var(--text-muted); font-weight: 500; margin-left: 0.3rem;">${s.rentedBeds}/${s.totalBeds}</small>
+                                </span>
                             </div>
                         `;
                     }).join('')}
@@ -363,7 +416,7 @@ function renderBuildingsTab() {
         `;
     }
 
-    // 單一館 view (重設計)
+    // 單館 view (營運面)
     const building = buildings.find(b => b.id === active);
     if (!building) {
         reportState.activeBuilding = 'all';
@@ -373,107 +426,177 @@ function renderBuildingsTab() {
     return `${subTabs}${renderSingleBuildingDashboard(s)}`;
 }
 
-// 單一館的儀表板版面 (Tab 2 用，重點：數字大、好讀)
+// 單一館的營運儀表板 (Tab 2)
 function renderSingleBuildingDashboard(s) {
-    const netColor = s.net >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-    const occColor = s.occRate >= 0.8 ? 'var(--color-success)' : s.occRate >= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)';
-
-    // 收入分類 (從 invoices 重算，以細節展示)
-    const range = reportState.viewRange;
-    const inInvoices = settledInRange(range).filter(i => i.buildingId === s.building.id && i.direction === 'in');
-    const incomeByType = {};
-    inInvoices.forEach(i => {
-        incomeByType[i.type || '其他'] = (incomeByType[i.type || '其他'] || 0) + actualAmount(i);
+    const occColor = s.occRate >= 0.8 ? 'var(--color-success)' : s.occRate >= 0.5 ? 'var(--color-warning-text)' : 'var(--color-danger)';
+    // 床位狀態列表
+    const beds = mockData.properties.filter(p => p.buildingId === s.building.id)
+        .sort((a, b) => (a.roomNumber || 0) - (b.roomNumber || 0) || String(a.bedLetter || '').localeCompare(String(b.bedLetter || '')));
+    const today = new Date().toISOString().slice(0, 10);
+    const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const bedRows = beds.map(b => {
+        const c = activeContractFor(b.name);
+        const status = c ? '已出租' : '空床';
+        const tenant = c ? c.tenant : '—';
+        const endDate = c ? c.endDate : '';
+        const expiringSoon = c && c.endDate >= today && c.endDate <= in30;
+        return { bed: b, status, tenant, endDate, expiringSoon };
     });
-    const incomeRows = Object.entries(incomeByType).sort((a, b) => b[1] - a[1]);
-    const maxIncomeAmt = Math.max(1, ...incomeRows.map(r => r[1]));
-    const maxExpenseAmt = Math.max(1, ...Object.values(s.byType));
-    const expenseRows = Object.entries(s.byType).sort((a, b) => b[1] - a[1]);
 
     return `
-        <!-- 館別 hero -->
         <div class="bldg-hero">
             <div class="bldg-hero-info">
                 <h2>${s.building.name}</h2>
-                <p>${s.building.baseAddress || ''}</p>
             </div>
             <button class="btn btn-outline" data-action="export-pdf" data-building-id="${s.building.id}">
                 <i class="ph ph-file-pdf"></i> 匯出 PDF
             </button>
         </div>
 
-        <!-- 4 stat tiles -->
         <div class="stat-tile-grid">
-            ${renderStatTile({ label: '區間收入', value: s.actualIncome, sub: `${inInvoices.length} 筆`, accent: '#22946e', valueColor: 'var(--color-success)', iconClass: 'ph-arrow-down-right' })}
-            ${renderStatTile({ label: '區間支出', value: s.expenseTotal, sub: `${Object.keys(s.byType).length} 類`, accent: '#b13535', valueColor: 'var(--color-danger)', iconClass: 'ph-arrow-up-right' })}
-            ${renderStatTile({ label: '淨利', value: s.net, sub: `毛利率 ${s.actualIncome > 0 ? pct(s.grossMargin) : '—'}`, accent: '#3b82f6', valueColor: netColor, iconClass: 'ph-trend-up' })}
-            <div class="stat-tile" style="--accent: #8b5cf6;">
+            <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率</div>
                 <div class="stat-tile-value" style="color: ${occColor};">${pct(s.occRate)}</div>
                 <div class="stat-tile-sub">${s.rentedBeds} / ${s.totalBeds} 床位</div>
             </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-bed"></i> 空床數</div>
+                <div class="stat-tile-value">${s.vacantBeds}</div>
+                <div class="stat-tile-sub">床位待出租</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-warning"></i> 空房損失</div>
+                <div class="stat-tile-value" style="color: var(--color-danger);">$${Math.round(s.vacancyLoss).toLocaleString()}</div>
+                <div class="stat-tile-sub">區間機會成本</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-clock-countdown"></i> 30 天內到期</div>
+                <div class="stat-tile-value" style="color: ${s.expiringSoon.length > 0 ? 'var(--color-warning-text)' : 'var(--text-main)'};">${s.expiringSoon.length}</div>
+                <div class="stat-tile-sub">需追蹤續約</div>
+            </div>
         </div>
 
-        <!-- 收入 vs 支出 對照 -->
-        <div class="io-compare-grid">
-            <div class="io-card io-card-income">
-                <div class="io-card-head">
-                    <div class="io-card-title"><i class="ph ph-arrow-down-right"></i> 收入</div>
-                    <div class="io-card-total">$${s.actualIncome.toLocaleString()}</div>
-                </div>
-                ${incomeRows.length === 0 ? `
-                    <div class="io-empty">區間內無收入</div>
-                ` : incomeRows.map(([type, amt]) => {
-                    const w = (amt / maxIncomeAmt) * 100;
-                    const ratio = s.actualIncome ? (amt / s.actualIncome * 100).toFixed(0) : '0';
-                    return `
-                        <div class="io-row">
-                            <div class="io-row-label">${type}</div>
-                            <div class="io-row-bar"><div class="io-row-bar-fill is-income" style="width: ${w}%;"></div></div>
-                            <div class="io-row-amount">
-                                <strong>$${amt.toLocaleString()}</strong>
-                                <span class="io-row-pct">${ratio}%</span>
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
+        ${s.expiringSoon.length > 0 ? `
+        <div class="report-chart-card">
+            <div class="report-chart-title"><i class="ph ph-clock-countdown"></i> 即將到期 (30 天內)</div>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>合約</th>
+                        <th>床位</th>
+                        <th>租客</th>
+                        <th>到期日</th>
+                        <th style="text-align: right;">剩餘</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${s.expiringSoon.sort((a, b) => a.endDate.localeCompare(b.endDate)).map(c => {
+                        const daysLeft = Math.ceil((new Date(c.endDate) - new Date(today)) / 86400000);
+                        return `<tr>
+                            <td style="font-family: monospace; font-size: 0.8rem;">${c.id}</td>
+                            <td>${(c.propertyName || '').replace('聚空間 - ', '')}</td>
+                            <td>${c.tenant || '—'}</td>
+                            <td>${c.endDate}</td>
+                            <td style="text-align: right; color: ${daysLeft <= 7 ? 'var(--color-danger)' : 'var(--color-warning-text)'}; font-weight: 600;">${daysLeft} 天</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>` : ''}
 
-            <div class="io-card io-card-expense">
-                <div class="io-card-head">
-                    <div class="io-card-title"><i class="ph ph-arrow-up-right"></i> 支出</div>
-                    <div class="io-card-total">$${s.expenseTotal.toLocaleString()}</div>
-                </div>
-                ${expenseRows.length === 0 ? `
-                    <div class="io-empty">區間內無支出</div>
-                ` : expenseRows.map(([type, amt]) => {
-                    const w = (amt / maxExpenseAmt) * 100;
-                    const ratio = s.expenseTotal ? (amt / s.expenseTotal * 100).toFixed(0) : '0';
-                    return `
-                        <div class="io-row">
-                            <div class="io-row-label">${type}</div>
-                            <div class="io-row-bar"><div class="io-row-bar-fill is-expense" style="width: ${w}%;"></div></div>
-                            <div class="io-row-amount">
-                                <strong>$${amt.toLocaleString()}</strong>
-                                <span class="io-row-pct">${ratio}%</span>
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
+        <div class="report-chart-card">
+            <div class="report-chart-title">
+                <span><i class="ph ph-grid-four"></i> 床位狀態 (${beds.length} 床)</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">已租 ${s.rentedBeds} · 空床 ${s.vacantBeds}</span>
             </div>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>床位</th>
+                        <th>狀態</th>
+                        <th>租客</th>
+                        <th>到期日</th>
+                        <th style="text-align: right;">月租</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${bedRows.map(r => `
+                        <tr>
+                            <td style="font-weight: 600;">R${r.bed.roomNumber}-${r.bed.bedLetter}</td>
+                            <td>
+                                <span class="bed-status ${r.status === '已出租' ? 'is-rented' : 'is-vacant'}">${r.status}</span>
+                            </td>
+                            <td>${r.tenant}</td>
+                            <td>${r.endDate || '—'}${r.expiringSoon ? ' <i class="ph ph-warning" style="color: var(--color-warning-text); font-size: 0.85em;" title="30 天內到期"></i>' : ''}</td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(r.bed.rent || 0).toLocaleString()}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
         </div>
     `;
 }
 
-// ───────────────────── Tab 3: 交叉分析 (從 analysis.js 搬過來) ─────────────────────
+// ───────────────────── Tab 3: 財務分析 (獲利面) ─────────────────────
 function computeAggForInvoices(invoices) {
     const inAll = invoices.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
     const outAll = invoices.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
     const landlordRent = invoices.filter(i => i.direction === 'out' && i.type === '房東租金').reduce((s, i) => s + actualAmount(i), 0);
+    const otherExpense = outAll - landlordRent;
     const net = inAll - outAll;
     const grossMargin = inAll > 0 ? (inAll - landlordRent) / inAll : 0;
     const netMargin = inAll > 0 ? net / inAll : 0;
-    return { inAll, outAll, landlordRent, net, grossMargin, netMargin };
+    const landlordRatio = inAll > 0 ? landlordRent / inAll : 0;
+    return { inAll, outAll, landlordRent, otherExpense, net, grossMargin, netMargin, landlordRatio };
+}
+
+// 支出 Pareto — 排序 + 累積 %
+function computeExpensePareto(invoices) {
+    const expense = invoices.filter(i => i.direction === 'out');
+    const total = expense.reduce((s, i) => s + actualAmount(i), 0);
+    const byType = {};
+    expense.forEach(i => { byType[i.type || '其他'] = (byType[i.type || '其他'] || 0) + actualAmount(i); });
+    const sorted = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+    let cum = 0;
+    return sorted.map(([type, amount]) => {
+        cum += amount;
+        return {
+            type, amount,
+            pct: total > 0 ? amount / total : 0,
+            cumPct: total > 0 ? cum / total : 0
+        };
+    });
+}
+
+function renderParetoChart(items) {
+    if (items.length === 0) {
+        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無支出資料</div>`;
+    }
+    const maxAmt = items[0].amount;
+    return `
+        <div class="pareto-list">
+            ${items.map((it, idx) => {
+                const w = (it.amount / maxAmt) * 100;
+                const is8020 = it.cumPct <= 0.8;
+                return `
+                    <div class="pareto-row">
+                        <div class="pareto-rank">${idx + 1}</div>
+                        <div class="pareto-body">
+                            <div class="pareto-head">
+                                <span class="pareto-label">${it.type}</span>
+                                <span class="pareto-cum ${is8020 ? 'is-key' : ''}">累積 ${(it.cumPct * 100).toFixed(0)}%</span>
+                            </div>
+                            <div class="pareto-bar"><div class="pareto-bar-fill" style="width: ${w}%;"></div></div>
+                            <div class="pareto-vals">
+                                <span class="pareto-amount">$${it.amount.toLocaleString()}</span>
+                                <span class="pareto-pct">${(it.pct * 100).toFixed(1)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
 }
 
 function renderAnalysisTab() {
@@ -485,7 +608,35 @@ function renderAnalysisTab() {
     return `${subTabs}${renderAnalysisAllBuildings()}`;
 }
 
-// 單一館的交叉分析 (按帳單類型細部 + 月度趨勢)
+// 共用 4 個獲利面 KPI tile
+function renderFinancialKpiTiles(agg, extraOther) {
+    return `
+        <div class="stat-tile-grid">
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-chart-pie-slice"></i> 毛利率</div>
+                <div class="stat-tile-value">${agg.inAll > 0 ? pct(agg.grossMargin) : '—'}</div>
+                <div class="stat-tile-sub">收入 − 房東租金</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-trend-up"></i> 淨利率</div>
+                <div class="stat-tile-value" style="color: ${agg.netMargin >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${agg.inAll > 0 ? pct(agg.netMargin) : '—'}</div>
+                <div class="stat-tile-sub">淨利 $${agg.net.toLocaleString()}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-buildings"></i> 房東租金佔比</div>
+                <div class="stat-tile-value">${agg.inAll > 0 ? pct(agg.landlordRatio) : '—'}</div>
+                <div class="stat-tile-sub">$${agg.landlordRent.toLocaleString()}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-receipt"></i> 其他支出</div>
+                <div class="stat-tile-value">$${agg.otherExpense.toLocaleString()}</div>
+                <div class="stat-tile-sub">${extraOther || '水電 / 維修 / 管理'}</div>
+            </div>
+        </div>
+    `;
+}
+
+// 單一館的財務分析
 function renderSingleBuildingAnalysis(buildingId) {
     const range = reportState.viewRange;
     const buildings = getSortedBuildings({ activeOnly: true });
@@ -496,19 +647,7 @@ function renderSingleBuildingAnalysis(buildingId) {
     }
     const invoices = settledInRange(range).filter(i => i.buildingId === buildingId);
     const agg = computeAggForInvoices(invoices);
-
-    // 收入 / 支出按類型
-    const incomeByType = {};
-    const expenseByType = {};
-    invoices.forEach(i => {
-        const key = i.type || '其他';
-        if (i.direction === 'in') incomeByType[key] = (incomeByType[key] || 0) + actualAmount(i);
-        else expenseByType[key] = (expenseByType[key] || 0) + actualAmount(i);
-    });
-    const incomeRows = Object.entries(incomeByType).sort((a, b) => b[1] - a[1]);
-    const expenseRows = Object.entries(expenseByType).sort((a, b) => b[1] - a[1]);
-    const maxIn = Math.max(1, ...incomeRows.map(r => r[1]));
-    const maxOut = Math.max(1, ...expenseRows.map(r => r[1]));
+    const pareto = computeExpensePareto(invoices);
 
     // 月度趨勢 (6 個月)
     const end = new Date(range.end);
@@ -532,63 +671,24 @@ function renderSingleBuildingAnalysis(buildingId) {
         <div class="bldg-hero">
             <div class="bldg-hero-info">
                 <h2>${building.name}</h2>
-                <p>${building.baseAddress || ''}</p>
             </div>
             <button class="btn btn-outline" id="btn-export-analysis-pdf">
                 <i class="ph ph-file-pdf"></i> 匯出 PDF
             </button>
         </div>
 
-        <div class="stat-tile-grid">
-            ${renderStatTile({ label: '收入合計', value: agg.inAll, sub: `${incomeRows.length} 類`, accent: '#22946e', valueColor: 'var(--color-success)', iconClass: 'ph-arrow-down-right' })}
-            ${renderStatTile({ label: '支出合計', value: agg.outAll, sub: `${expenseRows.length} 類`, accent: '#b13535', valueColor: 'var(--color-danger)', iconClass: 'ph-arrow-up-right' })}
-            ${renderStatTile({ label: '淨收益', value: agg.net, sub: `淨利率 ${agg.inAll > 0 ? pct(agg.netMargin) : '—'}`, accent: '#3b82f6', valueColor: agg.net >= 0 ? 'var(--color-success)' : 'var(--color-danger)', iconClass: 'ph-trend-up' })}
-            <div class="stat-tile" style="--accent: #f59e0b;">
-                <div class="stat-tile-label"><i class="ph ph-chart-pie"></i> 毛利率</div>
-                <div class="stat-tile-value">${agg.inAll > 0 ? pct(agg.grossMargin) : '—'}</div>
-                <div class="stat-tile-sub">扣房東租金後</div>
-            </div>
-        </div>
+        ${renderFinancialKpiTiles(agg)}
 
-        <div class="io-compare-grid">
-            <div class="io-card io-card-income">
-                <div class="io-card-head">
-                    <div class="io-card-title"><i class="ph ph-arrow-down-right"></i> 收入分類</div>
-                    <div class="io-card-total">$${agg.inAll.toLocaleString()}</div>
-                </div>
-                ${incomeRows.length === 0 ? `<div class="io-empty">無收入</div>` : incomeRows.map(([type, amt]) => {
-                    const w = (amt / maxIn) * 100;
-                    const ratio = agg.inAll ? (amt / agg.inAll * 100).toFixed(0) : '0';
-                    return `
-                        <div class="io-row">
-                            <div class="io-row-label">${type}</div>
-                            <div class="io-row-bar"><div class="io-row-bar-fill is-income" style="width: ${w}%;"></div></div>
-                            <div class="io-row-amount"><strong>$${amt.toLocaleString()}</strong><span class="io-row-pct">${ratio}%</span></div>
-                        </div>
-                    `;
-                }).join('')}
+        <div class="report-chart-card">
+            <div class="report-chart-title">
+                <span><i class="ph ph-chart-bar-horizontal"></i> 支出結構 Pareto (前 80% 是哪幾類)</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">標亮 = 佔前 80%</span>
             </div>
-            <div class="io-card io-card-expense">
-                <div class="io-card-head">
-                    <div class="io-card-title"><i class="ph ph-arrow-up-right"></i> 支出分類</div>
-                    <div class="io-card-total">$${agg.outAll.toLocaleString()}</div>
-                </div>
-                ${expenseRows.length === 0 ? `<div class="io-empty">無支出</div>` : expenseRows.map(([type, amt]) => {
-                    const w = (amt / maxOut) * 100;
-                    const ratio = agg.outAll ? (amt / agg.outAll * 100).toFixed(0) : '0';
-                    return `
-                        <div class="io-row">
-                            <div class="io-row-label">${type}</div>
-                            <div class="io-row-bar"><div class="io-row-bar-fill is-expense" style="width: ${w}%;"></div></div>
-                            <div class="io-row-amount"><strong>$${amt.toLocaleString()}</strong><span class="io-row-pct">${ratio}%</span></div>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
+            ${renderParetoChart(pareto)}
         </div>
 
         <div class="report-chart-card">
-            <div class="report-chart-title"><i class="ph ph-chart-line"></i> ${building.name} 月度趨勢 (過去 6 個月)</div>
+            <div class="report-chart-title"><i class="ph ph-chart-line"></i> 月度趨勢 (過去 6 個月)</div>
             ${renderTrendChart(months)}
         </div>
     `;
@@ -598,160 +698,80 @@ function renderAnalysisAllBuildings() {
     const range = reportState.viewRange;
     const rangeInvoices = settledInRange(range);
     const summary = computeAggForInvoices(rangeInvoices);
+    const pareto = computeExpensePareto(rangeInvoices);
     const activeBuildings = getSortedBuildings({ activeOnly: true });
-    const grouping = reportState.viewGrouping;
 
-    let unitRows;
-    if (grouping === 'group') {
-        const groups = {};
-        activeBuildings.forEach(b => {
-            const g = b.group || b.name;
-            if (!groups[g]) groups[g] = { label: g, buildings: [], invoices: [] };
-            groups[g].buildings.push(b);
-        });
-        rangeInvoices.forEach(inv => {
-            const b = activeBuildings.find(x => x.id === inv.buildingId);
-            if (!b) return;
-            const g = b.group || b.name;
-            if (groups[g]) groups[g].invoices.push(inv);
-        });
-        unitRows = Object.values(groups).map(g => ({
-            label: g.label,
-            sub: g.buildings.map(b => b.name).join(' + '),
-            ...computeAggForInvoices(g.invoices)
-        }));
-    } else {
-        unitRows = activeBuildings.map(b => ({
-            label: b.name,
-            sub: b.group ? `群組：${b.group}` : '',
-            ...computeAggForInvoices(rangeInvoices.filter(inv => inv.buildingId === b.id))
-        }));
-    }
-    const maxIn = Math.max(1, ...unitRows.map(r => r.inAll));
-
-    const incomeTypes = [...new Set(rangeInvoices.filter(i => i.direction === 'in').map(i => i.type))];
-    const expenseTypes = [...new Set(rangeInvoices.filter(i => i.direction === 'out').map(i => i.type))];
-    const matrixCols = activeBuildings;
-
-    const cellSum = (direction, type, buildingId) =>
-        rangeInvoices.filter(i => i.direction === direction && i.type === type && i.buildingId === buildingId)
-            .reduce((s, i) => s + actualAmount(i), 0);
-    const rowTotal = (direction, type) =>
-        rangeInvoices.filter(i => i.direction === direction && i.type === type).reduce((s, i) => s + actualAmount(i), 0);
-    const colSum = (direction, buildingId) =>
-        rangeInvoices.filter(i => i.direction === direction && i.buildingId === buildingId).reduce((s, i) => s + actualAmount(i), 0);
-    const totalSum = (direction) =>
-        rangeInvoices.filter(i => i.direction === direction).reduce((s, i) => s + actualAmount(i), 0);
-
-    const renderMatrixRow = (direction, type, color) => {
-        const cells = matrixCols.map(b => {
-            const v = cellSum(direction, type, b.id);
-            return `<td class="m-cell ${v > 0 ? 'has-val' : ''}" style="color: ${v > 0 ? color : 'var(--text-muted)'};">${v > 0 ? '$' + v.toLocaleString() : '—'}</td>`;
-        }).join('');
-        const total = rowTotal(direction, type);
-        return `<tr><td class="m-type">${type}</td>${cells}<td class="m-total" style="color: ${color};">${total > 0 ? '$' + total.toLocaleString() : '—'}</td></tr>`;
-    };
-
-    const matrixHtml = rangeInvoices.length === 0
-        ? '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">區間內尚無已結帳目</div>'
-        : `
-        <div class="matrix-wrap">
-            <table class="matrix-table">
-                <thead>
-                    <tr>
-                        <th class="m-type">類型</th>
-                        ${matrixCols.map(b => `<th>${b.name}</th>`).join('')}
-                        <th class="m-total">合計</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${incomeTypes.length > 0 ? `
-                        <tr class="m-section-row is-income"><td colspan="${matrixCols.length + 2}"><i class="ph ph-arrow-down"></i> 收入</td></tr>
-                        ${incomeTypes.map(t => renderMatrixRow('in', t, 'var(--color-success)')).join('')}
-                        <tr class="m-subtotal is-income">
-                            <td class="m-type">收入合計</td>
-                            ${matrixCols.map(b => {
-                                const v = colSum('in', b.id);
-                                return `<td>${v > 0 ? '<strong style="color: var(--color-success);">$' + v.toLocaleString() + '</strong>' : '—'}</td>`;
-                            }).join('')}
-                            <td class="m-total"><strong style="color: var(--color-success);">$${totalSum('in').toLocaleString()}</strong></td>
-                        </tr>
-                    ` : ''}
-                    ${expenseTypes.length > 0 ? `
-                        <tr class="m-section-row is-expense"><td colspan="${matrixCols.length + 2}"><i class="ph ph-arrow-up"></i> 支出</td></tr>
-                        ${expenseTypes.map(t => renderMatrixRow('out', t, 'var(--color-danger)')).join('')}
-                        <tr class="m-subtotal is-expense">
-                            <td class="m-type">支出合計</td>
-                            ${matrixCols.map(b => {
-                                const v = colSum('out', b.id);
-                                return `<td>${v > 0 ? '<strong style="color: var(--color-danger);">$' + v.toLocaleString() + '</strong>' : '—'}</td>`;
-                            }).join('')}
-                            <td class="m-total"><strong style="color: var(--color-danger);">$${totalSum('out').toLocaleString()}</strong></td>
-                        </tr>
-                    ` : ''}
-                    <tr class="m-net-row">
-                        <td class="m-type"><strong>淨收益</strong></td>
-                        ${matrixCols.map(b => {
-                            const net = colSum('in', b.id) - colSum('out', b.id);
-                            return `<td><strong style="color: ${net >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${net < 0 ? '-' : ''}$${Math.abs(net).toLocaleString()}</strong></td>`;
-                        }).join('')}
-                        <td class="m-total"><strong style="color: ${summary.net >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${summary.net < 0 ? '-' : ''}$${Math.abs(summary.net).toLocaleString()}</strong></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>`;
+    // 各館 P&L 對比
+    const perBuilding = activeBuildings.map(b => {
+        const inv = rangeInvoices.filter(i => i.buildingId === b.id);
+        return { building: b, ...computeAggForInvoices(inv) };
+    });
 
     return `
-        <div class="card" style="margin-bottom: 1.25rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-                <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-buildings"></i> ${grouping === 'group' ? '各群組' : '各館'}收支</h2>
-                <div class="chart-mode-toggle" role="group">
-                    <button type="button" class="chart-mode-btn ${grouping === 'building' ? 'active' : ''}" data-grouping="building">按館別</button>
-                    <button type="button" class="chart-mode-btn ${grouping === 'group' ? 'active' : ''}" data-grouping="group">按群組</button>
-                </div>
+        ${renderFinancialKpiTiles(summary)}
+
+        <div class="report-chart-card">
+            <div class="report-chart-title">
+                <span><i class="ph ph-chart-bar-horizontal"></i> 支出結構 Pareto (前 80% 是哪幾類)</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">標亮 = 佔前 80%</span>
             </div>
-            <div class="building-finance-grid">
-                ${unitRows.length === 0
-                    ? '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">尚無資料</div>'
-                    : unitRows.map(r => {
-                        const widthPct = r.inAll > 0 ? Math.round(r.inAll / maxIn * 100) : 0;
-                        return `
-                        <div class="bf-row">
-                            <div class="bf-name">
-                                <strong>${r.label}</strong>
-                                <span class="bf-rate ${r.net >= 0 ? 'good' : 'low'}">${r.net >= 0 ? '獲利' : '虧損'} $${Math.abs(r.net).toLocaleString()}</span>
-                                ${r.sub ? `<span style="font-size: 0.7rem; color: var(--text-muted);">${r.sub}</span>` : ''}
-                            </div>
-                            <div class="bf-bar"><div class="bf-bar-fill" style="width: ${widthPct}%;"></div></div>
-                            <div class="bf-stats">
-                                <span><span class="bf-label">收入</span><strong style="color: var(--color-success);">$${r.inAll.toLocaleString()}</strong></span>
-                                <span><span class="bf-label">支出</span><strong style="color: var(--color-warning);">$${r.outAll.toLocaleString()}</strong></span>
-                                <span><span class="bf-label">毛利率</span><strong>${r.inAll > 0 ? pct(r.grossMargin) : '—'}</strong></span>
-                                <span><span class="bf-label">淨利率</span><strong style="color: ${r.netMargin >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${r.inAll > 0 ? pct(r.netMargin) : '—'}</strong></span>
-                            </div>
-                        </div>
-                        `;
-                    }).join('')}
+            ${renderParetoChart(pareto)}
+        </div>
+
+        <div class="report-chart-card">
+            <div class="report-chart-title"><i class="ph ph-table"></i> 各館 P&amp;L 對比</div>
+            <div style="overflow-x: auto;">
+                <table class="report-table report-pnl-table">
+                    <thead>
+                        <tr>
+                            <th>館別</th>
+                            <th style="text-align: right;">收入</th>
+                            <th style="text-align: right;">房東租金</th>
+                            <th style="text-align: right;">其他支出</th>
+                            <th style="text-align: right;">淨利</th>
+                            <th style="text-align: right;">毛利率</th>
+                            <th style="text-align: right;">淨利率</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${perBuilding.map(r => `
+                            <tr style="cursor: pointer;" data-building-sub="${r.building.id}">
+                                <td style="font-weight: 600;">${r.building.name}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums;">$${r.inAll.toLocaleString()}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">$${r.landlordRent.toLocaleString()}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">$${r.otherExpense.toLocaleString()}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: ${r.net >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">$${r.net.toLocaleString()}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums;">${r.inAll > 0 ? pct(r.grossMargin) : '—'}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: ${r.netMargin >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${r.inAll > 0 ? pct(r.netMargin) : '—'}</td>
+                            </tr>
+                        `).join('')}
+                        <tr class="pnl-total-row">
+                            <td><strong>合計</strong></td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700;">$${summary.inAll.toLocaleString()}</td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700;">$${summary.landlordRent.toLocaleString()}</td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700;">$${summary.otherExpense.toLocaleString()}</td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: ${summary.net >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">$${summary.net.toLocaleString()}</td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700;">${summary.inAll > 0 ? pct(summary.grossMargin) : '—'}</td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: ${summary.netMargin >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${summary.inAll > 0 ? pct(summary.netMargin) : '—'}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-                <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-chart-bar"></i> 分類交叉分析</h2>
-                <button class="btn btn-outline" id="btn-export-analysis-pdf" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">
-                    <i class="ph ph-file-pdf"></i> 匯出 PDF
-                </button>
-            </div>
-            ${matrixHtml}
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+            <button class="btn btn-outline" id="btn-export-analysis-pdf" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">
+                <i class="ph ph-file-pdf"></i> 匯出 PDF
+            </button>
         </div>
     `;
 }
 
 // ───────────────────── Hub: tab bar + entry ─────────────────────
 const TABS = [
-    { key: 'overview',  icon: 'ph-gauge',       label: '總覽' },
-    { key: 'buildings', icon: 'ph-buildings',   label: '各館報表' },
-    { key: 'analysis',  icon: 'ph-chart-bar',   label: '交叉分析' }
+    { key: 'overview',  icon: 'ph-gauge',         label: '總覽' },
+    { key: 'buildings', icon: 'ph-buildings',     label: '各館報表' },
+    { key: 'analysis',  icon: 'ph-chart-pie',     label: '財務分析' }
     // 對帳單已拿掉，等代管模式一起推出
 ];
 
