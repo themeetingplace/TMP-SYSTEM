@@ -31,16 +31,15 @@ function rangeDayCount(range = reportState.viewRange) {
 }
 
 // 月度趨勢圖要顯示幾個月 — 按區間動態：
-//   區間 < 6 個月 → 顯示 6 個月 (避免圖太稀疏)
-//   區間 6~12 個月 → 顯示區間實際月數
-//   區間 > 12 個月 → cap 在 12 個月 (避免圖太擠)
+//   區間 = 1 個月 → 顯示 6 個月 (避免單欄圖太空，給歷史對照)
+//   區間 2~12 個月 → 顯示「區間實際月數」(本季 = 3 / 本年 = 6 YTD / 上年 = 12...)
+//   區間 > 12 個月 → cap 在 12 個月
 function rangeMonthCount(range = reportState.viewRange) {
     const s = new Date(range.start);
     const e = new Date(range.end);
     const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
-    if (months <= 6) return 6;
-    if (months >= 12) return 12;
-    return months;
+    if (months <= 1) return 6;        // 單月區間 → 給 6 個月歷史對照
+    return Math.min(12, months);      // 多月區間 → 跟區間一致 (上限 12)
 }
 
 // ───────────────────── Tab 1: 總覽 (老闆視角: NOI / 收款率 / 出租率 / 到期) ─────────────────────
@@ -1090,9 +1089,7 @@ export function initReportsActions(scope) {
     const exportAnalysisBtn = scope.querySelector('#btn-export-analysis-pdf');
     if (exportAnalysisBtn) {
         exportAnalysisBtn.addEventListener('click', () => {
-            const range = reportState.viewRange;
-            const ym = range.end.slice(0, 7);
-            exportAnalysisReport(ym);
+            exportAnalysisReport(reportState.viewRange);
         });
     }
 
