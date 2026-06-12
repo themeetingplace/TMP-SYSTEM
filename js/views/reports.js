@@ -30,32 +30,44 @@ function rangeDayCount(range = reportState.viewRange) {
     return Math.max(1, Math.round((e - s) / 86400000) + 1);
 }
 
-// ───────────────────── Tab 1: 總覽 (現金流為主) ─────────────────────
+// ───────────────────── Tab 1: 總覽 (老闆視角: NOI / 收款率 / 出租率 / 到期) ─────────────────────
 function computeOverviewKPIs(range) {
-    // 區間內所有 income invoice (含未結算的，才能算「應收 vs 已收」)
     const allIncome = mockData.invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
     const settledOnly = settledInRange(range);
-    // 應收總額 = 所有 income invoice 的 (amount − discount)
     const receivableTotal = allIncome.reduce((s, i) => s + ((Number(i.amount) || 0) - (Number(i.discount) || 0)), 0);
-    // 已收 = 所有 income invoice 的 paidAmount 總和 (含部分繳款)
     const paidTotal = allIncome.reduce((s, i) => s + (Number(i.paidAmount) || 0), 0);
-    // 待收 = 應收 − 已收 (該收還沒收的)
     const outstanding = Math.max(0, receivableTotal - paidTotal);
-    // 收款率
     const collectionRate = receivableTotal > 0 ? paidTotal / receivableTotal : 0;
-    // 已付支出 (已結算)
     const expenseTotal = settledOnly.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
-    const net = paidTotal - expenseTotal;
+    // NOI = 已收 − 已付支出 (Net Operating Income)
+    const noi = paidTotal - expenseTotal;
+
+    // 整體出租率 (snapshot)
+    const allBeds = mockData.properties || [];
+    const rentedBeds = allBeds.filter(p => activeContractFor(p.name)).length;
+    const occRate = allBeds.length ? rentedBeds / allBeds.length : 0;
+
+    // 30 天內到期合約數
+    const today = new Date().toISOString().slice(0, 10);
+    const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const expiringCount = mockData.contracts.filter(c =>
+        c.renewalState === 'active' && c.endDate && c.endDate >= today && c.endDate <= in30
+    ).length;
+
     return {
-        receivableTotal,
-        paidTotal,
-        outstanding,
-        collectionRate,
-        expenseTotal,
-        net,
-        invoiceCount: allIncome.length,
+        receivableTotal, paidTotal, outstanding, collectionRate,
+        expenseTotal, noi,
+        occRate, totalBeds: allBeds.length, rentedBeds,
+        expiringCount,
         unpaidCount: allIncome.filter(i => (Number(i.paidAmount) || 0) < ((Number(i.amount) || 0) - (Number(i.discount) || 0))).length
     };
+}
+
+// 紅黃綠燈狀態
+function statusLight(rate, healthy, warn) {
+    if (rate >= healthy) return { color: 'var(--color-success)', light: '🟢', label: '健康' };
+    if (rate >= warn) return { color: 'var(--color-warning-text)', light: '🟡', label: '注意' };
+    return { color: 'var(--color-danger)', light: '🔴', label: '警示' };
 }
 
 // 各館 應收/已收/待收 (取代收入結構 donut — 更有意義)
@@ -232,31 +244,34 @@ function renderOverviewTab() {
     const k = computeOverviewKPIs(range);
     const byBuilding = computeReceivableByBuilding(range);
     const trend = computeMonthlyTrend(range);
-    const days = rangeDayCount(range);
-    const collectionPct = (k.collectionRate * 100).toFixed(1);
-    const collectionColor = k.collectionRate >= 0.95 ? 'var(--color-success)' : k.collectionRate >= 0.85 ? 'var(--color-warning-text)' : 'var(--color-danger)';
+    const collection = statusLight(k.collectionRate, 0.95, 0.85);
+    const occupancy = statusLight(k.occRate, 0.95, 0.80);
+    const expiringStatus = k.expiringCount === 0
+        ? { color: 'var(--color-success)', light: '🟢' }
+        : k.expiringCount <= 3 ? { color: 'var(--color-warning-text)', light: '🟡' }
+        : { color: 'var(--color-danger)', light: '🔴' };
 
     return `
         <div class="stat-tile-grid">
             <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-currency-circle-dollar"></i> 應收總額</div>
-                <div class="stat-tile-value">$${k.receivableTotal.toLocaleString()}</div>
-                <div class="stat-tile-sub">區間 ${days} 天 · ${k.invoiceCount} 筆</div>
-            </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-wallet"></i> 已收金額</div>
-                <div class="stat-tile-value">$${k.paidTotal.toLocaleString()}</div>
-                <div class="stat-tile-sub">${k.unpaidCount > 0 ? `<strong style="color: var(--color-danger);">${k.unpaidCount}</strong> 筆未繳清` : '全部繳清'}</div>
-            </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-percent"></i> 收款率</div>
-                <div class="stat-tile-value" style="color: ${collectionColor};">${collectionPct}%</div>
-                <div class="stat-tile-sub">待收 $${k.outstanding.toLocaleString()}</div>
-            </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-trend-up"></i> 淨利</div>
-                <div class="stat-tile-value">$${k.net.toLocaleString()}</div>
+                <div class="stat-tile-label"><i class="ph ph-trend-up"></i> NOI 淨營運收入</div>
+                <div class="stat-tile-value" style="color: ${k.noi >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">$${k.noi.toLocaleString()}</div>
                 <div class="stat-tile-sub">已收 $${k.paidTotal.toLocaleString()} − 已付 $${k.expenseTotal.toLocaleString()}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-percent"></i> 收款率 <span style="margin-left: auto; font-size: 0.85em;">${collection.light}</span></div>
+                <div class="stat-tile-value" style="color: ${collection.color};">${(k.collectionRate * 100).toFixed(1)}%</div>
+                <div class="stat-tile-sub">待收 $${k.outstanding.toLocaleString()} · 目標 ≥ 95%</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率 <span style="margin-left: auto; font-size: 0.85em;">${occupancy.light}</span></div>
+                <div class="stat-tile-value" style="color: ${occupancy.color};">${pct(k.occRate)}</div>
+                <div class="stat-tile-sub">${k.rentedBeds} / ${k.totalBeds} 床 · 目標 ≥ 95%</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-clock-countdown"></i> 30 天內到期 <span style="margin-left: auto; font-size: 0.85em;">${expiringStatus.light}</span></div>
+                <div class="stat-tile-value" style="color: ${expiringStatus.color};">${k.expiringCount}</div>
+                <div class="stat-tile-sub">${k.expiringCount > 0 ? `<a href="#contracts" style="color: var(--color-primary-text); text-decoration: none;">前往合約管理 →</a>` : '無需追蹤'}</div>
             </div>
         </div>
 
@@ -275,46 +290,109 @@ function renderOverviewTab() {
     `;
 }
 
-// ───────────────────── Tab 2: 各館報表 (營運面) ─────────────────────
-function statsForBuildingRange(building, range) {
-    const beds = mockData.properties.filter(p => p.buildingId === building.id);
+// ───────────────────── Tab 2: 營運分析 ─────────────────────
+// 計算營運面 KPI (出租率 / 平均空置天數 / 續租率 / 入住-退租)
+// building = null 表示全館合計
+function computeOperationalKPIs(building, range) {
+    const beds = building
+        ? mockData.properties.filter(p => p.buildingId === building.id)
+        : (mockData.properties || []);
     const totalBeds = beds.length;
     const rentedBeds = beds.filter(p => activeContractFor(p.name)).length;
     const vacantBeds = totalBeds - rentedBeds;
     const occRate = totalBeds ? rentedBeds / totalBeds : 0;
 
-    // 空房損失 = 空床數 × 平均床位月租 × 區間月數
-    const avgBedRent = beds.length ? beds.reduce((s, b) => s + (Number(b.rent) || 0), 0) / beds.length : 0;
-    const months = rangeDayCount(range) / 30;
-    const vacancyLoss = vacantBeds * avgBedRent * months;
+    // 平均空置天數 — 從 contracts 推算：對每個床位，找它最近的合約結束日，到下一個合約開始日的差
+    // 簡化作法：對所有「目前空的床位」, 算自上一個合約結束 (或 created date) 到今天的天數，取平均
+    const todayMs = Date.now();
+    const vacantDaysArr = [];
+    beds.forEach(p => {
+        const active = activeContractFor(p.name);
+        if (active) return; // 已出租跳過
+        // 找這個床位最近一次的合約 (有 terminatedDate 或 endDate < today)
+        const lastContract = mockData.contracts
+            .filter(c => c.propertyName === p.name)
+            .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''))[0];
+        if (lastContract && lastContract.endDate) {
+            const days = Math.floor((todayMs - new Date(lastContract.endDate).getTime()) / 86400000);
+            if (days > 0) vacantDaysArr.push(days);
+        }
+    });
+    const avgVacancyDays = vacantDaysArr.length
+        ? Math.round(vacantDaysArr.reduce((s, d) => s + d, 0) / vacantDaysArr.length)
+        : 0;
 
-    // 30 天內到期 (active 合約 且 endDate 在 today ~ today+30)
-    const today = new Date().toISOString().slice(0, 10);
+    // 續租率 — 過去區間內到期 (endDate 落在 range) 的合約中，renewalState='renewed' 的比例
+    const expiredInRange = mockData.contracts.filter(c => {
+        if (!c.endDate) return false;
+        if (building && !beds.some(b => b.name === c.propertyName)) return false;
+        return c.endDate >= range.start && c.endDate <= range.end;
+    });
+    const renewedCount = expiredInRange.filter(c => c.renewalState === 'renewed').length;
+    const renewalRate = expiredInRange.length > 0 ? renewedCount / expiredInRange.length : null;
+
+    // 本期入住 / 退租 (區間內 startDate / terminatedDate)
+    const moveInCount = mockData.contracts.filter(c => {
+        if (!c.startDate) return false;
+        if (building && !beds.some(b => b.name === c.propertyName)) return false;
+        return c.startDate >= range.start && c.startDate <= range.end;
+    }).length;
+    const moveOutCount = mockData.contracts.filter(c => {
+        if (c.renewalState !== 'terminated') return false;
+        if (!c.terminatedDate) return false;
+        if (building && !beds.some(b => b.name === c.propertyName)) return false;
+        return c.terminatedDate >= range.start && c.terminatedDate <= range.end;
+    }).length;
+
+    // 30 天內到期合約數
+    const todayIso = new Date().toISOString().slice(0, 10);
     const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-    const expiringSoon = mockData.contracts.filter(c => {
+    const expiringSoonCount = mockData.contracts.filter(c => {
         if (c.renewalState !== 'active') return false;
         if (!c.endDate) return false;
-        if (!beds.some(b => b.name === c.propertyName)) return false;
-        return c.endDate >= today && c.endDate <= in30;
-    });
-
-    const inRangeInvoices = settledInRange(range).filter(i => i.buildingId === building.id);
-    const incomeInvoices = inRangeInvoices.filter(i => i.direction === 'in');
-    const expenseInvoices = inRangeInvoices.filter(i => i.direction === 'out');
-    const actualIncome = incomeInvoices.reduce((s, i) => s + actualAmount(i), 0);
-    const byType = {};
-    expenseInvoices.forEach(inv => {
-        byType[inv.type] = (byType[inv.type] || 0) + actualAmount(inv);
-    });
-    const expenseTotal = expenseInvoices.reduce((s, i) => s + actualAmount(i), 0);
-    const net = actualIncome - expenseTotal;
-    const grossMargin = actualIncome > 0 ? net / actualIncome : 0;
+        if (building && !beds.some(b => b.name === c.propertyName)) return false;
+        return c.endDate >= todayIso && c.endDate <= in30;
+    }).length;
 
     return {
-        building, totalBeds, rentedBeds, vacantBeds, occRate,
-        avgBedRent, vacancyLoss, expiringSoon,
-        actualIncome, byType, expenseTotal, net, grossMargin
+        totalBeds, rentedBeds, vacantBeds, occRate,
+        avgVacancyDays,
+        renewalRate, renewedCount, expiredInRangeCount: expiredInRange.length,
+        moveInCount, moveOutCount,
+        expiringSoonCount
     };
+}
+
+// 月度入住 vs 退租 — 過去 N 個月每月計數
+function computeMoveInOutTrend(building, endDate, monthCount = 6) {
+    const beds = building
+        ? mockData.properties.filter(p => p.buildingId === building.id)
+        : (mockData.properties || []);
+    const end = new Date(endDate);
+    const months = [];
+    for (let i = monthCount - 1; i >= 0; i--) {
+        const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const monthKey = `${yyyy}-${mm}`;
+        const monthStart = `${monthKey}-01`;
+        const lastDay = new Date(yyyy, d.getMonth() + 1, 0).getDate();
+        const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
+
+        const moveIn = mockData.contracts.filter(c => {
+            if (!c.startDate) return false;
+            if (building && !beds.some(b => b.name === c.propertyName)) return false;
+            return c.startDate >= monthStart && c.startDate <= monthEnd;
+        }).length;
+        const moveOut = mockData.contracts.filter(c => {
+            if (c.renewalState !== 'terminated') return false;
+            if (!c.terminatedDate) return false;
+            if (building && !beds.some(b => b.name === c.propertyName)) return false;
+            return c.terminatedDate >= monthStart && c.terminatedDate <= monthEnd;
+        }).length;
+        months.push({ label: `${d.getMonth() + 1}月`, moveIn, moveOut, net: moveIn - moveOut });
+    }
+    return months;
 }
 
 // 各館子標籤列 — Tab 2 / Tab 3 共用
@@ -347,207 +425,254 @@ function renderStatTile(opts) {
     `;
 }
 
+// 4 個營運 KPI tiles 共用渲染
+function renderOperationalKpiTiles(k) {
+    const occ = statusLight(k.occRate, 0.95, 0.80);
+    const renewalRateColor = k.renewalRate == null
+        ? 'var(--text-main)'
+        : k.renewalRate >= 0.75 ? 'var(--color-success)'
+        : k.renewalRate >= 0.5 ? 'var(--color-warning-text)'
+        : 'var(--color-danger)';
+    const vacColor = k.avgVacancyDays === 0 ? 'var(--text-main)'
+        : k.avgVacancyDays <= 30 ? 'var(--color-success)'
+        : k.avgVacancyDays <= 60 ? 'var(--color-warning-text)'
+        : 'var(--color-danger)';
+    return `
+        <div class="stat-tile-grid">
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率 <span style="margin-left: auto; font-size: 0.85em;">${occ.light}</span></div>
+                <div class="stat-tile-value" style="color: ${occ.color};">${pct(k.occRate)}</div>
+                <div class="stat-tile-sub">${k.rentedBeds} / ${k.totalBeds} 床 · 目標 ≥ 95%</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-bed"></i> 平均空置天數</div>
+                <div class="stat-tile-value" style="color: ${vacColor};">${k.avgVacancyDays}<small style="font-size: 0.55em; font-weight: 500; margin-left: 0.2rem;">天</small></div>
+                <div class="stat-tile-sub">${k.vacantBeds} 床空著 (招租能力指標)</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-arrows-counter-clockwise"></i> 續租率</div>
+                <div class="stat-tile-value" style="color: ${renewalRateColor};">${k.renewalRate == null ? '—' : pct(k.renewalRate)}</div>
+                <div class="stat-tile-sub">${k.expiredInRangeCount > 0 ? `${k.renewedCount} 續 / ${k.expiredInRangeCount} 到期` : '區間內無到期合約'} · 目標 75-85%</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-user-switch"></i> 本期入住 / 退租</div>
+                <div class="stat-tile-value"><span style="color: var(--color-success);">+${k.moveInCount}</span> <span style="color: var(--text-muted); font-weight: 500;">/</span> <span style="color: var(--color-danger);">-${k.moveOutCount}</span></div>
+                <div class="stat-tile-sub">淨變動 ${k.moveInCount - k.moveOutCount >= 0 ? '+' : ''}${k.moveInCount - k.moveOutCount} 位</div>
+            </div>
+        </div>
+    `;
+}
+
 function renderBuildingsTab() {
     const range = reportState.viewRange;
     const buildings = getSortedBuildings({ activeOnly: true });
     const active = reportState.activeBuilding || 'all';
     const subTabs = renderBuildingSubTabs();
 
-    // 全館合計 view (營運面)
     if (active === 'all') {
-        const allStats = buildings.map(b => statsForBuildingRange(b, range));
-        const totals = {
-            totalBeds: allStats.reduce((s, x) => s + x.totalBeds, 0),
-            rentedBeds: allStats.reduce((s, x) => s + x.rentedBeds, 0),
-            vacantBeds: allStats.reduce((s, x) => s + x.vacantBeds, 0),
-            vacancyLoss: allStats.reduce((s, x) => s + x.vacancyLoss, 0),
-            expiringCount: allStats.reduce((s, x) => s + x.expiringSoon.length, 0)
-        };
-        const totalOccRate = totals.totalBeds ? totals.rentedBeds / totals.totalBeds : 0;
-        const occColor = totalOccRate >= 0.8 ? 'var(--color-success)' : totalOccRate >= 0.5 ? 'var(--color-warning-text)' : 'var(--color-danger)';
+        const totals = computeOperationalKPIs(null, range);
+        const perBuilding = buildings.map(b => ({ building: b, ...computeOperationalKPIs(b, range) }));
+        const moveTrend = computeMoveInOutTrend(null, range.end, 6);
+        const maxMoveVal = Math.max(1, ...moveTrend.flatMap(m => [m.moveIn, m.moveOut]));
+        const maxVacancyDays = Math.max(1, ...perBuilding.map(p => p.avgVacancyDays));
 
         return `
             ${subTabs}
-            <div class="stat-tile-grid">
-                <div class="stat-tile">
-                    <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率</div>
-                    <div class="stat-tile-value" style="color: ${occColor};">${pct(totalOccRate)}</div>
-                    <div class="stat-tile-sub">${totals.rentedBeds} / ${totals.totalBeds} 床位</div>
+            ${renderOperationalKpiTiles(totals)}
+
+            ${totals.expiringSoonCount > 0 ? `
+                <div class="connector-card">
+                    <div class="connector-card-icon"><i class="ph ph-clock-countdown"></i></div>
+                    <div class="connector-card-body">
+                        <strong>${totals.expiringSoonCount} 份合約 30 天內到期</strong>
+                        <small>需追蹤續約意願</small>
+                    </div>
+                    <a class="connector-card-link" href="#contracts">前往合約管理 <i class="ph ph-arrow-right"></i></a>
                 </div>
-                <div class="stat-tile">
-                    <div class="stat-tile-label"><i class="ph ph-bed"></i> 空床數</div>
-                    <div class="stat-tile-value">${totals.vacantBeds}</div>
-                    <div class="stat-tile-sub">床位待出租</div>
+            ` : ''}
+
+            <div class="report-chart-grid">
+                <div class="report-chart-card">
+                    <div class="report-chart-title">
+                        <span><i class="ph ph-ranking"></i> 各館出租率</span>
+                        <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">虛線 = 目標 95%</span>
+                    </div>
+                    <div>${perBuilding.sort((a, b) => b.occRate - a.occRate).map(p => renderOccBarRow(p)).join('')}</div>
                 </div>
-                <div class="stat-tile">
-                    <div class="stat-tile-label"><i class="ph ph-warning"></i> 空房損失</div>
-                    <div class="stat-tile-value" style="color: var(--color-danger);">$${Math.round(totals.vacancyLoss).toLocaleString()}</div>
-                    <div class="stat-tile-sub">區間機會成本</div>
-                </div>
-                <div class="stat-tile">
-                    <div class="stat-tile-label"><i class="ph ph-clock-countdown"></i> 30 天內到期</div>
-                    <div class="stat-tile-value" style="color: ${totals.expiringCount > 0 ? 'var(--color-warning-text)' : 'var(--text-main)'};">${totals.expiringCount}</div>
-                    <div class="stat-tile-sub">需追蹤續約</div>
+
+                <div class="report-chart-card">
+                    <div class="report-chart-title">
+                        <span><i class="ph ph-bed"></i> 各館平均空置天數</span>
+                        <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">越少越好</span>
+                    </div>
+                    <div>${perBuilding.sort((a, b) => a.avgVacancyDays - b.avgVacancyDays).map(p => {
+                        const w = (p.avgVacancyDays / maxVacancyDays) * 100;
+                        const c = p.avgVacancyDays === 0 ? 'var(--color-success)' : p.avgVacancyDays <= 30 ? 'var(--color-success)' : p.avgVacancyDays <= 60 ? 'var(--color-warning-text)' : 'var(--color-danger)';
+                        return `
+                            <div class="bar-chart-row" style="cursor: pointer;" data-building-sub="${p.building.id}">
+                                <span class="bar-chart-label">${p.building.name}</span>
+                                <div class="bar-chart-bar-wrap"><div class="bar-chart-bar" style="width: ${w}%; background: ${c};"></div></div>
+                                <span class="bar-chart-value"><strong>${p.avgVacancyDays}</strong><small style="color: var(--text-muted); margin-left: 0.2rem;">天</small></span>
+                            </div>
+                        `;
+                    }).join('')}</div>
                 </div>
             </div>
 
             <div class="report-chart-card">
-                <div class="report-chart-title">
-                    <span><i class="ph ph-ranking"></i> 各館出租率</span>
-                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">點擊館別查看詳細</span>
-                </div>
-                <div>
-                    ${allStats.sort((a, b) => b.occRate - a.occRate).map(s => {
-                        const w = s.occRate * 100;
-                        const c = s.occRate >= 0.8 ? 'var(--color-success)' : s.occRate >= 0.5 ? 'var(--color-warning-text)' : 'var(--color-danger)';
-                        return `
-                            <div class="bar-chart-row" style="cursor: pointer;" data-building-sub="${s.building.id}">
-                                <span class="bar-chart-label">${s.building.name}</span>
-                                <div class="bar-chart-bar-wrap"><div class="bar-chart-bar" style="width: ${w}%; background: ${c};"></div></div>
-                                <span class="bar-chart-value">
-                                    <strong>${pct(s.occRate)}</strong>
-                                    <small style="color: var(--text-muted); font-weight: 500; margin-left: 0.3rem;">${s.rentedBeds}/${s.totalBeds}</small>
-                                </span>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
+                <div class="report-chart-title"><i class="ph ph-user-switch"></i> 月度入住 vs 退租 (過去 6 個月)</div>
+                ${renderMoveInOutChart(moveTrend, maxMoveVal)}
             </div>
         `;
     }
 
-    // 單館 view (營運面)
+    // 單館 view
     const building = buildings.find(b => b.id === active);
     if (!building) {
         reportState.activeBuilding = 'all';
         return renderBuildingsTab();
     }
-    const s = statsForBuildingRange(building, range);
-    return `${subTabs}${renderSingleBuildingDashboard(s)}`;
-}
+    const k = computeOperationalKPIs(building, range);
+    const moveTrend = computeMoveInOutTrend(building, range.end, 6);
+    const maxMoveVal = Math.max(1, ...moveTrend.flatMap(m => [m.moveIn, m.moveOut]));
 
-// 單一館的營運儀表板 (Tab 2)
-function renderSingleBuildingDashboard(s) {
-    const occColor = s.occRate >= 0.8 ? 'var(--color-success)' : s.occRate >= 0.5 ? 'var(--color-warning-text)' : 'var(--color-danger)';
-    // 床位狀態列表
-    const beds = mockData.properties.filter(p => p.buildingId === s.building.id)
-        .sort((a, b) => (a.roomNumber || 0) - (b.roomNumber || 0) || String(a.bedLetter || '').localeCompare(String(b.bedLetter || '')));
-    const today = new Date().toISOString().slice(0, 10);
-    const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-    const bedRows = beds.map(b => {
-        const c = activeContractFor(b.name);
-        const status = c ? '已出租' : '空床';
-        const tenant = c ? c.tenant : '—';
-        const endDate = c ? c.endDate : '';
-        const expiringSoon = c && c.endDate >= today && c.endDate <= in30;
-        return { bed: b, status, tenant, endDate, expiringSoon };
-    });
-
-    return `
+    return `${subTabs}
         <div class="bldg-hero">
             <div class="bldg-hero-info">
-                <h2>${s.building.name}</h2>
+                <h2>${building.name}</h2>
             </div>
-            <button class="btn btn-outline" data-action="export-pdf" data-building-id="${s.building.id}">
+            <button class="btn btn-outline" data-action="export-pdf" data-building-id="${building.id}">
                 <i class="ph ph-file-pdf"></i> 匯出 PDF
             </button>
         </div>
 
-        <div class="stat-tile-grid">
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率</div>
-                <div class="stat-tile-value" style="color: ${occColor};">${pct(s.occRate)}</div>
-                <div class="stat-tile-sub">${s.rentedBeds} / ${s.totalBeds} 床位</div>
+        ${renderOperationalKpiTiles(k)}
+
+        ${k.expiringSoonCount > 0 ? `
+            <div class="connector-card">
+                <div class="connector-card-icon"><i class="ph ph-clock-countdown"></i></div>
+                <div class="connector-card-body">
+                    <strong>${k.expiringSoonCount} 份合約 30 天內到期</strong>
+                    <small>${building.name} 需追蹤續約</small>
+                </div>
+                <a class="connector-card-link" href="#contracts">前往合約管理 <i class="ph ph-arrow-right"></i></a>
             </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-bed"></i> 空床數</div>
-                <div class="stat-tile-value">${s.vacantBeds}</div>
-                <div class="stat-tile-sub">床位待出租</div>
+        ` : ''}
+
+        <div class="connector-card">
+            <div class="connector-card-icon"><i class="ph ph-grid-four"></i></div>
+            <div class="connector-card-body">
+                <strong>查看 ${building.name} 床位狀態</strong>
+                <small>各床位租客 / 到期日 / 月租明細</small>
             </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-warning"></i> 空房損失</div>
-                <div class="stat-tile-value" style="color: var(--color-danger);">$${Math.round(s.vacancyLoss).toLocaleString()}</div>
-                <div class="stat-tile-sub">區間機會成本</div>
-            </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-clock-countdown"></i> 30 天內到期</div>
-                <div class="stat-tile-value" style="color: ${s.expiringSoon.length > 0 ? 'var(--color-warning-text)' : 'var(--text-main)'};">${s.expiringSoon.length}</div>
-                <div class="stat-tile-sub">需追蹤續約</div>
-            </div>
+            <a class="connector-card-link" href="#occupancy">前往住房一覽 <i class="ph ph-arrow-right"></i></a>
         </div>
 
-        ${s.expiringSoon.length > 0 ? `
         <div class="report-chart-card">
-            <div class="report-chart-title"><i class="ph ph-clock-countdown"></i> 即將到期 (30 天內)</div>
-            <table class="report-table">
-                <thead>
-                    <tr>
-                        <th>合約</th>
-                        <th>床位</th>
-                        <th>租客</th>
-                        <th>到期日</th>
-                        <th style="text-align: right;">剩餘</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${s.expiringSoon.sort((a, b) => a.endDate.localeCompare(b.endDate)).map(c => {
-                        const daysLeft = Math.ceil((new Date(c.endDate) - new Date(today)) / 86400000);
-                        return `<tr>
-                            <td style="font-family: monospace; font-size: 0.8rem;">${c.id}</td>
-                            <td>${(c.propertyName || '').replace('聚空間 - ', '')}</td>
-                            <td>${c.tenant || '—'}</td>
-                            <td>${c.endDate}</td>
-                            <td style="text-align: right; color: ${daysLeft <= 7 ? 'var(--color-danger)' : 'var(--color-warning-text)'}; font-weight: 600;">${daysLeft} 天</td>
-                        </tr>`;
-                    }).join('')}
-                </tbody>
-            </table>
-        </div>` : ''}
+            <div class="report-chart-title"><i class="ph ph-user-switch"></i> ${building.name} 月度入住 vs 退租 (過去 6 個月)</div>
+            ${renderMoveInOutChart(moveTrend, maxMoveVal)}
+        </div>
+    `;
+}
 
-        <div class="report-chart-card">
-            <div class="report-chart-title">
-                <span><i class="ph ph-grid-four"></i> 床位狀態 (${beds.length} 床)</span>
-                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">已租 ${s.rentedBeds} · 空床 ${s.vacantBeds}</span>
+// 出租率橫條 (含 95% 目標虛線)
+function renderOccBarRow(p) {
+    const w = p.occRate * 100;
+    const c = p.occRate >= 0.95 ? 'var(--color-success)'
+        : p.occRate >= 0.80 ? 'var(--color-warning-text)'
+        : 'var(--color-danger)';
+    return `
+        <div class="bar-chart-row" style="cursor: pointer;" data-building-sub="${p.building.id}">
+            <span class="bar-chart-label">${p.building.name}</span>
+            <div class="bar-chart-bar-wrap" style="position: relative;">
+                <div class="bar-chart-bar" style="width: ${w}%; background: ${c};"></div>
+                <div class="bar-target-line" style="left: 95%;" title="目標 95%"></div>
             </div>
-            <table class="report-table">
-                <thead>
-                    <tr>
-                        <th>床位</th>
-                        <th>狀態</th>
-                        <th>租客</th>
-                        <th>到期日</th>
-                        <th style="text-align: right;">月租</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${bedRows.map(r => `
-                        <tr>
-                            <td style="font-weight: 600;">R${r.bed.roomNumber}-${r.bed.bedLetter}</td>
-                            <td>
-                                <span class="bed-status ${r.status === '已出租' ? 'is-rented' : 'is-vacant'}">${r.status}</span>
-                            </td>
-                            <td>${r.tenant}</td>
-                            <td>${r.endDate || '—'}${r.expiringSoon ? ' <i class="ph ph-warning" style="color: var(--color-warning-text); font-size: 0.85em;" title="30 天內到期"></i>' : ''}</td>
-                            <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(r.bed.rent || 0).toLocaleString()}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+            <span class="bar-chart-value">
+                <strong>${pct(p.occRate)}</strong>
+                <small style="color: var(--text-muted); font-weight: 500; margin-left: 0.3rem;">${p.rentedBeds}/${p.totalBeds}</small>
+            </span>
+        </div>
+    `;
+}
+
+// 入住 vs 退租 雙線圖
+function renderMoveInOutChart(months, maxVal) {
+    if (months.length === 0) return '';
+    const w = 640, h = 220;
+    const padL = 36, padR = 16, padT = 18, padB = 36;
+    const innerW = w - padL - padR;
+    const innerH = h - padT - padB;
+    const stepX = innerW / (months.length - 1 || 1);
+    const niceMax = niceCeil(maxVal);
+    const yFor = v => padT + innerH - (v / niceMax) * innerH;
+    const xFor = i => padL + i * stepX;
+
+    const gridLines = [];
+    for (let i = 0; i <= 4; i++) {
+        const v = (niceMax * i) / 4;
+        const y = yFor(v);
+        gridLines.push(`<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="${i === 0 ? '#cbd5e1' : '#e5e7eb'}" stroke-width="1" ${i > 0 && i < 4 ? 'stroke-dasharray="3,3"' : ''}/>`);
+        gridLines.push(`<text x="${padL - 8}" y="${y + 4}" font-size="10" text-anchor="end" fill="#6b7280" font-family="Inter, system-ui, sans-serif">${Math.round(v)}</text>`);
+    }
+    const line = (key, color) => {
+        const points = months.map((m, i) => `${xFor(i)},${yFor(m[key])}`).join(' ');
+        const dots = months.map((m, i) => `<circle cx="${xFor(i)}" cy="${yFor(m[key])}" r="3.5" fill="white" stroke="${color}" stroke-width="2"/>`).join('');
+        const labels = months.map((m, i) => m[key] === 0 ? '' : `<text x="${xFor(i)}" y="${yFor(m[key]) - 8}" font-size="10" text-anchor="middle" fill="${color}" font-weight="700">${m[key]}</text>`).join('');
+        return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/>${dots}${labels}`;
+    };
+    const xLabels = months.map((m, i) => `<text x="${xFor(i)}" y="${h - 12}" font-size="11" text-anchor="middle" fill="#6b7280">${m.label}</text>`).join('');
+
+    return `
+        <div class="trend-chart-wrap">
+            <div class="trend-chart-legend">
+                <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #22946e;"></span>入住</span>
+                <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #b13535;"></span>退租</span>
+            </div>
+            <svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
+                ${gridLines.join('')}
+                ${line('moveIn', '#22946e')}
+                ${line('moveOut', '#b13535')}
+                ${xLabels}
+            </svg>
         </div>
     `;
 }
 
 // ───────────────────── Tab 3: 財務分析 (獲利面) ─────────────────────
+// 偵測「房東租金」用的 type 名字 (有些用戶可能改名了，自動掃)
+const LANDLORD_RENT_KEYWORDS = ['房東租金', '房東', '給房東', '房租支出', '房東房租'];
+function detectLandlordRentType(invoices) {
+    // 先精準匹配
+    for (const kw of LANDLORD_RENT_KEYWORDS) {
+        if (invoices.some(i => i.direction === 'out' && i.type === kw)) return kw;
+    }
+    // 再模糊匹配 (type 字串包含「房東」)
+    const hit = invoices.find(i => i.direction === 'out' && typeof i.type === 'string' && i.type.includes('房東'));
+    return hit ? hit.type : null;
+}
+
 function computeAggForInvoices(invoices) {
     const inAll = invoices.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
     const outAll = invoices.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
-    const landlordRent = invoices.filter(i => i.direction === 'out' && i.type === '房東租金').reduce((s, i) => s + actualAmount(i), 0);
+    const landlordType = detectLandlordRentType(invoices);
+    const landlordRent = landlordType
+        ? invoices.filter(i => i.direction === 'out' && i.type === landlordType).reduce((s, i) => s + actualAmount(i), 0)
+        : 0;
     const otherExpense = outAll - landlordRent;
     const net = inAll - outAll;
     const grossMargin = inAll > 0 ? (inAll - landlordRent) / inAll : 0;
     const netMargin = inAll > 0 ? net / inAll : 0;
     const landlordRatio = inAll > 0 ? landlordRent / inAll : 0;
-    return { inAll, outAll, landlordRent, otherExpense, net, grossMargin, netMargin, landlordRatio };
+    const opexRatio = inAll > 0 ? outAll / inAll : 0;
+    // 列出所有支出 type 給警告框用
+    const allExpenseTypes = [...new Set(invoices.filter(i => i.direction === 'out').map(i => i.type))].filter(Boolean);
+    return {
+        inAll, outAll, landlordRent, landlordType, otherExpense, net,
+        grossMargin, netMargin, landlordRatio, opexRatio,
+        noi: net,
+        allExpenseTypes
+    };
 }
 
 // 支出 Pareto — 排序 + 累積 %
@@ -572,24 +697,38 @@ function renderParetoChart(items) {
     if (items.length === 0) {
         return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無支出資料</div>`;
     }
-    const maxAmt = items[0].amount;
+    const total = items.reduce((s, it) => s + it.amount, 0);
+    // 找到第一個 cumPct > 0.8 的 index → 它是「最後一個還在 80% 內」的下一個
+    const firstOver80 = items.findIndex(it => it.cumPct > 0.8);
+    const lastIn80 = firstOver80 < 0 ? items.length - 1 : firstOver80 - 1;
+    const key80Count = lastIn80 + 1;
+    const key80Pct = items[lastIn80]?.cumPct ?? 0;
     return `
+        <div class="pareto-summary">
+            <div class="pareto-summary-icon"><i class="ph ph-target"></i></div>
+            <div>
+                <strong>${key80Count}</strong> 類佔了支出的 <strong>${(key80Pct * 100).toFixed(0)}%</strong>
+                <small>(80/20 法則 — 集中處理這幾類效益最大)</small>
+            </div>
+        </div>
         <div class="pareto-list">
             ${items.map((it, idx) => {
-                const w = (it.amount / maxAmt) * 100;
-                const is8020 = it.cumPct <= 0.8;
+                const w = (it.amount / total) * 100;
+                const is8020 = it.cumPct <= 0.8 || idx === lastIn80;
                 return `
-                    <div class="pareto-row">
-                        <div class="pareto-rank">${idx + 1}</div>
-                        <div class="pareto-body">
-                            <div class="pareto-head">
-                                <span class="pareto-label">${it.type}</span>
-                                <span class="pareto-cum ${is8020 ? 'is-key' : ''}">累積 ${(it.cumPct * 100).toFixed(0)}%</span>
+                    <div class="pareto-card ${is8020 ? 'is-key' : ''}">
+                        <div class="pareto-card-rank">${idx + 1}</div>
+                        <div class="pareto-card-body">
+                            <div class="pareto-card-row">
+                                <span class="pareto-card-label">${it.type}</span>
+                                <span class="pareto-card-amount">$${it.amount.toLocaleString()}</span>
                             </div>
-                            <div class="pareto-bar"><div class="pareto-bar-fill" style="width: ${w}%;"></div></div>
-                            <div class="pareto-vals">
-                                <span class="pareto-amount">$${it.amount.toLocaleString()}</span>
-                                <span class="pareto-pct">${(it.pct * 100).toFixed(1)}%</span>
+                            <div class="pareto-card-bar-wrap">
+                                <div class="pareto-card-bar" style="width: ${w}%;"></div>
+                            </div>
+                            <div class="pareto-card-meta">
+                                <span class="pareto-card-pct">佔 ${(it.pct * 100).toFixed(1)}%</span>
+                                <span class="pareto-card-cum">累積 ${(it.cumPct * 100).toFixed(0)}%</span>
                             </div>
                         </div>
                     </div>
@@ -608,29 +747,59 @@ function renderAnalysisTab() {
     return `${subTabs}${renderAnalysisAllBuildings()}`;
 }
 
-// 共用 4 個獲利面 KPI tile
-function renderFinancialKpiTiles(agg, extraOther) {
+// 共用 4 個財務面 KPI tile
+function renderFinancialKpiTiles(agg) {
+    const grossMarginColor = agg.grossMargin >= 0.30 ? 'var(--color-success)'
+        : agg.grossMargin >= 0.15 ? 'var(--color-warning-text)'
+        : agg.grossMargin > 0 ? 'var(--color-danger)' : 'var(--text-main)';
+    const opexColor = agg.opexRatio <= 0.80 ? 'var(--color-success)'
+        : agg.opexRatio <= 0.95 ? 'var(--color-warning-text)'
+        : 'var(--color-danger)';
+    const landlordRatioColor = agg.landlordRatio >= 0.60 && agg.landlordRatio <= 0.80 ? 'var(--text-main)'
+        : agg.landlordRatio > 0 ? 'var(--color-warning-text)' : 'var(--text-main)';
     return `
         <div class="stat-tile-grid">
             <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-chart-pie-slice"></i> 毛利率</div>
-                <div class="stat-tile-value">${agg.inAll > 0 ? pct(agg.grossMargin) : '—'}</div>
-                <div class="stat-tile-sub">收入 − 房東租金</div>
+                <div class="stat-tile-label"><i class="ph ph-trend-up"></i> NOI 淨營運收入</div>
+                <div class="stat-tile-value" style="color: ${agg.noi >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">$${agg.noi.toLocaleString()}</div>
+                <div class="stat-tile-sub">收 $${agg.inAll.toLocaleString()} − 付 $${agg.outAll.toLocaleString()}</div>
             </div>
             <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-trend-up"></i> 淨利率</div>
-                <div class="stat-tile-value" style="color: ${agg.netMargin >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${agg.inAll > 0 ? pct(agg.netMargin) : '—'}</div>
-                <div class="stat-tile-sub">淨利 $${agg.net.toLocaleString()}</div>
+                <div class="stat-tile-label"><i class="ph ph-chart-pie-slice"></i> 毛利率</div>
+                <div class="stat-tile-value" style="color: ${grossMarginColor};">${agg.inAll > 0 ? pct(agg.grossMargin) : '—'}</div>
+                <div class="stat-tile-sub">(收 − 房東租金) ÷ 收 · 業界 20-40%</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-receipt"></i> OpEx 營業費用率</div>
+                <div class="stat-tile-value" style="color: ${opexColor};">${agg.inAll > 0 ? pct(agg.opexRatio) : '—'}</div>
+                <div class="stat-tile-sub">已付 ÷ 已收 · 目標 ≤ 80%</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-buildings"></i> 房東租金佔比</div>
-                <div class="stat-tile-value">${agg.inAll > 0 ? pct(agg.landlordRatio) : '—'}</div>
-                <div class="stat-tile-sub">$${agg.landlordRent.toLocaleString()}</div>
+                <div class="stat-tile-value" style="color: ${landlordRatioColor};">${agg.inAll > 0 ? pct(agg.landlordRatio) : '—'}</div>
+                <div class="stat-tile-sub">$${agg.landlordRent.toLocaleString()} · 業界 60-80%</div>
             </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-receipt"></i> 其他支出</div>
-                <div class="stat-tile-value">$${agg.otherExpense.toLocaleString()}</div>
-                <div class="stat-tile-sub">${extraOther || '水電 / 維修 / 管理'}</div>
+        </div>
+    `;
+}
+
+// 房東租金 0% 但有支出 → 警告框
+function renderLandlordWarning(agg) {
+    if (agg.outAll === 0) return '';
+    if (agg.landlordRent > 0) return '';
+    // 有支出但沒抓到房東租金 → 顯示警告 + 列出可選 type
+    const types = agg.allExpenseTypes;
+    if (types.length === 0) return '';
+    return `
+        <div class="report-warning-card">
+            <div class="report-warning-icon"><i class="ph ph-warning-circle"></i></div>
+            <div class="report-warning-body">
+                <strong>未偵測到「房東租金」支出</strong>
+                <small>區間內有 $${agg.outAll.toLocaleString()} 已付支出，但都沒被歸類為房東租金，所以毛利率算成 100%。請檢查支出 type 是否命名正確 (應為「房東租金」)，或從以下類型中找出對應的：</small>
+                <div class="report-warning-types">
+                    ${types.map(t => `<span class="report-warning-type">${t}</span>`).join('')}
+                </div>
+                <small style="margin-top: 0.4rem;">→ 到「<a href="#settings" style="color: var(--color-primary-text);">系統設定 → 帳單類型</a>」確認設定，或直接編輯該帳目把 type 改成「房東租金」</small>
             </div>
         </div>
     `;
@@ -678,6 +847,7 @@ function renderSingleBuildingAnalysis(buildingId) {
         </div>
 
         ${renderFinancialKpiTiles(agg)}
+        ${renderLandlordWarning(agg)}
 
         <div class="report-chart-card">
             <div class="report-chart-title">
@@ -709,6 +879,7 @@ function renderAnalysisAllBuildings() {
 
     return `
         ${renderFinancialKpiTiles(summary)}
+        ${renderLandlordWarning(summary)}
 
         <div class="report-chart-card">
             <div class="report-chart-title">
