@@ -132,6 +132,15 @@ export function renderContracts() {
     const activeCount = enriched.filter(c => c._state === 'active' || c._state === 'snoozed' || c._state === 'expiring_soon' || c._state === 'awaiting_decision' || c._state === 'expired').length;
     const archivedCount = enriched.filter(c => c._state === 'renewed' || c._state === 'terminated').length;
 
+    // 續租意願計數 (LINE 自動詢問結果)
+    const renewCounts = {
+        asking:  enriched.filter(c => c.renewIntent === 'asking').length,
+        renew:   enriched.filter(c => c.renewIntent === 'renew').length,
+        decline: enriched.filter(c => c.renewIntent === 'decline').length,
+        inquiry: enriched.filter(c => c.renewIntent === 'inquiry').length
+    };
+    const anyRenewIntent = renewCounts.asking + renewCounts.renew + renewCounts.decline + renewCounts.inquiry;
+
     // 從 propertyName 抽館別 (e.g. "聚空間 - 松山館 R1-A" → "松山館")
     function extractArea(propName) {
         if (!propName) return '';
@@ -153,7 +162,9 @@ export function renderContracts() {
 
     const tableRows = enriched.map(c => {
         const lifecycle = c._state;
-        const isDecision = lifecycle === 'awaiting_decision' || lifecycle === 'expired';
+        // 租客已透過 LINE 表達意願 → 也算「該決策」(就算還沒進 awaiting_decision)，讓小編能立刻動作
+        const hasIntent = ['renew', 'decline', 'inquiry'].includes(c.renewIntent);
+        const isDecision = lifecycle === 'awaiting_decision' || lifecycle === 'expired' || hasIntent;
         const isArchived = lifecycle === 'renewed' || lifecycle === 'terminated';
 
         const searchText = [c.id, c.propertyName, c.tenant].join(' ').toLowerCase();
@@ -201,7 +212,7 @@ export function renderContracts() {
 
         const areaName = extractArea(c.propertyName);
         return `
-            <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
+            <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong style="font-size: 0.875rem;">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: 0.7rem; color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}</strong>
@@ -271,7 +282,30 @@ export function renderContracts() {
                 `).join('')}
             </div>
 
+            ${renewCounts.renew > 0 ? `
+                <div class="renew-intent-banner" data-jump-filter="renew" data-jump-value="renew">
+                    <div class="renew-intent-banner-icon"><i class="ph ph-confetti"></i></div>
+                    <div class="renew-intent-banner-body">
+                        <strong>🎉 ${renewCounts.renew} 位租客已表達續租意願</strong>
+                        <small>點此只看這些合約，準備建立續租</small>
+                    </div>
+                    <i class="ph ph-arrow-right" style="font-size: 1.1rem; color: var(--color-success);"></i>
+                </div>
+            ` : ''}
+
+            ${anyRenewIntent > 0 ? `
+                <div class="filter-tabs mb-2" style="flex-wrap: wrap;">
+                    <span class="filter-tab-label">續租意願</span>
+                    <button class="filter-tab active" data-filter-value="all" data-filter-group="renew">全部 (${enriched.length})</button>
+                    ${renewCounts.asking > 0 ? `<button class="filter-tab" data-filter-value="asking" data-filter-group="renew">⏳ 待回覆 (${renewCounts.asking})</button>` : ''}
+                    ${renewCounts.renew > 0 ? `<button class="filter-tab" data-filter-value="renew" data-filter-group="renew">✅ 要續租 (${renewCounts.renew})</button>` : ''}
+                    ${renewCounts.decline > 0 ? `<button class="filter-tab" data-filter-value="decline" data-filter-group="renew">❌ 不續租 (${renewCounts.decline})</button>` : ''}
+                    ${renewCounts.inquiry > 0 ? `<button class="filter-tab" data-filter-value="inquiry" data-filter-group="renew">❓ 有問題 (${renewCounts.inquiry})</button>` : ''}
+                </div>
+            ` : ''}
+
             <div class="filter-tabs mb-4">
+                <span class="filter-tab-label">狀態</span>
                 <button class="filter-tab active" data-filter-value="all">全部 (${enriched.length})</button>
                 <button class="filter-tab" data-filter-value="awaiting_decision">待決策 (${enriched.filter(c => c._state === 'awaiting_decision').length})</button>
                 <button class="filter-tab" data-filter-value="expired">已過期 (${enriched.filter(c => c._state === 'expired').length})</button>
@@ -844,6 +878,12 @@ function confirmSnooze(id) {
 export function initContractActions(scope) {
     // 新增合約 → 走統一的「新增入住」流程 (建合約+帳單+床位+租客+checkin 一氣呵成)
     scope.querySelector('#btn-new-contract')?.addEventListener('click', () => showCheckinAssignmentForm());
+
+    // 「N 位租客已表達續租意願」banner → 自動套上「✅ 要續租」filter
+    scope.querySelector('.renew-intent-banner')?.addEventListener('click', () => {
+        const chip = scope.querySelector('[data-filter-value="renew"][data-filter-group="renew"]');
+        if (chip) chip.click();
+    });
 
     // 詢問續租 — 觸發 Edge Function renewal-poll (15 天前發)
     scope.querySelector('#btn-ask-renewal')?.addEventListener('click', async () => {
