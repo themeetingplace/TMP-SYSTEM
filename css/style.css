@@ -2569,6 +2569,29 @@ select:focus-visible,
     box-shadow: var(--shadow-sm);
 }
 
+/* 篩選列前面的「館別 / 狀態」標籤 */
+.filter-tab-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.5rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+/* 該館 0 筆 → 淡化 chip */
+.filter-tab.is-empty {
+    opacity: 0.45;
+    cursor: default;
+}
+.filter-tab.is-empty:hover {
+    background: transparent;
+    color: var(--text-muted);
+}
+
 /* === filter-bar：tabs 左、進階篩選 chip 右 === */
 .filter-bar {
     display: flex;

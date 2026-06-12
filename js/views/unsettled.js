@@ -36,6 +36,14 @@ export function renderUnsettled() {
     }, 0);
     const awaitVerifyCount = unsettled.filter(i => i.bankLast5 && !i.bankVerified).length;
 
+    // 各館未結筆數
+    const allBuildings = getSortedBuildings({ activeOnly: true });
+    const buildingCounts = {};
+    unsettled.forEach(inv => {
+        const name = buildingName(inv.buildingId);
+        buildingCounts[name] = (buildingCounts[name] || 0) + 1;
+    });
+
     const tableRows = unsettled.map(inv => {
         const overdue = isOverdue(inv);
         const dirBadge = inv.direction === 'in'
@@ -68,7 +76,7 @@ export function renderUnsettled() {
             : '<span style="font-size: 0.75rem; color: var(--text-muted);">—</span>';
 
         return `
-            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-search="${searchText}" class="${overdue ? 'is-overdue-row' : ''} ${inv.bankLast5 && !inv.bankVerified ? 'is-await-verify-row' : ''}">
+            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="${overdue ? 'is-overdue-row' : ''} ${inv.bankLast5 && !inv.bankVerified ? 'is-await-verify-row' : ''}">
                 <td><input type="checkbox" class="row-check" data-id="${inv.id}"></td>
                 <td>${dirBadge}</td>
                 <td>
@@ -163,7 +171,16 @@ export function renderUnsettled() {
                 </div>
             </div>
 
-            <div class="filter-tabs mb-4">
+            <div class="filter-tabs mb-2" style="flex-wrap: wrap;">
+                <span class="filter-tab-label">館別</span>
+                <button class="filter-tab active" data-filter-value="all" data-filter-group="building">全部館 (${unsettled.length})</button>
+                ${allBuildings.map(b => {
+                    const cnt = buildingCounts[b.name] || 0;
+                    return `<button class="filter-tab ${cnt === 0 ? 'is-empty' : ''}" data-filter-value="${b.name}" data-filter-group="building">${b.name} (${cnt})</button>`;
+                }).join('')}
+            </div>
+            <div class="filter-tabs mb-4" style="flex-wrap: wrap;">
+                <span class="filter-tab-label">狀態</span>
                 <button class="filter-tab active" data-filter-value="all" data-filter-group="status">全部 (${unsettled.length})</button>
                 <button class="filter-tab" data-filter-value="待核對" data-filter-group="status">⚠ 待核對 (${awaitVerifyCount})</button>
                 <button class="filter-tab" data-filter-value="逾期" data-filter-group="status">逾期 (${overdueCount})</button>
