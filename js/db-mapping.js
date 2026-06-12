@@ -59,7 +59,12 @@ export const toDb = {
         signed_file_url: c.signedFileUrl ?? null,
         terminated_date: c.terminatedDate ?? null,
         decision_taken_at: c.decisionTakenAt ?? null,
-        decision_note: c.decisionNote ?? null
+        decision_note: c.decisionNote ?? null,
+        // 續租意願 (LINE 自動詢問)
+        renew_intent: c.renewIntent ?? null,
+        renew_asked_at: c.renewAskedAt ?? null,
+        renew_response_at: c.renewResponseAt ?? null,
+        renew_note: c.renewNote ?? null
     }),
     invoice: i => ({
         id: i.id,
@@ -183,7 +188,11 @@ export const fromDb = {
         signedFileUrl: r.signed_file_url,
         terminatedDate: r.terminated_date,
         decisionTakenAt: r.decision_taken_at,
-        decisionNote: r.decision_note
+        decisionNote: r.decision_note,
+        renewIntent: r.renew_intent,
+        renewAskedAt: r.renew_asked_at,
+        renewResponseAt: r.renew_response_at,
+        renewNote: r.renew_note
     }),
     invoice: r => ({
         id: r.id,

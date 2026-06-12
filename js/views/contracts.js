@@ -9,7 +9,7 @@ import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, 
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { fillContractPdf, downloadPdfBytes, formatRentalPeriod } from '../utils/pdfGen.js';
 import { showCheckinAssignmentForm } from './properties.js';
-import { pushToTenant, uploadPdfToStorage, resolveSignedPdfUrl } from '../utils/line.js';
+import { pushToTenant, uploadPdfToStorage, resolveSignedPdfUrl, triggerRenewalPoll } from '../utils/line.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
@@ -82,6 +82,21 @@ function sortArrow(thisCol, current) {
 function lifecycleBadge(state) {
     const { text, cls } = contractLifecycleLabel(state);
     return `<span class="status-badge ${cls}">${text}</span>`;
+}
+
+// 續租意願 badge (LINE 自動詢問結果)
+function renewIntentBadge(contract) {
+    const intent = contract.renewIntent;
+    if (!intent) return '';
+    const map = {
+        asking:  { text: '⏳ 已問', cls: 'warning',  title: contract.renewAskedAt ? `已詢問於 ${contract.renewAskedAt.slice(0, 10)}` : '已詢問，等待回覆' },
+        renew:   { text: '✅ 要續', cls: 'success',  title: '租客已表達續租意願' },
+        decline: { text: '❌ 不續', cls: 'danger',   title: '租客已表達不續租' },
+        inquiry: { text: '❓ 有問題', cls: 'info',   title: '租客有問題，需聯絡' }
+    };
+    const m = map[intent];
+    if (!m) return '';
+    return ` <span class="status-badge ${m.cls}" style="font-size: 0.68rem; margin-left: 0.2rem;" title="${m.title}">${m.text}</span>`;
 }
 
 function daysLabel(days) {
@@ -206,7 +221,7 @@ export function renderContracts() {
                         ${lifecycle === 'snoozed' && c.snoozeUntil ? `<span style="font-size: 0.7rem; color: var(--color-info);">⏸ ${c.snoozeUntil} 再提醒</span>` : ''}
                     </div>
                 </td>
-                <td>${lifecycleBadge(lifecycle)}</td>
+                <td>${lifecycleBadge(lifecycle)}${renewIntentBadge(c)}</td>
                 <td>
                     <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
                         ${decisionButtons}
@@ -233,6 +248,9 @@ export function renderContracts() {
                         <i class="ph ph-magnifying-glass"></i>
                         <input type="text" placeholder="搜尋合約編號或租客..." style="font-size: 0.875rem;">
                     </div>
+                    <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 30 天內到期的合約，自動發 LINE 問租客要不要續租">
+                        <i class="ph ph-chat-circle-dots"></i> 詢問續租
+                    </button>
                     <button class="btn btn-primary" id="btn-new-contract" data-fab="ph-file-plus">
                         <i class="ph ph-plus"></i> 建立合約
                     </button>
@@ -826,6 +844,47 @@ function confirmSnooze(id) {
 export function initContractActions(scope) {
     // 新增合約 → 走統一的「新增入住」流程 (建合約+帳單+床位+租客+checkin 一氣呵成)
     scope.querySelector('#btn-new-contract')?.addEventListener('click', () => showCheckinAssignmentForm());
+
+    // 詢問續租 — 觸發 Edge Function renewal-poll
+    scope.querySelector('#btn-ask-renewal')?.addEventListener('click', async () => {
+        const expiringSoon = mockData.contracts.filter(c => {
+            if (c.renewalState !== 'active') return false;
+            if (!c.endDate) return false;
+            const today = new Date().toISOString().slice(0, 10);
+            const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+            return c.endDate >= today && c.endDate <= in30;
+        });
+        if (expiringSoon.length === 0) {
+            showToast('30 天內沒有要到期的合約，不用發', 'info', 3000);
+            return;
+        }
+        openConfirm({
+            title: '詢問續租意願',
+            message: `將自動掃描 <strong>30 天內到期</strong>的合約，發 LINE 問租客是否續租。<br><br>` +
+                     `目前符合條件的合約有 <strong>${expiringSoon.length}</strong> 筆。<br>` +
+                     `<small style="color: var(--text-muted);">注意：7 天內已問過的會自動跳過。租客未綁 LINE 的也會跳過。</small>`,
+            confirmLabel: `🚀 開始發送`,
+            onConfirm: async () => {
+                showToast('掃描中…', 'info', 2000);
+                try {
+                    const result = await triggerRenewalPoll({ daysAhead: 30 });
+                    const lines = [
+                        `✅ 發送完成`,
+                        `· 已發 ${result.sent || 0} 筆`,
+                        `· 未綁 LINE 跳過 ${result.skipped_no_line || 0} 筆`,
+                        `· 近期問過跳過 ${result.skipped_already_asked || 0} 筆`,
+                        ...((result.failed || 0) > 0 ? [`· ⚠ 失敗 ${result.failed} 筆 (見 console)`] : [])
+                    ];
+                    showToast(lines.join('  '), result.failed > 0 ? 'warning' : 'success', 6000);
+                    console.log('[renewal-poll] 結果:', result);
+                    setTimeout(() => refreshView(), 1500); // 等 realtime 同步回來
+                } catch (e) {
+                    showToast(`發送失敗：${e.message}`, 'danger', 6000);
+                    console.error('[renewal-poll]', e);
+                }
+            }
+        });
+    });
 
     // 點表頭排序 — 同欄切換 asc/desc，再點一次切回預設 (lifecycle)；切其他欄重置 asc
     scope.querySelectorAll('.sortable-col').forEach(th => {

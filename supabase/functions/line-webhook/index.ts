@@ -218,6 +218,77 @@ async function handleUnfollow(event: any) {
     });
 }
 
+// 處理 Quick Reply postback (續租詢問 回應)
+async function handlePostback(event: any) {
+    const userId = event.source.userId;
+    if (event.mode === 'standby') return;
+    if (isRateLimited(userId)) return;
+
+    const dataStr = String(event.postback?.data || '');
+    const params = new URLSearchParams(dataStr);
+    const action = params.get('action');
+    const contractId = params.get('contract');
+
+    // log raw postback
+    await supabase.from('line_messages').insert({
+        line_user_id: userId,
+        direction: 'in',
+        message_type: 'postback',
+        content: dataStr,
+        raw: event,
+        webhook_event_id: event.webhookEventId
+    });
+
+    if (!action || !contractId) return;
+
+    // 續租意願 mapping
+    const intentMap: Record<string, string> = {
+        renew: 'renew',
+        decline: 'decline',
+        inquiry: 'inquiry'
+    };
+    const intent = intentMap[action];
+    if (!intent) return;
+
+    // 確認該合約存在且 contract.tenant 對得上 LINE 綁定的租客 (防呆: 別人代答)
+    const { data: tenant } = await supabase
+        .from('tenants').select('name').eq('line_user_id', userId).maybeSingle();
+    if (!tenant) {
+        await lineReply(event.replyToken, [
+            { type: 'text', text: '請先到聚空間 BMS 完成登記綁定，才能使用續租回覆喔～' }
+        ]);
+        return;
+    }
+
+    const { data: contract } = await supabase
+        .from('contracts').select('id, tenant, end_date, property_name, renew_intent')
+        .eq('id', contractId).maybeSingle();
+    if (!contract || contract.tenant !== tenant.name) {
+        await lineReply(event.replyToken, [
+            { type: 'text', text: '⚠ 找不到您的合約資料，請聯絡小編。' }
+        ]);
+        return;
+    }
+
+    // 更新合約 renew_intent
+    await supabase.from('contracts').update({
+        renew_intent: intent,
+        renew_response_at: new Date().toISOString()
+    }).eq('id', contractId);
+
+    // 回覆對應訊息
+    const propertyShort = String(contract.property_name || '').replace('聚空間 - ', '');
+    let replyText = '';
+    if (intent === 'renew') {
+        replyText = `🎉 太好了！小編收到您的續租意願，會在合約到期前主動聯繫您處理續約。\n\n📍 ${propertyShort}\n📅 原合約到期：${contract.end_date}`;
+    } else if (intent === 'decline') {
+        replyText = `好的，小編已記下您不續租的意願。\n會在合約到期前再跟您確認退租手續 ☺️\n\n📍 ${propertyShort}\n📅 合約到期：${contract.end_date}`;
+    } else {
+        replyText = `好的～小編會盡快與您聯絡，了解您的問題 🙏\n\n📍 ${propertyShort}\n📅 合約到期：${contract.end_date}`;
+    }
+    await lineReply(event.replyToken, [{ type: 'text', text: replyText }]);
+}
+
 // 從 LINE 抓檔案二進位 (image / file / video)
 // 限制：MAX_FILE_BYTES 以內，超過直接拒，避免 LINE 用戶傳超大檔耗光 Storage 配額
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -702,6 +773,7 @@ serve(async (req) => {
             if (event.type === 'follow')   await handleFollow(event);
             if (event.type === 'unfollow') await handleUnfollow(event);
             if (event.type === 'message')  await handleMessage(event);
+            if (event.type === 'postback') await handlePostback(event);
         } catch (e) {
             console.error('[webhook] Event handler error:', e);
             handlerError = e;

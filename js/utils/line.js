@@ -19,6 +19,17 @@ export async function pushToTenant(tenantId, opts = {}) {
     return data;
 }
 
+// 觸發續租詢問掃描 — 後端找 N 天內到期的 active 合約，發 LINE Quick Reply 給租客
+// opts.daysAhead: 預設 30；opts.force: 即使 7 天內問過也再問一次 (測試用)
+export async function triggerRenewalPoll(opts = {}) {
+    const { data, error } = await supabase.functions.invoke('renewal-poll', {
+        body: { daysAhead: opts.daysAhead || 30, force: !!opts.force }
+    });
+    if (error) throw new Error(error.message);
+    if (data && data.ok === false) throw new Error(data.error || '續租詢問失敗');
+    return data; // { ok, sent, skipped_no_line, skipped_already_asked, failed, contracts: [...] }
+}
+
 // 上傳 PDF bytes 到 Supabase Storage (bucket = private)
 // 回傳 { path: 存到 DB 用的 storage key, url: 24 小時有效的簽名連結，給 LINE 用 }
 // Storage key 不能含中文 → 用 ASCII 隨機檔名；原中文檔名只用在 LINE 訊息顯示
