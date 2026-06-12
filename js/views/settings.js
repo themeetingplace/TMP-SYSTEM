@@ -748,7 +748,8 @@ function renderContractTemplatesTab() {
     const rows = buildings.map(b => {
         const tpl = templates.find(t => t.buildingId === b.id);
         const uploaded = tpl ? new Date(tpl.uploadedAt).toLocaleString('zh-TW', { hour12: false }) : null;
-        // 防呆: pdfBase64 可能是 null (雲端同步沒回傳) — 顯示 0 KB，不要炸
+        // 防呆: pdfBase64 可能是 null (雲端同步沒回傳) — 顯示 0 KB + 損壞 badge
+        const isBroken = tpl && (!tpl.pdfBase64 || tpl.pdfBase64.length < 200);
         const sizeKB = tpl?.pdfBase64 ? Math.round(tpl.pdfBase64.length * 0.75 / 1024) : 0;
 
         return `
@@ -760,8 +761,8 @@ function renderContractTemplatesTab() {
                 <td>
                     ${tpl
                         ? `<div style="display: flex; flex-direction: column;">
-                                <span style="font-weight: 500; font-size: 0.875rem;"><i class="ph ph-file-pdf" style="color: var(--color-danger);"></i> ${tpl.fileName}</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted);">${sizeKB} KB · ${uploaded}</span>
+                                <span style="font-weight: 500; font-size: 0.875rem;"><i class="ph ph-file-pdf" style="color: ${isBroken ? 'var(--color-danger)' : 'var(--color-success)'};"></i> ${tpl.fileName}${isBroken ? ' <span style="background: rgba(177,53,53,0.12); color: var(--color-danger); padding: 0.1rem 0.45rem; border-radius: 99px; font-size: 0.68rem; font-weight: 600; margin-left: 0.3rem;">⚠ 內容遺失</span>' : ''}</span>
+                                <span style="font-size: 0.75rem; color: ${isBroken ? 'var(--color-danger)' : 'var(--text-muted)'};">${sizeKB} KB · ${uploaded}${isBroken ? ' · 請先刪除後重新上傳' : ''}</span>
                            </div>`
                         : '<span style="color: var(--text-muted); font-size: 0.875rem;">尚未上傳樣板</span>'
                     }
@@ -921,17 +922,41 @@ async function handleTemplateUpload(file, buildingId) {
         showToast('請選擇 PDF 檔案', 'danger');
         return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-        showToast('檔案超過 5 MB，建議壓縮後再上傳', 'warning');
+    // 防呆: 空檔
+    if (file.size === 0) {
+        showToast('PDF 檔案是空的 (0 bytes)，請換一份', 'danger', 5000);
+        return;
     }
-    showToast('上傳中...', 'info', 1500);
+    // 防呆: 太大 (Supabase row 限制邊緣案例 > 4 MB 容易掛)
+    if (file.size > 4 * 1024 * 1024) {
+        showToast(`檔案 ${Math.round(file.size / 1024 / 1024 * 10) / 10} MB 偏大，建議壓縮到 < 4 MB 再上傳避免雲端寫入失敗`, 'warning', 6000);
+    }
+    showToast('上傳中...', 'info', 2500);
     try {
         const base64 = await fileToBase64(file);
+        // 防呆: base64 轉碼失敗 / 內容過短
+        if (!base64 || base64.length < 200) {
+            throw new Error('檔案轉碼為空或過短，可能是損壞的 PDF');
+        }
         store.setContractTemplate(buildingId, file.name, base64);
-        showToast(`✅ 已上傳 ${file.name}`, 'success');
+        // 驗證: 寫入後本機 mockData 內容是否真的有 base64 (還沒到雲端，先確認本機)
+        const verified = store.getContractTemplate(buildingId);
+        if (!verified?.pdfBase64 || verified.pdfBase64.length < 200) {
+            throw new Error('本機儲存後驗證失敗');
+        }
+        const kb = Math.round(file.size / 1024);
+        showToast(`✅ 已上傳 ${file.name} (${kb} KB) · 同步雲端中...`, 'success', 4000);
         refreshView();
+        // 5 秒後再次驗證 (雲端往返時間夠了)，若 mockData 被 pull 覆蓋成 null → 警告
+        setTimeout(() => {
+            const final = store.getContractTemplate(buildingId);
+            if (!final?.pdfBase64 || final.pdfBase64.length < 200) {
+                showToast(`⚠ ${file.name} 雲端同步後內容遺失，請壓縮 PDF 後重新上傳 (檔案過大或網路問題)`, 'danger', 8000);
+                refreshView();
+            }
+        }, 5000);
     } catch (e) {
-        showToast(`上傳失敗：${e.message}`, 'danger', 5000);
+        showToast(`上傳失敗：${e.message}`, 'danger', 6000);
     }
 }
 
