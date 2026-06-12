@@ -845,8 +845,8 @@ function renderSingleBuildingAnalysis(buildingId) {
             <div class="bldg-hero-info">
                 <h2>${building.name}</h2>
             </div>
-            <button class="btn btn-outline" id="btn-export-analysis-pdf">
-                <i class="ph ph-file-pdf"></i> 匯出 PDF
+            <button class="btn btn-outline" data-action="export-analysis-pdf" data-building-id="${building.id}" title="只匯出 ${building.name} 的財務報表">
+                <i class="ph ph-file-pdf"></i> 匯出 ${building.name} PDF
             </button>
         </div>
 
@@ -938,8 +938,8 @@ function renderAnalysisAllBuildings() {
         </div>
 
         <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
-            <button class="btn btn-outline" id="btn-export-analysis-pdf" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">
-                <i class="ph ph-file-pdf"></i> 匯出 PDF
+            <button class="btn btn-outline" data-action="export-analysis-pdf" title="匯出全館合計財務報表">
+                <i class="ph ph-file-pdf"></i> 匯出全館合計 PDF
             </button>
         </div>
     `;
@@ -1086,12 +1086,14 @@ export function initReportsActions(scope) {
             exportLandlordReport(btn.dataset.buildingId, ym);
         });
     });
-    const exportAnalysisBtn = scope.querySelector('#btn-export-analysis-pdf');
-    if (exportAnalysisBtn) {
-        exportAnalysisBtn.addEventListener('click', () => {
-            exportAnalysisReport(reportState.viewRange);
+    // 財務分析 PDF 匯出 (Tab 3 單館 / 全館 共用 [data-action="export-analysis-pdf"])
+    // 有 data-building-id 就只匯出該館，沒有就匯出全館合計
+    scope.querySelectorAll('[data-action="export-analysis-pdf"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const buildingId = btn.dataset.buildingId || null;
+            exportAnalysisReport(reportState.viewRange, buildingId);
         });
-    }
+    });
 
     // 交叉分析的 grouping 切換
     scope.querySelectorAll('[data-grouping]').forEach(btn => {

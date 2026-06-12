@@ -54,18 +54,24 @@ function computeExpensePareto(invoices) {
     });
 }
 
-function buildAnalysisReportHtml(range) {
+function buildAnalysisReportHtml(range, buildingId = null) {
     const today = new Date().toISOString().slice(0, 10);
     const periodLabel = `${fmtDate(range.start)} ~ ${fmtDate(range.end)}`;
-    const rangeInvoices = settledInRange(range);
-    const summary = computeAgg(rangeInvoices);
-    const pareto = computeExpensePareto(rangeInvoices);
+    const allInRange = settledInRange(range);
     const activeBuildings = getSortedBuildings({ activeOnly: true });
 
-    // 各館 P&L
+    // 單館模式 → 只算這館的 invoice
+    const targetBuilding = buildingId ? activeBuildings.find(b => b.id === buildingId) : null;
+    const rangeInvoices = buildingId ? allInRange.filter(i => i.buildingId === buildingId) : allInRange;
+    const summary = computeAgg(rangeInvoices);
+    const pareto = computeExpensePareto(rangeInvoices);
+
+    const reportTitle = targetBuilding ? `${targetBuilding.name} 財務分析報表` : '財務分析報表 · 全館合計';
+
+    // 各館 P&L (僅全館模式顯示)
     const perBuilding = activeBuildings.map(b => ({
         building: b,
-        ...computeAgg(rangeInvoices.filter(inv => inv.buildingId === b.id))
+        ...computeAgg(allInRange.filter(inv => inv.buildingId === b.id))
     }));
 
     const buildingTableRows = perBuilding.map(r => `
@@ -95,10 +101,10 @@ function buildAnalysisReportHtml(range) {
             </tr>
         `).join('');
 
-    // 分類交叉表
+    // 分類交叉表 — 單館模式時 matrixCols 只有那一館 (其實就退化成單欄表)
     const incomeTypes = [...new Set(rangeInvoices.filter(i => i.direction === 'in').map(i => i.type))];
     const expenseTypes = [...new Set(rangeInvoices.filter(i => i.direction === 'out').map(i => i.type))];
-    const matrixCols = activeBuildings;
+    const matrixCols = targetBuilding ? [targetBuilding] : activeBuildings;
     const cellSum = (direction, type, buildingId) =>
         rangeInvoices.filter(i => i.direction === direction && i.type === type && i.buildingId === buildingId)
             .reduce((s, i) => s + actualAmount(i), 0);
@@ -162,7 +168,7 @@ function buildAnalysisReportHtml(range) {
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>${esc(periodLabel)} 財務報表</title>
+<title>${esc(reportTitle)} · ${esc(periodLabel)}</title>
 <style>
     @page { size: A4 landscape; margin: 1cm; }
     * { box-sizing: border-box; }
@@ -250,7 +256,7 @@ function buildAnalysisReportHtml(range) {
 
 <div class="report-page">
     <header class="report-header">
-        <h1>聚空間 · 財務分析報表</h1>
+        <h1>聚空間 · ${esc(reportTitle)}</h1>
         <div class="meta">區間 ${esc(periodLabel)} · 製表 ${today} · 共 ${rangeInvoices.length} 筆已結帳目</div>
     </header>
 
@@ -280,6 +286,7 @@ function buildAnalysisReportHtml(range) {
         </div>
     </section>
 
+    ${targetBuilding ? '' : `
     <section>
         <h2>各館 P&amp;L 對比</h2>
         <table>
@@ -296,7 +303,7 @@ function buildAnalysisReportHtml(range) {
             </thead>
             <tbody>${buildingTableRows}</tbody>
         </table>
-    </section>
+    </section>`}
 
     <section>
         <h2>支出結構 Pareto (前 80% 標亮)</h2>
@@ -315,7 +322,7 @@ function buildAnalysisReportHtml(range) {
     </section>
 
     <section>
-        <h2>分類交叉分析</h2>
+        <h2>${targetBuilding ? '收支分類明細' : '分類交叉分析'}</h2>
         ${matrixHtml}
     </section>
 
@@ -328,7 +335,7 @@ function buildAnalysisReportHtml(range) {
 </html>`;
 }
 
-export function exportAnalysisReport(rangeOrYm) {
+export function exportAnalysisReport(rangeOrYm, buildingId = null) {
     // 向後相容：若傳入字串 (YYYY-MM)，當成單月區間
     let range;
     if (typeof rangeOrYm === 'string' && /^\d{4}-\d{2}$/.test(rangeOrYm)) {
@@ -338,7 +345,7 @@ export function exportAnalysisReport(rangeOrYm) {
     } else {
         range = rangeOrYm;
     }
-    const html = buildAnalysisReportHtml(range);
+    const html = buildAnalysisReportHtml(range, buildingId);
     const win = window.open('', '_blank');
     if (!win) {
         alert('瀏覽器擋住了彈窗。請允許彈窗後再試。');
