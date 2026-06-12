@@ -3389,120 +3389,72 @@ select:focus-visible,
 .sb-val-out { color: var(--color-danger); font-weight: 600; }
 .sb-val-total { color: var(--text-muted); }
 
-/* === Pareto 圖 (Tab 3) — 卡片化 === */
-.pareto-summary {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.85rem 1rem;
-    background: rgba(255, 136, 89, 0.08);
-    border: 1px solid rgba(255, 136, 89, 0.25);
-    border-radius: 10px;
-    margin-bottom: 0.85rem;
-    font-size: 0.86rem;
-    color: var(--text-main);
-}
-.pareto-summary-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: rgba(255, 136, 89, 0.18);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--color-primary);
-    font-size: 1.1rem;
-    flex-shrink: 0;
-}
-.pareto-summary strong { font-weight: 700; color: var(--color-primary-text); }
-.pareto-summary small {
-    display: block;
-    color: var(--text-muted);
-    font-size: 0.74rem;
-    margin-top: 0.15rem;
-}
-.pareto-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-}
-.pareto-card {
-    display: grid;
-    grid-template-columns: 32px 1fr;
-    gap: 0.7rem;
-    padding: 0.7rem 0.85rem;
-    background: var(--color-surface);
-    border: 1px solid var(--border-soft);
-    border-radius: 10px;
-    transition: border-color 0.15s, background 0.15s;
-}
-.pareto-card.is-key {
-    border-color: rgba(255, 136, 89, 0.35);
-    background: rgba(255, 136, 89, 0.04);
-}
-.pareto-card-rank {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--surface-sunken);
-    color: var(--text-muted);
+/* === Pareto Tiles (Tab 3) — 寬度依金額比例 === */
+.pareto-summary-mini {
+    text-align: center;
     font-size: 0.82rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    align-self: center;
+    color: var(--text-muted);
+    margin-bottom: 0.85rem;
+    letter-spacing: 0.02em;
 }
-.pareto-card.is-key .pareto-card-rank {
-    background: rgba(255, 136, 89, 0.18);
+.pareto-summary-mini strong {
     color: var(--color-primary-text);
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    margin: 0 0.15rem;
 }
-.pareto-card-body {
+.pareto-tiles {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    min-height: 110px;
+}
+.pareto-tile {
+    flex: 1 1 0;
+    min-width: 70px;
+    padding: 0.7rem 0.65rem;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    min-width: 0;
-}
-.pareto-card-row {
-    display: flex;
     justify-content: space-between;
-    align-items: baseline;
-    gap: 0.5rem;
+    gap: 0.3rem;
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+    overflow: hidden;
+    transition: filter 0.15s, transform 0.15s;
+    border-radius: 6px;
 }
-.pareto-card-label {
-    font-size: 0.92rem;
+.pareto-tile:hover { transform: translateY(-1px); filter: brightness(0.97); }
+.pareto-tile.is-key {
+    background: linear-gradient(135deg, var(--color-primary), #ff743d);
+    color: #fff;
+}
+.pareto-tile-pct {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+.pareto-tile-label {
+    font-size: 0.78rem;
     font-weight: 600;
-    color: var(--text-main);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.pareto-card-amount {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--text-main);
+.pareto-tile.is-key .pareto-tile-label { color: rgba(255,255,255,0.95); }
+.pareto-tile-amount {
+    font-size: 0.72rem;
     font-variant-numeric: tabular-nums;
-    flex-shrink: 0;
+    opacity: 0.8;
 }
-.pareto-card-bar-wrap {
-    background: var(--surface-sunken);
-    border-radius: 99px;
-    height: 6px;
-    overflow: hidden;
-}
-.pareto-card-bar {
-    height: 100%;
-    background: var(--color-primary);
-    border-radius: 99px;
-    transition: width 0.5s ease-out;
-}
-.pareto-card:not(.is-key) .pareto-card-bar { background: var(--text-muted); opacity: 0.55; }
-.pareto-card-meta {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.74rem;
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
+@media (max-width: 640px) {
+    .pareto-tiles { flex-wrap: wrap; }
+    .pareto-tile { min-width: 100px; flex-basis: calc(50% - 2px); }
+    .pareto-tile-pct { font-size: 1.2rem; }
 }
 
 /* === Connector card (Tab 2: 引導到其他頁面) === */
@@ -3614,49 +3566,33 @@ select:focus-visible,
     font-weight: 500;
 }
 
-/* === 報表資訊卡 (房東租金偵測成功時) === */
+/* === 報表資訊條 (房東租金偵測成功時) — 極簡 1 行 === */
 .report-info-card {
     display: flex;
-    gap: 0.85rem;
-    padding: 0.7rem 1rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.85rem;
     background: rgba(34, 148, 110, 0.06);
     border: 1px solid rgba(34, 148, 110, 0.2);
     border-left: 3px solid var(--color-success);
-    border-radius: 10px;
+    border-radius: 8px;
     margin-bottom: 1rem;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
 }
-.report-info-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: rgba(34, 148, 110, 0.15);
+.report-info-icon-inline {
     color: var(--color-success);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     font-size: 1rem;
     flex-shrink: 0;
 }
-.report-info-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-width: 0;
-    line-height: 1.45;
-}
-.report-info-body strong {
-    font-size: 0.88rem;
+.report-info-card strong {
     color: var(--text-main);
     font-weight: 700;
-}
-.report-info-body small {
-    font-size: 0.75rem;
-    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
 }
 .report-info-type {
     display: inline-block;
-    padding: 0.1rem 0.45rem;
+    padding: 0.08rem 0.4rem;
     background: var(--color-surface);
     border: 1px solid var(--border-soft);
     border-radius: 99px;

@@ -149,51 +149,45 @@ function renderReceivableStackedBars(items) {
     `;
 }
 
-// 月度趨勢折線圖 — 含 Y 軸刻度 / 4 條網格線 / 每點數值標 / 圖例
+// 月度趨勢 — 改成 grouped bar (收入/支出 雙柱，不重疊)，淨利改用 KPI tile 表達
 function renderTrendChart(months) {
     if (months.length === 0) return '';
-    const w = 640, h = 260;
-    const padL = 60, padR = 16, padT = 24, padB = 36;
+    const w = 640, h = 200;
+    const padL = 48, padR = 12, padT = 24, padB = 30;
     const innerW = w - padL - padR;
     const innerH = h - padT - padB;
 
-    const allValues = months.flatMap(m => [m.income, m.expense, m.net]);
-    const rawMin = Math.min(0, ...allValues);
-    const rawMax = Math.max(1, ...allValues);
-    // 把 max 取整到「漂亮數字」(k 位)，讓 Y 軸刻度好讀
-    const niceMax = niceCeil(rawMax);
-    const niceMin = rawMin < 0 ? -niceCeil(Math.abs(rawMin)) : 0;
-    const range = niceMax - niceMin || 1;
+    const allValues = months.flatMap(m => [m.income, m.expense]);
+    const maxRaw = Math.max(1, ...allValues);
+    const niceMax = niceCeil(maxRaw);
 
-    const stepX = innerW / (months.length - 1 || 1);
-    const yFor = (v) => padT + innerH - ((v - niceMin) / range) * innerH;
-    const xFor = (i) => padL + i * stepX;
+    const slotW = innerW / months.length;
+    const barW = Math.min(18, (slotW - 8) / 2);
+    const yFor = v => padT + innerH - (v / niceMax) * innerH;
+    const xCenter = i => padL + slotW * i + slotW / 2;
 
-    // 4 條等距 Y 軸網格線 + 刻度標籤
+    // 4 條 Y 軸網格 + 刻度
     const gridLines = [];
     for (let i = 0; i <= 4; i++) {
-        const v = niceMin + (range * i / 4);
+        const v = (niceMax * i) / 4;
         const y = yFor(v);
-        gridLines.push(`<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="${i === 0 || (niceMin < 0 && v === 0) ? '#cbd5e1' : '#e5e7eb'}" stroke-width="1" ${i > 0 && i < 4 ? 'stroke-dasharray="3,3"' : ''}/>`);
-        gridLines.push(`<text x="${padL - 8}" y="${y + 4}" font-size="10" text-anchor="end" fill="#6b7280" font-family="Inter, system-ui, sans-serif">$${formatYAxis(v)}</text>`);
+        gridLines.push(`<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="${i === 0 ? '#cbd5e1' : '#eef0f3'}" stroke-width="1" ${i > 0 && i < 4 ? 'stroke-dasharray="3,3"' : ''}/>`);
+        gridLines.push(`<text x="${padL - 6}" y="${y + 4}" font-size="10" text-anchor="end" fill="#9ca3af" font-family="Inter, system-ui, sans-serif">$${formatYAxis(v)}</text>`);
     }
 
-    const line = (key, color, label) => {
-        const points = months.map((m, i) => `${xFor(i)},${yFor(m[key])}`).join(' ');
-        return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
-    };
-    const dots = (key, color) => months.map((m, i) =>
-        `<circle cx="${xFor(i)}" cy="${yFor(m[key])}" r="3.5" fill="white" stroke="${color}" stroke-width="2"/>`
-    ).join('');
-    // 在每個點上方標數字
-    const valueLabels = (key, color, dy) => months.map((m, i) => {
+    const renderBars = (key, color, offsetX) => months.map((m, i) => {
         const v = m[key];
-        if (v === 0) return '';
-        return `<text x="${xFor(i)}" y="${yFor(v) + dy}" font-size="9" text-anchor="middle" fill="${color}" font-family="Inter, system-ui, sans-serif" font-weight="600">$${formatYAxis(v)}</text>`;
+        const x = xCenter(i) + offsetX;
+        const y = yFor(v);
+        const barH = padT + innerH - y;
+        const label = v === 0
+            ? ''
+            : `<text x="${x + barW/2}" y="${y - 5}" font-size="10" text-anchor="middle" fill="${color}" font-weight="700" font-family="Inter, system-ui, sans-serif">${formatYAxis(v)}</text>`;
+        return `<rect x="${x}" y="${y}" width="${barW}" height="${Math.max(0.5, barH)}" fill="${color}" rx="2"/>${label}`;
     }).join('');
 
     const xLabels = months.map((m, i) =>
-        `<text x="${xFor(i)}" y="${h - 12}" font-size="11" text-anchor="middle" fill="#6b7280" font-family="Inter, system-ui, sans-serif">${m.label}</text>`
+        `<text x="${xCenter(i)}" y="${h - 10}" font-size="11" text-anchor="middle" fill="#6b7280" font-family="Inter, system-ui, sans-serif">${m.label}</text>`
     ).join('');
 
     return `
@@ -201,18 +195,11 @@ function renderTrendChart(months) {
             <div class="trend-chart-legend">
                 <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #22946e;"></span>收入</span>
                 <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #b13535;"></span>支出</span>
-                <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #3b82f6;"></span>淨利</span>
             </div>
             <svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
                 ${gridLines.join('')}
-                ${line('income', '#22946e')}
-                ${line('expense', '#b13535')}
-                ${line('net', '#3b82f6')}
-                ${dots('income', '#22946e')}
-                ${dots('expense', '#b13535')}
-                ${dots('net', '#3b82f6')}
-                ${valueLabels('income', '#22946e', -10)}
-                ${valueLabels('expense', '#b13535', 18)}
+                ${renderBars('income', '#22946e', -barW - 2)}
+                ${renderBars('expense', '#b13535', 2)}
                 ${xLabels}
             </svg>
         </div>
@@ -694,39 +681,26 @@ function renderParetoChart(items) {
         return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無支出資料</div>`;
     }
     const total = items.reduce((s, it) => s + it.amount, 0);
-    // 找到第一個 cumPct > 0.8 的 index → 它是「最後一個還在 80% 內」的下一個
     const firstOver80 = items.findIndex(it => it.cumPct > 0.8);
     const lastIn80 = firstOver80 < 0 ? items.length - 1 : firstOver80 - 1;
     const key80Count = lastIn80 + 1;
     const key80Pct = items[lastIn80]?.cumPct ?? 0;
+
+    // 太細的 tile 會壓縮文字 — 用 min-width + flex-grow 平衡。極小的 (<3%) 用 width: 60px 不要再縮。
     return `
-        <div class="pareto-summary">
-            <div class="pareto-summary-icon"><i class="ph ph-target"></i></div>
-            <div>
-                <strong>${key80Count}</strong> 類佔了支出的 <strong>${(key80Pct * 100).toFixed(0)}%</strong>
-                <small>(80/20 法則 — 集中處理這幾類效益最大)</small>
-            </div>
+        <div class="pareto-summary-mini">
+            前 <strong>${key80Count}</strong> 類 = 支出的 <strong>${(key80Pct * 100).toFixed(0)}%</strong>
         </div>
-        <div class="pareto-list">
+        <div class="pareto-tiles">
             ${items.map((it, idx) => {
-                const w = (it.amount / total) * 100;
-                const is8020 = it.cumPct <= 0.8 || idx === lastIn80;
+                const isKey = idx <= lastIn80;
+                const ratio = it.amount / total;
+                const flexGrow = Math.max(1, ratio * 100);
                 return `
-                    <div class="pareto-card ${is8020 ? 'is-key' : ''}">
-                        <div class="pareto-card-rank">${idx + 1}</div>
-                        <div class="pareto-card-body">
-                            <div class="pareto-card-row">
-                                <span class="pareto-card-label">${it.type}</span>
-                                <span class="pareto-card-amount">$${it.amount.toLocaleString()}</span>
-                            </div>
-                            <div class="pareto-card-bar-wrap">
-                                <div class="pareto-card-bar" style="width: ${w}%;"></div>
-                            </div>
-                            <div class="pareto-card-meta">
-                                <span class="pareto-card-pct">佔 ${(it.pct * 100).toFixed(1)}%</span>
-                                <span class="pareto-card-cum">累積 ${(it.cumPct * 100).toFixed(0)}%</span>
-                            </div>
-                        </div>
+                    <div class="pareto-tile ${isKey ? 'is-key' : ''}" style="flex-grow: ${flexGrow.toFixed(2)};">
+                        <div class="pareto-tile-pct">${(it.pct * 100).toFixed(0)}%</div>
+                        <div class="pareto-tile-label">${it.type}</div>
+                        <div class="pareto-tile-amount">$${it.amount.toLocaleString()}</div>
                     </div>
                 `;
             }).join('')}
@@ -783,15 +757,12 @@ function renderFinancialKpiTiles(agg) {
 function renderLandlordWarning(agg) {
     if (agg.outAll === 0) return '';
 
-    // 有抓到 → 顯示資訊條 (讓你驗證有抓對)
+    // 有抓到 → 一行 info 條（極簡，不囉嗦）
     if (agg.landlordRent > 0) {
         return `
             <div class="report-info-card">
-                <div class="report-info-icon"><i class="ph ph-info"></i></div>
-                <div class="report-info-body">
-                    <strong>房東租金偵測：$${agg.landlordRent.toLocaleString()}</strong>
-                    <small>包含 type 為：${agg.detectedTypes.map(t => `<span class="report-info-type">${t}</span>`).join(' ')} 且 direction = 已付 的所有帳目</small>
-                </div>
+                <i class="ph ph-info report-info-icon-inline"></i>
+                <span>房東租金 <strong>$${agg.landlordRent.toLocaleString()}</strong> · type: ${agg.detectedTypes.map(t => `<span class="report-info-type">${t}</span>`).join('')}</span>
             </div>
         `;
     }
@@ -804,7 +775,7 @@ function renderLandlordWarning(agg) {
             <div class="report-warning-icon"><i class="ph ph-warning-circle"></i></div>
             <div class="report-warning-body">
                 <strong>未偵測到房東租金支出</strong>
-                <small>區間內有 $${agg.outAll.toLocaleString()} 已付支出，但沒有 type 含「租金 / 房租 / 房東」字眼的，所以毛利率算成 100%。從以下類型中找出對應的，並到「<a href="#settings" style="color: var(--color-primary-text);">系統設定 → 帳單類型</a>」改名，或直接編輯帳目把 type 改一下：</small>
+                <small>毛利率會算成 100%。當期支出 type：</small>
                 <div class="report-warning-types">
                     ${types.map(t => `<span class="report-warning-type">${t}</span>`).join('')}
                 </div>
