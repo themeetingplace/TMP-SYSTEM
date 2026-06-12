@@ -149,11 +149,11 @@ function renderReceivableStackedBars(items) {
     `;
 }
 
-// 月度趨勢 — 改成 grouped bar (收入/支出 雙柱，不重疊)，淨利改用 KPI tile 表達
+// 月度趨勢 grouped bar — 數字 hover 才顯示，網格密集
 function renderTrendChart(months) {
     if (months.length === 0) return '';
-    const w = 640, h = 200;
-    const padL = 48, padR = 12, padT = 24, padB = 30;
+    const w = 600, h = 220;
+    const padL = 44, padR = 10, padT = 16, padB = 26;
     const innerW = w - padL - padR;
     const innerH = h - padT - padB;
 
@@ -162,17 +162,21 @@ function renderTrendChart(months) {
     const niceMax = niceCeil(maxRaw);
 
     const slotW = innerW / months.length;
-    const barW = Math.min(18, (slotW - 8) / 2);
+    const barW = Math.min(20, (slotW - 6) / 2);
     const yFor = v => padT + innerH - (v / niceMax) * innerH;
     const xCenter = i => padL + slotW * i + slotW / 2;
 
-    // 4 條 Y 軸網格 + 刻度
+    // 6 條 Y 軸網格 (密集) + 刻度
+    const GRID_N = 6;
     const gridLines = [];
-    for (let i = 0; i <= 4; i++) {
-        const v = (niceMax * i) / 4;
+    for (let i = 0; i <= GRID_N; i++) {
+        const v = (niceMax * i) / GRID_N;
         const y = yFor(v);
-        gridLines.push(`<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="${i === 0 ? '#cbd5e1' : '#eef0f3'}" stroke-width="1" ${i > 0 && i < 4 ? 'stroke-dasharray="3,3"' : ''}/>`);
-        gridLines.push(`<text x="${padL - 6}" y="${y + 4}" font-size="10" text-anchor="end" fill="#9ca3af" font-family="Inter, system-ui, sans-serif">$${formatYAxis(v)}</text>`);
+        gridLines.push(`<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="${i === 0 ? '#cbd5e1' : '#eef0f3'}" stroke-width="1" ${i > 0 && i < GRID_N ? 'stroke-dasharray="3,3"' : ''}/>`);
+        // 只在偶數 index 顯示刻度文字 (避免擠)
+        if (i % 2 === 0) {
+            gridLines.push(`<text x="${padL - 6}" y="${y + 4}" font-size="10" text-anchor="end" fill="#9ca3af" font-family="Inter, system-ui, sans-serif">$${formatYAxis(v)}</text>`);
+        }
     }
 
     const renderBars = (key, color, offsetX) => months.map((m, i) => {
@@ -180,14 +184,11 @@ function renderTrendChart(months) {
         const x = xCenter(i) + offsetX;
         const y = yFor(v);
         const barH = padT + innerH - y;
-        const label = v === 0
-            ? ''
-            : `<text x="${x + barW/2}" y="${y - 5}" font-size="10" text-anchor="middle" fill="${color}" font-weight="700" font-family="Inter, system-ui, sans-serif">${formatYAxis(v)}</text>`;
-        return `<rect x="${x}" y="${y}" width="${barW}" height="${Math.max(0.5, barH)}" fill="${color}" rx="2"/>${label}`;
+        return `<rect x="${x}" y="${y}" width="${barW}" height="${Math.max(0.5, barH)}" fill="${color}" rx="2" class="bar-chart-rect" data-tip-kind="bar" data-tip-month="${m.label}" data-tip-income="${m.income}" data-tip-expense="${m.expense}" data-tip-net="${m.net}"/>`;
     }).join('');
 
     const xLabels = months.map((m, i) =>
-        `<text x="${xCenter(i)}" y="${h - 10}" font-size="11" text-anchor="middle" fill="#6b7280" font-family="Inter, system-ui, sans-serif">${m.label}</text>`
+        `<text x="${xCenter(i)}" y="${h - 8}" font-size="11" text-anchor="middle" fill="#6b7280" font-family="Inter, system-ui, sans-serif">${m.label}</text>`
     ).join('');
 
     return `
@@ -198,8 +199,8 @@ function renderTrendChart(months) {
             </div>
             <svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
                 ${gridLines.join('')}
-                ${renderBars('income', '#22946e', -barW - 2)}
-                ${renderBars('expense', '#b13535', 2)}
+                ${renderBars('income', '#22946e', -barW - 1)}
+                ${renderBars('expense', '#b13535', 1)}
                 ${xLabels}
             </svg>
         </div>
@@ -676,34 +677,49 @@ function computeExpensePareto(invoices) {
     });
 }
 
-function renderParetoChart(items) {
-    if (items.length === 0) {
+// 圓餅圖配色 — brand 橘為主、其他用同色系明度漸層 (避免亂)
+const PIE_COLORS = ['#ff8859', '#ffa580', '#ffc7a8', '#d2741b', '#8b5cf6', '#22946e', '#3b82f6', '#9ca3af'];
+
+function arcPath(cx, cy, r, startAngle, endAngle) {
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+    const large = (endAngle - startAngle) > Math.PI ? 1 : 0;
+    return `M ${cx} ${cy} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+}
+
+function renderExpensePie(items) {
+    if (items.length === 0 || items.every(it => it.amount === 0)) {
         return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無支出資料</div>`;
     }
     const total = items.reduce((s, it) => s + it.amount, 0);
-    const firstOver80 = items.findIndex(it => it.cumPct > 0.8);
-    const lastIn80 = firstOver80 < 0 ? items.length - 1 : firstOver80 - 1;
-    const key80Count = lastIn80 + 1;
-    const key80Pct = items[lastIn80]?.cumPct ?? 0;
+    const cx = 110, cy = 110, r = 95;
+    let angle = -Math.PI / 2;
 
-    // 太細的 tile 會壓縮文字 — 用 min-width + flex-grow 平衡。極小的 (<3%) 用 width: 60px 不要再縮。
-    return `
-        <div class="pareto-summary-mini">
-            前 <strong>${key80Count}</strong> 類 = 支出的 <strong>${(key80Pct * 100).toFixed(0)}%</strong>
+    const slices = items.map((it, idx) => {
+        const sliceAngle = (it.amount / total) * Math.PI * 2;
+        const path = arcPath(cx, cy, r, angle, angle + sliceAngle);
+        angle += sliceAngle;
+        const color = PIE_COLORS[idx % PIE_COLORS.length];
+        const labelEsc = String(it.type).replace(/"/g, '&quot;');
+        return `<path d="${path}" fill="${color}" data-tip-kind="pie" data-tip-label="${labelEsc}" data-tip-amount="${it.amount}" data-tip-pct="${(it.pct * 100).toFixed(1)}" class="pie-slice"/>`;
+    }).join('');
+
+    const legend = items.map((it, idx) => `
+        <div class="pie-legend-item">
+            <span class="pie-legend-dot" style="background: ${PIE_COLORS[idx % PIE_COLORS.length]};"></span>
+            <div class="pie-legend-body">
+                <span class="pie-legend-label">${it.type}</span>
+                <span class="pie-legend-meta">${(it.pct * 100).toFixed(0)}% · $${it.amount.toLocaleString()}</span>
+            </div>
         </div>
-        <div class="pareto-tiles">
-            ${items.map((it, idx) => {
-                const isKey = idx <= lastIn80;
-                const ratio = it.amount / total;
-                const flexGrow = Math.max(1, ratio * 100);
-                return `
-                    <div class="pareto-tile ${isKey ? 'is-key' : ''}" style="flex-grow: ${flexGrow.toFixed(2)};">
-                        <div class="pareto-tile-pct">${(it.pct * 100).toFixed(0)}%</div>
-                        <div class="pareto-tile-label">${it.type}</div>
-                        <div class="pareto-tile-amount">$${it.amount.toLocaleString()}</div>
-                    </div>
-                `;
-            }).join('')}
+    `).join('');
+
+    return `
+        <div class="pie-chart-wrap">
+            <svg viewBox="0 0 220 220" class="pie-chart-svg">${slices}<circle cx="${cx}" cy="${cy}" r="50" fill="white"/></svg>
+            <div class="pie-chart-legend">${legend}</div>
         </div>
     `;
 }
@@ -717,16 +733,17 @@ function renderAnalysisTab() {
     return `${subTabs}${renderAnalysisAllBuildings()}`;
 }
 
-// 共用 4 個財務面 KPI tile
+// 共用 4 個財務面 KPI tile — NOI / 毛利率 / 淨利率 / OpEx
 function renderFinancialKpiTiles(agg) {
     const grossMarginColor = agg.grossMargin >= 0.30 ? 'var(--color-success)'
         : agg.grossMargin >= 0.15 ? 'var(--color-warning-text)'
         : agg.grossMargin > 0 ? 'var(--color-danger)' : 'var(--text-main)';
+    const netMarginColor = agg.netMargin >= 0.15 ? 'var(--color-success)'
+        : agg.netMargin >= 0.05 ? 'var(--color-warning-text)'
+        : agg.netMargin > 0 ? 'var(--color-danger)' : 'var(--text-main)';
     const opexColor = agg.opexRatio <= 0.80 ? 'var(--color-success)'
         : agg.opexRatio <= 0.95 ? 'var(--color-warning-text)'
         : 'var(--color-danger)';
-    const landlordRatioColor = agg.landlordRatio >= 0.60 && agg.landlordRatio <= 0.80 ? 'var(--text-main)'
-        : agg.landlordRatio > 0 ? 'var(--color-warning-text)' : 'var(--text-main)';
     return `
         <div class="stat-tile-grid">
             <div class="stat-tile">
@@ -740,14 +757,14 @@ function renderFinancialKpiTiles(agg) {
                 <div class="stat-tile-sub">(收 − 房東租金) ÷ 收 · 業界 20-40%</div>
             </div>
             <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-percent"></i> 淨利率</div>
+                <div class="stat-tile-value" style="color: ${netMarginColor};">${agg.inAll > 0 ? pct(agg.netMargin) : '—'}</div>
+                <div class="stat-tile-sub">淨利 ÷ 收 · 目標 ≥ 15%</div>
+            </div>
+            <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-receipt"></i> OpEx 營業費用率</div>
                 <div class="stat-tile-value" style="color: ${opexColor};">${agg.inAll > 0 ? pct(agg.opexRatio) : '—'}</div>
                 <div class="stat-tile-sub">已付 ÷ 已收 · 目標 ≤ 80%</div>
-            </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-buildings"></i> 房東租金佔比</div>
-                <div class="stat-tile-value" style="color: ${landlordRatioColor};">${agg.inAll > 0 ? pct(agg.landlordRatio) : '—'}</div>
-                <div class="stat-tile-sub">$${agg.landlordRent.toLocaleString()} · 業界 60-80%</div>
             </div>
         </div>
     `;
@@ -826,19 +843,16 @@ function renderSingleBuildingAnalysis(buildingId) {
         </div>
 
         ${renderFinancialKpiTiles(agg)}
-        ${renderLandlordWarning(agg)}
 
-        <div class="report-chart-card">
-            <div class="report-chart-title">
-                <span><i class="ph ph-chart-bar-horizontal"></i> 支出結構 Pareto (前 80% 是哪幾類)</span>
-                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">標亮 = 佔前 80%</span>
+        <div class="charts-side-by-side">
+            <div class="report-chart-card">
+                <div class="report-chart-title"><span><i class="ph ph-chart-pie"></i> 支出結構</span></div>
+                ${renderExpensePie(pareto)}
             </div>
-            ${renderParetoChart(pareto)}
-        </div>
-
-        <div class="report-chart-card">
-            <div class="report-chart-title"><i class="ph ph-chart-line"></i> 月度趨勢 (過去 6 個月)</div>
-            ${renderTrendChart(months)}
+            <div class="report-chart-card">
+                <div class="report-chart-title"><span><i class="ph ph-chart-bar"></i> 月度趨勢 (過去 6 個月)</span></div>
+                ${renderTrendChart(months)}
+            </div>
         </div>
     `;
 }
@@ -850,6 +864,24 @@ function renderAnalysisAllBuildings() {
     const pareto = computeExpensePareto(rangeInvoices);
     const activeBuildings = getSortedBuildings({ activeOnly: true });
 
+    // 過去 6 個月趨勢 (全館合計)
+    const end = new Date(range.end);
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const monthKey = `${yyyy}-${mm}`;
+        const monthStart = `${monthKey}-01`;
+        const lastDay = new Date(yyyy, d.getMonth() + 1, 0).getDate();
+        const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
+        const monthRange = { start: monthStart, end: monthEnd, preset: 'custom' };
+        const monthInvoices = settledInRange(monthRange);
+        const inc = monthInvoices.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
+        const exp = monthInvoices.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
+        months.push({ label: `${d.getMonth() + 1}月`, income: inc, expense: exp, net: inc - exp });
+    }
+
     // 各館 P&L 對比
     const perBuilding = activeBuildings.map(b => {
         const inv = rangeInvoices.filter(i => i.buildingId === b.id);
@@ -858,14 +890,16 @@ function renderAnalysisAllBuildings() {
 
     return `
         ${renderFinancialKpiTiles(summary)}
-        ${renderLandlordWarning(summary)}
 
-        <div class="report-chart-card">
-            <div class="report-chart-title">
-                <span><i class="ph ph-chart-bar-horizontal"></i> 支出結構 Pareto (前 80% 是哪幾類)</span>
-                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">標亮 = 佔前 80%</span>
+        <div class="charts-side-by-side">
+            <div class="report-chart-card">
+                <div class="report-chart-title"><span><i class="ph ph-chart-pie"></i> 支出結構</span></div>
+                ${renderExpensePie(pareto)}
             </div>
-            ${renderParetoChart(pareto)}
+            <div class="report-chart-card">
+                <div class="report-chart-title"><span><i class="ph ph-chart-bar"></i> 月度趨勢 (過去 6 個月)</span></div>
+                ${renderTrendChart(months)}
+            </div>
         </div>
 
         <div class="report-chart-card">
@@ -956,8 +990,80 @@ export function renderReports() {
     `;
 }
 
+// ───────────────────── 圖表 hover tooltip ─────────────────────
+let _chartTooltipEl = null;
+function ensureChartTooltip() {
+    if (_chartTooltipEl) return _chartTooltipEl;
+    _chartTooltipEl = document.createElement('div');
+    _chartTooltipEl.className = 'chart-tooltip';
+    _chartTooltipEl.hidden = true;
+    document.body.appendChild(_chartTooltipEl);
+    return _chartTooltipEl;
+}
+function hideChartTooltip() {
+    if (_chartTooltipEl) _chartTooltipEl.hidden = true;
+}
+function positionChartTooltip(e) {
+    if (!_chartTooltipEl || _chartTooltipEl.hidden) return;
+    const r = _chartTooltipEl.getBoundingClientRect();
+    let x = e.clientX + 14;
+    let y = e.clientY - r.height - 14;
+    if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 14;
+    if (y < 8) y = e.clientY + 14;
+    _chartTooltipEl.style.left = `${x}px`;
+    _chartTooltipEl.style.top = `${y}px`;
+}
+function initChartTooltips(scope) {
+    const tip = ensureChartTooltip();
+    // Pie slice
+    scope.querySelectorAll('.pie-slice').forEach(el => {
+        el.addEventListener('mouseenter', e => {
+            const label = el.dataset.tipLabel || '';
+            const amount = Number(el.dataset.tipAmount) || 0;
+            const pct = el.dataset.tipPct || '0';
+            tip.innerHTML = `
+                <div class="chart-tip-title">${label}</div>
+                <div class="chart-tip-row"><span class="chart-tip-key">金額</span><span class="chart-tip-val">$${amount.toLocaleString()}</span></div>
+                <div class="chart-tip-row"><span class="chart-tip-key">佔比</span><span class="chart-tip-val">${pct}%</span></div>
+            `;
+            tip.hidden = false;
+            positionChartTooltip(e);
+            el.style.opacity = '0.82';
+        });
+        el.addEventListener('mousemove', positionChartTooltip);
+        el.addEventListener('mouseleave', () => {
+            hideChartTooltip();
+            el.style.opacity = '1';
+        });
+    });
+    // Bar rect (income / expense)
+    scope.querySelectorAll('.bar-chart-rect').forEach(el => {
+        el.addEventListener('mouseenter', e => {
+            const month = el.dataset.tipMonth || '';
+            const income = Number(el.dataset.tipIncome) || 0;
+            const expense = Number(el.dataset.tipExpense) || 0;
+            const net = Number(el.dataset.tipNet) || 0;
+            tip.innerHTML = `
+                <div class="chart-tip-title">${month}</div>
+                <div class="chart-tip-row"><span class="chart-tip-key" style="color: #22946e;">收入</span><span class="chart-tip-val">$${income.toLocaleString()}</span></div>
+                <div class="chart-tip-row"><span class="chart-tip-key" style="color: #b13535;">支出</span><span class="chart-tip-val">$${expense.toLocaleString()}</span></div>
+                <div class="chart-tip-row chart-tip-net"><span class="chart-tip-key">淨利</span><span class="chart-tip-val" style="color: ${net >= 0 ? '#22946e' : '#b13535'};">$${net.toLocaleString()}</span></div>
+            `;
+            tip.hidden = false;
+            positionChartTooltip(e);
+            el.style.opacity = '0.78';
+        });
+        el.addEventListener('mousemove', positionChartTooltip);
+        el.addEventListener('mouseleave', () => {
+            hideChartTooltip();
+            el.style.opacity = '1';
+        });
+    });
+}
+
 export function initReportsActions(scope) {
     initRangePicker(scope, () => refreshView());
+    initChartTooltips(scope);
 
     // Tab 切換 (上層: 總覽 / 各館 / 交叉)
     scope.querySelectorAll('[data-tab]').forEach(btn => {

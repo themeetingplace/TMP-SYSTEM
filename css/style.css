@@ -3389,6 +3389,119 @@ select:focus-visible,
 .sb-val-out { color: var(--color-danger); font-weight: 600; }
 .sb-val-total { color: var(--text-muted); }
 
+/* === 左右並排圖表容器 (Tab 3: 圓餅 + 柱狀) === */
+.charts-side-by-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+@media (max-width: 900px) {
+    .charts-side-by-side { grid-template-columns: 1fr; }
+}
+
+/* === 圓餅圖 (Tab 3 支出結構) === */
+.pie-chart-wrap {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+}
+.pie-chart-svg {
+    width: 220px;
+    height: 220px;
+    flex-shrink: 0;
+}
+.pie-slice {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.pie-slice:hover {
+    opacity: 0.82;
+}
+.pie-chart-legend {
+    flex: 1;
+    min-width: 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 220px;
+    overflow-y: auto;
+}
+.pie-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.pie-legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.pie-legend-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    min-width: 0;
+}
+.pie-legend-label {
+    font-size: 0.82rem;
+    color: var(--text-main);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pie-legend-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* === 圖表 hover tooltip === */
+.chart-tooltip {
+    position: fixed;
+    z-index: 9999;
+    background: rgba(26, 28, 35, 0.95);
+    color: white;
+    padding: 0.55rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    min-width: 140px;
+    line-height: 1.4;
+}
+.chart-tip-title {
+    font-weight: 700;
+    font-size: 0.85rem;
+    margin-bottom: 0.35rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+.chart-tip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.85rem;
+    align-items: center;
+    padding: 0.1rem 0;
+}
+.chart-tip-key {
+    color: rgba(255,255,255,0.7);
+    font-size: 0.75rem;
+}
+.chart-tip-val {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.chart-tip-net {
+    border-top: 1px dashed rgba(255,255,255,0.18);
+    padding-top: 0.25rem;
+    margin-top: 0.15rem;
+}
+
 /* === Pareto Tiles (Tab 3) — 寬度依金額比例 === */
 .pareto-summary-mini {
     text-align: center;
