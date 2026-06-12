@@ -1250,7 +1250,7 @@ select:focus-visible,
     padding: 0.2rem 0.4rem;
     margin: -0.2rem -0.4rem;
     cursor: pointer;
-    text-align: left;
+    text-align: center;
     font-family: inherit;
     font-size: 0.75rem;
     color: var(--text-muted);
@@ -2637,20 +2637,10 @@ body[data-role="helper"] .data-table tbody td:last-child {
 }
 /* 顯式標 data-write="1" 的按鈕 (其他地方寫入按鈕的逃生口) */
 body[data-role="helper"] [data-write] { display: none !important; }
-/* 住房一覽 — 入住按鈕 + 退房 checkbox 隱藏 */
+/* 住房一覽 — 入住按鈕 + 退房 checkbox 隱藏 (helper 不能寫入這些) */
 body[data-role="helper"] .occ-checkin-btn,
 body[data-role="helper"] .occ-terminate-check { display: none !important; }
-/* 住房一覽 — 備註欄: helper 還是看得到備註文字，但不可點 (顯示為純文字) */
-body[data-role="helper"] .occ-note-btn {
-    pointer-events: none;
-    cursor: default;
-    background: transparent;
-    border: none;
-    padding: 0;
-    text-align: left;
-}
-body[data-role="helper"] .occ-note-empty { display: none; }
-/* 住房一覽 — 床位 / 租客 link 還是可點 (詳細視窗是只讀的) */
+/* 床位 / 租客 link / 備註 都還是可點 — 備註可編輯、床位/租客是 read-only 詳細視窗 */
 /* === 續租意願通知 banner === */
 .renew-intent-banner {
     display: flex;

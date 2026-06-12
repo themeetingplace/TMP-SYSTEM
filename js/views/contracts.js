@@ -516,7 +516,7 @@ export function showContractDetails(id) {
         ],
         footerHtml: `
             <button class="btn btn-outline" data-action="close-detail" type="button">關閉</button>
-            <button class="btn btn-primary" data-action="edit-from-detail" type="button">
+            <button class="btn btn-primary" data-action="edit-from-detail" type="button" data-write>
                 <i class="ph ph-pencil"></i> 編輯合約
             </button>
         `,
