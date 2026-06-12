@@ -271,7 +271,7 @@ function buildAnalysisReportHtml(range, buildingId = null) {
             <div class="kpi">
                 <div class="kpi-label">毛利率</div>
                 <div class="kpi-value">${summary.inAll > 0 ? pct(summary.grossMargin) : '—'}</div>
-                <div class="kpi-sub">扣房東租金 · 業界 20-40%</div>
+                <div class="kpi-sub">扣租金 · 業界 20-40%</div>
             </div>
             <div class="kpi">
                 <div class="kpi-label">淨利率</div>
@@ -294,7 +294,7 @@ function buildAnalysisReportHtml(range, buildingId = null) {
                 <tr>
                     <th>館別</th>
                     <th class="right">收入</th>
-                    <th class="right">房東租金</th>
+                    <th class="right">租金</th>
                     <th class="right">其他支出</th>
                     <th class="right">淨利</th>
                     <th class="right">毛利率</th>

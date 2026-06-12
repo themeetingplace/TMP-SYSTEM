@@ -778,7 +778,7 @@ function renderFinancialKpiTiles(agg) {
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-chart-pie-slice"></i> 毛利率</div>
                 <div class="stat-tile-value" style="color: ${grossMarginColor};">${agg.inAll > 0 ? pct(agg.grossMargin) : '—'}</div>
-                <div class="stat-tile-sub">(收 − 房東租金) ÷ 收 · 業界 20-40%</div>
+                <div class="stat-tile-sub">(收 − 租金) ÷ 收 · 業界 20-40%</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-percent"></i> 淨利率</div>
@@ -803,7 +803,7 @@ function renderLandlordWarning(agg) {
         return `
             <div class="report-info-card">
                 <i class="ph ph-info report-info-icon-inline"></i>
-                <span>房東租金 <strong>$${agg.landlordRent.toLocaleString()}</strong> · type: ${agg.detectedTypes.map(t => `<span class="report-info-type">${t}</span>`).join('')}</span>
+                <span>租金 <strong>$${agg.landlordRent.toLocaleString()}</strong> · type: ${agg.detectedTypes.map(t => `<span class="report-info-type">${t}</span>`).join('')}</span>
             </div>
         `;
     }
@@ -815,7 +815,7 @@ function renderLandlordWarning(agg) {
         <div class="report-warning-card">
             <div class="report-warning-icon"><i class="ph ph-warning-circle"></i></div>
             <div class="report-warning-body">
-                <strong>未偵測到房東租金支出</strong>
+                <strong>未偵測到租金支出</strong>
                 <small>毛利率會算成 100%。當期支出 type：</small>
                 <div class="report-warning-types">
                     ${types.map(t => `<span class="report-warning-type">${t}</span>`).join('')}
@@ -904,7 +904,7 @@ function renderAnalysisAllBuildings() {
                         <tr>
                             <th>館別</th>
                             <th style="text-align: right;">收入</th>
-                            <th style="text-align: right;">房東租金</th>
+                            <th style="text-align: right;">租金</th>
                             <th style="text-align: right;">其他支出</th>
                             <th style="text-align: right;">淨利</th>
                             <th style="text-align: right;">毛利率</th>
