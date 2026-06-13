@@ -91,13 +91,15 @@
     /* Topbar */
     --topbar-height: 54px;
 
-    /* Chart palette — dashboard + reports 共用，改色只改這裡 */
-    --chart-income: var(--color-success);                /* #22946e */
-    --chart-expense: var(--color-danger);                /* #b13535 */
+    /* Chart palette — dashboard + reports 共用，改色只改這裡
+       字面值 (不用 var(...)) — Chart.js v4.5 動畫引擎吃到 getPropertyValue 拿到
+       未解析的 var() 字串會炸 this._fn is not a function */
+    --chart-income: #22946e;                              /* = color-success */
+    --chart-expense: #b13535;                             /* = color-danger */
     --chart-fill-income: rgba(34, 148, 110, 0.10);
     --chart-fill-expense: rgba(177, 53, 53, 0.08);
-    --chart-grid: rgba(15, 23, 42, 0.06);                /* 統一 grid 灰 — 介於 dashboard 0.05 跟 reports #cbd5e1 之間 */
-    --chart-axis-text: var(--text-muted);                /* #6b7280 */
+    --chart-grid: rgba(15, 23, 42, 0.06);                /* 介於 dashboard 0.05 跟 reports #cbd5e1 之間 */
+    --chart-axis-text: #6b7280;                          /* = text-muted */
     /* Categorical — 多館 / 分類 / pie 用，取代 BUILDING_COLOR_PALETTE / PIE_COLORS 兩套 */
     --chart-cat-1: #ff8859;  /* brand */
     --chart-cat-2: #3f7c8a;
