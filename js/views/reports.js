@@ -16,7 +16,7 @@ import { renderRangePicker, initRangePicker } from '../utils/dateRangePicker.js'
 import { reportState, invoiceInRange, getRangeLabel } from './report-state.js';
 import { exportLandlordReport } from './report-export.js';
 import { exportAnalysisReport } from './analysis-export.js';
-import { getChartColors } from '../utils/chartTheme.js';
+// 注意: reports.js 不從 chartTheme 讀色 — 全部 hex literal，跟 dashboard.js 一致避開 Chart.js v4.5 動畫 bug
 
 // ───────────────────── 共用 helpers ─────────────────────
 const pct = v => `${(v * 100).toFixed(1)}%`;
@@ -190,11 +190,12 @@ export function initReportsCharts(scope) {
     }
 }
 
-// 月度趨勢 — 收支雙線 (smooth + fill)，跟 dashboard 同 schema
+// 月度趨勢 — 收支雙線 (smooth + fill)
+// config 1:1 跟 dashboard.js (line 376-465) 對齊，避開 Chart.js v4.5 內部炸鍋
+// 寫死 hex 跟 dashboard 一樣，不從 CSS var 讀 (--chart-* 留給 categorical 用)
 function renderTrendChart(months) {
     if (months.length === 0) return '';
     const id = `report-chart-${++_chartCounter}`;
-    const C = getChartColors();
     _pendingCharts.push({
         canvasId: id,
         config: {
@@ -205,25 +206,28 @@ function renderTrendChart(months) {
                     {
                         label: '收入',
                         data: months.map(m => m.income),
-                        borderColor: C.income,
-                        backgroundColor: C.fillIncome,
-                        borderWidth: 2, tension: 0.4, fill: true,
-                        pointBackgroundColor: C.income, pointRadius: 3
+                        borderColor: '#22946e',
+                        backgroundColor: 'rgba(34, 148, 110, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
                     },
                     {
                         label: '支出',
                         data: months.map(m => m.expense),
-                        borderColor: C.expense,
-                        backgroundColor: C.fillExpense,
-                        borderWidth: 2, tension: 0.4, fill: true,
-                        pointBackgroundColor: C.expense, pointRadius: 3
+                        borderColor: '#b13535',
+                        backgroundColor: 'rgba(177, 53, 53, 0.08)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
                     }
                 ]
             },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'top', labels: { boxWidth: 14, padding: 16, color: C.axis } },
+                    legend: { position: 'top', labels: { boxWidth: 14, padding: 16 } },
                     tooltip: {
                         callbacks: {
                             label: (item) => `${item.dataset.label}：$${item.parsed.y.toLocaleString()}`
@@ -233,10 +237,10 @@ function renderTrendChart(months) {
                 scales: {
                     y: {
                         beginAtZero: true,
-                        grid: { color: C.grid },
-                        ticks: { color: C.axis, callback: v => '$' + v.toLocaleString() }
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                        ticks: { callback: (v) => '$' + v.toLocaleString() }
                     },
-                    x: { grid: { display: false }, ticks: { color: C.axis } }
+                    x: { grid: { display: false } }
                 }
             }
         }
@@ -603,12 +607,10 @@ function renderOccBarRow(p) {
     `;
 }
 
-// 入住 vs 退租 雙線圖 — Chart.js line，跟 trend chart 同 schema
-// maxVal 參數保留 (caller 已計算) 但 Chart.js 自己會推軸頂
+// 入住 vs 退租 雙線圖 — config 1:1 跟 dashboard 對齊
 function renderMoveInOutChart(months /* , maxVal */) {
     if (months.length === 0) return '';
     const id = `report-chart-${++_chartCounter}`;
-    const C = getChartColors();
     _pendingCharts.push({
         canvasId: id,
         config: {
@@ -619,34 +621,37 @@ function renderMoveInOutChart(months /* , maxVal */) {
                     {
                         label: '入住',
                         data: months.map(m => m.moveIn),
-                        borderColor: C.income,
-                        backgroundColor: C.fillIncome,
-                        borderWidth: 2, tension: 0.4, fill: true,
-                        pointBackgroundColor: C.income, pointRadius: 3
+                        borderColor: '#22946e',
+                        backgroundColor: 'rgba(34, 148, 110, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
                     },
                     {
                         label: '退租',
                         data: months.map(m => m.moveOut),
-                        borderColor: C.expense,
-                        backgroundColor: C.fillExpense,
-                        borderWidth: 2, tension: 0.4, fill: true,
-                        pointBackgroundColor: C.expense, pointRadius: 3
+                        borderColor: '#b13535',
+                        backgroundColor: 'rgba(177, 53, 53, 0.08)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
                     }
                 ]
             },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'top', labels: { boxWidth: 14, padding: 16, color: C.axis } },
+                    legend: { position: 'top', labels: { boxWidth: 14, padding: 16 } },
                     tooltip: { callbacks: { label: (i) => `${i.dataset.label}：${i.parsed.y} 位` } }
                 },
                 scales: {
                     y: {
                         beginAtZero: true,
-                        grid: { color: C.grid },
-                        ticks: { color: C.axis, precision: 0 }
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                        ticks: { precision: 0 }
                     },
-                    x: { grid: { display: false }, ticks: { color: C.axis } }
+                    x: { grid: { display: false } }
                 }
             }
         }
@@ -704,14 +709,16 @@ function computeExpensePareto(invoices) {
     });
 }
 
-// 支出結構 — Chart.js doughnut；color 走 :root 的 --chart-cat-* token
+// 支出結構 — doughnut，config 1:1 跟 dashboard emptyBedsChart 對齊
+// 色票直接寫陣列 literal (不繞 getChartColors)
+const PIE_PALETTE = ['#ff8859', '#3f7c8a', '#d4a574', '#7a9a6a', '#b67d7d', '#9c8aaa', '#c4a486', '#7a7c80'];
+
 function renderExpensePie(items) {
     if (items.length === 0 || items.every(it => it.amount === 0)) {
         return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無支出資料</div>`;
     }
     const id = `report-chart-${++_chartCounter}`;
-    const C = getChartColors();
-    const colors = items.map((_, i) => C.cats[i % C.cats.length]);
+    const colors = items.map((_, i) => PIE_PALETTE[i % PIE_PALETTE.length]);
     _pendingCharts.push({
         canvasId: id,
         config: {
@@ -721,15 +728,17 @@ function renderExpensePie(items) {
                 datasets: [{
                     data: items.map(it => it.amount),
                     backgroundColor: colors,
-                    borderColor: C.surface,
-                    borderWidth: 2
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                    hoverOffset: 6
                 }]
             },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true,
+                maintainAspectRatio: false,
                 cutout: '55%',
                 plugins: {
-                    legend: { display: false },  // 我們自己在右邊渲染帶金額的 legend
+                    legend: { display: false },
                     tooltip: {
                         callbacks: {
                             label: (item) => {
