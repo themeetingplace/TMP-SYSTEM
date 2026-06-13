@@ -222,17 +222,11 @@ function renderTrendChart(months) {
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { position: 'top', labels: { boxWidth: 14, padding: 16, color: C.axis } },
                     tooltip: {
                         callbacks: {
-                            label: (item) => `${item.dataset.label}：$${item.parsed.y.toLocaleString()}`,
-                            afterBody: (items) => {
-                                if (!items.length) return '';
-                                const m = months[items[0].dataIndex];
-                                return `淨利：$${m.net.toLocaleString()}`;
-                            }
+                            label: (item) => `${item.dataset.label}：$${item.parsed.y.toLocaleString()}`
                         }
                     }
                 },
@@ -642,7 +636,6 @@ function renderMoveInOutChart(months /* , maxVal */) {
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { position: 'top', labels: { boxWidth: 14, padding: 16, color: C.axis } },
                     tooltip: { callbacks: { label: (i) => `${i.dataset.label}：${i.parsed.y} 位` } }
