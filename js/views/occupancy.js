@@ -27,8 +27,9 @@ let currentBuildingId = null;
 let mobileNavState = { level: 'buildings', buildingId: null, room: null };
 
 function calculateMonthCount() {
-    // 用實際 main-content 寬度算 (排除 sidebar)，找不到才 fallback window
-    // 上限 MAX_MONTHS — 即使螢幕再寬也不會超過 (今天 + 8 個月)
+    // 手機 (≤768px): 強制 6 個月，讓使用者橫向捲動發現未來月份
+    // 桌機: 依 main-content 寬度算 (上限 MAX_MONTHS)
+    if (window.innerWidth <= 768) return 6;
     const main = document.querySelector('.main-content');
     const availableArea = main?.offsetWidth || window.innerWidth;
     const space = Math.max(300, availableArea - FIXED_COLS - CARD_PADDING);
@@ -43,6 +44,7 @@ function buildMonths(today, count) {
             year: d.getFullYear(),
             month: d.getMonth() + 1,
             label: `${d.getFullYear()}/${d.getMonth() + 1}`,
+            shortLabel: `${d.getMonth() + 1}月`,   // 手機用短版 label
             isCurrent: d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()
         });
     }
@@ -268,7 +270,7 @@ function renderBuildingTable(building, months, today) {
         return headerRow + bedRows;
     }).join('');
     const monthHeader = months.map(m =>
-        `<th class="${m.isCurrent ? 'occ-this-month-header' : ''}">${m.label}</th>`
+        `<th class="${m.isCurrent ? 'occ-this-month-header' : ''}"><span class="occ-month-full">${m.label}</span><span class="occ-month-short">${m.shortLabel}</span></th>`
     ).join('');
 
     // 統計：active = 有現任合約，vacant = 沒任何 active/snoozed

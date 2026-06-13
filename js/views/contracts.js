@@ -294,7 +294,7 @@ export function renderContracts() {
             ` : ''}
 
             ${anyRenewIntent > 0 ? `
-                <div class="filter-tabs mb-2" style="flex-wrap: wrap;">
+                <div class="filter-tabs mb-2">
                     <span class="filter-tab-label">續租意願</span>
                     <button class="filter-tab active" data-filter-value="all" data-filter-group="renew">全部 (${enriched.length})</button>
                     ${renewCounts.asking > 0 ? `<button class="filter-tab" data-filter-value="asking" data-filter-group="renew">⏳ 待回覆 (${renewCounts.asking})</button>` : ''}

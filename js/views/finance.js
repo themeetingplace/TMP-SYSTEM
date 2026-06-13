@@ -140,17 +140,17 @@ export function renderFinance() {
     return `
         ${renderFinanceSubTabs('finance')}
         <!-- 月份切換 -->
-        <div class="month-switcher card" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1.25rem; margin-bottom: 1rem;">
-            <button class="btn btn-outline" data-month-action="prev" style="padding: 0.4rem 0.75rem;">
+        <div class="month-switcher card">
+            <button class="btn btn-outline" data-month-action="prev">
                 <i class="ph ph-caret-left"></i> 上個月
             </button>
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.125rem;">
-                <span style="font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">檢視月份</span>
-                <strong style="font-size: 1.1rem;">${formatMonthLabel(financeState.viewMonth)}</strong>
+            <div class="month-switcher__label">
+                <span class="month-switcher__label-eyebrow">檢視月份</span>
+                <strong>${formatMonthLabel(financeState.viewMonth)}</strong>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
-                <button class="btn btn-outline" data-month-action="this" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">本月</button>
-                <button class="btn btn-outline" data-month-action="next" style="padding: 0.4rem 0.75rem;">
+            <div class="month-switcher__right">
+                <button class="btn btn-outline" data-month-action="this">本月</button>
+                <button class="btn btn-outline" data-month-action="next">
                     下個月 <i class="ph ph-caret-right"></i>
                 </button>
             </div>
