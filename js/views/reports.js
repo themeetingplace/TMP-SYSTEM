@@ -16,6 +16,7 @@ import { renderRangePicker, initRangePicker } from '../utils/dateRangePicker.js'
 import { reportState, invoiceInRange, getRangeLabel } from './report-state.js';
 import { exportLandlordReport } from './report-export.js';
 import { exportAnalysisReport } from './analysis-export.js';
+import { getChartColors } from '../utils/chartTheme.js';
 
 // ───────────────────── 共用 helpers ─────────────────────
 const pct = v => `${(v * 100).toFixed(1)}%`;
@@ -169,23 +170,6 @@ let _chartCounter = 0;
 const _pendingCharts = [];
 const _chartInstances = new Map();
 
-function chartColors() {
-    const css = getComputedStyle(document.documentElement);
-    const read = name => css.getPropertyValue(name).trim();
-    const cats = [];
-    for (let i = 1; i <= 8; i++) cats.push(read(`--chart-cat-${i}`) || '#999');
-    return {
-        income: read('--chart-income') || '#22946e',
-        expense: read('--chart-expense') || '#b13535',
-        fillIncome: read('--chart-fill-income') || 'rgba(34, 148, 110, 0.10)',
-        fillExpense: read('--chart-fill-expense') || 'rgba(177, 53, 53, 0.08)',
-        grid: read('--chart-grid') || 'rgba(15, 23, 42, 0.06)',
-        axis: read('--chart-axis-text') || '#6b7280',
-        surface: read('--color-surface') || '#ffffff',
-        cats
-    };
-}
-
 function destroyAllCharts() {
     _chartInstances.forEach(c => { try { c.destroy(); } catch {} });
     _chartInstances.clear();
@@ -210,7 +194,7 @@ export function initReportsCharts(scope) {
 function renderTrendChart(months) {
     if (months.length === 0) return '';
     const id = `report-chart-${++_chartCounter}`;
-    const C = chartColors();
+    const C = getChartColors();
     _pendingCharts.push({
         canvasId: id,
         config: {
@@ -630,7 +614,7 @@ function renderOccBarRow(p) {
 function renderMoveInOutChart(months /* , maxVal */) {
     if (months.length === 0) return '';
     const id = `report-chart-${++_chartCounter}`;
-    const C = chartColors();
+    const C = getChartColors();
     _pendingCharts.push({
         canvasId: id,
         config: {
@@ -733,7 +717,7 @@ function renderExpensePie(items) {
         return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無支出資料</div>`;
     }
     const id = `report-chart-${++_chartCounter}`;
-    const C = chartColors();
+    const C = getChartColors();
     const colors = items.map((_, i) => C.cats[i % C.cats.length]);
     _pendingCharts.push({
         canvasId: id,

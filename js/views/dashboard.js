@@ -1,5 +1,6 @@
 import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings } from '../data.js';
 import { emptyState } from '../utils/emptyState.js';
+import { getChartColors } from '../utils/chartTheme.js';
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
 function extractAreaName(fullName) {
@@ -335,7 +336,7 @@ export function renderDashboard() {
 let incomeChartInstance = null;
 let chartMode = 'total'; // 'total' | 'byBuilding'
 
-const BUILDING_COLOR_PALETTE = ['#ff8859', '#1e56a3', '#22946e', '#b8871f', '#7c3aed', '#0891b2', '#db2777'];
+// 各館分色 — 從 :root --chart-cat-1~8 讀，buildChartData() 直接用 getChartColors().cats
 
 function aggregateInvoicesByMonth(months) {
     // 回傳 { income: [m1, m2, ...], expense: [...] }
@@ -370,6 +371,7 @@ function buildChartData() {
     const months = lastNMonths(6);
     const monthLabels = months.map(m => `${parseInt(m.substring(5), 10)}月`);
     const buildings = getSortedBuildings({ activeOnly: true });
+    const C = getChartColors();
 
     if (chartMode === 'total') {
         const { income, expense } = aggregateInvoicesByMonth(months);
@@ -379,8 +381,8 @@ function buildChartData() {
                 {
                     label: '收入',
                     data: income,
-                    borderColor: '#22946e',
-                    backgroundColor: 'rgba(34, 148, 110, 0.1)',
+                    borderColor: C.income,
+                    backgroundColor: C.fillIncome,
                     borderWidth: 2,
                     tension: 0.4,
                     fill: true
@@ -388,8 +390,8 @@ function buildChartData() {
                 {
                     label: '支出',
                     data: expense,
-                    borderColor: '#b13535',
-                    backgroundColor: 'rgba(177, 53, 53, 0.08)',
+                    borderColor: C.expense,
+                    backgroundColor: C.fillExpense,
                     borderWidth: 2,
                     tension: 0.4,
                     fill: true
@@ -400,12 +402,13 @@ function buildChartData() {
 
     // byBuilding：每館一條淨收益線
     const netByBuilding = aggregateNetByBuildingMonth(months, buildings);
+    const palette = C.cats;
     return {
         labels: monthLabels,
         datasets: buildings.map((b, i) => ({
             label: b.name,
             data: netByBuilding[b.id],
-            borderColor: BUILDING_COLOR_PALETTE[i % BUILDING_COLOR_PALETTE.length],
+            borderColor: palette[i % palette.length],
             backgroundColor: 'transparent',
             borderWidth: 2,
             tension: 0.4,
@@ -519,15 +522,16 @@ window.initDashboardInteractions = function() {
     const firstData = firstName ? emptyBedsByProperty[firstName] : { total: 0, vacant: 0 };
     const firstRented = firstData.total - firstData.vacant;
 
-    // primary: #ff8859 (空床), success: #22946e (已出租)
+    // 已出租 = success token / 空床 = primary token
+    const C = getChartColors();
     emptyBedsChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: ['已出租', '空床'],
             datasets: [{
                 data: [firstRented, firstData.vacant],
-                backgroundColor: ['#22946e', '#ff8859'],
-                borderColor: '#ffffff',
+                backgroundColor: [C.income, C.primary],
+                borderColor: C.surface,
                 borderWidth: 2,
                 hoverOffset: 6
             }]

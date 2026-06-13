@@ -2303,8 +2303,11 @@ select:focus-visible,
 /* A-M-1: 拿掉 metric-card 額外 translateY，避免 dashboard 一片 card 同步抖
    .card:hover 的 shadow + border 已足夠 feedback */
 
+/* card-title — UIUX_AUDIT_CONSISTENCY P1-2: 三處覆寫 + 兩個 !important 整併到這一條
+   font-size 走階梯 token (--text-md = 1rem)，原 0.9375rem 太小、L5280 的 !important 1rem 也順勢併入；
+   nowrap/ellipsis 從 L6540 拉上來；mobile 額外縮小拿掉，1rem 在手機上仍 OK */
 .card-title {
-    font-size: 0.9375rem;
+    font-size: var(--text-md);
     font-weight: 600;
     margin-bottom: 1rem;
     display: flex;
@@ -2312,6 +2315,9 @@ select:focus-visible,
     gap: 0.5rem;
     color: var(--text-main);
     letter-spacing: -0.005em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .card-title i {
@@ -5276,15 +5282,7 @@ select.form-input {
     }
 }
 
-/* QW: card-title 跟內文拉開差距 */
-.card-title {
-    font-size: 1rem !important;   /* 從 0.9375rem → 1rem，跟內文 0.875 差 14% */
-}
-@media (max-width: 768px) {
-    .card-title {
-        font-size: 0.95rem !important;
-    }
-}
+/* card-title 補丁已整併到 L2306 base rule (P1-2)，原 QW !important 移除 */
 
 /* T3R-#6: finance/analysis/unsettled sub-tabs 改保留 label 但縮短 */
 @media (max-width: 640px) {
@@ -6536,12 +6534,7 @@ tr.row-flash > td {
     transform: scale(1.15);
 }
 
-/* Prevent text wrapping in various elements */
-.card-title {
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-}
+/* card-title nowrap/ellipsis 已整併到 L2306 base rule (P1-2)，原 !important 移除 */
 
 .metric-header {
     white-space: nowrap !important;
