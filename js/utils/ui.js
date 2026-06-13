@@ -81,6 +81,23 @@ export function openModal({ title, bodyHtml, footerHtml = '', maxWidth = 600, on
     // T3R-#7: 手機軟鍵盤彈起時動態縮 modal 高度，讓 footer / submit 按鈕仍在視野內
     attachKeyboardAdjustment(overlay);
 
+    // P1 mobile follow-up #4: 鍵盤彈出後把焦點 input 捲到 modal-body 可見區
+    // iOS Safari modal-body 是 overflow-y: auto，但鍵盤動畫期間 focus 觸發的 native scrollIntoView
+    // 會嘗試捲整個 page (而 page 沒法捲)，所以要顯式捲 modal-body 容器
+    const body = overlay.querySelector('.modal-body');
+    if (body) {
+        overlay.addEventListener('focusin', e => {
+            const target = e.target;
+            if (!target || !target.matches) return;
+            if (!target.matches('input, textarea, select, [contenteditable="true"]')) return;
+            // 等鍵盤彈出動畫 (~300ms iOS) + visualViewport resize 觸發
+            setTimeout(() => {
+                if (!body.contains(target)) return;
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 320);
+        });
+    }
+
     return { overlay, close };
 }
 

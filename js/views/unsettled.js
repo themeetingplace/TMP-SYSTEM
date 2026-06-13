@@ -171,7 +171,7 @@ export function renderUnsettled() {
                 </div>
             </div>
 
-            <div class="filter-tabs mb-2" style="flex-wrap: wrap;">
+            <div class="filter-tabs mb-2">
                 <span class="filter-tab-label">館別</span>
                 <button class="filter-tab active" data-filter-value="all" data-filter-group="building">全部館 (${unsettled.length})</button>
                 ${allBuildings.map(b => {
@@ -179,7 +179,7 @@ export function renderUnsettled() {
                     return `<button class="filter-tab ${cnt === 0 ? 'is-empty' : ''}" data-filter-value="${b.name}" data-filter-group="building">${b.name} (${cnt})</button>`;
                 }).join('')}
             </div>
-            <div class="filter-tabs mb-4" style="flex-wrap: wrap;">
+            <div class="filter-tabs mb-4">
                 <span class="filter-tab-label">狀態</span>
                 <button class="filter-tab active" data-filter-value="all" data-filter-group="status">全部 (${unsettled.length})</button>
                 <button class="filter-tab" data-filter-value="待核對" data-filter-group="status">⚠ 待核對 (${awaitVerifyCount})</button>

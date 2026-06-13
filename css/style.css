@@ -1417,9 +1417,9 @@ select:focus-visible,
     background: rgba(0, 0, 0, 0.02);
 }
 
-/* Row 狀態 — 用單一明顯底色，覆蓋 stripe */
+/* Row 狀態 — 用單一明顯底色，覆蓋 stripe (用不透明 hex 避免 sticky 透過去看到底層) */
 .occ-table tr.occ-row-vacant > td {
-    background: rgba(148, 163, 184, 0.10) !important;  /* 淺灰一致 */
+    background: #f1f3f5 !important;  /* = rgba(148,163,184,0.10) over white 不透明等效 */
 }
 .occ-table tr.occ-row-terminated > td {
     background: repeating-linear-gradient(
@@ -4018,6 +4018,8 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     max-width: 600px;
     width: 100%;
     max-height: 85vh;
+    /* dvh = 動態 viewport，鍵盤彈出時自動縮，避免 modal 內 input 被遮到拉不回 (P1 mobile follow-up #4) */
+    max-height: 85dvh;
     /* 改成 flex 容器 — 讓 header / body / footer 分層，只有 body 內部捲動 */
     display: flex;
     flex-direction: column;
@@ -4896,8 +4898,22 @@ tr.is-await-verify-row:hover {
 }
 
 @media (max-width: 640px) {
+    /* 手機: form-grid 直接改 block，每個 form-group 自然成一行
+       不用 grid 1fr 是因為 stepper sticky / form-section-divider grid-column 1/-1
+       會跟 grid layout 互相打架 (P1 mobile follow-up #2/#3/#5) */
     .form-grid {
-        grid-template-columns: 1fr;
+        display: block;
+    }
+    .form-grid > * {
+        margin-bottom: 1rem;
+    }
+    .form-grid > *:last-child {
+        margin-bottom: 0;
+    }
+    /* form-section-divider 在 block layout 不再需要 grid-column 1/-1 inline，視覺更乾淨 */
+    .form-grid > .form-section-divider {
+        margin-top: 1rem;
+        margin-bottom: 0.75rem;
     }
 }
 
@@ -6080,6 +6096,20 @@ select.form-input {
     .occ-table thead th:nth-child(2) { z-index: 4; }
     /* 房間 header colspan 排除 sticky 影響 */
     .occ-table tr.occ-room-header td { position: static !important; }
+    /* sticky 雙欄在 vacant / terminated 列要跟著該列底色不透明 (P1 mobile follow-up #1)
+       否則橫滾時底層的 +入住 button / 月份格 會透出來，視覺髒 */
+    .occ-table tr.occ-row-vacant > td:nth-child(1),
+    .occ-table tr.occ-row-vacant > td:nth-child(2) {
+        background: #f1f3f5 !important;
+    }
+    .occ-table tr.occ-row-terminated > td:nth-child(1),
+    .occ-table tr.occ-row-terminated > td:nth-child(2) {
+        background: #f8f9fa !important;
+    }
+    /* stripe-b 列的 sticky 房客欄底色要跟列底色一致 (本身是 rgba(0,0,0,0.02) 半透明，sticky 漏底) */
+    .occ-table tr.occ-room-stripe-b:not(.occ-row-vacant):not(.occ-row-terminated) > td:nth-child(2) {
+        background: #fafbfa !important;
+    }
 
     /* 防禦規則: 防範未來再加新全域 thead 規則時把矩陣表 clip 掉 (V2 designer 建議) */
     .occ-table thead {
