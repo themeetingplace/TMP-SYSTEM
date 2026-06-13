@@ -2580,8 +2580,11 @@ select:focus-visible,
     }
 }
 
-/* Filter Tabs */
-.filter-tabs {
+/* === Segmented control (canonical) ===
+   .filter-tab 是基準樣式；.chart-mode-btn / .property-filter-btn 視覺一樣，
+   一起共用同條規則 (P0-3 audit) — 之後改一處所有 segmented 都跟著走 */
+.filter-tabs,
+.chart-mode-toggle {
     display: flex;
     gap: 0.375rem;
     flex-wrap: wrap;
@@ -2591,26 +2594,33 @@ select:focus-visible,
     width: fit-content;
 }
 
-.filter-tab {
+.filter-tab,
+.chart-mode-btn,
+.property-filter-btn {
     background: none;
     border: none;
     padding: 0.4375rem 0.875rem;
     border-radius: calc(var(--radius-md) - 2px);
-    font-size: 0.8125rem;
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--text-muted);
     cursor: pointer;
     transition: all var(--transition-fast);
     font-family: inherit;
     line-height: 1.4;
+    white-space: nowrap;
 }
 
-.filter-tab:hover {
+.filter-tab:hover,
+.chart-mode-btn:hover,
+.property-filter-btn:hover {
     color: var(--text-main);
     background-color: rgba(255, 255, 255, 0.6);
 }
 
-.filter-tab.active {
+.filter-tab.active,
+.chart-mode-btn.active,
+.property-filter-btn.active {
     background-color: var(--color-surface);
     color: var(--color-primary);
     font-weight: 600;
@@ -4582,37 +4592,7 @@ tr.is-await-verify-row:hover {
 .matrix-table tr.m-subtotal.is-expense td.m-type { background-color: rgba(177, 53, 53, 0.05); }
 .matrix-table tr.m-net-row td.m-type { background-color: rgba(51, 65, 85, 0.08); }
 
-/* === Dashboard chart mode toggle === */
-.chart-mode-toggle {
-    display: inline-flex;
-    background-color: var(--color-background);
-    padding: 0.25rem;
-    border-radius: var(--radius-md);
-    gap: 0.125rem;
-}
-
-.chart-mode-btn {
-    padding: 0.35rem 0.875rem;
-    background: none;
-    border: none;
-    font-family: inherit;
-    font-size: 0.8rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all var(--transition-fast);
-}
-
-.chart-mode-btn:hover {
-    color: var(--text-main);
-}
-
-.chart-mode-btn.active {
-    background-color: var(--color-surface);
-    color: var(--color-primary);
-    box-shadow: var(--shadow-sm);
-}
+/* .chart-mode-toggle / .chart-mode-btn 已合併到 L2584 canonical .filter-tab 規則 (P0-3) */
 
 /* === 各館收支總覽 (帳務管理頁) === */
 .building-finance-grid {
@@ -4818,31 +4798,7 @@ tr.is-await-verify-row:hover {
     color: var(--color-danger);
 }
 
-/* Property Filter Buttons */
-.property-filter-btn {
-    padding: 0.35rem 0.75rem !important;
-    font-size: 0.8rem !important;
-    border: 1px solid var(--border-color) !important;
-    background: transparent !important;
-    color: var(--text-muted) !important;
-    cursor: pointer !important;
-    border-radius: var(--radius-md) !important;
-    white-space: nowrap !important;
-    transition: all var(--transition-fast) !important;
-}
-
-.property-filter-btn:hover {
-    background-color: var(--color-background) !important;
-    color: var(--text-main) !important;
-    border-color: var(--color-primary) !important;
-}
-
-.property-filter-btn.active {
-    background-color: var(--color-primary-light) !important;
-    color: var(--color-primary) !important;
-    border-color: var(--color-primary) !important;
-    font-weight: 600 !important;
-}
+/* .property-filter-btn 已合併到 L2584 canonical .filter-tab 規則 (P0-3)，原本 !important 全拆 */
 
 /* Modal Footer */
 .modal-footer {

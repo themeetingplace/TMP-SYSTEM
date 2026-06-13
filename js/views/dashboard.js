@@ -251,7 +251,7 @@ export function renderDashboard() {
                     <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; white-space: nowrap;">各館空床狀態</h3>
                     <div id="property-selector" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                         ${propertyNames.map((name, idx) => `
-                            <button class="property-filter-btn ${idx === 0 ? 'active' : ''}" data-property="${name}" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; border: 1px solid var(--border-color); background: none; cursor: pointer; border-radius: var(--radius-md); white-space: nowrap; transition: all var(--transition-fast);">
+                            <button class="property-filter-btn ${idx === 0 ? 'active' : ''}" data-property="${name}">
                                 ${name}
                             </button>
                         `).join('')}
