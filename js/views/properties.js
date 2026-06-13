@@ -535,8 +535,8 @@ export function showCheckinAssignmentForm(opts = {}) {
             if (headerEl && !headerEl.parentElement.querySelector('.modal-subtitle')) {
                 const sub = document.createElement('div');
                 sub.className = 'modal-subtitle';
-                sub.style.cssText = 'font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; font-weight: 400;';
-                sub.innerHTML = `將建立合約編號 <span style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-weight: 600; letter-spacing: 0.02em;">${predictedContractId}</span> <span style="opacity: 0.7;">· 送出後正式產生</span>`;
+                // 樣式走 .modal-subtitle CSS 規則 — 不再 inline (audit QW-5)
+                sub.innerHTML = `將建立合約編號 <span class="mono">${predictedContractId}</span> <span class="modal-subtitle__faded">· 送出後正式產生</span>`;
                 headerEl.insertAdjacentElement('afterend', sub);
             }
 

@@ -121,9 +121,9 @@ function attachKeyboardAdjustment(overlay) {
         }
         const vv = window.visualViewport;
         // visualViewport.height = 可見區高度 (鍵盤彈起時會變小)
-        // 我們把 modal max-height 設成 visualViewport.height，並把 modal 推上去靠 viewport top
         content.style.maxHeight = `${vv.height}px`;
-        content.style.transform = `translateY(${vv.offsetTop}px)`;
+        // 註：原本還有 transform: translateY(vv.offsetTop) 推 sheet 上去，但 iOS Safari offsetTop 永遠是 0，
+        // 反而會在 Android 偶發出現小 offset，audit 建議直接拿掉
     };
 
     window.visualViewport.addEventListener('resize', onResize);
