@@ -73,7 +73,7 @@ export function showAccessDenied(email) {
                 <span class="auth-logo" style="background: var(--color-danger, #b13535);"><i class="ph-fill ph-prohibit"></i></span>
                 <div class="auth-brand-text">
                     <span class="auth-name">無權限存取</span>
-                    <span class="auth-sub">聚空間 BMS</span>
+                    <span class="auth-sub">聚空間 PMS</span>
                 </div>
             </div>
             <div style="padding: 0.5rem 0 1rem; text-align: center;">

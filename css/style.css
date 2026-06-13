@@ -90,6 +90,23 @@
 
     /* Topbar */
     --topbar-height: 54px;
+
+    /* Chart palette — dashboard + reports 共用，改色只改這裡 */
+    --chart-income: var(--color-success);                /* #22946e */
+    --chart-expense: var(--color-danger);                /* #b13535 */
+    --chart-fill-income: rgba(34, 148, 110, 0.10);
+    --chart-fill-expense: rgba(177, 53, 53, 0.08);
+    --chart-grid: rgba(15, 23, 42, 0.06);                /* 統一 grid 灰 — 介於 dashboard 0.05 跟 reports #cbd5e1 之間 */
+    --chart-axis-text: var(--text-muted);                /* #6b7280 */
+    /* Categorical — 多館 / 分類 / pie 用，取代 BUILDING_COLOR_PALETTE / PIE_COLORS 兩套 */
+    --chart-cat-1: #ff8859;  /* brand */
+    --chart-cat-2: #3f7c8a;
+    --chart-cat-3: #d4a574;
+    --chart-cat-4: #7a9a6a;
+    --chart-cat-5: #b67d7d;
+    --chart-cat-6: #9c8aaa;
+    --chart-cat-7: #c4a486;
+    --chart-cat-8: #7a7c80;
 }
 
 * {
@@ -1834,7 +1851,7 @@ select:focus-visible,
     color: var(--color-danger);
 }
 
-/* 第二行：聚空間 BMS v1.1.1 / © 2026 聚空間租賃管理顧問有限公司 — 細線分隔，上下兩行排版 */
+/* 第二行：聚空間 PMS vX.Y.Z / © 2026 聚空間租賃管理顧問有限公司 — 細線分隔，上下兩行排版 */
 .brand-row {
     display: flex;
     flex-direction: column;
@@ -3524,24 +3541,18 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     .charts-side-by-side { grid-template-columns: 1fr; }
 }
 
-/* === 圓餅圖 (Tab 3 支出結構) === */
+/* === 圓餅圖 (Tab 3 支出結構，Chart.js doughnut) === */
 .pie-chart-wrap {
     display: flex;
     align-items: center;
     gap: 1.25rem;
     flex-wrap: wrap;
 }
-.pie-chart-svg {
+.pie-chart-canvas-wrap {
     width: 220px;
     height: 220px;
     flex-shrink: 0;
-}
-.pie-slice {
-    cursor: pointer;
-    transition: opacity 0.15s;
-}
-.pie-slice:hover {
-    opacity: 0.82;
+    position: relative;
 }
 .pie-chart-legend {
     flex: 1;
@@ -3584,47 +3595,7 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     font-variant-numeric: tabular-nums;
 }
 
-/* === 圖表 hover tooltip === */
-.chart-tooltip {
-    position: fixed;
-    z-index: 9999;
-    background: rgba(26, 28, 35, 0.95);
-    color: white;
-    padding: 0.55rem 0.75rem;
-    border-radius: 8px;
-    font-size: 0.78rem;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
-    pointer-events: none;
-    min-width: 140px;
-    line-height: 1.4;
-}
-.chart-tip-title {
-    font-weight: 700;
-    font-size: 0.85rem;
-    margin-bottom: 0.35rem;
-    padding-bottom: 0.3rem;
-    border-bottom: 1px solid rgba(255,255,255,0.15);
-}
-.chart-tip-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.85rem;
-    align-items: center;
-    padding: 0.1rem 0;
-}
-.chart-tip-key {
-    color: rgba(255,255,255,0.7);
-    font-size: 0.75rem;
-}
-.chart-tip-val {
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-.chart-tip-net {
-    border-top: 1px dashed rgba(255,255,255,0.18);
-    padding-top: 0.25rem;
-    margin-top: 0.15rem;
-}
+/* 圖表 hover tooltip 已下架 — Chart.js 內建 tooltip 取代 (dashboard + reports 共用) */
 
 /* === Pareto Tiles (Tab 3) — 寬度依金額比例 === */
 .pareto-summary-mini {
@@ -3945,32 +3916,11 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     font-size: 0.85rem;
 }
 
-/* 月度趨勢折線圖 (SVG) */
+/* 月度趨勢折線圖 (Chart.js canvas — 需要明確高度) */
 .trend-chart-wrap {
     width: 100%;
-    overflow: hidden;
-}
-.trend-chart-svg {
-    width: 100%;
-    display: block;
-}
-.trend-chart-legend {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    margin-top: 0.5rem;
-    font-size: 0.76rem;
-    color: var(--text-muted);
-}
-.trend-chart-legend-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-.trend-chart-legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
+    height: 260px;
+    position: relative;
 }
 
 .modal-content {

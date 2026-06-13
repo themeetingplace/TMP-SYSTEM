@@ -161,82 +161,109 @@ function renderReceivableStackedBars(items) {
     `;
 }
 
-// 月度趨勢 grouped bar — 數字 hover 才顯示，網格密集
-function renderTrendChart(months) {
-    if (months.length === 0) return '';
-    const w = 600, h = 220;
-    const padL = 44, padR = 10, padT = 16, padB = 26;
-    const innerW = w - padL - padR;
-    const innerH = h - padT - padB;
+// ───────────────────── Chart.js 工廠 (取代手寫 SVG，跟 dashboard 同套渲染) ─────────────────────
+// 每個 render 函數產出 `<canvas id="${id}">`，並把 Chart.js config 推到 _pendingCharts；
+// view render 完 → initReportsActions(scope) → initReportsCharts(scope) 一次性 init 所有 canvas。
+// 切 tab / 切館 → refreshView() → 整個 view 重新 render，舊 Chart instance 在 destroyAllCharts() 被清掉。
+let _chartCounter = 0;
+const _pendingCharts = [];
+const _chartInstances = new Map();
 
-    const allValues = months.flatMap(m => [m.income, m.expense]);
-    const maxRaw = Math.max(1, ...allValues);
-    const niceMax = niceCeil(maxRaw);
+function chartColors() {
+    const css = getComputedStyle(document.documentElement);
+    const read = name => css.getPropertyValue(name).trim();
+    const cats = [];
+    for (let i = 1; i <= 8; i++) cats.push(read(`--chart-cat-${i}`) || '#999');
+    return {
+        income: read('--chart-income') || '#22946e',
+        expense: read('--chart-expense') || '#b13535',
+        fillIncome: read('--chart-fill-income') || 'rgba(34, 148, 110, 0.10)',
+        fillExpense: read('--chart-fill-expense') || 'rgba(177, 53, 53, 0.08)',
+        grid: read('--chart-grid') || 'rgba(15, 23, 42, 0.06)',
+        axis: read('--chart-axis-text') || '#6b7280',
+        surface: read('--color-surface') || '#ffffff',
+        cats
+    };
+}
 
-    const slotW = innerW / months.length;
-    const barW = Math.min(20, (slotW - 6) / 2);
-    const yFor = v => padT + innerH - (v / niceMax) * innerH;
-    const xCenter = i => padL + slotW * i + slotW / 2;
+function destroyAllCharts() {
+    _chartInstances.forEach(c => { try { c.destroy(); } catch {} });
+    _chartInstances.clear();
+}
 
-    // 6 條 Y 軸網格 (密集) + 刻度
-    const GRID_N = 6;
-    const gridLines = [];
-    for (let i = 0; i <= GRID_N; i++) {
-        const v = (niceMax * i) / GRID_N;
-        const y = yFor(v);
-        gridLines.push(`<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="${i === 0 ? '#cbd5e1' : '#eef0f3'}" stroke-width="1" ${i > 0 && i < GRID_N ? 'stroke-dasharray="3,3"' : ''}/>`);
-        // 只在偶數 index 顯示刻度文字 (避免擠)
-        if (i % 2 === 0) {
-            gridLines.push(`<text x="${padL - 6}" y="${y + 4}" font-size="10" text-anchor="end" fill="#9ca3af" font-family="Inter, system-ui, sans-serif">$${formatYAxis(v)}</text>`);
+export function initReportsCharts(scope) {
+    destroyAllCharts();
+    while (_pendingCharts.length) {
+        const spec = _pendingCharts.shift();
+        const canvas = scope.querySelector(`#${spec.canvasId}`);
+        if (!canvas || typeof Chart === 'undefined') continue;
+        try {
+            const inst = new Chart(canvas, spec.config);
+            _chartInstances.set(spec.canvasId, inst);
+        } catch (e) {
+            console.warn('[reports] chart init failed', spec.canvasId, e);
         }
     }
-
-    const renderBars = (key, color, offsetX) => months.map((m, i) => {
-        const v = m[key];
-        const x = xCenter(i) + offsetX;
-        const y = yFor(v);
-        const barH = padT + innerH - y;
-        return `<rect x="${x}" y="${y}" width="${barW}" height="${Math.max(0.5, barH)}" fill="${color}" rx="2" class="bar-chart-rect" data-tip-kind="bar" data-tip-month="${m.label}" data-tip-income="${m.income}" data-tip-expense="${m.expense}" data-tip-net="${m.net}"/>`;
-    }).join('');
-
-    const xLabels = months.map((m, i) =>
-        `<text x="${xCenter(i)}" y="${h - 8}" font-size="11" text-anchor="middle" fill="#6b7280" font-family="Inter, system-ui, sans-serif">${m.label}</text>`
-    ).join('');
-
-    return `
-        <div class="trend-chart-wrap">
-            <div class="trend-chart-legend">
-                <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #22946e;"></span>收入</span>
-                <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #b13535;"></span>支出</span>
-            </div>
-            <svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
-                ${gridLines.join('')}
-                ${renderBars('income', '#22946e', -barW - 1)}
-                ${renderBars('expense', '#b13535', 1)}
-                ${xLabels}
-            </svg>
-        </div>
-    `;
 }
 
-// 取整到「漂亮數字」(eg. 12300 → 15000) 給 Y 軸用
-function niceCeil(n) {
-    if (n <= 0) return 0;
-    const pow = Math.pow(10, Math.floor(Math.log10(n)));
-    const r = n / pow;
-    if (r <= 1) return pow;
-    if (r <= 2) return 2 * pow;
-    if (r <= 5) return 5 * pow;
-    return 10 * pow;
-}
-
-// 格式化 Y 軸數字 (≥1000 用 k，≥1000k 用 M)
-function formatYAxis(v) {
-    const abs = Math.abs(v);
-    const sign = v < 0 ? '-' : '';
-    if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
-    if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`;
-    return `${sign}${abs}`;
+// 月度趨勢 — 收支雙線 (smooth + fill)，跟 dashboard 同 schema
+function renderTrendChart(months) {
+    if (months.length === 0) return '';
+    const id = `report-chart-${++_chartCounter}`;
+    const C = chartColors();
+    _pendingCharts.push({
+        canvasId: id,
+        config: {
+            type: 'line',
+            data: {
+                labels: months.map(m => m.label),
+                datasets: [
+                    {
+                        label: '收入',
+                        data: months.map(m => m.income),
+                        borderColor: C.income,
+                        backgroundColor: C.fillIncome,
+                        borderWidth: 2, tension: 0.4, fill: true,
+                        pointBackgroundColor: C.income, pointRadius: 3
+                    },
+                    {
+                        label: '支出',
+                        data: months.map(m => m.expense),
+                        borderColor: C.expense,
+                        backgroundColor: C.fillExpense,
+                        borderWidth: 2, tension: 0.4, fill: true,
+                        pointBackgroundColor: C.expense, pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 14, padding: 16, color: C.axis } },
+                    tooltip: {
+                        callbacks: {
+                            label: (item) => `${item.dataset.label}：$${item.parsed.y.toLocaleString()}`,
+                            afterBody: (items) => {
+                                if (!items.length) return '';
+                                const m = months[items[0].dataIndex];
+                                return `淨利：$${m.net.toLocaleString()}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: C.grid },
+                        ticks: { color: C.axis, callback: v => '$' + v.toLocaleString() }
+                    },
+                    x: { grid: { display: false }, ticks: { color: C.axis } }
+                }
+            }
+        }
+    });
+    return `<div class="trend-chart-wrap"><canvas id="${id}"></canvas></div>`;
 }
 
 function renderOverviewTab() {
@@ -598,47 +625,56 @@ function renderOccBarRow(p) {
     `;
 }
 
-// 入住 vs 退租 雙線圖
-function renderMoveInOutChart(months, maxVal) {
+// 入住 vs 退租 雙線圖 — Chart.js line，跟 trend chart 同 schema
+// maxVal 參數保留 (caller 已計算) 但 Chart.js 自己會推軸頂
+function renderMoveInOutChart(months /* , maxVal */) {
     if (months.length === 0) return '';
-    const w = 640, h = 220;
-    const padL = 36, padR = 16, padT = 18, padB = 36;
-    const innerW = w - padL - padR;
-    const innerH = h - padT - padB;
-    const stepX = innerW / (months.length - 1 || 1);
-    const niceMax = niceCeil(maxVal);
-    const yFor = v => padT + innerH - (v / niceMax) * innerH;
-    const xFor = i => padL + i * stepX;
-
-    const gridLines = [];
-    for (let i = 0; i <= 4; i++) {
-        const v = (niceMax * i) / 4;
-        const y = yFor(v);
-        gridLines.push(`<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="${i === 0 ? '#cbd5e1' : '#e5e7eb'}" stroke-width="1" ${i > 0 && i < 4 ? 'stroke-dasharray="3,3"' : ''}/>`);
-        gridLines.push(`<text x="${padL - 8}" y="${y + 4}" font-size="10" text-anchor="end" fill="#6b7280" font-family="Inter, system-ui, sans-serif">${Math.round(v)}</text>`);
-    }
-    const line = (key, color) => {
-        const points = months.map((m, i) => `${xFor(i)},${yFor(m[key])}`).join(' ');
-        const dots = months.map((m, i) => `<circle cx="${xFor(i)}" cy="${yFor(m[key])}" r="3.5" fill="white" stroke="${color}" stroke-width="2"/>`).join('');
-        const labels = months.map((m, i) => m[key] === 0 ? '' : `<text x="${xFor(i)}" y="${yFor(m[key]) - 8}" font-size="10" text-anchor="middle" fill="${color}" font-weight="700">${m[key]}</text>`).join('');
-        return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/>${dots}${labels}`;
-    };
-    const xLabels = months.map((m, i) => `<text x="${xFor(i)}" y="${h - 12}" font-size="11" text-anchor="middle" fill="#6b7280">${m.label}</text>`).join('');
-
-    return `
-        <div class="trend-chart-wrap">
-            <div class="trend-chart-legend">
-                <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #22946e;"></span>入住</span>
-                <span class="trend-chart-legend-item"><span class="trend-chart-legend-dot" style="background: #b13535;"></span>退租</span>
-            </div>
-            <svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
-                ${gridLines.join('')}
-                ${line('moveIn', '#22946e')}
-                ${line('moveOut', '#b13535')}
-                ${xLabels}
-            </svg>
-        </div>
-    `;
+    const id = `report-chart-${++_chartCounter}`;
+    const C = chartColors();
+    _pendingCharts.push({
+        canvasId: id,
+        config: {
+            type: 'line',
+            data: {
+                labels: months.map(m => m.label),
+                datasets: [
+                    {
+                        label: '入住',
+                        data: months.map(m => m.moveIn),
+                        borderColor: C.income,
+                        backgroundColor: C.fillIncome,
+                        borderWidth: 2, tension: 0.4, fill: true,
+                        pointBackgroundColor: C.income, pointRadius: 3
+                    },
+                    {
+                        label: '退租',
+                        data: months.map(m => m.moveOut),
+                        borderColor: C.expense,
+                        backgroundColor: C.fillExpense,
+                        borderWidth: 2, tension: 0.4, fill: true,
+                        pointBackgroundColor: C.expense, pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 14, padding: 16, color: C.axis } },
+                    tooltip: { callbacks: { label: (i) => `${i.dataset.label}：${i.parsed.y} 位` } }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: C.grid },
+                        ticks: { color: C.axis, precision: 0 }
+                    },
+                    x: { grid: { display: false }, ticks: { color: C.axis } }
+                }
+            }
+        }
+    });
+    return `<div class="trend-chart-wrap"><canvas id="${id}"></canvas></div>`;
 }
 
 // ───────────────────── Tab 3: 財務分析 (獲利面) ─────────────────────
@@ -691,48 +727,49 @@ function computeExpensePareto(invoices) {
     });
 }
 
-// 圓餅配色 — 暖系設計師色盤，brand 橘為首，其餘協調的低飽和度地球色系
-// 8 色循環，輪到第 9 個會回到第 1 個 (一般類別 5-6 個夠用)
-const PIE_COLORS = [
-    '#ff8859', // brand 橘 (top)
-    '#3f7c8a', // teal blue (互補冷色，與橘對比但不搶)
-    '#d4a574', // 暖駝
-    '#7a9a6a', // 抹茶綠
-    '#b67d7d', // 暗玫瑰
-    '#9c8aaa', // 霧紫
-    '#c4a486', // 米卡其
-    '#7a7c80'  // 暖深灰
-];
-
-function arcPath(cx, cy, r, startAngle, endAngle) {
-    const x1 = cx + r * Math.cos(startAngle);
-    const y1 = cy + r * Math.sin(startAngle);
-    const x2 = cx + r * Math.cos(endAngle);
-    const y2 = cy + r * Math.sin(endAngle);
-    const large = (endAngle - startAngle) > Math.PI ? 1 : 0;
-    return `M ${cx} ${cy} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
-}
-
+// 支出結構 — Chart.js doughnut；color 走 :root 的 --chart-cat-* token
 function renderExpensePie(items) {
     if (items.length === 0 || items.every(it => it.amount === 0)) {
         return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無支出資料</div>`;
     }
-    const total = items.reduce((s, it) => s + it.amount, 0);
-    const cx = 110, cy = 110, r = 95;
-    let angle = -Math.PI / 2;
-
-    const slices = items.map((it, idx) => {
-        const sliceAngle = (it.amount / total) * Math.PI * 2;
-        const path = arcPath(cx, cy, r, angle, angle + sliceAngle);
-        angle += sliceAngle;
-        const color = PIE_COLORS[idx % PIE_COLORS.length];
-        const labelEsc = String(it.type).replace(/"/g, '&quot;');
-        return `<path d="${path}" fill="${color}" data-tip-kind="pie" data-tip-label="${labelEsc}" data-tip-amount="${it.amount}" data-tip-pct="${(it.pct * 100).toFixed(1)}" class="pie-slice"/>`;
-    }).join('');
+    const id = `report-chart-${++_chartCounter}`;
+    const C = chartColors();
+    const colors = items.map((_, i) => C.cats[i % C.cats.length]);
+    _pendingCharts.push({
+        canvasId: id,
+        config: {
+            type: 'doughnut',
+            data: {
+                labels: items.map(it => it.type),
+                datasets: [{
+                    data: items.map(it => it.amount),
+                    backgroundColor: colors,
+                    borderColor: C.surface,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                cutout: '55%',
+                plugins: {
+                    legend: { display: false },  // 我們自己在右邊渲染帶金額的 legend
+                    tooltip: {
+                        callbacks: {
+                            label: (item) => {
+                                const total = items.reduce((s, x) => s + x.amount, 0);
+                                const pct = total > 0 ? ((item.parsed / total) * 100).toFixed(1) : '0';
+                                return `${item.label}：$${item.parsed.toLocaleString()} (${pct}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
 
     const legend = items.map((it, idx) => `
         <div class="pie-legend-item">
-            <span class="pie-legend-dot" style="background: ${PIE_COLORS[idx % PIE_COLORS.length]};"></span>
+            <span class="pie-legend-dot" style="background: ${colors[idx]};"></span>
             <div class="pie-legend-body">
                 <span class="pie-legend-label">${it.type}</span>
                 <span class="pie-legend-meta">${(it.pct * 100).toFixed(0)}% · $${it.amount.toLocaleString()}</span>
@@ -742,7 +779,7 @@ function renderExpensePie(items) {
 
     return `
         <div class="pie-chart-wrap">
-            <svg viewBox="0 0 220 220" class="pie-chart-svg">${slices}<circle cx="${cx}" cy="${cy}" r="50" fill="white"/></svg>
+            <div class="pie-chart-canvas-wrap"><canvas id="${id}"></canvas></div>
             <div class="pie-chart-legend">${legend}</div>
         </div>
     `;
@@ -984,80 +1021,10 @@ export function renderReports() {
     `;
 }
 
-// ───────────────────── 圖表 hover tooltip ─────────────────────
-let _chartTooltipEl = null;
-function ensureChartTooltip() {
-    if (_chartTooltipEl) return _chartTooltipEl;
-    _chartTooltipEl = document.createElement('div');
-    _chartTooltipEl.className = 'chart-tooltip';
-    _chartTooltipEl.hidden = true;
-    document.body.appendChild(_chartTooltipEl);
-    return _chartTooltipEl;
-}
-function hideChartTooltip() {
-    if (_chartTooltipEl) _chartTooltipEl.hidden = true;
-}
-function positionChartTooltip(e) {
-    if (!_chartTooltipEl || _chartTooltipEl.hidden) return;
-    const r = _chartTooltipEl.getBoundingClientRect();
-    let x = e.clientX + 14;
-    let y = e.clientY - r.height - 14;
-    if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 14;
-    if (y < 8) y = e.clientY + 14;
-    _chartTooltipEl.style.left = `${x}px`;
-    _chartTooltipEl.style.top = `${y}px`;
-}
-function initChartTooltips(scope) {
-    const tip = ensureChartTooltip();
-    // Pie slice
-    scope.querySelectorAll('.pie-slice').forEach(el => {
-        el.addEventListener('mouseenter', e => {
-            const label = el.dataset.tipLabel || '';
-            const amount = Number(el.dataset.tipAmount) || 0;
-            const pct = el.dataset.tipPct || '0';
-            tip.innerHTML = `
-                <div class="chart-tip-title">${label}</div>
-                <div class="chart-tip-row"><span class="chart-tip-key">金額</span><span class="chart-tip-val">$${amount.toLocaleString()}</span></div>
-                <div class="chart-tip-row"><span class="chart-tip-key">佔比</span><span class="chart-tip-val">${pct}%</span></div>
-            `;
-            tip.hidden = false;
-            positionChartTooltip(e);
-            el.style.opacity = '0.82';
-        });
-        el.addEventListener('mousemove', positionChartTooltip);
-        el.addEventListener('mouseleave', () => {
-            hideChartTooltip();
-            el.style.opacity = '1';
-        });
-    });
-    // Bar rect (income / expense)
-    scope.querySelectorAll('.bar-chart-rect').forEach(el => {
-        el.addEventListener('mouseenter', e => {
-            const month = el.dataset.tipMonth || '';
-            const income = Number(el.dataset.tipIncome) || 0;
-            const expense = Number(el.dataset.tipExpense) || 0;
-            const net = Number(el.dataset.tipNet) || 0;
-            tip.innerHTML = `
-                <div class="chart-tip-title">${month}</div>
-                <div class="chart-tip-row"><span class="chart-tip-key" style="color: #22946e;">收入</span><span class="chart-tip-val">$${income.toLocaleString()}</span></div>
-                <div class="chart-tip-row"><span class="chart-tip-key" style="color: #b13535;">支出</span><span class="chart-tip-val">$${expense.toLocaleString()}</span></div>
-                <div class="chart-tip-row chart-tip-net"><span class="chart-tip-key">淨利</span><span class="chart-tip-val" style="color: ${net >= 0 ? '#22946e' : '#b13535'};">$${net.toLocaleString()}</span></div>
-            `;
-            tip.hidden = false;
-            positionChartTooltip(e);
-            el.style.opacity = '0.78';
-        });
-        el.addEventListener('mousemove', positionChartTooltip);
-        el.addEventListener('mouseleave', () => {
-            hideChartTooltip();
-            el.style.opacity = '1';
-        });
-    });
-}
-
 export function initReportsActions(scope) {
     initRangePicker(scope, () => refreshView());
-    initChartTooltips(scope);
+    // Chart.js init — 取代手寫 SVG + hover tooltip handler，hover/tooltip 由 Chart.js 內建
+    initReportsCharts(scope);
 
     // Tab 切換 (上層: 總覽 / 各館 / 交叉)
     scope.querySelectorAll('[data-tab]').forEach(btn => {

@@ -77,7 +77,10 @@ export const mockData = {
 };
 
 // === localStorage 持久化（避免重整時遺失修改） ===
-const STORAGE_KEY = 'bananas-bms-data-v1';
+// 2026-06-13: 系統改名 BMS → PMS，key 跟著改
+// 為了不讓老用戶資料消失，hydrate 時會先試新 key，沒有就讀舊 key 並一次性 migrate
+const STORAGE_KEY = 'bananas-pms-data-v1';
+const LEGACY_STORAGE_KEY = 'bananas-bms-data-v1';
 let _persistDisabled = false;
 
 // P1-15: contractTemplates (PDF base64) 不寫 localStorage，避免一個樣板就撐爆 5MB
@@ -118,6 +121,16 @@ function hydrate() {
     let raw;
     try {
         raw = localStorage.getItem(STORAGE_KEY);
+        // 一次性 migrate：新 key 沒東西時試讀舊 key (bananas-bms-data-v1)
+        if (!raw) {
+            const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+            if (legacy) {
+                console.log('[migrate] BMS→PMS localStorage 一次性遷移');
+                localStorage.setItem(STORAGE_KEY, legacy);
+                localStorage.removeItem(LEGACY_STORAGE_KEY);
+                raw = legacy;
+            }
+        }
         if (!raw) return false;
         const saved = JSON.parse(raw);
         Object.keys(saved).forEach(key => {

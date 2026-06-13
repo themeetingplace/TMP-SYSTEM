@@ -1,4 +1,4 @@
-# 聚空間 BMS 物件管理系統
+# 聚空間 PMS 物件管理系統 (Property Management System)
 
 ## 🚀 快速開始
 

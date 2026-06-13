@@ -102,8 +102,16 @@ serve(async (req) => {
         for (const k of required) {
             if (!form[k]) throw new Error(`欄位「${k}」必填`);
         }
+        // 手機格式：
+        //   (a) 台灣本地 09XXXXXXXX
+        //   (b) 國際格式 +國碼+號碼 (海外租客)
+        // 都先 strip 連字號/空白
         const phone = String(form.phone).replace(/[-\s]/g, '');
-        if (!/^09\d{8}$/.test(phone)) throw new Error('手機格式錯誤');
+        const isTW = /^09\d{8}$/.test(phone);
+        const isIntl = /^\+\d{8,15}$/.test(phone);
+        if (!isTW && !isIntl) {
+            throw new Error('手機格式錯誤 (台灣請填 09XXXXXXXX，海外請以 + 開頭加國碼)');
+        }
 
         // 證件正面必填，反面選填 (外籍租客只傳護照)
         if (!idCardFront) {

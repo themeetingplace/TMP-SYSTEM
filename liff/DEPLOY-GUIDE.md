@@ -35,7 +35,7 @@ Supabase Edge Function: tenant-register
 - 登入 https://developers.line.biz/console/
 - 進入聚空間 Provider
 - 點「**Create a new channel**」→ 選 **LINE Login**
-- App name：「聚空間 BMS」
+- App name：「聚空間 PMS」(歷史值「聚空間 BMS」也可繼續使用，不影響功能)
 - App types：勾選 **Web app**
 - 建立完成
 

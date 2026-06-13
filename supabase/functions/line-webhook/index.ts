@@ -255,7 +255,7 @@ async function handlePostback(event: any) {
         .from('tenants').select('name').eq('line_user_id', userId).maybeSingle();
     if (!tenant) {
         await lineReply(event.replyToken, [
-            { type: 'text', text: '請先到聚空間 BMS 完成登記綁定，才能使用續租回覆喔～' }
+            { type: 'text', text: '請先到聚空間 PMS 完成登記綁定，才能使用續租回覆喔～' }
         ]);
         return;
     }

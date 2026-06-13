@@ -225,29 +225,213 @@
         line-height: 1.55;
     }
     .id-upload-banner strong { color: var(--success); }
+
+    /* === 語言切換器 (右上 pill toggle) === */
+    .lang-switch {
+        position: fixed;
+        top: 0.75rem;
+        right: 0.75rem;
+        display: inline-flex;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 2px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        font-size: 0.72rem;
+        z-index: 100;
+        font-family: inherit;
+    }
+    .lang-switch button {
+        border: none;
+        background: none;
+        padding: 0.3rem 0.7rem;
+        cursor: pointer;
+        border-radius: 999px;
+        color: var(--text-muted);
+        font-family: inherit;
+        font-weight: 500;
+        transition: background 0.15s, color 0.15s;
+        font-size: inherit;
+    }
+    .lang-switch button.is-active {
+        background: var(--brand);
+        color: white;
+    }
 </style>
 </head>
 <body>
 
+<div class="lang-switch" id="lang-switch" aria-label="language switch / 語言">
+    <button type="button" data-lang="zh">中文</button>
+    <button type="button" data-lang="en">EN</button>
+</div>
+
 <div class="container" id="root">
     <div class="loading">
         <div class="spinner"></div>
-        <div>載入中…</div>
+        <div id="loading-text">載入中…</div>
     </div>
 </div>
 
 <script>
 // ============================================================
-// 已填入聚空間 BMS 的設定
+// 已填入聚空間 PMS 的設定
 // ============================================================
 const LIFF_ID = '2010185822-G7D3N3Gw';
 const SUPABASE_URL = 'https://zkwkycpfcyecebstmotc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_qsFrMoFYyM5DMcSt9nvNcg_pah5nruy';
 const EDGE_FUNCTION = `${SUPABASE_URL}/functions/v1/tenant-register`;
 
+// ============================================================
+// i18n — 中文 / English 切換
+// 預設規則：手動選過 → localStorage；沒選過 → liff.getLanguage() (zh-* = 中文，其他 = English)
+// 浮水印文字「僅供聚空間合約使用」始終是中文 (印在照片像素上，下游讀者永遠是中文管理員)
+// ============================================================
+const STRINGS = {
+    zh: {
+        htmlLang: 'zh-TW',
+        title: '聚空間 — 住客資料登記',
+        loading: '載入中…',
+        pageTitle: '聚空間 住客登記',
+        subtitle: '填完送出，立刻完成 LINE 綁定 ✨',
+        loggedInAs: '已透過 LINE 登入：<strong>{name}</strong>',
+        lblName: '姓名',
+        lblPhone: '手機',
+        hintPhone: '用來建立帳單，海外可填國際格式',
+        phPhone: '0912345678 或 +886 912 345 678',
+        lblEmail: 'Email',
+        hintOptional: '選填',
+        lblEmergency: '緊急聯絡人',
+        hintEmergency: '選填，例：王媽媽 0911-222-333',
+        phEmergency: '姓名 + 電話',
+        lblIdCard: '身分證 / 護照',
+        hintIdCard: '驗證本人用',
+        idBannerPrivacy: '🔒 <strong>隱私保護</strong>：照片會自動疊上半透明浮水印「僅供聚空間合約使用」，原圖不保存，只有管理員能查看。',
+        idBannerForeign: '🛂 非本國人士請上傳「護照照片頁」或「居留證」。',
+        cardFrontLabel: '證件正面',
+        cardBackLabel: '證件反面',
+        cardBackTag: '(選填)',
+        cardHintFront: '點擊拍照或從相簿選',
+        cardHintBack: '本國身分證才需要',
+        cardLabelFrontShort: '正面',
+        cardLabelBackShort: '反面',
+        cardStatusDone: '✓ 已加浮水印 ({sizeKB} KB)',
+        btnSubmit: '送出登記',
+        btnSubmitting: '送出中…',
+        btnProcessing: '處理證件照片…',
+        btnUploading: '上傳中…',
+        btnRetry: '重試',
+        doneTitle: '登記完成！',
+        doneGreeting: '{name} 您好',
+        doneBody: '您的資料已送出，LINE 也綁定完成<br>之後合約 / 帳單通知會傳到這裡 ✨',
+        doneClose: '關閉視窗',
+        errIdFrontMissing: '請至少上傳證件正面照片',
+        errSubmitFailed: '送出失敗：{msg}',
+        errWatermarkFailed: '圖片處理失敗：{msg}',
+        errLiffInit: 'LIFF 初始化失敗：{msg}\n\ncode: {code}\nURL: {url}\n\n請聯絡小編並附上這段訊息'
+    },
+    en: {
+        htmlLang: 'en',
+        title: 'The Meeting Place — Tenant Registration',
+        loading: 'Loading…',
+        pageTitle: 'Tenant Registration',
+        subtitle: 'Fill out the form to link your LINE account ✨',
+        loggedInAs: 'Logged in via LINE: <strong>{name}</strong>',
+        lblName: 'Full Name',
+        lblPhone: 'Phone Number',
+        hintPhone: 'For invoices · international format OK',
+        phPhone: '0912345678 or +886 912 345 678',
+        lblEmail: 'Email',
+        hintOptional: 'Optional',
+        lblEmergency: 'Emergency Contact',
+        hintEmergency: 'Optional, e.g. Mom 0911-222-333',
+        phEmergency: 'Name + phone',
+        lblIdCard: 'ID Card / Passport',
+        hintIdCard: 'For identity verification',
+        idBannerPrivacy: '🔒 <strong>Privacy</strong>: Your photo will be auto-watermarked. The original is not stored; only admins can view it.',
+        idBannerForeign: '🛂 Non-Taiwan nationals: please upload your <strong>passport photo page</strong> or <strong>ARC</strong>.',
+        cardFrontLabel: 'ID Front',
+        cardBackLabel: 'ID Back',
+        cardBackTag: '(Optional)',
+        cardHintFront: 'Tap to take a photo or pick from album',
+        cardHintBack: 'Only required for Taiwan ID',
+        cardLabelFrontShort: 'Front',
+        cardLabelBackShort: 'Back',
+        cardStatusDone: '✓ Watermarked ({sizeKB} KB)',
+        btnSubmit: 'Submit',
+        btnSubmitting: 'Submitting…',
+        btnProcessing: 'Processing ID photo…',
+        btnUploading: 'Uploading…',
+        btnRetry: 'Retry',
+        doneTitle: 'Registration Complete!',
+        doneGreeting: 'Hello {name}',
+        doneBody: 'Your info is submitted and your LINE account is linked.<br>Future contracts &amp; invoices will be sent here ✨',
+        doneClose: 'Close',
+        errIdFrontMissing: 'Please upload the front of your ID at minimum.',
+        errSubmitFailed: 'Submit failed: {msg}',
+        errWatermarkFailed: 'Image processing failed: {msg}',
+        errLiffInit: 'LIFF init failed: {msg}\n\ncode: {code}\nURL: {url}\n\nPlease contact the admin with this message.'
+    }
+};
+
+let LANG = (function() {
+    const saved = localStorage.getItem('tmp-liff-lang');
+    return (saved === 'zh' || saved === 'en') ? saved : 'zh';
+})();
+
+function t(key, vars) {
+    let s = (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.zh[key] || `[${key}]`;
+    if (vars) {
+        Object.keys(vars).forEach(k => { s = s.split(`{${k}}`).join(vars[k]); });
+    }
+    return s;
+}
+
+// 切語言時當前畫面要重畫 — 各個 render 函數都會把自己掛到 _currentRender
+let _currentRender = null;
+
+function applyLangChrome() {
+    document.documentElement.lang = STRINGS[LANG].htmlLang;
+    document.title = t('title');
+    const lt = document.getElementById('loading-text');
+    if (lt) lt.textContent = t('loading');
+    document.querySelectorAll('.lang-switch button').forEach(btn => {
+        btn.classList.toggle('is-active', btn.dataset.lang === LANG);
+    });
+}
+
+function setLang(lang) {
+    if (lang !== 'zh' && lang !== 'en') return;
+    if (LANG === lang) return;
+    LANG = lang;
+    localStorage.setItem('tmp-liff-lang', lang);
+    applyLangChrome();
+    if (_currentRender) _currentRender();
+}
+
+function initLangSwitch() {
+    const sw = document.getElementById('lang-switch');
+    if (!sw) return;
+    sw.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-lang]');
+        if (btn) setLang(btn.dataset.lang);
+    });
+    applyLangChrome();
+}
+
 async function main() {
+    initLangSwitch();
     try {
         await liff.init({ liffId: LIFF_ID });
+        // 用戶沒手動選過 → 用 LINE 系統語言當預設
+        if (!localStorage.getItem('tmp-liff-lang')) {
+            const liffLang = (liff.getLanguage() || '').toLowerCase();
+            const detected = liffLang.startsWith('zh') ? 'zh' : 'en';
+            if (detected !== LANG) {
+                LANG = detected;
+                applyLangChrome();
+            }
+        }
         if (!liff.isLoggedIn()) {
             liff.login();
             return;
@@ -257,72 +441,76 @@ async function main() {
     } catch (e) {
         const code = e.code || e.name || '(no code)';
         const msg  = e.message || String(e);
-        showError(
-            `LIFF 初始化失敗：${msg}\n\n` +
-            `code: ${code}\n` +
-            `URL: ${location.href}\n\n` +
-            `請聯絡小編並附上這段訊息`
-        );
+        showError({ key: 'errLiffInit', vars: { msg, code, url: location.href } });
         console.error('[LIFF init error]', e);
     }
 }
 
 function renderForm(profile) {
+    // 切語言會 re-call 自己 — 把當前 input 值跟 ID card preview 保留
+    _currentRender = () => {
+        const snap = snapshotFormValues();
+        renderForm(profile);
+        restoreFormValues(snap);
+        if (idCardImages.front) applyIdPreview('front', idCardImages.front);
+        if (idCardImages.back)  applyIdPreview('back',  idCardImages.back);
+    };
+
     document.getElementById('root').innerHTML = `
-        <h1>聚空間 住客登記</h1>
-        <div class="subtitle">填完送出，立刻完成 LINE 綁定 ✨</div>
+        <h1>${t('pageTitle')}</h1>
+        <div class="subtitle">${t('subtitle')}</div>
 
         <div class="user-card">
             <img src="${profile.pictureUrl || ''}" alt="" onerror="this.style.display='none'">
-            <span>已透過 LINE 登入：<strong>${profile.displayName}</strong></span>
+            <span>${t('loggedInAs', { name: profile.displayName })}</span>
         </div>
 
         <form id="form">
             <div class="field">
-                <label>姓名<span class="req">*</span></label>
+                <label>${t('lblName')}<span class="req">*</span></label>
                 <input type="text" name="name" required autocomplete="name">
             </div>
 
             <div class="field">
-                <label>手機<span class="req">*</span><span class="hint">用來建立帳單</span></label>
-                <input type="tel" name="phone" required pattern="09[0-9]{8}" placeholder="0912345678" autocomplete="tel">
+                <label>${t('lblPhone')}<span class="req">*</span><span class="hint">${t('hintPhone')}</span></label>
+                <input type="tel" name="phone" required pattern="[0-9+\-\s]{8,20}" placeholder="${t('phPhone')}" autocomplete="tel">
             </div>
 
             <div class="field">
-                <label>Email<span class="hint">選填</span></label>
+                <label>${t('lblEmail')}<span class="hint">${t('hintOptional')}</span></label>
                 <input type="email" name="email" autocomplete="email">
             </div>
 
             <div class="field">
-                <label>緊急聯絡人<span class="hint">選填，例：王媽媽 0911-222-333</span></label>
-                <input type="text" name="emergencyContact" placeholder="姓名 + 電話">
+                <label>${t('lblEmergency')}<span class="hint">${t('hintEmergency')}</span></label>
+                <input type="text" name="emergencyContact" placeholder="${t('phEmergency')}">
             </div>
 
             <div class="field">
-                <label>身分證 / 護照<span class="req">*</span><span class="hint">驗證本人用</span></label>
+                <label>${t('lblIdCard')}<span class="req">*</span><span class="hint">${t('hintIdCard')}</span></label>
                 <div class="id-upload-banner">
-                    🔒 <strong>隱私保護</strong>：照片會自動疊上半透明浮水印「僅供聚空間合約使用」，原圖不保存，只有管理員能查看。<br>
-                    🛂 非本國人士請上傳「護照照片頁」或「居留證」即可。
+                    ${t('idBannerPrivacy')}<br>
+                    ${t('idBannerForeign')}
                 </div>
                 <div class="id-upload-row">
                     <label class="id-upload-card" id="id-card-front">
-                        <input type="file" accept="image/*" capture="environment" data-side="front">
+                        <input type="file" accept="image/*" data-side="front">
                         <div class="id-upload-icon">🪪</div>
-                        <div class="id-upload-label">證件正面</div>
-                        <div class="id-upload-hint">點擊拍照 / 上傳</div>
+                        <div class="id-upload-label">${t('cardFrontLabel')}</div>
+                        <div class="id-upload-hint">${t('cardHintFront')}</div>
                     </label>
                     <label class="id-upload-card" id="id-card-back">
-                        <input type="file" accept="image/*" capture="environment" data-side="back">
+                        <input type="file" accept="image/*" data-side="back">
                         <div class="id-upload-icon">🪪</div>
-                        <div class="id-upload-label">證件反面 <span class="hint" style="margin: 0;">(選填)</span></div>
-                        <div class="id-upload-hint">本國身分證才需要</div>
+                        <div class="id-upload-label">${t('cardBackLabel')} <span class="hint" style="margin: 0;">${t('cardBackTag')}</span></div>
+                        <div class="id-upload-hint">${t('cardHintBack')}</div>
                     </label>
                 </div>
             </div>
 
             <div id="msg-area"></div>
 
-            <button type="submit" class="submit" id="submitBtn">送出登記</button>
+            <button type="submit" class="submit" id="submitBtn">${t('btnSubmit')}</button>
         </form>
     `;
 
@@ -333,41 +521,54 @@ function renderForm(profile) {
 
     // 綁定 ID card 上傳 → Canvas 浮水印
     document.querySelectorAll('.id-upload-card input[type="file"]').forEach(input => {
-        input.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const side = input.dataset.side;
-            const card = input.closest('.id-upload-card');
-            try {
-                const watermarked = await addWatermark(file);
-                idCardImages[side] = watermarked;
-                // 預覽
-                const previewUrl = URL.createObjectURL(watermarked);
-                card.innerHTML = `
-                    <input type="file" accept="image/*" capture="environment" data-side="${side}">
-                    <img src="${previewUrl}" class="id-upload-preview" alt="${side}">
-                    <div class="id-upload-label">${side === 'front' ? '正面' : '反面'}</div>
-                    <div class="id-upload-status">✓ 已加浮水印 (${Math.round(watermarked.size / 1024)} KB)</div>
-                `;
-                card.classList.add('has-file');
-                // 重新綁定 input
-                const newInput = card.querySelector('input[type="file"]');
-                newInput.addEventListener('change', arguments.callee || (() => {})); // 簡化：重新整頁也行
-                // 為了讓重新選取也運作，重新綁
-                newInput.addEventListener('change', async (ev) => {
-                    const f = ev.target.files[0]; if (!f) return;
-                    const wm = await addWatermark(f);
-                    idCardImages[side] = wm;
-                    const u = URL.createObjectURL(wm);
-                    card.querySelector('img').src = u;
-                    card.querySelector('.id-upload-status').textContent = `✓ 已加浮水印 (${Math.round(wm.size / 1024)} KB)`;
-                });
-            } catch (err) {
-                console.error('[watermark] failed:', err);
-                showSubmitMessage(`圖片處理失敗：${err.message}`, 'error');
-            }
-        });
+        input.addEventListener('change', (e) => handleIdCardChange(input, e.target.files[0]));
     });
+}
+
+function snapshotFormValues() {
+    const form = document.getElementById('form');
+    if (!form) return null;
+    return Object.fromEntries(new FormData(form).entries());
+}
+
+function restoreFormValues(values) {
+    if (!values) return;
+    const form = document.getElementById('form');
+    if (!form) return;
+    Object.keys(values).forEach(k => {
+        const el = form.elements[k];
+        if (el && values[k]) el.value = values[k];
+    });
+}
+
+async function handleIdCardChange(input, file) {
+    if (!file) return;
+    const side = input.dataset.side;
+    try {
+        const watermarked = await addWatermark(file);
+        idCardImages[side] = watermarked;
+        applyIdPreview(side, watermarked);
+    } catch (err) {
+        console.error('[watermark] failed:', err);
+        showSubmitMessage(t('errWatermarkFailed', { msg: err.message }), 'error');
+    }
+}
+
+// 把已上傳照片渲染成 preview 卡 — i18n re-render 跟「換選照片」共用
+function applyIdPreview(side, blob) {
+    const card = document.getElementById(side === 'front' ? 'id-card-front' : 'id-card-back');
+    if (!card) return;
+    const previewUrl = URL.createObjectURL(blob);
+    const shortLabel = t(side === 'front' ? 'cardLabelFrontShort' : 'cardLabelBackShort');
+    card.innerHTML = `
+        <input type="file" accept="image/*" data-side="${side}">
+        <img src="${previewUrl}" class="id-upload-preview" alt="${side}">
+        <div class="id-upload-label">${shortLabel}</div>
+        <div class="id-upload-status">${t('cardStatusDone', { sizeKB: Math.round(blob.size / 1024) })}</div>
+    `;
+    card.classList.add('has-file');
+    const newInput = card.querySelector('input[type="file"]');
+    newInput.addEventListener('change', (ev) => handleIdCardChange(newInput, ev.target.files[0]));
 }
 
 // 已上傳浮水印照片 (in-memory，submit 時轉 base64 傳給 Edge Function)
@@ -458,22 +659,21 @@ async function handleSubmit(profile) {
 
     // 驗證證件正面已上傳 (反面選填，外籍租客只傳護照)
     if (!idCardImages.front) {
-        msg.innerHTML = `<div class="msg error">請至少上傳證件正面照片</div>`;
+        msg.innerHTML = `<div class="msg error">${t('errIdFrontMissing')}</div>`;
         return;
     }
 
     btn.disabled = true;
-    btn.textContent = '送出中…';
+    btn.textContent = t('btnSubmitting');
     msg.innerHTML = '';
 
     try {
         const idToken = liff.getIDToken();
-        // 把 watermark Blob 轉 base64 (反面可選)
-        btn.textContent = '處理證件照片…';
+        btn.textContent = t('btnProcessing');
         const idCardFrontB64 = await blobToBase64(idCardImages.front);
         const idCardBackB64  = idCardImages.back ? await blobToBase64(idCardImages.back) : null;
 
-        btn.textContent = '上傳中…';
+        btn.textContent = t('btnUploading');
         const resp = await fetch(EDGE_FUNCTION, {
             method: 'POST',
             headers: {
@@ -498,31 +698,34 @@ async function handleSubmit(profile) {
 
         renderDone(profile, data);
     } catch (e) {
-        msg.innerHTML = `<div class="msg error">送出失敗：${e.message}</div>`;
+        msg.innerHTML = `<div class="msg error">${t('errSubmitFailed', { msg: e.message })}</div>`;
         btn.disabled = false;
-        btn.textContent = '重試';
+        btn.textContent = t('btnRetry');
     }
 }
 
 function renderDone(profile, data) {
+    _currentRender = () => renderDone(profile, data);
     document.getElementById('root').innerHTML = `
         <div class="done-screen">
             <div class="done-icon">✅</div>
-            <h1>登記完成！</h1>
+            <h1>${t('doneTitle')}</h1>
             <p style="color: var(--text-muted); margin: 1rem 0;">
-                ${profile.displayName} 您好<br>
-                您的資料已送出，LINE 也綁定完成<br>
-                之後合約 / 帳單通知會傳到這裡 ✨
+                ${t('doneGreeting', { name: profile.displayName })}<br>
+                ${t('doneBody')}
             </p>
-            <button class="submit" onclick="liff.closeWindow()" style="max-width: 200px; margin: 1rem auto 0;">關閉視窗</button>
+            <button class="submit" onclick="liff.closeWindow()" style="max-width: 200px; margin: 1rem auto 0;">${t('doneClose')}</button>
         </div>
     `;
 }
 
-function showError(msg) {
+// payload 可以是純字串 (legacy) 或 {key, vars} (i18n-aware)
+function showError(payload) {
+    _currentRender = () => showError(payload);
+    const text = typeof payload === 'string' ? payload : t(payload.key, payload.vars);
     document.getElementById('root').innerHTML = `
-        <div class="msg error" style="margin: 2rem 0;">${msg}</div>
-        <button class="submit" onclick="location.reload()">重試</button>
+        <div class="msg error" style="margin: 2rem 0; white-space: pre-line;">${text}</div>
+        <button class="submit" onclick="location.reload()">${t('btnRetry')}</button>
     `;
 }
 

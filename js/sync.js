@@ -22,7 +22,18 @@ import { supabase } from './supabase.js';
 import { mockData, runMigration } from './data.js';
 import { TABLES, SMALL_TABLES, LARGE_TABLES } from './db-mapping.js';
 
-const LAST_SYNC_KEY = 'bms-last-sync';
+const LAST_SYNC_KEY = 'pms-last-sync';
+const LEGACY_LAST_SYNC_KEY = 'bms-last-sync';
+
+// 一次性 migrate：新 key 沒值就讀舊 key (bms-last-sync) 並刪舊
+(function migrateLastSyncKey() {
+    if (localStorage.getItem(LAST_SYNC_KEY)) return;
+    const legacy = localStorage.getItem(LEGACY_LAST_SYNC_KEY);
+    if (legacy) {
+        localStorage.setItem(LAST_SYNC_KEY, legacy);
+        localStorage.removeItem(LEGACY_LAST_SYNC_KEY);
+    }
+})();
 
 const state = {
     status: 'idle',  // idle | pulling | pushing | error | offline

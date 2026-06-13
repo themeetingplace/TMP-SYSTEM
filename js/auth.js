@@ -32,7 +32,11 @@ export async function signInWithGoogle() {
 
 // 登出時要清掉的本機快取 (含個資的 mockData snapshot + 同步時戳)
 // UI 偏好如 sidebar 收合狀態保留 (不含敏感資料)
-const SENSITIVE_LOCAL_KEYS = ['bananas-bms-data-v1', 'bms-last-sync'];
+// 新舊 key 都清，過渡期登出後再登入不殘留任何個資
+const SENSITIVE_LOCAL_KEYS = [
+    'bananas-pms-data-v1', 'pms-last-sync',
+    'bananas-bms-data-v1', 'bms-last-sync'
+];
 
 export function clearSensitiveLocalCache() {
     SENSITIVE_LOCAL_KEYS.forEach(k => {
