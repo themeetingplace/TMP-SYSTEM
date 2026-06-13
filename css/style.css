@@ -5356,18 +5356,85 @@ select.form-input {
     }
 }
 
-/* T3R-#9: month-switcher 在手機 wrap 避免擠爆 */
+/* T3R-#9 v2 (P1-mobile-#1 follow-up): month-switcher 手機 3 欄按鈕一條水平
+   layout:
+     [          2026 年 6 月          ]  ← label spanning, eyebrow above
+     [ ◀ 上個月 | 本月 | 下個月 ▶ ]  ← 3 buttons equal width 1 row */
 @media (max-width: 640px) {
     .month-switcher {
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 0.4rem;
+        padding: 0.6rem 0.7rem;
+        align-items: center;
+    }
+    .month-switcher__label {
+        grid-column: 1 / -1;
+        order: -1;
+        align-items: center;
+        gap: 0.1rem;
+    }
+    .month-switcher__label-eyebrow { font-size: 0.65rem; }
+    .month-switcher__label strong { font-size: 1.05rem; }
+    /* __right 是 wrapper div 沒實際視覺含義 — display: contents 讓 this/next 直接參與 parent grid */
+    .month-switcher__right {
+        display: contents;
+    }
+    .month-switcher .btn {
+        padding: 0.42rem 0.4rem !important;
+        font-size: 0.78rem !important;
+        white-space: nowrap;
+        text-align: center;
         justify-content: center;
+    }
+    .month-switcher .btn .ph { font-size: 0.85rem; }
+}
+
+/* finance-toolbar: 已結帳目 header row (P1-mobile-#1 follow-up)
+   desktop: title 左 + 搜尋 + 3 顆按鈕 右
+   mobile : title 一行、搜尋一行、3 顆按鈕一行 (等分水平對齊) */
+.finance-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    gap: 0.75rem;
+}
+.finance-toolbar__title {
+    margin-bottom: 0 !important;
+}
+.finance-toolbar__actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.finance-toolbar__search {
+    width: 250px;
+}
+@media (max-width: 768px) {
+    .finance-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+    .finance-toolbar__search {
+        width: 100%;
+    }
+    .finance-toolbar__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
         gap: 0.4rem;
     }
-    .month-switcher strong {
-        flex-basis: 100%;
-        text-align: center;
-        order: -1;
+    .finance-toolbar__search {
+        grid-column: 1 / -1;
     }
+    .finance-toolbar__actions .btn {
+        padding: 0.5rem 0.35rem !important;
+        font-size: 0.75rem !important;
+        white-space: nowrap;
+        justify-content: center;
+    }
+    .finance-toolbar__actions .btn .ph { font-size: 0.85rem; }
 }
 
 /* ============================================================
@@ -5836,6 +5903,8 @@ select.form-input {
         top: 0;
         left: 0;
         height: 100vh;
+        /* dvh = dynamic viewport height，把 mobile Safari URL bar 算進去，避免 footer 被切到 (P1-mobile-#2) */
+        height: 100dvh;
         width: 280px !important;
         transform: translateX(-100%);
         transition: transform 0.25s ease, width 0.2s ease;
@@ -5844,6 +5913,22 @@ select.form-input {
         /* drawer 關閉狀態完全不接受互動，避免「隱形 sidebar 擋住主內容左邊」 */
         pointer-events: none;
         visibility: hidden;
+        /* drawer 自身是 flex column (繼承 .sidebar)，nav 已 flex:1 自動撐開 + 滾動，
+           footer 在 column 最後自然 stick 在底部，不需要再 sticky */
+        overflow: hidden;
+    }
+    /* drawer 內 nav 撐滿、自己 scrollable；footer 永遠停在底部可見 */
+    .sidebar.is-mobile-open .sidebar-nav {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+    .sidebar.is-mobile-open .sidebar-footer {
+        flex-shrink: 0;
+        background: var(--sidebar-bg);
+        border-top: 1px solid var(--sidebar-border);
+        /* iOS safe-area 補底 padding 避免被 home indicator 蓋 */
+        padding-bottom: calc(0.4rem + env(safe-area-inset-bottom)) !important;
     }
     .sidebar.is-mobile-open {
         transform: translateX(0);
@@ -5996,6 +6081,17 @@ select.form-input {
     /* 房間 header colspan 排除 sticky 影響 */
     .occ-table tr.occ-room-header td { position: static !important; }
 
+    /* 防禦規則: 防範未來再加新全域 thead 規則時把矩陣表 clip 掉 (V2 designer 建議) */
+    .occ-table thead {
+        position: static !important;
+        width: auto !important;
+        height: auto !important;
+        clip: auto !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0;
+    }
+
     /* 6. sticky thead — 全域規則排除了 occ-table，這裡單獨補回 */
     .occ-table thead th {
         position: sticky;
@@ -6033,7 +6129,8 @@ select.form-input {
     .occ-table-wrap {
         position: relative;
         overflow-x: auto !important;
-        overflow-y: visible;
+        /* 寫 hidden 不是 visible — CSS spec 規定一軸 hidden/auto 時，visible 那邊會被強制改 auto，sticky thead 縱向會失靈 */
+        overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
     }
     .occ-table-wrap::after {
@@ -6225,6 +6322,164 @@ button.omn-card { font-family: inherit; }
     font-size: var(--text-xs);
 }
 
+/* ============================================
+   M-C-4 (2026-06-13): 新增入住 / 建立合約 modal 手機 redesign
+   依 CONTRACT_MODAL_MOBILE_REDESIGN_2026-06-13.md
+   桌面樣式不動 — 全包在 @media (max-width: 600px) 內
+   ============================================ */
+@media (max-width: 600px) {
+    /* 1. Modal Header: 取消 flex 搶寬度，標題 / 副標 / close 各自獨立流 */
+    .modal-header {
+        display: block;
+        position: relative;
+        padding: 1rem 3rem 0.85rem 1.25rem;
+    }
+    .modal-header h3 {
+        font-size: 1rem;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .modal-header .modal-subtitle {
+        display: block;
+        margin-top: 0.3rem;
+        font-size: 0.7rem;
+        line-height: 1.4;
+        white-space: normal;
+    }
+    .modal-header .modal-close {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+    }
+
+    /* 2. Wizard Stepper: 緊湊水平條 + sticky 在 modal-body 頂 */
+    .wizard-stepper {
+        gap: 0.3rem !important;
+        padding: 0.6rem 1rem 0.7rem !important;
+        margin-bottom: 0.5rem !important;
+        position: sticky;
+        top: -1.5rem;
+        background: var(--color-surface);
+        z-index: 5;
+        margin-left: -1.5rem !important;
+        margin-right: -1.5rem !important;
+    }
+    .wizard-stepper .wiz-step {
+        flex-shrink: 0;
+        gap: 0.3rem !important;
+    }
+    .wizard-stepper .wiz-step-num {
+        width: 24px !important;
+        height: 24px !important;
+        font-size: 0.7rem !important;
+    }
+    .wizard-stepper .wiz-step-label {
+        white-space: nowrap;
+        font-size: 0.7rem !important;
+        max-width: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition: max-width 0.2s, opacity 0.2s, margin 0.2s;
+        margin-left: 0;
+    }
+    /* 當前步驟 (JS 加 .is-current) 才展開 label */
+    .wizard-stepper .wiz-step.is-current .wiz-step-label {
+        max-width: 6em;
+        opacity: 1;
+        margin-left: 0.1rem;
+    }
+    .wizard-stepper .wiz-step-bar {
+        min-width: 12px;
+        max-width: 40px;
+        flex: 1 1 auto;
+    }
+
+    /* 3. 額外床位卡片: label / 增加按鈕 / hint 各自獨立 block */
+    #ph-extraBeds > div {
+        padding: 0.85rem !important;
+    }
+    #ph-extraBeds > div > div:first-child {
+        display: block !important;
+        margin-bottom: 0.6rem !important;
+    }
+    #ph-extraBeds > div > div:first-child > label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+    #ph-extraBeds > div > div:first-child > label small {
+        display: block;
+        margin-top: 0.15rem;
+        font-size: 0.7rem;
+        line-height: 1.4;
+    }
+    #ph-extraBeds #add-extra-bed-btn {
+        display: block;
+        width: 100%;
+        font-size: 0.8rem !important;
+        padding: 0.55rem 0.7rem !important;
+        min-height: 40px;
+    }
+    #ph-extraBeds .form-hint {
+        font-size: 0.7rem !important;
+        line-height: 1.5 !important;
+        margin-top: 0.5rem !important;
+    }
+
+    /* 4. Footer 按鈕 3 顆平分寬度，不擠到換行 */
+    .modal-footer {
+        gap: 0.4rem;
+        padding: 0.75rem 1rem;
+        padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
+    .modal-footer .btn {
+        flex: 1 1 0;
+        min-width: 0;
+        font-size: 0.825rem;
+        padding: 0.6rem 0.4rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .modal-footer .btn i {
+        font-size: 0.85rem;
+    }
+
+    /* 5. Form Group label 防止飄移 (grid item 預設 min-width: auto 會撐爆) */
+    .modal-body .form-grid .form-group {
+        min-width: 0;
+    }
+    .modal-body .form-grid .form-group label {
+        text-align: left;
+    }
+
+    /* 6. modal-body 加底 padding，避免最後一個欄位被 footer 蓋 */
+    .modal-body {
+        padding-bottom: 1rem;
+    }
+}
+
+/* M-C-4-tiny: 超窄螢幕 ≤360px (iPhone SE 1) 再細修 */
+@media (max-width: 360px) {
+    .modal-header h3 {
+        font-size: 0.9rem;
+    }
+    .wizard-stepper .wiz-step.is-current .wiz-step-label {
+        max-width: 5em;
+        font-size: 0.65rem !important;
+    }
+    .modal-footer .btn {
+        font-size: 0.75rem;
+        padding: 0.55rem 0.3rem;
+    }
+    .modal-footer .btn i {
+        display: none;
+    }
+}
+
 .omn-empty {
     text-align: center;
     padding: 2rem 1rem;
@@ -6245,8 +6500,9 @@ button.omn-card { font-family: inherit; }
         border: none;
         background: transparent;
     }
-    .data-table thead {
-        /* 表頭視覺上隱藏，但仍要存在給 data-label 邏輯用 */
+    .data-table:not(.occ-table) thead {
+        /* 表頭視覺上隱藏，但仍要存在給 data-label 邏輯用 — 排除矩陣表 (.occ-table)
+           不然會把月份 header 整列 clip 掉 (designer V2 報告根因) */
         position: absolute;
         width: 1px;
         height: 1px;

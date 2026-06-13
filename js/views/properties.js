@@ -990,6 +990,9 @@ export function showCheckinAssignmentForm(opts = {}) {
                 // 更新 stepper 樣式
                 stepper.querySelectorAll('.wiz-step').forEach(el => {
                     const s = Number(el.dataset.wizStep);
+                    // 手機 CSS 用 .is-current / .is-done 控制 stepper label 收/展 (M-C-4)
+                    el.classList.toggle('is-current', s === currentStep);
+                    el.classList.toggle('is-done', s < currentStep);
                     const num = el.querySelector('.wiz-step-num');
                     const lbl = el.querySelector('.wiz-step-label');
                     if (s < currentStep) {

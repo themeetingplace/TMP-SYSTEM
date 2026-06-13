@@ -177,10 +177,10 @@ export function renderFinance() {
 
         <!-- 帳目明細 -->
         <div class="card">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-receipt"></i> 已結帳目</h2>
-                <div class="flex gap-2">
-                    <div class="search-bar" style="width: 250px;">
+            <div class="finance-toolbar">
+                <h2 class="card-title finance-toolbar__title"><i class="ph ph-receipt"></i> 已結帳目</h2>
+                <div class="finance-toolbar__actions">
+                    <div class="search-bar finance-toolbar__search">
                         <i class="ph ph-magnifying-glass"></i>
                         <input type="text" placeholder="搜尋帳單編號 / 對象 / 備註..." style="font-size: 0.875rem;">
                     </div>
