@@ -105,18 +105,20 @@ serve(async (req) => {
         const phone = String(form.phone).replace(/[-\s]/g, '');
         if (!/^09\d{8}$/.test(phone)) throw new Error('手機格式錯誤');
 
-        // 身分證照片必填驗證
-        if (!idCardFront || !idCardBack) {
-            throw new Error('請上傳身分證正面與反面照片');
+        // 證件正面必填，反面選填 (外籍租客只傳護照)
+        if (!idCardFront) {
+            throw new Error('請至少上傳證件正面照片');
         }
-        // base64 過短 → 推測壞檔
-        if (idCardFront.length < 1000 || idCardBack.length < 1000) {
-            throw new Error('身分證照片資料異常，請重新拍照上傳');
+        if (idCardFront.length < 1000) {
+            throw new Error('證件正面資料異常，請重新拍照上傳');
         }
-        // 過大保護 — 每張 base64 < 4 MB (= 約 3 MB JPEG)
+        if (idCardBack && idCardBack.length < 1000) {
+            throw new Error('證件反面資料異常，請重新拍照上傳');
+        }
+        // 過大保護 — 每張 base64 < 4 MB
         const MAX_B64 = 4 * 1024 * 1024;
-        if (idCardFront.length > MAX_B64 || idCardBack.length > MAX_B64) {
-            throw new Error('身分證照片過大，請以較低畫質重拍');
+        if (idCardFront.length > MAX_B64 || (idCardBack && idCardBack.length > MAX_B64)) {
+            throw new Error('證件照片過大，請以較低畫質重拍');
         }
 
         // 床位 / 合約 由管理員後台處理，這裡只做「自我介紹 + 綁 LINE」
@@ -172,12 +174,15 @@ serve(async (req) => {
             tenantId = newId;
         }
 
-        // 7. 上傳身分證 (浮水印照) 到 id-cards bucket → 寫回 tenants 對應欄位
+        // 7. 上傳證件 (浮水印照) 到 id-cards bucket → 寫回 tenants
+        //    反面可選 — 沒傳就只上傳正面
         let frontPath: string | null = null;
         let backPath: string | null = null;
         try {
             frontPath = await uploadIdCard(tenantId, 'front', idCardFront);
-            backPath  = await uploadIdCard(tenantId, 'back',  idCardBack);
+            if (idCardBack) {
+                backPath = await uploadIdCard(tenantId, 'back', idCardBack);
+            }
             await supabase.from('tenants').update({
                 id_card_front_path: frontPath,
                 id_card_back_path: backPath,

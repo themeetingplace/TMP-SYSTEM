@@ -299,23 +299,23 @@ function renderForm(profile) {
             </div>
 
             <div class="field">
-                <label>身分證 / 護照<span class="req">*</span><span class="hint">合約核驗用</span></label>
+                <label>身分證 / 護照<span class="req">*</span><span class="hint">驗證本人用</span></label>
                 <div class="id-upload-banner">
                     🔒 <strong>隱私保護</strong>：照片會自動疊上半透明浮水印「僅供聚空間合約使用」，原圖不保存，只有管理員能查看。<br>
-                    🛂 外籍租客請上傳「護照照片頁」+「居留證」(或簽證頁)。
+                    🛂 外籍租客請上傳「護照照片頁」或「居留證」即可。
                 </div>
                 <div class="id-upload-row">
                     <label class="id-upload-card" id="id-card-front">
                         <input type="file" accept="image/*" capture="environment" data-side="front">
                         <div class="id-upload-icon">🪪</div>
-                        <div class="id-upload-label">正面 / 照片頁</div>
+                        <div class="id-upload-label">證件正面</div>
                         <div class="id-upload-hint">點擊拍照 / 上傳</div>
                     </label>
                     <label class="id-upload-card" id="id-card-back">
                         <input type="file" accept="image/*" capture="environment" data-side="back">
                         <div class="id-upload-icon">🪪</div>
-                        <div class="id-upload-label">反面 / 居留證</div>
-                        <div class="id-upload-hint">點擊拍照 / 上傳</div>
+                        <div class="id-upload-label">證件反面 <span class="hint" style="margin: 0;">(選填)</span></div>
+                        <div class="id-upload-hint">本國身分證才需要</div>
                     </label>
                 </div>
             </div>
@@ -456,9 +456,9 @@ async function handleSubmit(profile) {
     const btn = document.getElementById('submitBtn');
     const msg = document.getElementById('msg-area');
 
-    // 驗證身分證已上傳
-    if (!idCardImages.front || !idCardImages.back) {
-        msg.innerHTML = `<div class="msg error">請上傳身分證正面與反面照片</div>`;
+    // 驗證證件正面已上傳 (反面選填，外籍租客只傳護照)
+    if (!idCardImages.front) {
+        msg.innerHTML = `<div class="msg error">請至少上傳證件正面照片</div>`;
         return;
     }
 
@@ -468,10 +468,10 @@ async function handleSubmit(profile) {
 
     try {
         const idToken = liff.getIDToken();
-        // 把 watermark Blob 轉 base64
-        btn.textContent = '處理身分證照片…';
+        // 把 watermark Blob 轉 base64 (反面可選)
+        btn.textContent = '處理證件照片…';
         const idCardFrontB64 = await blobToBase64(idCardImages.front);
-        const idCardBackB64  = await blobToBase64(idCardImages.back);
+        const idCardBackB64  = idCardImages.back ? await blobToBase64(idCardImages.back) : null;
 
         btn.textContent = '上傳中…';
         const resp = await fetch(EDGE_FUNCTION, {
