@@ -251,6 +251,16 @@ export function showTenantDetails(id) {
         </div>
     `;
 
+    // 身分證 hash 連結 — 點開時走 signed URL，避免 detail modal 開著時 URL 過期
+    const idCardHtml = (t.idCardFrontPath || t.idCardBackPath)
+        ? `<div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <span class="status-badge success" style="font-size: 0.72rem;"><i class="ph-fill ph-check-circle"></i> 已上傳</span>
+              ${t.idCardFrontPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: 0.75rem;" data-action="view-id-card" data-path="${t.idCardFrontPath}" data-side="正面"><i class="ph ph-eye"></i> 正面</button>` : ''}
+              ${t.idCardBackPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: 0.75rem;" data-action="view-id-card" data-path="${t.idCardBackPath}" data-side="反面"><i class="ph ph-eye"></i> 反面</button>` : ''}
+              ${t.idCardUploadedAt ? `<small style="color: var(--text-muted); font-size: 0.7rem;">${t.idCardUploadedAt.slice(0, 10)} 上傳</small>` : ''}
+           </div>`
+        : '<span style="color: var(--text-muted)">未上傳</span>';
+
     openDetailModal({
         title: '租客詳細資料',
         maxWidth: 640,
@@ -266,12 +276,36 @@ export function showTenantDetails(id) {
             { label: 'LINE 綁定', value: t.lineUserId
                 ? `<span class="status-badge success"><i class="ph-fill ph-check-circle"></i> 已綁定</span>${t.lineDisplayName ? ` · ${t.lineDisplayName}` : ''}`
                 : '<span style="color: var(--text-muted)">未綁定</span>' },
+            { label: '身分證 (浮水印)', value: idCardHtml },
             { label: '備註', value: t.note
                 ? `<span style="white-space: pre-wrap; color: var(--text-main);">${t.note.replace(/</g, '&lt;')}</span>`
                 : '<span style="color: var(--text-muted)">無</span>' }
         ],
-        extraHtml: historyHtml
+        extraHtml: historyHtml,
+        onMount: (overlay) => {
+            overlay.querySelectorAll('[data-action="view-id-card"]').forEach(btn => {
+                btn.addEventListener('click', () => openIdCard(btn.dataset.path, btn.dataset.side));
+            });
+        }
     });
+}
+
+// 點「正面/反面」→ 取 5 分鐘 signed URL 開新分頁
+async function openIdCard(path, side) {
+    if (!path) return;
+    try {
+        const { supabase } = await import('../supabase.js');
+        const { data, error } = await supabase.storage
+            .from('id-cards')
+            .createSignedUrl(path, 300); // 5 分鐘
+        if (error) throw error;
+        if (!data?.signedUrl) throw new Error('未取得 signed URL');
+        window.open(data.signedUrl, '_blank', 'noopener');
+    } catch (e) {
+        console.error('[openIdCard]', e);
+        const { showToast } = await import('../utils/ui.js');
+        showToast(`無法開啟身分證${side}：${e.message}`, 'danger', 5000);
+    }
 }
 
 // 「編輯備註」focused modal — 點租客名字打開

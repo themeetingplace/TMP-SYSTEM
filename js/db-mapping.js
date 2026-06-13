@@ -39,7 +39,10 @@ export const toDb = {
         line_display_name: t.lineDisplayName ?? null,
         line_picture_url: t.linePictureUrl ?? null,
         line_bound_at: t.lineBoundAt ?? null,
-        note: t.note ?? null
+        note: t.note ?? null,
+        id_card_front_path: t.idCardFrontPath ?? null,
+        id_card_back_path: t.idCardBackPath ?? null,
+        id_card_uploaded_at: t.idCardUploadedAt ?? null
     }),
     contract: c => ({
         id: c.id,
@@ -168,7 +171,10 @@ export const fromDb = {
         lineDisplayName: r.line_display_name,
         linePictureUrl: r.line_picture_url,
         lineBoundAt: r.line_bound_at,
-        note: r.note
+        note: r.note,
+        idCardFrontPath: r.id_card_front_path,
+        idCardBackPath: r.id_card_back_path,
+        idCardUploadedAt: r.id_card_uploaded_at
     }),
     contract: r => ({
         id: r.id,

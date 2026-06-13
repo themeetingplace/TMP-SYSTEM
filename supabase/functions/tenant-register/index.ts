@@ -60,6 +60,27 @@ function corsHeaders() {
     };
 }
 
+// base64 → Uint8Array
+function base64ToBytes(b64: string): Uint8Array {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+}
+
+// 上傳浮水印身分證到 id-cards bucket
+// path = id-cards/{tenantId}/{side}_{timestamp}.jpg
+async function uploadIdCard(tenantId: string, side: 'front' | 'back', b64: string): Promise<string> {
+    const bytes = base64ToBytes(b64);
+    const ts = Date.now();
+    const path = `${tenantId}/${side}_${ts}.jpg`;
+    const { error } = await supabase.storage
+        .from('id-cards')
+        .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
+    if (error) throw new Error(`身分證 ${side} 上傳失敗：${error.message}`);
+    return path;
+}
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders() });
@@ -69,7 +90,7 @@ serve(async (req) => {
     }
 
     try {
-        const { idToken, userId, displayName, pictureUrl, form } = await req.json();
+        const { idToken, userId, displayName, pictureUrl, form, idCardFront, idCardBack } = await req.json();
 
         // 1. 驗 LINE ID Token
         if (!idToken || !userId) throw new Error('缺少 idToken / userId');
@@ -83,6 +104,20 @@ serve(async (req) => {
         }
         const phone = String(form.phone).replace(/[-\s]/g, '');
         if (!/^09\d{8}$/.test(phone)) throw new Error('手機格式錯誤');
+
+        // 身分證照片必填驗證
+        if (!idCardFront || !idCardBack) {
+            throw new Error('請上傳身分證正面與反面照片');
+        }
+        // base64 過短 → 推測壞檔
+        if (idCardFront.length < 1000 || idCardBack.length < 1000) {
+            throw new Error('身分證照片資料異常，請重新拍照上傳');
+        }
+        // 過大保護 — 每張 base64 < 4 MB (= 約 3 MB JPEG)
+        const MAX_B64 = 4 * 1024 * 1024;
+        if (idCardFront.length > MAX_B64 || idCardBack.length > MAX_B64) {
+            throw new Error('身分證照片過大，請以較低畫質重拍');
+        }
 
         // 床位 / 合約 由管理員後台處理，這裡只做「自我介紹 + 綁 LINE」
 
@@ -137,16 +172,35 @@ serve(async (req) => {
             tenantId = newId;
         }
 
-        // 7. log 到 line_messages 給管理員追蹤
+        // 7. 上傳身分證 (浮水印照) 到 id-cards bucket → 寫回 tenants 對應欄位
+        let frontPath: string | null = null;
+        let backPath: string | null = null;
+        try {
+            frontPath = await uploadIdCard(tenantId, 'front', idCardFront);
+            backPath  = await uploadIdCard(tenantId, 'back',  idCardBack);
+            await supabase.from('tenants').update({
+                id_card_front_path: frontPath,
+                id_card_back_path: backPath,
+                id_card_uploaded_at: nowIso
+            }).eq('id', tenantId);
+        } catch (uploadErr: any) {
+            // 上傳失敗不阻斷主流程，記錄錯誤；tenant 已建好可手動補
+            console.error('[tenant-register] id-card upload fail:', uploadErr);
+        }
+
+        // 8. log 到 line_messages 給管理員追蹤
         await supabase.from('line_messages').insert({
             line_user_id: userId,
             direction: 'in',
             message_type: 'liff_register',
-            content: `LIFF 登記：${form.name} (${phone})${existing ? ' — 更新舊客' : ' — 新客'}`,
-            raw: { form, profile: { displayName, pictureUrl } }
+            content: `LIFF 登記：${form.name} (${phone})${existing ? ' — 更新舊客' : ' — 新客'}${frontPath ? ' · 含身分證照' : ''}`,
+            raw: { form, profile: { displayName, pictureUrl }, idCardUploaded: !!frontPath }
         });
 
-        return new Response(JSON.stringify({ ok: true, tenantId, isNew: !existing }), {
+        return new Response(JSON.stringify({
+            ok: true, tenantId, isNew: !existing,
+            idCardUploaded: !!(frontPath && backPath)
+        }), {
             headers: { 'Content-Type': 'application/json', ...corsHeaders() }
         });
     } catch (e: any) {
