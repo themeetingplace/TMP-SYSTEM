@@ -1,4 +1,4 @@
-// 報表 hub — 頂部區間 picker + 4 tab：總覽 / 各館報表 / 交叉分析 / 對帳單
+﻿// 報表 hub — 頂部區間 picker + 4 tab：總覽 / 各館報表 / 交叉分析 / 對帳單
 //
 // 區間狀態:  reportState.viewRange = { start, end, preset }
 // 切換 tab:  reportState.activeTab = 'overview' | 'buildings' | 'analysis' | 'statement'
@@ -132,7 +132,7 @@ function computeMonthlyTrend(range, buildingId = null) {
 // 各館 應收 vs 已收 stacked bar (取代 donut — 顯示現金流缺口)
 function renderReceivableStackedBars(items) {
     if (items.length === 0 || items.every(it => it.receivable === 0)) {
-        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無應收資料</div>`;
+        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">區間內無應收資料</div>`;
     }
     const maxReceivable = Math.max(...items.map(it => it.receivable), 1);
     return `
@@ -287,7 +287,7 @@ function renderOverviewTab() {
         <div class="report-chart-card">
             <div class="report-chart-title">
                 <span><i class="ph ph-buildings"></i> 各館應收 vs 已收</span>
-                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">深色=已收 · 淺色=待收</span>
+                <span style="font-size: var(--text-2xs); color: var(--text-muted); font-weight: 500;">深色=已收 · 淺色=待收</span>
             </div>
             ${renderReceivableStackedBars(byBuilding)}
         </div>
@@ -505,7 +505,7 @@ function renderBuildingsTab() {
                 <div class="report-chart-card">
                     <div class="report-chart-title">
                         <span><i class="ph ph-ranking"></i> 各館出租率</span>
-                        <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">虛線 = 目標 95%</span>
+                        <span style="font-size: var(--text-2xs); color: var(--text-muted); font-weight: 500;">虛線 = 目標 95%</span>
                     </div>
                     <div>${perBuilding.sort((a, b) => b.occRate - a.occRate).map(p => renderOccBarRow(p)).join('')}</div>
                 </div>
@@ -513,7 +513,7 @@ function renderBuildingsTab() {
                 <div class="report-chart-card">
                     <div class="report-chart-title">
                         <span><i class="ph ph-bed"></i> 各館平均空置天數</span>
-                        <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">越少越好</span>
+                        <span style="font-size: var(--text-2xs); color: var(--text-muted); font-weight: 500;">越少越好</span>
                     </div>
                     <div>${perBuilding.sort((a, b) => a.avgVacancyDays - b.avgVacancyDays).map(p => {
                         const w = (p.avgVacancyDays / maxVacancyDays) * 100;
@@ -715,7 +715,7 @@ const PIE_PALETTE = ['#ff8859', '#3f7c8a', '#d4a574', '#7a9a6a', '#b67d7d', '#9c
 
 function renderExpensePie(items) {
     if (items.length === 0 || items.every(it => it.amount === 0)) {
-        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">區間內無支出資料</div>`;
+        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">區間內無支出資料</div>`;
     }
     const id = `report-chart-${++_chartCounter}`;
     const colors = items.map((_, i) => PIE_PALETTE[i % PIE_PALETTE.length]);

@@ -1,4 +1,4 @@
-import {
+﻿import {
     mockData, store,
     getContractLifecycle, daysUntilExpiry, needsDecision, contractLifecycleLabel,
     activeContractFor, activeContractOfTenant,
@@ -76,7 +76,7 @@ function sortArrow(thisCol, current) {
     const icon = isActive ? (current.dir === 'desc' ? 'ph-caret-down' : 'ph-caret-up') : 'ph-caret-up-down';
     const opacity = isActive ? 1 : 0.35;
     const color = isActive ? 'color: var(--color-warning);' : '';
-    return `<span style="display: inline-block; width: 1.1em; text-align: center; margin-left: 3px; opacity: ${opacity}; ${color}"><i class="ph ${icon}" style="font-size: 0.72rem; vertical-align: middle;"></i></span>`;
+    return `<span style="display: inline-block; width: 1.1em; text-align: center; margin-left: 3px; opacity: ${opacity}; ${color}"><i class="ph ${icon}" style="font-size: var(--text-2xs); vertical-align: middle;"></i></span>`;
 }
 
 function lifecycleBadge(state) {
@@ -96,7 +96,7 @@ function renewIntentBadge(contract) {
     };
     const m = map[intent];
     if (!m) return '';
-    return ` <span class="status-badge ${m.cls}" style="font-size: 0.68rem; margin-left: 0.2rem;" title="${m.title}">${m.text}</span>`;
+    return ` <span class="status-badge ${m.cls}" style="font-size: var(--text-2xs); margin-left: 0.2rem;" title="${m.title}">${m.text}</span>`;
 }
 
 function daysLabel(days) {
@@ -172,38 +172,38 @@ export function renderContracts() {
 
         // 操作按鈕：未決策的合約優先顯示決策按鈕
         const decisionButtons = isDecision ? `
-            <button class="btn btn-success contract-action" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" data-action="renew" data-id="${c.id}" title="續租">
+            <button class="btn btn-success contract-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);" data-action="renew" data-id="${c.id}" title="續租">
                 <i class="ph ph-arrow-clockwise"></i> 續租
             </button>
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-danger);" data-action="terminate" data-id="${c.id}" title="退租">
+            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="terminate" data-id="${c.id}" title="退租">
                 <i class="ph ph-door-open"></i>
             </button>
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="snooze" data-id="${c.id}" title="暫緩">
+            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="snooze" data-id="${c.id}" title="暫緩">
                 <i class="ph ph-clock-clockwise"></i>
             </button>
         ` : '';
 
         const signedButton = c.signedFileUrl
-            ? `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-success); border-color: var(--color-success);" data-action="view-signed" data-id="${c.id}" title="租客已回傳簽署檔，點此檢視">
+            ? `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-success); border-color: var(--color-success);" data-action="view-signed" data-id="${c.id}" title="租客已回傳簽署檔，點此檢視">
                    <i class="ph-fill ph-check-square"></i>
                </button>`
             : '';
 
         const standardButtons = `
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="view" data-id="${c.id}" title="檢視合約">
+            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="view" data-id="${c.id}" title="檢視合約">
                 <i class="ph ph-eye"></i>
             </button>
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-id="${c.id}" title="編輯合約">
+            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${c.id}" title="編輯合約">
                 <i class="ph ph-pencil"></i>
             </button>
-            ${isArchived ? '' : `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="download" data-id="${c.id}" title="下載 PDF">
+            ${isArchived ? '' : `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="download" data-id="${c.id}" title="下載 PDF">
                 <i class="ph ph-download"></i>
             </button>`}
-            ${isArchived ? '' : `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: #06c755;" data-action="send-line" data-id="${c.id}" title="寄/重寄 合約 PDF 給租客的 LINE（連結 24 小時有效，過期再點一次重發新連結）">
+            ${isArchived ? '' : `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: #06c755;" data-action="send-line" data-id="${c.id}" title="寄/重寄 合約 PDF 給租客的 LINE（連結 24 小時有效，過期再點一次重發新連結）">
                 <i class="ph ph-paper-plane-tilt"></i>
             </button>`}
             ${signedButton}
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-danger);" data-action="delete" data-id="${c.id}" title="刪除">
+            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete" data-id="${c.id}" title="刪除">
                 <i class="ph ph-trash"></i>
             </button>
         `;
@@ -215,21 +215,21 @@ export function renderContracts() {
             <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
                 <td>
                     <div style="display: flex; flex-direction: column;">
-                        <strong style="font-size: 0.875rem;">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: 0.7rem; color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}</strong>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${esc(c.propertyName || '')}</span>
+                        <strong style="font-size: var(--text-base);">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: var(--text-2xs); color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}</strong>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${esc(c.propertyName || '')}</span>
                     </div>
                 </td>
                 <td><strong>${esc(c.tenant || '')}</strong></td>
                 <td>
-                    <div style="font-size: 0.875rem; font-weight: 500;">$${(c.amount || 0).toLocaleString()}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">${c.termMonths === 3 ? '3 個月期' : '1 個月期'}</div>
+                    <div style="font-size: var(--text-base); font-weight: 500;">$${(c.amount || 0).toLocaleString()}</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted);">${c.termMonths === 3 ? '3 個月期' : '1 個月期'}</div>
                 </td>
                 <td>${c.startDate ? `<span style="font-weight: 500;">${c.startDate}</span>` : '<span style="color: var(--text-muted)">—</span>'}</td>
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         ${c.endDate ? `<span style="font-weight: 500;">${c.endDate}</span>` : '<span style="color: var(--text-muted)">—</span>'}
-                        ${!isArchived && days != null ? `<span style="font-size: 0.75rem; color: ${days < 0 ? 'var(--color-danger)' : days <= 14 ? 'var(--color-warning)' : 'var(--text-muted)'};">${daysLabel(days)}</span>` : ''}
-                        ${lifecycle === 'snoozed' && c.snoozeUntil ? `<span style="font-size: 0.7rem; color: var(--color-info);">⏸ ${c.snoozeUntil} 再提醒</span>` : ''}
+                        ${!isArchived && days != null ? `<span style="font-size: var(--text-xs); color: ${days < 0 ? 'var(--color-danger)' : days <= 14 ? 'var(--color-warning)' : 'var(--text-muted)'};">${daysLabel(days)}</span>` : ''}
+                        ${lifecycle === 'snoozed' && c.snoozeUntil ? `<span style="font-size: var(--text-2xs); color: var(--color-info);">⏸ ${c.snoozeUntil} 再提醒</span>` : ''}
                     </div>
                 </td>
                 <td>${lifecycleBadge(lifecycle)}${renewIntentBadge(c)}</td>
@@ -257,7 +257,7 @@ export function renderContracts() {
                 <div class="flex gap-2">
                     <div class="search-bar" style="width: 250px;">
                         <i class="ph ph-magnifying-glass"></i>
-                        <input type="text" placeholder="搜尋合約編號或租客..." style="font-size: 0.875rem;">
+                        <input type="text" placeholder="搜尋合約編號或租客..." style="font-size: var(--text-base);">
                     </div>
                     <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 15 天內到期的合約，自動發 LINE 問租客要不要續租">
                         <i class="ph ph-chat-circle-dots"></i> 詢問續租
@@ -499,7 +499,7 @@ export function showContractDetails(id) {
     openDetailModal({
         title: `合約 ${c.id}`,
         items: [
-            { label: '生命週期', value: lifecycleBadge(state) + (days != null && state !== 'renewed' && state !== 'terminated' ? ` <span style="color: var(--text-muted); font-size: 0.85rem;">${daysLabel(days)}</span>` : '') },
+            { label: '生命週期', value: lifecycleBadge(state) + (days != null && state !== 'renewed' && state !== 'terminated' ? ` <span style="color: var(--text-muted); font-size: var(--text-sm);">${daysLabel(days)}</span>` : '') },
             { label: '物件', value: c.propertyName },
             { label: '租客', value: c.tenant },
             { label: '租金', value: `$${(c.amount || 0).toLocaleString()} / 月` },
@@ -508,7 +508,7 @@ export function showContractDetails(id) {
             { label: '到期日', value: c.endDate || '—' },
             { label: '簽署狀態', value: c.status },
             { label: '租客簽署檔', value: c.signedFileUrl
-                ? `<button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.8rem; color: var(--color-success); border-color: var(--color-success);" onclick="window.openSignedContractByPath('${c.signedFileUrl.replace(/'/g, '\\\'')}')"><i class="ph-fill ph-check-square"></i> 已收到 — 點此檢視</button>`
+                ? `<button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs); color: var(--color-success); border-color: var(--color-success);" onclick="window.openSignedContractByPath('${c.signedFileUrl.replace(/'/g, '\\\'')}')"><i class="ph-fill ph-check-square"></i> 已收到 — 點此檢視</button>`
                 : '<span style="color: var(--text-muted);">尚未收到（租客可從 LINE 傳檔回來）</span>' },
             { label: '續自', value: c.parentContractId || '—' },
             ...(c.renewalState === 'terminated' ? [{ label: '終止日', value: c.terminatedDate || '—' }] : []),
@@ -536,9 +536,9 @@ function confirmDelete(id) {
     // P0 護欄：阻擋有 invoice 連動的合約直接刪 (避免帳款消失)
     const relatedInvoices = mockData.invoices.filter(inv => inv.contractId === id);
     const blockedReason = relatedInvoices.length > 0
-        ? `<div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(220, 38, 38, 0.08); border-radius: 6px; border-left: 3px solid var(--color-danger); font-size: 0.85rem;">
+        ? `<div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(220, 38, 38, 0.08); border-radius: 6px; border-left: 3px solid var(--color-danger); font-size: var(--text-sm);">
               <strong>⚠ 此合約有 ${relatedInvoices.length} 筆連動帳單</strong>，會一起被刪除。
-              <div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.3rem;">建議先「退租」保留歷史，或到帳務管理確認帳單。</div>
+              <div style="color: var(--text-muted); font-size: var(--text-xs); margin-top: 0.3rem;">建議先「退租」保留歷史，或到帳務管理確認帳單。</div>
            </div>`
         : '';
 
@@ -752,12 +752,12 @@ function confirmRenew(id) {
     openConfirm({
         title: '🔄 確認續租',
         message: `將為 <strong>${c.tenant}</strong> 自動建立下一期合約：
-            <div style="margin-top: 1rem; padding: 0.875rem; background-color: var(--color-background); border-radius: var(--radius-md); font-size: 0.875rem; line-height: 1.8;">
+            <div style="margin-top: 1rem; padding: 0.875rem; background-color: var(--color-background); border-radius: var(--radius-md); font-size: var(--text-base); line-height: 1.8;">
                 <div><strong>物件：</strong>${c.propertyName}</div>
                 <div><strong>租金：</strong>$${(c.amount || 0).toLocaleString()} / 月（沿用）</div>
                 <div><strong>新期間：</strong>${newStartStr} ~ ${newEndStr}（${c.termMonths === 3 ? '3 個月' : '1 個月'}）</div>
             </div>
-            <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted);">舊合約 ${c.id} 將標記為「已續約」。</p>`,
+            <p style="margin-top: 1rem; font-size: var(--text-xs); color: var(--text-muted);">舊合約 ${c.id} 將標記為「已續約」。</p>`,
         confirmLabel: '確認續租',
         onConfirm: () => {
             const result = store.renewContract(id);
@@ -786,7 +786,7 @@ export function confirmTerminate(id) {
         : null;
 
     const summaryHtml = `
-        <div style="margin-bottom: 1rem; padding: 0.875rem 1rem; background-color: var(--color-background); border-radius: var(--radius-md); font-size: 0.85rem; line-height: 1.7;">
+        <div style="margin-bottom: 1rem; padding: 0.875rem 1rem; background-color: var(--color-background); border-radius: var(--radius-md); font-size: var(--text-sm); line-height: 1.7;">
             <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--text-main);">
                 <i class="ph ph-info" style="color: var(--color-warning);"></i> 退租會做這些事:
             </div>
@@ -794,8 +794,8 @@ export function confirmTerminate(id) {
             <div><strong>租客：</strong>${c.tenant}</div>
             <div><strong>原訂到期：</strong>${c.endDate || '—'}${daysLeft != null ? `（剩 ${daysLeft} 天）` : ''}</div>
             <hr style="margin: 0.5rem 0; border: none; border-top: 1px dashed var(--border-color);">
-            <div style="color: var(--text-muted); font-size: 0.8rem;">退租送出後會：</div>
-            <ul style="margin: 0.25rem 0 0 1.25rem; padding: 0; color: var(--text-main); font-size: 0.8rem;">
+            <div style="color: var(--text-muted); font-size: var(--text-xs);">退租送出後會：</div>
+            <ul style="margin: 0.25rem 0 0 1.25rem; padding: 0; color: var(--text-main); font-size: var(--text-xs);">
                 <li>合約 ${c.id} 狀態 → <strong style="color: var(--color-danger);">已終止</strong></li>
                 <li>床位 ${c.propertyName?.match(/R\d+-[A-Z]/)?.[0] || '?'} 變回 <strong>待租</strong></li>
                 <li>租客 ${c.tenant} 若無其他合約 → 狀態 <strong>已退租</strong></li>

@@ -1,4 +1,4 @@
-// 財務分析 PDF 匯出 — 用區間 (不是單月)，含 4 KPI + 各館 P&L 對比 + 支出 Pareto + 分類交叉表
+﻿// 財務分析 PDF 匯出 — 用區間 (不是單月)，含 4 KPI + 各館 P&L 對比 + 支出 Pareto + 分類交叉表
 import { mockData, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount } from '../data.js';
 
 function esc(s) { return String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
@@ -78,11 +78,11 @@ function buildAnalysisReportHtml(range, buildingId = null) {
         <tr>
             <td>${esc(r.building.name)}</td>
             <td class="right">$${fmtMoney(r.inAll)}</td>
-            <td class="right" style="color: #64748b;">$${fmtMoney(r.landlordRent)}</td>
-            <td class="right" style="color: #64748b;">$${fmtMoney(r.otherExpense)}</td>
-            <td class="right" style="color: ${r.net >= 0 ? '#16a34a' : '#dc2626'}; font-weight: 700;">${r.net < 0 ? '-' : ''}$${fmtMoney(Math.abs(r.net))}</td>
+            <td class="right" style="color: #6b7280;">$${fmtMoney(r.landlordRent)}</td>
+            <td class="right" style="color: #6b7280;">$${fmtMoney(r.otherExpense)}</td>
+            <td class="right" style="color: ${r.net >= 0 ? '#22946e' : '#b13535'}; font-weight: 700;">${r.net < 0 ? '-' : ''}$${fmtMoney(Math.abs(r.net))}</td>
             <td class="right">${r.inAll > 0 ? pct(r.grossMargin) : '—'}</td>
-            <td class="right" style="color: ${r.netMargin >= 0 ? '#0f172a' : '#dc2626'};">${r.inAll > 0 ? pct(r.netMargin) : '—'}</td>
+            <td class="right" style="color: ${r.netMargin >= 0 ? '#1a1c23' : '#b13535'};">${r.inAll > 0 ? pct(r.netMargin) : '—'}</td>
         </tr>
     `).join('') || '<tr><td colspan="7" class="empty">區間內無資料</td></tr>';
 
@@ -118,7 +118,7 @@ function buildAnalysisReportHtml(range, buildingId = null) {
     const renderMatrixRow = (direction, type, color) => {
         const cells = matrixCols.map(b => {
             const v = cellSum(direction, type, b.id);
-            return `<td class="right" style="color: ${v > 0 ? color : '#cbd5e1'};">${v > 0 ? '$' + fmtMoney(v) : '—'}</td>`;
+            return `<td class="right" style="color: ${v > 0 ? color : '#d6dae1'};">${v > 0 ? '$' + fmtMoney(v) : '—'}</td>`;
         }).join('');
         const total = rowTotal(direction, type);
         return `<tr><td>${esc(type)}</td>${cells}<td class="right total-cell" style="color: ${color};">${total > 0 ? '$' + fmtMoney(total) : '—'}</td></tr>`;
@@ -137,29 +137,29 @@ function buildAnalysisReportHtml(range, buildingId = null) {
             <tbody>
                 ${incomeTypes.length > 0 ? `
                     <tr class="section-row income"><td colspan="${matrixCols.length + 2}">↓ 收入</td></tr>
-                    ${incomeTypes.map(t => renderMatrixRow('in', t, '#16a34a')).join('')}
+                    ${incomeTypes.map(t => renderMatrixRow('in', t, '#22946e')).join('')}
                     <tr class="subtotal income">
                         <td>收入合計</td>
-                        ${matrixCols.map(b => `<td class="right" style="color: #16a34a; font-weight: 700;">${colSum('in', b.id) > 0 ? '$' + fmtMoney(colSum('in', b.id)) : '—'}</td>`).join('')}
-                        <td class="right total-cell" style="color: #16a34a; font-weight: 700;">$${fmtMoney(totalSum('in'))}</td>
+                        ${matrixCols.map(b => `<td class="right" style="color: #22946e; font-weight: 700;">${colSum('in', b.id) > 0 ? '$' + fmtMoney(colSum('in', b.id)) : '—'}</td>`).join('')}
+                        <td class="right total-cell" style="color: #22946e; font-weight: 700;">$${fmtMoney(totalSum('in'))}</td>
                     </tr>
                 ` : ''}
                 ${expenseTypes.length > 0 ? `
                     <tr class="section-row expense"><td colspan="${matrixCols.length + 2}">↑ 支出</td></tr>
-                    ${expenseTypes.map(t => renderMatrixRow('out', t, '#dc2626')).join('')}
+                    ${expenseTypes.map(t => renderMatrixRow('out', t, '#b13535')).join('')}
                     <tr class="subtotal expense">
                         <td>支出合計</td>
-                        ${matrixCols.map(b => `<td class="right" style="color: #dc2626; font-weight: 700;">${colSum('out', b.id) > 0 ? '$' + fmtMoney(colSum('out', b.id)) : '—'}</td>`).join('')}
-                        <td class="right total-cell" style="color: #dc2626; font-weight: 700;">$${fmtMoney(totalSum('out'))}</td>
+                        ${matrixCols.map(b => `<td class="right" style="color: #b13535; font-weight: 700;">${colSum('out', b.id) > 0 ? '$' + fmtMoney(colSum('out', b.id)) : '—'}</td>`).join('')}
+                        <td class="right total-cell" style="color: #b13535; font-weight: 700;">$${fmtMoney(totalSum('out'))}</td>
                     </tr>
                 ` : ''}
                 <tr class="net-row">
                     <td><strong>淨收益</strong></td>
                     ${matrixCols.map(b => {
                         const net = colSum('in', b.id) - colSum('out', b.id);
-                        return `<td class="right"><strong style="color: ${net >= 0 ? '#16a34a' : '#dc2626'};">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</strong></td>`;
+                        return `<td class="right"><strong style="color: ${net >= 0 ? '#22946e' : '#b13535'};">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</strong></td>`;
                     }).join('')}
-                    <td class="right total-cell"><strong style="color: ${summary.net >= 0 ? '#16a34a' : '#dc2626'};">${summary.net < 0 ? '-' : ''}$${fmtMoney(Math.abs(summary.net))}</strong></td>
+                    <td class="right total-cell"><strong style="color: ${summary.net >= 0 ? '#22946e' : '#b13535'};">${summary.net < 0 ? '-' : ''}$${fmtMoney(Math.abs(summary.net))}</strong></td>
                 </tr>
             </tbody>
         </table>`;
@@ -174,7 +174,7 @@ function buildAnalysisReportHtml(range, buildingId = null) {
     * { box-sizing: border-box; }
     body {
         font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
-        color: #0f172a; margin: 0; padding: 1.5rem; background: #f1f5f9;
+        color: #1a1c23; margin: 0; padding: 1.5rem; background: #f1f5f9;
     }
     @media print {
         body { background: white; padding: 0; }
@@ -206,7 +206,7 @@ function buildAnalysisReportHtml(range, buildingId = null) {
         padding-bottom: 0.75rem; margin-bottom: 1rem;
     }
     h1 { margin: 0 0 0.2rem; font-size: 1.4rem; }
-    .meta { font-size: 0.8rem; color: #64748b; }
+    .meta { font-size: 0.8rem; color: #6b7280; }
 
     section { margin-bottom: 1.25rem; }
     h2 { font-size: 0.95rem; margin: 0 0 0.6rem; color: #334155; border-left: 4px solid #ff8859; padding-left: 0.6rem; }
@@ -216,17 +216,17 @@ function buildAnalysisReportHtml(range, buildingId = null) {
         padding: 0.7rem 0.95rem; background: #f8fafc;
         border: 1px solid #e2e8f0; border-radius: 6px;
     }
-    .kpi-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
     .kpi-value { font-size: 1.3rem; font-weight: 800; margin: 0.25rem 0 0.1rem; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-    .kpi-sub { font-size: 0.7rem; color: #94a3b8; }
+    .kpi-sub { font-size: 0.7rem; color: #6b7280; }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
     th, td { padding: 0.4rem 0.55rem; border-bottom: 1px solid #e2e8f0; text-align: left; }
     th { background: #f1f5f9; color: #475569; font-weight: 600; font-size: 0.74rem; }
     td.right, th.right { text-align: right; }
-    .total-cell { background: #f8fafc; border-left: 1px solid #cbd5e1; font-weight: 600; }
-    .empty { color: #94a3b8; font-style: italic; text-align: center; padding: 1.5rem; }
-    .empty-block { text-align: center; padding: 2rem; color: #94a3b8; }
+    .total-cell { background: #f8fafc; border-left: 1px solid #d6dae1; font-weight: 600; }
+    .empty { color: #6b7280; font-style: italic; text-align: center; padding: 1.5rem; }
+    .empty-block { text-align: center; padding: 2rem; color: #6b7280; }
 
     /* Pareto 表 */
     tr.pareto-key td { background: rgba(255, 136, 89, 0.06); }
@@ -243,7 +243,7 @@ function buildAnalysisReportHtml(range, buildingId = null) {
     footer.report-footer {
         margin-top: 1.5rem; padding-top: 0.75rem;
         border-top: 1px solid #e2e8f0;
-        font-size: 0.7rem; color: #94a3b8;
+        font-size: 0.7rem; color: #6b7280;
         display: flex; justify-content: space-between;
     }
 </style>
@@ -265,7 +265,7 @@ function buildAnalysisReportHtml(range, buildingId = null) {
         <div class="kpi-grid">
             <div class="kpi">
                 <div class="kpi-label">NOI 淨營運收入</div>
-                <div class="kpi-value" style="color: ${summary.net >= 0 ? '#0f172a' : '#dc2626'};">$${fmtMoney(summary.net)}</div>
+                <div class="kpi-value" style="color: ${summary.net >= 0 ? '#1a1c23' : '#b13535'};">$${fmtMoney(summary.net)}</div>
                 <div class="kpi-sub">收 $${fmtMoney(summary.inAll)} − 付 $${fmtMoney(summary.outAll)}</div>
             </div>
             <div class="kpi">
@@ -275,7 +275,7 @@ function buildAnalysisReportHtml(range, buildingId = null) {
             </div>
             <div class="kpi">
                 <div class="kpi-label">淨利率</div>
-                <div class="kpi-value" style="color: ${summary.netMargin >= 0 ? '#0f172a' : '#dc2626'};">${summary.inAll > 0 ? pct(summary.netMargin) : '—'}</div>
+                <div class="kpi-value" style="color: ${summary.netMargin >= 0 ? '#1a1c23' : '#b13535'};">${summary.inAll > 0 ? pct(summary.netMargin) : '—'}</div>
                 <div class="kpi-sub">目標 ≥ 15%</div>
             </div>
             <div class="kpi">

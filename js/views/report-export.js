@@ -1,4 +1,4 @@
-// 各館營運報告匯出 — 房東導向 PDF (用瀏覽器列印產生)
+﻿// 各館營運報告匯出 — 房東導向 PDF (用瀏覽器列印產生)
 //
 // 流程：點 BMS「📄 匯出 PDF」→ 開新分頁顯示報告 → 點上方「列印」→ 瀏覽器存 PDF
 // CJK 字體用系統字 (Noto Sans TC / 微軟正黑)；A4 portrait
@@ -98,13 +98,13 @@ export function buildLandlordReportHtml(building, ym) {
 
     const kpiCards = [
         { label: '出租率', value: `${(d.occRate * 100).toFixed(0)}%`, sub: `${d.rented} / ${d.totalBeds} 床` },
-        { label: '月收入', value: `$${fmtMoney(d.actualIncome)}`, sub: `預期 $${fmtMoney(d.potentialIncome)}`, color: '#16a34a' },
-        { label: '月支出', value: `$${fmtMoney(d.expenseTotal)}`, sub: `${Object.keys(d.byType).length} 項`, color: '#dc2626' },
-        { label: '淨利', value: `${d.net >= 0 ? '' : '-'}$${fmtMoney(Math.abs(d.net))}`, sub: `毛利率 ${(d.grossMargin * 100).toFixed(0)}%`, color: d.net >= 0 ? '#16a34a' : '#dc2626' }
+        { label: '月收入', value: `$${fmtMoney(d.actualIncome)}`, sub: `預期 $${fmtMoney(d.potentialIncome)}`, color: '#22946e' },
+        { label: '月支出', value: `$${fmtMoney(d.expenseTotal)}`, sub: `${Object.keys(d.byType).length} 項`, color: '#b13535' },
+        { label: '淨利', value: `${d.net >= 0 ? '' : '-'}$${fmtMoney(Math.abs(d.net))}`, sub: `毛利率 ${(d.grossMargin * 100).toFixed(0)}%`, color: d.net >= 0 ? '#22946e' : '#b13535' }
     ].map(k => `
         <div class="kpi">
             <div class="kpi-label">${k.label}</div>
-            <div class="kpi-value" style="color: ${k.color || '#0f172a'};">${k.value}</div>
+            <div class="kpi-value" style="color: ${k.color || '#1a1c23'};">${k.value}</div>
             <div class="kpi-sub">${k.sub}</div>
         </div>
     `).join('');
@@ -148,7 +148,7 @@ export function buildLandlordReportHtml(building, ym) {
     * { box-sizing: border-box; }
     body {
         font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
-        color: #0f172a;
+        color: #1a1c23;
         margin: 0;
         padding: 1.5rem;
         background: #f1f5f9;
@@ -180,7 +180,7 @@ export function buildLandlordReportHtml(building, ym) {
         cursor: pointer;
     }
     .toolbar .btn-print {
-        background: linear-gradient(135deg, #f59e0b, #d97706);
+        background: linear-gradient(135deg, #b8871f, #d97706);
         color: white;
     }
     .toolbar .btn-close {
@@ -195,37 +195,37 @@ export function buildLandlordReportHtml(building, ym) {
         box-shadow: 0 4px 24px rgba(0,0,0,0.08);
     }
     header.report-header {
-        border-bottom: 3px solid #f59e0b;
+        border-bottom: 3px solid #b8871f;
         padding-bottom: 1rem;
         margin-bottom: 1.5rem;
     }
     h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
-    .meta { font-size: 0.85rem; color: #64748b; }
+    .meta { font-size: 0.85rem; color: #6b7280; }
     section { margin-bottom: 1.5rem; page-break-inside: avoid; }
-    h2 { font-size: 1rem; margin: 0 0 0.6rem; color: #334155; border-left: 4px solid #f59e0b; padding-left: 0.6rem; }
+    h2 { font-size: 1rem; margin: 0 0 0.6rem; color: #334155; border-left: 4px solid #b8871f; padding-left: 0.6rem; }
     .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
     .kpi { padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center; }
-    .kpi-label { font-size: 0.7rem; color: #64748b; margin-bottom: 0.25rem; }
+    .kpi-label { font-size: 0.7rem; color: #6b7280; margin-bottom: 0.25rem; }
     .kpi-value { font-size: 1.3rem; font-weight: 700; }
-    .kpi-sub { font-size: 0.7rem; color: #94a3b8; margin-top: 0.2rem; }
+    .kpi-sub { font-size: 0.7rem; color: #6b7280; margin-top: 0.2rem; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th { background: #f1f5f9; padding: 0.4rem 0.6rem; text-align: left; font-weight: 600; color: #475569; }
     td { padding: 0.4rem 0.6rem; border-bottom: 1px solid #e2e8f0; }
-    tr.vacant td { color: #94a3b8; }
-    .empty { color: #94a3b8; font-style: italic; }
+    tr.vacant td { color: #6b7280; }
+    .empty { color: #6b7280; font-style: italic; }
     ul { margin: 0; padding-left: 1.25rem; font-size: 0.85rem; }
     ul li { margin-bottom: 0.3rem; }
     .status-pill { font-size: 0.7rem; padding: 0.1rem 0.5rem; background: #e0f2fe; color: #0369a1; border-radius: 999px; margin-left: 0.3rem; }
     .notes-area {
         min-height: 6rem;
-        border: 1px dashed #cbd5e1;
+        border: 1px dashed #d6dae1;
         border-radius: 6px;
         padding: 0.75rem;
         font-size: 0.85rem;
-        color: #94a3b8;
+        color: #6b7280;
     }
     .notes-area:empty::before { content: '（管理員可手寫補充：本月觀察、下期重點、待溝通事項…）'; }
-    footer.report-footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; font-size: 0.75rem; color: #94a3b8; display: flex; justify-content: space-between; }
+    footer.report-footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; font-size: 0.75rem; color: #6b7280; display: flex; justify-content: space-between; }
 </style>
 </head>
 <body>
@@ -243,7 +243,7 @@ export function buildLandlordReportHtml(building, ym) {
     <section>
         <h2>📊 核心指標</h2>
         <div class="kpi-grid">${kpiCards}</div>
-        ${d.vacancyLoss > 0 ? `<p style="margin-top: 0.5rem; font-size: 0.8rem; color: #94a3b8;">⚠ 空床損失：$${fmtMoney(d.vacancyLoss)}（預期 vs 實收差距，多為待繳或部分繳款）</p>` : ''}
+        ${d.vacancyLoss > 0 ? `<p style="margin-top: 0.5rem; font-size: 0.8rem; color: #6b7280;">⚠ 空床損失：$${fmtMoney(d.vacancyLoss)}（預期 vs 實收差距，多為待繳或部分繳款）</p>` : ''}
     </section>
 
     <section>

@@ -1,4 +1,4 @@
-// 住房一覽 — 分館 tabs + 矩陣式月收租日
+﻿// 住房一覽 — 分館 tabs + 矩陣式月收租日
 //
 // 設計：
 //   * 每館一個 tab，點 tab 切換
@@ -162,7 +162,7 @@ function renderContractRow(bed, contract, months, today, stripeClass, todayStr) 
         : `<span class="occ-note-empty">+ 編輯</span>`;
     const noteCell = tenantObj
         ? `<button class="occ-note-btn" data-action="edit-note" data-tenant-id="${tenantObj.id}" title="${tenantObj.note ? tenantObj.note.replace(/"/g, '&quot;') : '點擊新增備註'}">${noteContent}</button>`
-        : (isSnoozed ? `<span style="font-size: 0.7rem;">暫緩中</span>` : '');
+        : (isSnoozed ? `<span style="font-size: var(--text-2xs);">暫緩中</span>` : '');
 
     const cells = months.map(m => {
         const cell = rentCellFor(contract, m, today);
@@ -176,7 +176,7 @@ function renderContractRow(bed, contract, months, today, stripeClass, todayStr) 
         <tr class="${rowClass}">
             <td class="occ-bed-label">${bedLabelHtml}</td>
             <td>${tenantCell}</td>
-            <td><span style="font-size: 0.75rem; color: var(--text-muted);">${noteCell}</span></td>
+            <td><span style="font-size: var(--text-xs); color: var(--text-muted);">${noteCell}</span></td>
             <td style="text-align: center;">
                 <input type="checkbox" class="occ-terminate-check" data-action="terminate-contract" data-contract-id="${contract.id}" title="勾選後啟動退房流程" />
             </td>
@@ -193,7 +193,7 @@ function renderVacantRow(bed, months, stripeClass = '') {
     return `
         <tr class="occ-row-vacant ${stripeClass}">
             <td class="occ-bed-label">${bedLabelHtml}</td>
-            <td><span style="color: var(--text-muted); font-size: 0.75rem;">空床</span></td>
+            <td><span style="color: var(--text-muted); font-size: var(--text-xs);">空床</span></td>
             <td></td>
             <td style="text-align: center;">
                 <button class="occ-checkin-btn" data-action="checkin-bed" data-bed-id="${bed.id}" title="新增入住"><i class="ph ph-plus"></i> 入住</button>
@@ -265,7 +265,7 @@ function renderBuildingTable(building, months, today) {
                 return renderRow(b, months, today, stripeClass);
             } catch (e) {
                 console.error(`[occupancy] 床位 ${b.id} / ${b.name} 渲染失敗:`, e, b);
-                return `<tr><td colspan="${colCount}" style="color: var(--color-danger); padding: 0.5rem; font-size: 0.8rem;">⚠ ${b.id || '(no id)'} - ${b.name || '(no name)'}: ${e.message}</td></tr>`;
+                return `<tr><td colspan="${colCount}" style="color: var(--color-danger); padding: 0.5rem; font-size: var(--text-xs);">⚠ ${b.id || '(no id)'} - ${b.name || '(no name)'}: ${e.message}</td></tr>`;
             }
         }).join('');
 
@@ -291,7 +291,7 @@ function renderBuildingTable(building, months, today) {
                 <h3 class="card-title" style="margin: 0;">
                     <i class="ph ph-buildings"></i> ${building.name}
                 </h3>
-                <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 1rem;">
+                <div style="font-size: var(--text-xs); color: var(--text-muted); display: flex; gap: 1rem;">
                     <span>共 <strong>${beds.length}</strong> 床</span>
                     <span style="color: var(--color-success);">居住 ${stats.active || 0}</span>
                     ${stats.snoozed ? `<span style="color: var(--color-warning);">暫緩 ${stats.snoozed}</span>` : ''}

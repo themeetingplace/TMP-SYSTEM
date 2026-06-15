@@ -1,4 +1,4 @@
-import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts } from '../data.js';
+﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
 import { showTenantDetails } from './tenants.js';
@@ -36,7 +36,7 @@ function propSortArrow(thisCol, current) {
     const icon = isActive ? (current.dir === 'desc' ? 'ph-caret-down' : 'ph-caret-up') : 'ph-caret-up-down';
     const opacity = isActive ? 1 : 0.35;
     const color = isActive ? 'color: var(--color-warning);' : '';
-    return `<span style="display: inline-block; width: 1.1em; text-align: center; margin-left: 3px; opacity: ${opacity}; ${color}"><i class="ph ${icon}" style="font-size: 0.72rem; vertical-align: middle;"></i></span>`;
+    return `<span style="display: inline-block; width: 1.1em; text-align: center; margin-left: 3px; opacity: ${opacity}; ${color}"><i class="ph ${icon}" style="font-size: var(--text-2xs); vertical-align: middle;"></i></span>`;
 }
 
 // 把「聚空間 - 松山館 R1-A」拆成 { area: '松山館', bed: 'R1-A' }
@@ -113,19 +113,19 @@ export function renderProperties() {
         const displayArea = building?.name || area;
         const displayBed = (p.roomNumber && p.bedLetter) ? `R${p.roomNumber}-${p.bedLetter}` : bed;
         const roomTypeBadge = (p.gender && p.capacity)
-            ? `<span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">${formatRoomType(p.gender, p.capacity)}</span>`
+            ? `<span style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 2px;">${formatRoomType(p.gender, p.capacity)}</span>`
             : '';
         const tenantObj = p.tenant ? mockData.tenants.find(t => t.name === p.tenant) : null;
         const tenantCell = p.tenant
             ? (tenantObj
                 ? `<button class="tenant-link" data-tenant-id="${esc(tenantObj.id)}" title="查看租客資料">${esc(p.tenant)}</button>`
-                : `<strong>${esc(p.tenant)}</strong> <span style="font-size: 0.7rem; color: var(--text-muted);">(查無對應租客)</span>`)
+                : `<strong>${esc(p.tenant)}</strong> <span style="font-size: var(--text-2xs); color: var(--text-muted);">(查無對應租客)</span>`)
             : '<span style="color: var(--text-muted)">--</span>';
 
         const contractCell = p.contractId
             ? `<div style="display: flex; flex-direction: column;">
-                    <strong style="font-size: 0.875rem;">${p.contractId}</strong>
-                    <span style="font-size: 0.75rem; color: var(--text-muted);">${p.contractEnd ? '到期 ' + p.contractEnd : '未定到期日'}</span>
+                    <strong style="font-size: var(--text-base);">${p.contractId}</strong>
+                    <span style="font-size: var(--text-xs); color: var(--text-muted);">${p.contractEnd ? '到期 ' + p.contractEnd : '未定到期日'}</span>
                </div>`
             : (p.contractEnd
                 ? `<span style="font-weight: 500;">${p.contractEnd}</span>`
@@ -137,24 +137,24 @@ export function renderProperties() {
             <tr data-row-id="${p.id}" data-status="${p.status}" data-area="${displayArea}" data-search="${searchText}">
                 <td>
                     <div style="display: flex; flex-direction: column;">
-                        <strong style="font-size: 0.875rem;">${displayArea}</strong>
-                        <span style="font-size: 0.75rem; color: var(--text-main);">床位 ${displayBed}</span>
+                        <strong style="font-size: var(--text-base);">${displayArea}</strong>
+                        <span style="font-size: var(--text-xs); color: var(--text-main);">床位 ${displayBed}</span>
                         ${roomTypeBadge}
                     </div>
                 </td>
                 <td><span class="status-badge ${statusClass}">${p.status}</span></td>
                 <td>
-                    <div style="font-size: 0.875rem; font-weight: 500;">${p.rent != null ? '$' + p.rent.toLocaleString() : '<span style="color: var(--text-muted)">—</span>'}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">每月租金</div>
+                    <div style="font-size: var(--text-base); font-weight: 500;">${p.rent != null ? '$' + p.rent.toLocaleString() : '<span style="color: var(--text-muted)">—</span>'}</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted);">每月租金</div>
                 </td>
                 <td>${tenantCell}</td>
                 <td>${contractCell}</td>
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline action-btn" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="view" data-property-id="${p.id}" title="查看詳情">
+                        <button class="btn btn-outline action-btn" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="view" data-property-id="${p.id}" title="查看詳情">
                             <i class="ph ph-eye"></i>
                         </button>
-                        <button class="btn btn-outline action-btn" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-property-id="${p.id}" title="編輯床位">
+                        <button class="btn btn-outline action-btn" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-property-id="${p.id}" title="編輯床位">
                             <i class="ph ph-pencil"></i>
                         </button>
                     </div>
@@ -205,7 +205,7 @@ export function renderProperties() {
                 <div class="flex gap-2">
                     <div class="search-bar" style="width: 250px;">
                         <i class="ph ph-magnifying-glass"></i>
-                        <input type="text" placeholder="搜尋館別、床位、租客或合約..." style="font-size: 0.875rem;">
+                        <input type="text" placeholder="搜尋館別、床位、租客或合約..." style="font-size: var(--text-base);">
                     </div>
                     <button class="btn btn-primary" id="btn-new-checkin-assign" data-fab="ph-key">
                         <i class="ph ph-key"></i> 新增入住
@@ -697,21 +697,21 @@ export function showCheckinAssignmentForm(opts = {}) {
                         <button type="button" class="adj-kind-btn ${row.kind === 'add' ? 'is-active' : ''}" data-kind="add" title="加收 / 額外費用">+ 加收</button>
                     </div>
                     <input type="hidden" data-adj="kind" value="${row.kind || 'sub'}">
-                    <input data-adj="label" type="text" class="form-input" placeholder="說明 (例：季繳優惠 / 能源費)" value="${row.label || ''}" style="font-size: 0.85rem;">
-                    <input data-adj="amount" type="number" class="form-input" placeholder="金額" value="${row.amount || ''}" style="font-size: 0.85rem; text-align: right;">
+                    <input data-adj="label" type="text" class="form-input" placeholder="說明 (例：季繳優惠 / 能源費)" value="${row.label || ''}" style="font-size: var(--text-sm);">
+                    <input data-adj="amount" type="number" class="form-input" placeholder="金額" value="${row.amount || ''}" style="font-size: var(--text-sm); text-align: right;">
                     <button type="button" class="adj-del" title="移除這筆" style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: 1rem; padding: 0.2rem;"><i class="ph ph-x"></i></button>
                 </div>
             `;
             if (adjustPh) {
                 adjustPh.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <label style="font-weight: 500; font-size: 0.875rem;">折扣 / 加收項目 <small style="color: var(--text-muted); font-weight: 400;">(可多筆)</small></label>
-                        <button type="button" id="adj-add" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+                        <label style="font-weight: 500; font-size: var(--text-base);">折扣 / 加收項目 <small style="color: var(--text-muted); font-weight: 400;">(可多筆)</small></label>
+                        <button type="button" id="adj-add" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">
                             <i class="ph ph-plus"></i> 新增項目
                         </button>
                     </div>
                     <div id="adj-list"></div>
-                    <small class="form-hint" style="color: var(--text-muted); font-size: 0.7rem;">例：季繳優惠 -1000 (折扣) / 能源費 +500 (加收)。沒有可以不填。</small>
+                    <small class="form-hint" style="color: var(--text-muted); font-size: var(--text-2xs);">例：季繳優惠 -1000 (折扣) / 能源費 +500 (加收)。沒有可以不填。</small>
                 `;
                 const listEl = adjustPh.querySelector('#adj-list');
                 const addRow = (row) => {
@@ -795,7 +795,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                     const totalRent = primaryRent + extraBedRentSum;
                     const totalCount = extras.length + 1;
                     const extraChips = extras.map(b => `
-                        <span style="background: var(--color-surface, #fff); border: 1px solid var(--border-color); padding: 0.2rem 0.55rem; border-radius: 999px; display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--text-main); white-space: nowrap;">
+                        <span style="background: var(--color-surface, #fff); border: 1px solid var(--border-color); padding: 0.2rem 0.55rem; border-radius: 999px; display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--text-xs); color: var(--text-main); white-space: nowrap;">
                             <i class="ph ph-stack-plus" style="color: var(--color-primary); font-size: 0.85em;"></i>
                             <strong>${(b.name || '').replace('聚空間 - ', '')}</strong>
                             <span style="color: var(--text-muted);">$${(b.rent || 0).toLocaleString()}</span>
@@ -804,16 +804,16 @@ export function showCheckinAssignmentForm(opts = {}) {
                     // 右側合計徽章：單床位顯示「$X/月」，多床位顯示「合計月租 $X (共 N 張)」
                     const rightBadge = extras.length
                         ? `<div style="text-align: right; line-height: 1.2; flex-shrink: 0;">
-                              <div style="font-size: 0.68rem; color: var(--text-muted); letter-spacing: 0.04em;">合計月租 · 共 ${totalCount} 張</div>
+                              <div style="font-size: var(--text-2xs); color: var(--text-muted); letter-spacing: 0.04em;">合計月租 · 共 ${totalCount} 張</div>
                               <div style="font-size: 1.1rem; font-weight: 700; color: var(--color-primary); margin-top: 0.1rem;">$${totalRent.toLocaleString()}</div>
                            </div>`
                         : `<div style="font-size: 1.1rem; font-weight: 700; color: var(--color-primary); flex-shrink: 0; align-self: center;">
-                              $${primaryRent.toLocaleString()}<span style="color: var(--text-muted); font-size: 0.7rem; margin-left: 0.15rem; font-weight: 500;">/月</span>
+                              $${primaryRent.toLocaleString()}<span style="color: var(--text-muted); font-size: var(--text-2xs); margin-left: 0.15rem; font-weight: 500;">/月</span>
                            </div>`;
                     // 額外床位 chip 列 (有額外時才顯示，跟主資訊之間用虛線分隔)
                     const extrasRow = extras.length
                         ? `<div style="margin-top: 0.55rem; padding-top: 0.5rem; border-top: 1px dashed var(--border-color); display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                              <span style="font-size: 0.72rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
+                              <span style="font-size: var(--text-2xs); color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
                                   <i class="ph ph-plus-circle" style="color: var(--color-primary);"></i> 額外
                               </span>
                               ${extraChips}
@@ -822,9 +822,9 @@ export function showCheckinAssignmentForm(opts = {}) {
                     headerEl.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                             <div style="display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1;">
-                                <span style="font-size: 0.68rem; color: var(--text-muted); letter-spacing: 0.04em;">入住床位${extras.length ? ` <span style="color: var(--color-primary); font-weight: 600;">(${totalCount} 張)</span>` : ''}</span>
-                                <span style="font-weight: 600; font-size: 0.95rem;">${preselectBuilding?.name || ''} R${preselectBed.roomNumber}-${preselectBed.bedLetter}</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted);">${formatRoomType(preselectBed.gender, preselectBed.capacity)} · $${primaryRent.toLocaleString()}/月</span>
+                                <span style="font-size: var(--text-2xs); color: var(--text-muted); letter-spacing: 0.04em;">入住床位${extras.length ? ` <span style="color: var(--color-primary); font-weight: 600;">(${totalCount} 張)</span>` : ''}</span>
+                                <span style="font-weight: 600; font-size: var(--text-md);">${preselectBuilding?.name || ''} R${preselectBed.roomNumber}-${preselectBed.bedLetter}</span>
+                                <span style="font-size: var(--text-xs); color: var(--text-muted);">${formatRoomType(preselectBed.gender, preselectBed.capacity)} · $${primaryRent.toLocaleString()}/月</span>
                             </div>
                             ${rightBadge}
                         </div>
@@ -877,15 +877,15 @@ export function showCheckinAssignmentForm(opts = {}) {
                 extraBedsPh.innerHTML = `
                     <div style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; border: 1px dashed var(--border-color); margin-top: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <label style="font-weight: 500; font-size: 0.875rem;">
+                            <label style="font-weight: 500; font-size: var(--text-base);">
                                 <i class="ph ph-stack-plus"></i> 額外床位 <small style="color: var(--text-muted); font-weight: 400;">(可選 — 同租客同期間 = 多張合約)</small>
                             </label>
-                            <button type="button" id="add-extra-bed-btn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.3rem 0.7rem;">
+                            <button type="button" id="add-extra-bed-btn" class="btn btn-outline" style="font-size: var(--text-xs); padding: 0.3rem 0.7rem;">
                                 <i class="ph ph-plus"></i> 增加床位
                             </button>
                         </div>
                         <div id="extra-beds-list"></div>
-                        <small class="form-hint" style="color: var(--text-muted); font-size: 0.7rem; display: block; margin-top: 0.4rem;">每多選一張床位 = 多建一份合約，月租自動加總；折扣 / 收款只記在主合約，額外床位的房租可至帳務管理收款</small>
+                        <small class="form-hint" style="color: var(--text-muted); font-size: var(--text-2xs); display: block; margin-top: 0.4rem;">每多選一張床位 = 多建一份合約，月租自動加總；折扣 / 收款只記在主合約，額外床位的房租可至帳務管理收款</small>
                     </div>
                 `;
                 extraBedsPh.querySelector('#add-extra-bed-btn').addEventListener('click', () => addExtraBedRow());
@@ -998,7 +998,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                     if (s < currentStep) {
                         num.style.background = 'var(--color-success)';
                         num.style.color = '#fff';
-                        num.innerHTML = '<i class="ph ph-check" style="font-size: 0.75rem;"></i>';
+                        num.innerHTML = '<i class="ph ph-check" style="font-size: var(--text-xs);"></i>';
                         lbl.style.color = 'var(--text-muted)';
                         lbl.style.fontWeight = '500';
                     } else if (s === currentStep) {
@@ -1121,21 +1121,21 @@ export function showCheckinAssignmentForm(opts = {}) {
                 ? adjItems.map(x => {
                     const sign = x.kind === 'add' ? '+' : '-';
                     const color = x.kind === 'add' ? 'var(--color-info)' : 'var(--color-warning)';
-                    return `<div style="font-size: 0.8rem; color: ${color}; padding-left: 0.5rem;">${sign} $${x.amount.toLocaleString()} ${x.label || '(無說明)'}</div>`;
+                    return `<div style="font-size: var(--text-xs); color: ${color}; padding-left: 0.5rem;">${sign} $${x.amount.toLocaleString()} ${x.label || '(無說明)'}</div>`;
                 }).join('')
                 : '';
             const bedSummary = extraBeds.length === 0
                 ? `${(bed.name || '').replace('聚空間 - ', '')} · 月租 $${(bed.rent || 0).toLocaleString()}`
                 : `<div><strong>主床位：</strong>${(bed.name || '').replace('聚空間 - ', '')} · $${(bed.rent || 0).toLocaleString()}/月</div>` +
-                  extraBeds.map(b => `<div style="color: var(--text-secondary); font-size: 0.82rem; padding-left: 0.5rem; margin-top: 0.2rem;"><i class="ph ph-stack-plus" style="font-size: 0.85em;"></i> 額外：${(b.name || '').replace('聚空間 - ', '')} · $${(b.rent || 0).toLocaleString()}/月</div>`).join('') +
-                  `<div style="color: var(--text-muted); font-size: 0.78rem; margin-top: 0.25rem;">共 ${extraBeds.length + 1} 張床位 · 合計月租 $${(amount + extraBedRentTotal).toLocaleString()}</div>`;
+                  extraBeds.map(b => `<div style="color: var(--text-secondary); font-size: var(--text-sm); padding-left: 0.5rem; margin-top: 0.2rem;"><i class="ph ph-stack-plus" style="font-size: 0.85em;"></i> 額外：${(b.name || '').replace('聚空間 - ', '')} · $${(b.rent || 0).toLocaleString()}/月</div>`).join('') +
+                  `<div style="color: var(--text-muted); font-size: var(--text-xs); margin-top: 0.25rem;">共 ${extraBeds.length + 1} 張床位 · 合計月租 $${(amount + extraBedRentTotal).toLocaleString()}</div>`;
             const contractIdLabel = extraBeds.length === 0
                 ? `<strong style="font-family: monospace;">${predictedContractId}</strong>`
-                : `<strong style="font-family: monospace;">${predictedContractId}</strong> <span style="color: var(--text-muted); font-size: 0.78rem;">+ 額外 ${extraBeds.length} 份</span>`;
+                : `<strong style="font-family: monospace;">${predictedContractId}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">+ 額外 ${extraBeds.length} 份</span>`;
             const reviewRows = [
                 ['新合約編號', contractIdLabel],
                 ['床位', bedSummary],
-                ['租客', `${inputName} <span style="color: var(--text-muted); font-size: 0.8rem;">${tenantStatusLabel}</span>`],
+                ['租客', `${inputName} <span style="color: var(--text-muted); font-size: var(--text-xs);">${tenantStatusLabel}</span>`],
                 ['電話', values.tenantPhone || '<span style="color: var(--text-muted)">未填</span>'],
                 ['Email', values.tenantEmail || '<span style="color: var(--text-muted)">未填</span>'],
                 ['緊急聯絡人', values.tenantEmergency || '<span style="color: var(--text-muted)">未填</span>'],
@@ -1143,14 +1143,14 @@ export function showCheckinAssignmentForm(opts = {}) {
                 ['入住日', startDate],
                 ['到期日', endDate],
                 ['合約期', term === 3 ? '3 個月（季繳）' : '1 個月'],
-                ['月租金', `$${(amount + extraBedRentTotal).toLocaleString()}${extraBeds.length ? ` <span style="color: var(--text-muted); font-size: 0.78rem;">(主 $${amount.toLocaleString()} + 額外 $${extraBedRentTotal.toLocaleString()})</span>` : ''}`],
-                ['應收總額', `<div><strong>$${due.toLocaleString()}</strong> <span style="color: var(--text-muted); font-size: 0.8rem;">(月租 × ${term} = $${((amount + extraBedRentTotal) * term).toLocaleString()})</span></div>${adjustmentLines}`],
+                ['月租金', `$${(amount + extraBedRentTotal).toLocaleString()}${extraBeds.length ? ` <span style="color: var(--text-muted); font-size: var(--text-xs);">(主 $${amount.toLocaleString()} + 額外 $${extraBedRentTotal.toLocaleString()})</span>` : ''}`],
+                ['應收總額', `<div><strong>$${due.toLocaleString()}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">(月租 × ${term} = $${((amount + extraBedRentTotal) * term).toLocaleString()})</span></div>${adjustmentLines}`],
                 ['已收金額', `$${paidAmount.toLocaleString()}${paidAmount >= due ? ' <span style="color: var(--color-success);">✅ 已收訖</span>' : paidAmount > 0 ? ` <span style="color: var(--color-warning);">部分繳款 (餘 $${(due - paidAmount).toLocaleString()})</span>` : ' <span style="color: var(--color-danger);">❌ 未繳</span>'}`],
                 ['付款方式', values.paymentMethod || '匯款']
             ];
             const reviewHtml = `
-                <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">請仔細核對下方資料，確認無誤後送出。送出後系統會：建立合約 → 自動產生帳單 → 更新床位 / 租客狀態。</div>
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
+                <div style="font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 1rem;">請仔細核對下方資料，確認無誤後送出。送出後系統會：建立合約 → 自動產生帳單 → 更新床位 / 租客狀態。</div>
+                <table style="width: 100%; border-collapse: collapse; font-size: var(--text-base);">
                     ${reviewRows.map(([k, v]) => `
                         <tr>
                             <td style="padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-muted); width: 30%; vertical-align: top;">${k}</td>
@@ -1268,7 +1268,7 @@ function confirmDelete(propertyId) {
     // 阻擋有 active 合約的床位被刪除
     const hasActiveContract = mockData.contracts.some(c => c.propertyId === propertyId && c.renewalState === 'active');
     const blockedReason = hasActiveContract
-        ? `<div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(220, 38, 38, 0.08); border-radius: 6px; border-left: 3px solid var(--color-danger); font-size: 0.85rem;">
+        ? `<div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(220, 38, 38, 0.08); border-radius: 6px; border-left: 3px solid var(--color-danger); font-size: var(--text-sm);">
               <strong>⚠ 此床位有現任租客的合約</strong>，先到合約管理「退租」才能刪除床位。
            </div>`
         : '';

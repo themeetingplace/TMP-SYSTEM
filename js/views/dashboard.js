@@ -1,4 +1,4 @@
-import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings } from '../data.js';
+﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings } from '../data.js';
 import { emptyState } from '../utils/emptyState.js';
 import { getChartColors } from '../utils/chartTheme.js';
 
@@ -248,7 +248,7 @@ export function renderDashboard() {
             
             <div class="card">
                 <div style="margin-bottom: 1rem;">
-                    <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; white-space: nowrap;">各館空床狀態</h3>
+                    <h3 style="font-size: var(--text-md); font-weight: 600; margin-bottom: 0.75rem; white-space: nowrap;">各館空床狀態</h3>
                     <div id="property-selector" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                         ${propertyNames.map((name, idx) => `
                             <button class="property-filter-btn ${idx === 0 ? 'active' : ''}" data-property="${name}">
@@ -262,10 +262,10 @@ export function renderDashboard() {
                         <canvas id="emptyBedsChart"></canvas>
                         <div id="empty-beds-center" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;">
                             <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-primary); line-height: 1;">${selectedPropertyData.vacant}</div>
-                            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">空床 / 共 ${selectedPropertyData.total}</div>
+                            <div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.25rem;">空床 / 共 ${selectedPropertyData.total}</div>
                         </div>
                     </div>
-                    <div id="empty-beds-legend" style="text-align: center; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
+                    <div id="empty-beds-legend" style="text-align: center; font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.5rem;">
                         已出租 <strong style="color: var(--color-success);">${occupiedBeds}</strong> · 空床 <strong style="color: var(--color-primary);">${selectedPropertyData.vacant}</strong>
                     </div>
                     <div id="empty-beds-gender" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; padding-top: 0.75rem; border-top: 1px dashed var(--border-color);">
@@ -287,9 +287,9 @@ export function renderDashboard() {
                                 <div style="margin-bottom: 0.25rem;">
                                     <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
                                 </div>
-                                <div style="font-size: 0.8rem; color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
+                                <div style="font-size: var(--text-xs); color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
                             </div>
-                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
+                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: var(--text-2xs); white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
                         </div>
                     `).join('') : emptyState({ icon: 'ph-check-circle', title: '本月合約都安全', hint: '沒有即將到期 / 待簽 / 需決策的合約' })}
                 </div>
@@ -304,9 +304,9 @@ export function renderDashboard() {
                                 <div style="margin-bottom: 0.25rem;">
                                     <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
                                 </div>
-                                <div style="font-size: 0.8rem; color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
+                                <div style="font-size: var(--text-xs); color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
                             </div>
-                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
+                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: var(--text-2xs); white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
                         </div>
                     `).join('') : emptyState({ icon: 'ph-coffee', title: '所有帳款都清光了', hint: '沒有待繳款或未對帳的項目' })}
                 </div>
@@ -321,9 +321,9 @@ export function renderDashboard() {
                                 <div style="margin-bottom: 0.25rem;">
                                     <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
                                 </div>
-                                <div style="font-size: 0.8rem; color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
+                                <div style="font-size: var(--text-xs); color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
                             </div>
-                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
+                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: var(--text-2xs); white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
                         </div>
                     `).join('') : emptyState({ icon: 'ph-confetti', title: '沒有未處理的維修', hint: '所有報修都已完成或進行中' })}
                 </div>
@@ -498,7 +498,7 @@ window.initDashboardInteractions = function() {
         if (centerEl) {
             centerEl.innerHTML = `
                 <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-primary); line-height: 1;">${data.vacant}</div>
-                <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">空床 / 共 ${data.total}</div>
+                <div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.25rem;">空床 / 共 ${data.total}</div>
             `;
         }
         if (legendEl) {

@@ -1,4 +1,4 @@
-// 報表頁共用狀態 (區間 + 子分頁 + 分組方式)
+﻿// 報表頁共用狀態 (區間 + 子分頁 + 分組方式)
 // 跟 finance-state.js 是分開的 — 報表用區間 (start/end)，帳務用單月
 import { currentMonth } from '../data.js';
 

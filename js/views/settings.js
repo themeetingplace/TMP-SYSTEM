@@ -1,4 +1,4 @@
-import { mockData, store, formatRoomType, getSortedBuildings } from '../data.js';
+﻿import { mockData, store, formatRoomType, getSortedBuildings } from '../data.js';
 import { openFormModal, openConfirm, openModal, showToast, refreshView } from '../utils/ui.js';
 import { showPropertyForm } from './properties.js';
 import { fileToBase64, fillContractPdf, downloadPdfBytes, previewPdfBytes, listPdfFields, formatRentalPeriod } from '../utils/pdfGen.js';
@@ -57,25 +57,25 @@ function renderBuildingsTab() {
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong>${b.name}</strong>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${b.id}</span>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${b.id}</span>
                     </div>
                 </td>
-                <td><span style="font-size: 0.875rem;">${b.baseAddress || '<span style=\"color: var(--text-muted)\">未設定</span>'}</span></td>
-                <td><strong>${rooms}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">間</span></td>
-                <td><strong>${total}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">床</span></td>
+                <td><span style="font-size: var(--text-base);">${b.baseAddress || '<span style=\"color: var(--text-muted)\">未設定</span>'}</span></td>
+                <td><strong>${rooms}</strong> <span style="font-size: var(--text-xs); color: var(--text-muted);">間</span></td>
+                <td><strong>${total}</strong> <span style="font-size: var(--text-xs); color: var(--text-muted);">床</span></td>
                 <td><span style="color: var(--color-success); font-weight: 600;">${rented}</span> <span style="color: var(--text-muted);"> / </span><span>${total - rented}</span></td>
                 <td>
                     <span class="status-badge ${isActive ? 'success' : 'info'}">${isActive ? '啟用中' : '已停用'}</span>
                 </td>
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline building-action" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;" data-action="manage" data-id="${b.id}" title="管理房間與床位">
+                        <button class="btn btn-outline building-action" style="padding: 0.25rem 0.75rem; font-size: var(--text-xs);" data-action="manage" data-id="${b.id}" title="管理房間與床位">
                             <i class="ph ph-list-bullets"></i> 房間/床位
                         </button>
-                        <button class="btn btn-outline building-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-id="${b.id}" title="編輯館別">
+                        <button class="btn btn-outline building-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${b.id}" title="編輯館別">
                             <i class="ph ph-pencil"></i>
                         </button>
-                        <button class="btn btn-outline building-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="toggle" data-id="${b.id}" title="${isActive ? '停用' : '啟用'}">
+                        <button class="btn btn-outline building-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="toggle" data-id="${b.id}" title="${isActive ? '停用' : '啟用'}">
                             <i class="ph ${isActive ? 'ph-pause' : 'ph-play'}"></i>
                         </button>
                     </div>
@@ -89,7 +89,7 @@ function renderBuildingsTab() {
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-buildings"></i> 館別管理</h2>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">館別禁止刪除（會影響歷史資料），不再使用請改為「停用」</p>
+                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">館別禁止刪除（會影響歷史資料），不再使用請改為「停用」</p>
                 </div>
                 <button class="btn btn-primary" id="btn-new-building">
                     <i class="ph ph-plus"></i> 新增館別
@@ -150,7 +150,7 @@ function showBuildingForm(building = null) {
                                     <p style="margin: 0 0 0.5rem;">館別「<strong>${values.name}</strong>」預設地址已改為：</p>
                                     <p style="margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; background: var(--bg-secondary); border-radius: 4px; font-weight: 600;">${newAddress}</p>
                                     <p style="margin: 0 0 0.5rem;">要把它套用到該館 <strong>${affectedProps.length}</strong> 個現有床位嗎？</p>
-                                    <ul style="margin: 0; padding-left: 1.2rem; color: var(--text-muted); font-size: 0.85rem; line-height: 1.6;">
+                                    <ul style="margin: 0; padding-left: 1.2rem; color: var(--text-muted); font-size: var(--text-sm); line-height: 1.6;">
                                         <li>床位地址會被合約 detail / 搜尋 / PDF 引用</li>
                                         <li>若某些床位你曾自訂地址（例如加樓層），會被覆蓋</li>
                                         <li>不同步 = 只改未來新增床位的預設值</li>
@@ -224,7 +224,7 @@ function showBuildingRoomsModal(buildingId) {
                 ? `<div class="rooms-empty">
                         <i class="ph ph-bed" style="font-size: 2.5rem; color: var(--text-muted);"></i>
                         <p style="margin: 0.75rem 0 0.25rem; font-weight: 600;">此館別尚無房間</p>
-                        <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">點選右上角「新增房間」開始建立</p>
+                        <p style="margin: 0; font-size: var(--text-xs); color: var(--text-muted);">點選右上角「新增房間」開始建立</p>
                    </div>`
                 : roomNumbers.map(rn => renderRoom(rn, rooms[rn])).join('')}
         `;
@@ -243,15 +243,15 @@ function showBuildingRoomsModal(buildingId) {
                     <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                         <strong style="font-size: 1.1rem;">R${roomNumber}</strong>
                         <span class="status-badge ${genderClass}">${roomTypeLabel}</span>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${beds.length} 張床</span>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">·</span>
-                        <span style="font-size: 0.8rem; color: var(--text-muted);">月租總計 <strong style="color: var(--color-success);">$${beds.reduce((s, b) => s + (b.rent || 0), 0).toLocaleString()}</strong></span>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${beds.length} 張床</span>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">·</span>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">月租總計 <strong style="color: var(--color-success);">$${beds.reduce((s, b) => s + (b.rent || 0), 0).toLocaleString()}</strong></span>
                     </div>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit-room" data-room="${roomNumber}" title="編輯房間（房型/樓層）">
+                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit-room" data-room="${roomNumber}" title="編輯房間（房型/樓層）">
                             <i class="ph ph-pencil"></i>
                         </button>
-                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-danger);" data-action="delete-room" data-room="${roomNumber}" title="刪除整個房間">
+                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete-room" data-room="${roomNumber}" title="刪除整個房間">
                             <i class="ph ph-trash"></i>
                         </button>
                     </div>
@@ -272,15 +272,15 @@ function showBuildingRoomsModal(buildingId) {
                 <div class="bed-letter">${bed.bedLetter || '?'}</div>
                 <div class="bed-main">
                     <span style="font-weight: 500;">床位 ${bed.bedLetter || '?'}</span>
-                    <span style="color: var(--text-muted); font-size: 0.8rem;">·</span>
+                    <span style="color: var(--text-muted); font-size: var(--text-xs);">·</span>
                     <span style="font-weight: 600; color: var(--color-success);">$${(bed.rent || 0).toLocaleString()}</span>
-                    <span style="font-size: 0.7rem; color: var(--text-muted);">/月</span>
+                    <span style="font-size: var(--text-2xs); color: var(--text-muted);">/月</span>
                 </div>
                 <div style="display: flex; gap: 0.25rem;">
-                    <button class="btn btn-outline" style="padding: 0.2rem 0.4rem; font-size: 0.7rem;" data-action="edit-bed" data-id="${bed.id}" title="編輯床位">
+                    <button class="btn btn-outline" style="padding: 0.2rem 0.4rem; font-size: var(--text-2xs);" data-action="edit-bed" data-id="${bed.id}" title="編輯床位">
                         <i class="ph ph-pencil"></i>
                     </button>
-                    <button class="btn btn-outline" style="padding: 0.2rem 0.4rem; font-size: 0.7rem; color: var(--color-danger);" data-action="delete-bed" data-id="${bed.id}" title="刪除床位">
+                    <button class="btn btn-outline" style="padding: 0.2rem 0.4rem; font-size: var(--text-2xs); color: var(--color-danger);" data-action="delete-bed" data-id="${bed.id}" title="刪除床位">
                         <i class="ph ph-trash"></i>
                     </button>
                 </div>
@@ -524,17 +524,17 @@ function renderInvoiceTypesTab() {
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong>${it.name}</strong>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${it.id}</span>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${it.id}</span>
                     </div>
                 </td>
-                <td><strong>${used}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">張帳單使用</span></td>
-                <td><span style="font-size: 0.875rem; color: var(--text-muted);">${it.note || '—'}</span></td>
+                <td><strong>${used}</strong> <span style="font-size: var(--text-xs); color: var(--text-muted);">張帳單使用</span></td>
+                <td><span style="font-size: var(--text-base); color: var(--text-muted);">${it.note || '—'}</span></td>
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline invoicetype-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-id="${it.id}" title="編輯類型">
+                        <button class="btn btn-outline invoicetype-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${it.id}" title="編輯類型">
                             <i class="ph ph-pencil"></i>
                         </button>
-                        <button class="btn btn-outline invoicetype-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; ${used === 0 ? 'color: var(--color-danger);' : 'opacity: 0.4; cursor: not-allowed;'}" data-action="delete" data-id="${it.id}" title="${used === 0 ? '刪除' : '已被使用，無法刪除'}">
+                        <button class="btn btn-outline invoicetype-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); ${used === 0 ? 'color: var(--color-danger);' : 'opacity: 0.4; cursor: not-allowed;'}" data-action="delete" data-id="${it.id}" title="${used === 0 ? '刪除' : '已被使用，無法刪除'}">
                             <i class="ph ph-trash"></i>
                         </button>
                     </div>
@@ -548,7 +548,7 @@ function renderInvoiceTypesTab() {
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-receipt"></i> 帳單類型</h2>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">新增帳單時可選擇的類型；改名會連動已存在的帳單</p>
+                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">新增帳單時可選擇的類型；改名會連動已存在的帳單</p>
                 </div>
                 <button class="btn btn-primary" id="btn-new-invoicetype">
                     <i class="ph ph-plus"></i> 新增類型
@@ -648,17 +648,17 @@ function renderSimpleListTab(kind) {
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong>${it.name}</strong>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${it.id}</span>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${it.id}</span>
                     </div>
                 </td>
-                <td><strong>${used}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">${cfg.usageLabel}</span></td>
-                <td><span style="font-size: 0.875rem; color: var(--text-muted);">${it.note || '—'}</span></td>
+                <td><strong>${used}</strong> <span style="font-size: var(--text-xs); color: var(--text-muted);">${cfg.usageLabel}</span></td>
+                <td><span style="font-size: var(--text-base); color: var(--text-muted);">${it.note || '—'}</span></td>
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline simplelist-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-kind="${kind}" data-id="${it.id}" title="編輯">
+                        <button class="btn btn-outline simplelist-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-kind="${kind}" data-id="${it.id}" title="編輯">
                             <i class="ph ph-pencil"></i>
                         </button>
-                        <button class="btn btn-outline simplelist-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; ${used === 0 ? 'color: var(--color-danger);' : 'opacity: 0.4; cursor: not-allowed;'}" data-action="delete" data-kind="${kind}" data-id="${it.id}" title="${used === 0 ? '刪除' : '已被使用，無法刪除'}">
+                        <button class="btn btn-outline simplelist-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); ${used === 0 ? 'color: var(--color-danger);' : 'opacity: 0.4; cursor: not-allowed;'}" data-action="delete" data-kind="${kind}" data-id="${it.id}" title="${used === 0 ? '刪除' : '已被使用，無法刪除'}">
                             <i class="ph ph-trash"></i>
                         </button>
                     </div>
@@ -672,7 +672,7 @@ function renderSimpleListTab(kind) {
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ${cfg.icon}"></i> ${cfg.title}</h2>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">${cfg.desc}</p>
+                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">${cfg.desc}</p>
                 </div>
                 <button class="btn btn-primary" data-action="new-simplelist" data-kind="${kind}">
                     <i class="ph ph-plus"></i> 新增${cfg.title}
@@ -756,31 +756,31 @@ function renderContractTemplatesTab() {
             <tr>
                 <td>
                     <strong>${b.name}</strong>
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">${b.baseAddress || '—'}</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted);">${b.baseAddress || '—'}</div>
                 </td>
                 <td>
                     ${tpl
                         ? `<div style="display: flex; flex-direction: column;">
-                                <span style="font-weight: 500; font-size: 0.875rem;"><i class="ph ph-file-pdf" style="color: ${isBroken ? 'var(--color-danger)' : 'var(--color-success)'};"></i> ${tpl.fileName}${isBroken ? ' <span style="background: rgba(177,53,53,0.12); color: var(--color-danger); padding: 0.1rem 0.45rem; border-radius: 99px; font-size: 0.68rem; font-weight: 600; margin-left: 0.3rem;">⚠ 內容遺失</span>' : ''}</span>
-                                <span style="font-size: 0.75rem; color: ${isBroken ? 'var(--color-danger)' : 'var(--text-muted)'};">${sizeKB} KB · ${uploaded}${isBroken ? ' · 請先刪除後重新上傳' : ''}</span>
+                                <span style="font-weight: 500; font-size: var(--text-base);"><i class="ph ph-file-pdf" style="color: ${isBroken ? 'var(--color-danger)' : 'var(--color-success)'};"></i> ${tpl.fileName}${isBroken ? ' <span style="background: rgba(177,53,53,0.12); color: var(--color-danger); padding: 0.1rem 0.45rem; border-radius: 99px; font-size: var(--text-2xs); font-weight: 600; margin-left: 0.3rem;">⚠ 內容遺失</span>' : ''}</span>
+                                <span style="font-size: var(--text-xs); color: ${isBroken ? 'var(--color-danger)' : 'var(--text-muted)'};">${sizeKB} KB · ${uploaded}${isBroken ? ' · 請先刪除後重新上傳' : ''}</span>
                            </div>`
-                        : '<span style="color: var(--text-muted); font-size: 0.875rem;">尚未上傳樣板</span>'
+                        : '<span style="color: var(--text-muted); font-size: var(--text-base);">尚未上傳樣板</span>'
                     }
                 </td>
                 <td>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <label class="btn btn-outline" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; cursor: pointer;">
+                        <label class="btn btn-outline" style="padding: 0.3rem 0.7rem; font-size: var(--text-xs); cursor: pointer;">
                             <i class="ph ph-upload-simple"></i> ${tpl ? '更換' : '上傳'} PDF
                             <input type="file" accept="application/pdf" style="display: none;" class="tpl-upload" data-building-id="${b.id}">
                         </label>
                         ${tpl ? `
-                            <button class="btn btn-outline tpl-action" style="padding: 0.3rem 0.7rem; font-size: 0.75rem;" data-action="test" data-building-id="${b.id}" title="用範例資料套版測試">
+                            <button class="btn btn-outline tpl-action" style="padding: 0.3rem 0.7rem; font-size: var(--text-xs);" data-action="test" data-building-id="${b.id}" title="用範例資料套版測試">
                                 <i class="ph ph-flask"></i> 測試套版
                             </button>
-                            <button class="btn btn-outline tpl-action" style="padding: 0.3rem 0.7rem; font-size: 0.75rem;" data-action="inspect" data-building-id="${b.id}" title="列出 PDF 內的欄位">
+                            <button class="btn btn-outline tpl-action" style="padding: 0.3rem 0.7rem; font-size: var(--text-xs);" data-action="inspect" data-building-id="${b.id}" title="列出 PDF 內的欄位">
                                 <i class="ph ph-list-magnifying-glass"></i> 檢查欄位
                             </button>
-                            <button class="btn btn-outline tpl-action" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; color: var(--color-danger);" data-action="delete" data-building-id="${b.id}" title="刪除樣板">
+                            <button class="btn btn-outline tpl-action" style="padding: 0.3rem 0.7rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete" data-building-id="${b.id}" title="刪除樣板">
                                 <i class="ph ph-trash"></i>
                             </button>
                         ` : ''}
@@ -793,11 +793,11 @@ function renderContractTemplatesTab() {
     return `
         <div class="card" style="margin-bottom: 1.25rem;">
             <h2 class="card-title"><i class="ph ph-info"></i> 樣板準備說明</h2>
-            <div style="font-size: 0.875rem; line-height: 1.7;">
+            <div style="font-size: var(--text-base); line-height: 1.7;">
                 <p style="margin: 0 0 0.75rem;">每個館別上傳一份 <strong>含可填入欄位</strong> 的 PDF 合約樣板。系統產生合約時會自動填入下列欄位：</p>
-                <table style="width: auto; font-size: 0.85rem; border-collapse: collapse; margin-bottom: 0.75rem;">
+                <table style="width: auto; font-size: var(--text-sm); border-collapse: collapse; margin-bottom: 0.75rem;">
                     <thead>
-                        <tr><th colspan="3" style="text-align: left; padding: 0.3rem 0; color: var(--text-secondary); font-size: 0.78rem; border-bottom: 1px solid var(--border-color);">必要欄位</th></tr>
+                        <tr><th colspan="3" style="text-align: left; padding: 0.3rem 0; color: var(--text-secondary); font-size: var(--text-xs); border-bottom: 1px solid var(--border-color);">必要欄位</th></tr>
                     </thead>
                     <tbody>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">bed_no</code></td><td style="color: var(--text-muted);">床號（例：R1-A）</td></tr>
@@ -807,7 +807,7 @@ function renderContractTemplatesTab() {
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">deposit_amount</code></td><td style="color: var(--text-muted);">押金金額（例：0 或 18,000）</td></tr>
                     </tbody>
                     <thead>
-                        <tr><th colspan="3" style="text-align: left; padding: 0.65rem 0 0.3rem; color: var(--text-secondary); font-size: 0.78rem; border-bottom: 1px solid var(--border-color);">選填欄位 — 折扣 / 加收 (季繳優惠、能源費等)</th></tr>
+                        <tr><th colspan="3" style="text-align: left; padding: 0.65rem 0 0.3rem; color: var(--text-secondary); font-size: var(--text-xs); border-bottom: 1px solid var(--border-color);">選填欄位 — 折扣 / 加收 (季繳優惠、能源費等)</th></tr>
                     </thead>
                     <tbody>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">adjustments</code></td><td style="color: var(--text-muted);">加減項目明細，多筆換行（例：<br>− 季繳優惠：−$1,000<br>+ 能源費：+$500）<br><small>欄位請設為「多行文字」(Multi-line)</small></td></tr>
@@ -815,7 +815,7 @@ function renderContractTemplatesTab() {
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">monthly_amount</code></td><td style="color: var(--text-muted);"><strong>月付金額</strong>（每月實際付多少）= 租金總額 ÷ 合約期<br><small>1 個月 → 跟 total_amount 相同；3 個月合約 → 平均到每月（四捨五入到整數）</small></td></tr>
                     </tbody>
                 </table>
-                <p style="margin: 0; color: var(--text-muted); font-size: 0.8rem;">
+                <p style="margin: 0; color: var(--text-muted); font-size: var(--text-xs);">
                     💡 在 Adobe Acrobat 或 <a href="https://www.pdfescape.com/open/" target="_blank" rel="noopener" style="color: var(--color-primary);">PDFescape</a>（免費線上）等工具中，到「準備表單」功能加入這些文字欄位，命名為上述名稱。<br>
                     📝 沒有加減項目時，<code>adjustments</code> 會填空字串、<code>total_amount</code> 等於 <code>rent_amount</code>。樣板沒加這兩個欄位也沒影響，只是合約上不會印出折扣 / 加收明細。
                 </p>
@@ -825,7 +825,7 @@ function renderContractTemplatesTab() {
         <div class="card">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-file-pdf"></i> 各館合約樣板</h2>
-                <span style="font-size: 0.8rem; color: var(--text-muted);">總計 ${templates.length} / ${buildings.length} 已上傳</span>
+                <span style="font-size: var(--text-xs); color: var(--text-muted);">總計 ${templates.length} / ${buildings.length} 已上傳</span>
             </div>
             <div class="table-container">
                 <table class="data-table">
@@ -907,7 +907,7 @@ async function inspectTemplate(buildingId) {
             : '<p style="color: var(--color-success); margin-top: 0.75rem;">✅ 必要欄位都齊全</p>';
         openConfirm({
             title: `${tpl.fileName} 內的欄位`,
-            message: `<ul style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem;">${list}</ul>${missingHtml}`,
+            message: `<ul style="margin: 0; padding-left: 1.25rem; font-size: var(--text-base);">${list}</ul>${missingHtml}`,
             confirmLabel: '關閉',
             cancelLabel: ''
         });
@@ -1064,25 +1064,25 @@ function renderSyncTab() {
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-cloud"></i> 雲端同步</h2>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">雲端優先模式 — Supabase 是唯一真實來源，多裝置即時同步</p>
+                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">雲端優先模式 — Supabase 是唯一真實來源，多裝置即時同步</p>
                 </div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">同步狀態</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 0.5rem;">同步狀態</div>
                     <div style="font-size: 1.1rem; font-weight: 600;">${statusLabel}</div>
-                    ${s.error ? `<div style="font-size: 0.75rem; color: var(--color-danger); margin-top: 0.5rem;">錯誤：${s.error}</div>` : ''}
+                    ${s.error ? `<div style="font-size: var(--text-xs); color: var(--color-danger); margin-top: 0.5rem;">錯誤：${s.error}</div>` : ''}
                 </div>
                 <div style="padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">即時連線</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 0.5rem;">即時連線</div>
                     <div style="font-size: 1.1rem; font-weight: 600;">${s.realtimeConnected ? '🟢 連線中' : '🔴 未連線'}</div>
-                    <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem;">${s.realtimeConnected ? '別人改的會立刻收到' : 'Realtime 未啟用 — 跑 SQL 03 啟用'}</div>
+                    <div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.5rem;">${s.realtimeConnected ? '別人改的會立刻收到' : 'Realtime 未啟用 — 跑 SQL 03 啟用'}</div>
                 </div>
                 <div style="padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">上次同步</div>
-                    <div style="font-size: 0.95rem; font-weight: 500;">${fmtTime(s.lastSync)}</div>
-                    <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem;">網路：${s.online ? '✅ 線上' : '🚫 離線'}</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 0.5rem;">上次同步</div>
+                    <div style="font-size: var(--text-md); font-weight: 500;">${fmtTime(s.lastSync)}</div>
+                    <div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.5rem;">網路：${s.online ? '✅ 線上' : '🚫 離線'}</div>
                 </div>
             </div>
 
@@ -1098,7 +1098,7 @@ function renderSyncTab() {
                 </button>
             </div>
 
-            <div style="padding: 1rem; background: var(--bg-tertiary, #1a1a1a); border-radius: var(--radius-md); font-size: 0.8rem; line-height: 1.7; color: var(--text-muted);">
+            <div style="padding: 1rem; background: var(--bg-tertiary, #1a1a1a); border-radius: var(--radius-md); font-size: var(--text-xs); line-height: 1.7; color: var(--text-muted);">
                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;"><i class="ph ph-info"></i> 同步行為</div>
                 <ul style="margin: 0; padding-left: 1.2rem;">
                     <li><strong>雲端優先</strong>：開機必拉完雲端資料才顯示 UI</li>
@@ -1109,7 +1109,7 @@ function renderSyncTab() {
                 </ul>
             </div>
 
-            <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary, #1a1a1a); border-radius: var(--radius-md); font-size: 0.8rem; color: var(--text-muted);">
+            <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary, #1a1a1a); border-radius: var(--radius-md); font-size: var(--text-xs); color: var(--text-muted);">
                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;"><i class="ph ph-warning-circle"></i> 已知限制</div>
                 <ul style="margin: 0; padding-left: 1.2rem;">
                     <li>多人同時編輯同一筆資料時，後 push 的會贏（last-write-wins）</li>
@@ -1119,7 +1119,7 @@ function renderSyncTab() {
 
             <!-- E2: 一鍵備份 -->
             <div style="margin-top: 1.5rem;">
-                <h3 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text-primary);">
+                <h3 style="font-size: var(--text-md); margin-bottom: 0.5rem; color: var(--text-primary);">
                     <i class="ph ph-archive"></i> 災難復原 — 手動備份
                 </h3>
                 <div style="padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
@@ -1127,11 +1127,11 @@ function renderSyncTab() {
                         <button class="btn btn-primary" id="btn-backup-download">
                             <i class="ph ph-download-simple"></i> 下載完整備份 (JSON)
                         </button>
-                        <div style="font-size: 0.8rem; color: var(--text-muted);">
+                        <div style="font-size: var(--text-xs); color: var(--text-muted);">
                             上次備份：<strong id="last-backup-at">${fmtTime(getLastBackupAt())}</strong>
                         </div>
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); line-height: 1.6;">
                         建議 <strong>每週一次</strong>，下載後存到 Google Drive / OneDrive。雲端 Supabase 自己也有 daily auto backup (Pro 方案 7 天)，這份是雙保險。<br>
                         備份內含：所有資料表的完整資料 (snake_case) + contract-pdfs 檔案清單。<strong>PDF 二進位不含</strong>，那部分依賴 Supabase Storage 自身的備份。
                     </div>

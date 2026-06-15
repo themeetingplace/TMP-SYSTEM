@@ -1,4 +1,4 @@
-// 收支分析 — 從原 帳務管理 拆出來的「各館/群組收支」+「本月分類分析(交叉表)」
+﻿// 收支分析 — 從原 帳務管理 拆出來的「各館/群組收支」+「本月分類分析(交叉表)」
 // 跟 finance.js 共用 financeState.viewMonth (切月份會同步)
 
 import { mockData, invoiceMonth, shiftMonth, currentMonth, formatMonthLabel, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount } from '../data.js';
@@ -132,7 +132,7 @@ export function renderAnalysis() {
                             const i = colSum('in', b.id);
                             const lr = monthInvoices.filter(x => x.direction === 'out' && x.type === '房東租金' && x.buildingId === b.id).reduce((s, x) => s + (x.amount || 0), 0);
                             const gm = i > 0 ? (i - lr) / i : 0;
-                            return `<td style="color: ${gm >= 0 ? 'var(--text-muted)' : 'var(--color-danger)'}; font-size: 0.85rem;">${i > 0 ? pct(gm) : '—'}</td>`;
+                            return `<td style="color: ${gm >= 0 ? 'var(--text-muted)' : 'var(--color-danger)'}; font-size: var(--text-sm);">${i > 0 ? pct(gm) : '—'}</td>`;
                         }).join('')}
                         <td class="m-total" style="color: ${summary.grossMargin >= 0 ? 'var(--text-muted)' : 'var(--color-danger)'};">${summary.inAll > 0 ? pct(summary.grossMargin) : '—'}</td>
                     </tr>
@@ -142,7 +142,7 @@ export function renderAnalysis() {
                             const i = colSum('in', b.id);
                             const o = colSum('out', b.id);
                             const nm = i > 0 ? (i - o) / i : 0;
-                            return `<td style="color: ${nm >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}; font-size: 0.85rem;">${i > 0 ? pct(nm) : '—'}</td>`;
+                            return `<td style="color: ${nm >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}; font-size: var(--text-sm);">${i > 0 ? pct(nm) : '—'}</td>`;
                         }).join('')}
                         <td class="m-total" style="color: ${summary.netMargin >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${summary.inAll > 0 ? pct(summary.netMargin) : '—'}</td>
                     </tr>
@@ -158,14 +158,14 @@ export function renderAnalysis() {
                 <i class="ph ph-caret-left"></i> 上個月
             </button>
             <div style="display: flex; flex-direction: column; align-items: center;">
-                <span style="font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">檢視月份</span>
+                <span style="font-size: var(--text-2xs); color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">檢視月份</span>
                 <strong style="font-size: 1.1rem;">${formatMonthLabel(viewMonth)}</strong>
             </div>
             <div style="display: flex; gap: 0.5rem;">
-                <button class="btn btn-outline" id="btn-export-analysis-pdf" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;" title="匯出當月收支分析為 PDF">
+                <button class="btn btn-outline" id="btn-export-analysis-pdf" style="padding: 0.4rem 0.75rem; font-size: var(--text-xs);" title="匯出當月收支分析為 PDF">
                     <i class="ph ph-file-pdf"></i> 匯出 PDF
                 </button>
-                <button class="btn btn-outline" data-month-action="this" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">本月</button>
+                <button class="btn btn-outline" data-month-action="this" style="padding: 0.4rem 0.75rem; font-size: var(--text-xs);">本月</button>
                 <button class="btn btn-outline" data-month-action="next" style="padding: 0.4rem 0.75rem;">
                     下個月 <i class="ph ph-caret-right"></i>
                 </button>
@@ -191,7 +191,7 @@ export function renderAnalysis() {
                             <div class="bf-name">
                                 <strong>${r.label}</strong>
                                 <span class="bf-rate ${r.net >= 0 ? 'good' : 'low'}">${r.net >= 0 ? '獲利' : '虧損'} $${Math.abs(r.net).toLocaleString()}</span>
-                                ${r.sub ? `<span style="font-size: 0.7rem; color: var(--text-muted);">${r.sub}</span>` : ''}
+                                ${r.sub ? `<span style="font-size: var(--text-2xs); color: var(--text-muted);">${r.sub}</span>` : ''}
                             </div>
                             <div class="bf-bar"><div class="bf-bar-fill" style="width: ${widthPct}%;"></div></div>
                             <div class="bf-stats">

@@ -1,4 +1,4 @@
-import { mockData, store } from '../data.js';
+﻿import { mockData, store } from '../data.js';
 import { openFormModal, openConfirm, openDetailModal, openModal, showToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 
@@ -27,12 +27,12 @@ export function renderTenants() {
         const lineBound = !!t.lineUserId;
         const lineCell = lineBound
             ? `<div style="display: flex; flex-direction: column; gap: 2px;">
-                   <span class="status-badge success" style="font-size: 0.7rem; align-self: flex-start;"><i class="ph-fill ph-check-circle"></i> 已綁定</span>
-                   ${t.lineDisplayName ? `<span style="font-size: 0.7rem; color: var(--text-muted);">${esc(t.lineDisplayName)}</span>` : ''}
+                   <span class="status-badge success" style="font-size: var(--text-2xs); align-self: flex-start;"><i class="ph-fill ph-check-circle"></i> 已綁定</span>
+                   ${t.lineDisplayName ? `<span style="font-size: var(--text-2xs); color: var(--text-muted);">${esc(t.lineDisplayName)}</span>` : ''}
                </div>`
             : (t.status === '居住中'
-                ? `<span class="status-badge warning" style="font-size: 0.7rem;"><i class="ph ph-warning"></i> 未綁定</span>`
-                : `<span style="color: var(--text-muted); font-size: 0.75rem;">—</span>`);
+                ? `<span class="status-badge warning" style="font-size: var(--text-2xs);"><i class="ph ph-warning"></i> 未綁定</span>`
+                : `<span style="color: var(--text-muted); font-size: var(--text-xs);">—</span>`);
 
         const searchText = [t.name, t.phone, t.email, t.currentProperty || '', t.lineDisplayName || ''].join(' ').toLowerCase();
 
@@ -40,12 +40,12 @@ export function renderTenants() {
             <tr data-row-id="${esc(t.id)}" data-status="${esc(t.status)}" data-line="${lineBound ? 'bound' : 'unbound'}" data-search="${escapeAttr(searchText)}">
                 <td>
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
-                        <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background-color: var(--color-primary); color: var(--text-inverse); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.875rem;">
+                        <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background-color: var(--color-primary); color: var(--text-inverse); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: var(--text-base);">
                             ${esc((t.name || '?').charAt(0))}
                         </div>
                         <div>
-                            <strong style="font-size: 0.875rem;">${esc(t.name || '(未命名)')}</strong>
-                            <div style="font-size: 0.75rem; color: var(--text-muted);">${esc(t.email || '')}</div>
+                            <strong style="font-size: var(--text-base);">${esc(t.name || '(未命名)')}</strong>
+                            <div style="font-size: var(--text-xs); color: var(--text-muted);">${esc(t.email || '')}</div>
                         </div>
                     </div>
                 </td>
@@ -53,23 +53,23 @@ export function renderTenants() {
                 <td>
                     <div style="max-width: 200px;">
                         <div style="font-weight: 500; margin-bottom: 0.25rem;">${t.currentProperty ? esc(t.currentProperty) : '<span style="color: var(--text-muted)">未指定物件</span>'}</div>
-                        <span class="status-badge ${statusClass}" style="font-size: 0.75rem;">${esc(t.status)}</span>
+                        <span class="status-badge ${statusClass}" style="font-size: var(--text-xs);">${esc(t.status)}</span>
                     </div>
                 </td>
                 <td>${lineCell}</td>
-                <td><div style="font-size: 0.875rem; color: var(--text-main);">${t.emergencyContact ? esc(t.emergencyContact) : '<span style="color: var(--text-muted)">--</span>'}</div></td>
+                <td><div style="font-size: var(--text-base); color: var(--text-main);">${t.emergencyContact ? esc(t.emergencyContact) : '<span style="color: var(--text-muted)">--</span>'}</div></td>
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline tenant-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="view" data-id="${t.id}" title="詳細資料">
+                        <button class="btn btn-outline tenant-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="view" data-id="${t.id}" title="詳細資料">
                             <i class="ph ph-eye"></i>
                         </button>
-                        <button class="btn btn-outline tenant-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-id="${t.id}" title="編輯資料">
+                        <button class="btn btn-outline tenant-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${t.id}" title="編輯資料">
                             <i class="ph ph-pencil"></i>
                         </button>
                         ${t.phone
-                            ? `<a class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" href="tel:${t.phone.replace(/\D/g,'')}" title="撥打電話"><i class="ph ph-phone"></i></a>`
-                            : `<button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; opacity: 0.4; cursor: not-allowed;" disabled title="無電話"><i class="ph ph-phone"></i></button>`}
-                        <button class="btn btn-outline tenant-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-danger);" data-action="delete" data-id="${t.id}" title="刪除">
+                            ? `<a class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" href="tel:${t.phone.replace(/\D/g,'')}" title="撥打電話"><i class="ph ph-phone"></i></a>`
+                            : `<button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); opacity: 0.4; cursor: not-allowed;" disabled title="無電話"><i class="ph ph-phone"></i></button>`}
+                        <button class="btn btn-outline tenant-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete" data-id="${t.id}" title="刪除">
                             <i class="ph ph-trash"></i>
                         </button>
                     </div>
@@ -96,7 +96,7 @@ export function renderTenants() {
                 <div class="flex gap-2">
                     <div class="search-bar" style="width: 250px;">
                         <i class="ph ph-magnifying-glass"></i>
-                        <input type="text" placeholder="搜尋租客姓名或電話..." style="font-size: 0.875rem;">
+                        <input type="text" placeholder="搜尋租客姓名或電話..." style="font-size: var(--text-base);">
                     </div>
                     <button class="btn btn-primary" id="btn-new-tenant" data-fab="ph-user-plus">
                         <i class="ph ph-user-plus"></i> 新增租客
@@ -207,7 +207,7 @@ export function showTenantDetails(id) {
     };
 
     const historyRows = allContracts.length === 0
-        ? `<tr><td colspan="5" style="text-align: center; padding: 1.25rem; color: var(--text-muted); font-size: 0.85rem;">尚無入住紀錄</td></tr>`
+        ? `<tr><td colspan="5" style="text-align: center; padding: 1.25rem; color: var(--text-muted); font-size: var(--text-sm);">尚無入住紀錄</td></tr>`
         : allContracts.map(c => {
             const s = stateLabel(c);
             const sus = isAmountSuspect(c);
@@ -219,23 +219,23 @@ export function showTenantDetails(id) {
                 : `<td style="text-align: right; font-weight: 600;">$${(c.amount || 0).toLocaleString()}</td>`;
             return `
                 <tr>
-                    <td style="font-family: monospace; font-size: 0.8rem;">${c.id}</td>
+                    <td style="font-family: monospace; font-size: var(--text-xs);">${c.id}</td>
                     <td>${(c.propertyName || '—').replace('聚空間 - ', '')}</td>
-                    <td style="font-size: 0.78rem; color: var(--text-secondary);">${c.startDate || '—'} ~ ${c.endDate || '—'}</td>
+                    <td style="font-size: var(--text-xs); color: var(--text-secondary);">${c.startDate || '—'} ~ ${c.endDate || '—'}</td>
                     ${amountCell}
-                    <td><span class="status-badge ${s.cls}" style="font-size: 0.7rem;">${s.text}</span></td>
+                    <td><span class="status-badge ${s.cls}" style="font-size: var(--text-2xs);">${s.text}</span></td>
                 </tr>
             `;
         }).join('');
 
     const historyHtml = `
         <div style="margin-top: 1.5rem;">
-            <h3 style="font-size: 0.95rem; font-weight: 600; margin: 0 0 0.6rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+            <h3 style="font-size: var(--text-md); font-weight: 600; margin: 0 0 0.6rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
                 <i class="ph ph-clock-counter-clockwise"></i> 入住紀錄
-                <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 400;">共 ${allContracts.length} 筆</span>
+                <span style="font-size: var(--text-2xs); color: var(--text-muted); font-weight: 400;">共 ${allContracts.length} 筆</span>
             </h3>
             <div style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                <table style="width: 100%; border-collapse: collapse; font-size: var(--text-sm);">
                     <thead>
                         <tr style="background: var(--bg-tertiary);">
                             <th style="padding: 0.45rem 0.6rem; text-align: left; color: var(--text-muted); font-weight: 600;">合約</th>
@@ -254,10 +254,10 @@ export function showTenantDetails(id) {
     // 身分證 hash 連結 — 點開時走 signed URL，避免 detail modal 開著時 URL 過期
     const idCardHtml = (t.idCardFrontPath || t.idCardBackPath)
         ? `<div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-              <span class="status-badge success" style="font-size: 0.72rem;"><i class="ph-fill ph-check-circle"></i> 已上傳</span>
-              ${t.idCardFrontPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: 0.75rem;" data-action="view-id-card" data-path="${t.idCardFrontPath}" data-side="正面"><i class="ph ph-eye"></i> 正面</button>` : ''}
-              ${t.idCardBackPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: 0.75rem;" data-action="view-id-card" data-path="${t.idCardBackPath}" data-side="反面"><i class="ph ph-eye"></i> 反面</button>` : ''}
-              ${t.idCardUploadedAt ? `<small style="color: var(--text-muted); font-size: 0.7rem;">${t.idCardUploadedAt.slice(0, 10)} 上傳</small>` : ''}
+              <span class="status-badge success" style="font-size: var(--text-2xs);"><i class="ph-fill ph-check-circle"></i> 已上傳</span>
+              ${t.idCardFrontPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="view-id-card" data-path="${t.idCardFrontPath}" data-side="正面"><i class="ph ph-eye"></i> 正面</button>` : ''}
+              ${t.idCardBackPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="view-id-card" data-path="${t.idCardBackPath}" data-side="反面"><i class="ph ph-eye"></i> 反面</button>` : ''}
+              ${t.idCardUploadedAt ? `<small style="color: var(--text-muted); font-size: var(--text-2xs);">${t.idCardUploadedAt.slice(0, 10)} 上傳</small>` : ''}
            </div>`
         : '<span style="color: var(--text-muted)">未上傳</span>';
 
@@ -330,7 +330,7 @@ export function showTenantNoteEditor(tenantId) {
                        background: #fffdfb; outline: none; box-sizing: border-box;
                        transition: border-color 0.15s, box-shadow 0.15s;">${initialNote.replace(/</g, '&lt;')}</textarea>
         </div>
-        <div style="margin-top: 0.5rem; font-size: 0.72rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+        <div style="margin-top: 0.5rem; font-size: var(--text-2xs); color: var(--text-muted); display: flex; justify-content: space-between;">
             <span><kbd style="font-family: inherit; padding: 1px 6px; background: var(--bg-tertiary); border-radius: 4px;">Ctrl + Enter</kbd> 儲存</span>
             <span id="tenant-note-count"></span>
         </div>
@@ -343,7 +343,7 @@ export function showTenantNoteEditor(tenantId) {
 
     openModal({
         title: '編輯備註',
-        bodyHtml: `<div style="margin: -0.25rem 0 0; padding: 0 0 1rem; font-size: 0.875rem; color: var(--text-muted); border-bottom: 1px dashed var(--border-color); margin-bottom: 1rem;">${subtitle}</div>${bodyHtml}`,
+        bodyHtml: `<div style="margin: -0.25rem 0 0; padding: 0 0 1rem; font-size: var(--text-base); color: var(--text-muted); border-bottom: 1px dashed var(--border-color); margin-bottom: 1rem;">${subtitle}</div>${bodyHtml}`,
         footerHtml,
         maxWidth: 480,
         onMount: (overlay, close) => {

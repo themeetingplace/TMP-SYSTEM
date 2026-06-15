@@ -2561,6 +2561,17 @@ select:focus-visible,
     color: var(--text-main);
 }
 
+/* P2-1 audit: data-table compact modifier — 用於資料密度高的列表 (e.g. 房租查帳分析 / 內嵌 modal 表)
+   值跟 .report-table 對齊 — 之後新表想要 compact 模式時加 .is-compact 即可 */
+.data-table.is-compact th {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.72rem;
+}
+.data-table.is-compact td {
+    padding: 0.6rem 0.7rem;
+    font-size: 0.82rem;
+}
+
 .data-table tbody tr {
     transition: background-color var(--transition-fast);
 }
@@ -2616,9 +2627,28 @@ select:focus-visible,
     }
 }
 
-/* === Segmented control (canonical) ===
-   .filter-tab 是基準樣式；.chart-mode-btn / .property-filter-btn 視覺一樣，
-   一起共用同條規則 (P0-3 audit) — 之後改一處所有 segmented 都跟著走 */
+/* === Segmented Control 系統 (P0-3 + P2-1 audit 收尾文件)
+   ──────────────────────────────────────────────────────
+   1 個 canonical + 3 個 variant，刻意分開、不強行合併:
+
+   (1) CANONICAL — 中性「白底 + shadow + 橘字 active」 (這條規則)
+       .filter-tab    : 篩選列 (finance / contracts / properties / maintenance / tenants / unsettled)
+       .chart-mode-btn: dashboard 圖表模式切換
+       .property-filter-btn: dashboard 各館切換
+
+   (2) VARIANT pill emphasis — 「橘 light 漸層 + 強 border」(留給強調情境)
+       .bldg-subtab  : reports 各館 sub-tab (CSS L3370+)
+       .occ-tab      : 住房一覽各館 tab (CSS L1336+，P1-5 audit 已柔化跟 bldg-subtab 同款)
+
+   (3) VARIANT block — 「flex:1 等寬 sub-tab」(3-4 個固定子頁)
+       .finance-sub-tab: 帳務管理 (總收支/查帳/分析) sub-tab (CSS L2829+)
+
+   (4) VARIANT semantic — 「sub=紅、add=綠 填色 active」(modal 確認動作)
+       .adj-kind-btn  : 折扣 / 加收 切換 (CSS L4004+)
+
+   audit 結論：6 套不強行收成 .seg-control + modifier，因 (2)(3)(4) 各有合理 UX 差異
+   (emphasis / 等寬分配 / 動作色)。canonical 已合併到下方一條 rule。
+   ────────────────────────────────────────────────────── */
 .filter-tabs,
 .chart-mode-toggle {
     display: flex;

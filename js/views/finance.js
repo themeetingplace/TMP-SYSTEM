@@ -1,4 +1,4 @@
-// 總收支表 — 只顯示「已結帳目」的條目清單
+﻿// 總收支表 — 只顯示「已結帳目」的條目清單
 // 各館分析 / 交叉表 → 移到「收支分析」分頁
 // 待結帳款 → 「待結帳款」分頁
 import { mockData, store, invoiceMonth, shiftMonth, currentMonth, formatMonthLabel, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount, formatDiscountReason } from '../data.js';
@@ -50,7 +50,7 @@ function sortHeader(label, field, align = 'left') {
     const color = isActive ? 'color: var(--color-warning);' : '';
     return `
         <th style="cursor: pointer; user-select: none; text-align: ${align}; ${color}" data-action="sort" data-sort-field="${field}" title="點擊排序">
-            ${label}<span style="display: inline-block; width: 1.1em; text-align: center; margin-left: 3px; opacity: ${opacity};"><i class="ph ${icon}" style="font-size: 0.72rem; vertical-align: middle;"></i></span>
+            ${label}<span style="display: inline-block; width: 1.1em; text-align: center; margin-left: 3px; opacity: ${opacity};"><i class="ph ${icon}" style="font-size: var(--text-2xs); vertical-align: middle;"></i></span>
         </th>
     `;
 }
@@ -103,10 +103,10 @@ export function renderFinance() {
                 ? `<strong>合約 ${inv.contractId}</strong>`
                 : '<span style="color: var(--text-muted);">整館共用</span>');
         const periodText = inv.periodStart && inv.periodEnd
-            ? `<div style="font-size: 0.7rem; color: var(--text-muted);">租期 ${inv.periodStart.slice(5)}~${inv.periodEnd.slice(5)}</div>`
+            ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">租期 ${inv.periodStart.slice(5)}~${inv.periodEnd.slice(5)}</div>`
             : '';
         const propertyText = inv.propertyName
-            ? `<div style="font-size: 0.7rem; color: var(--text-muted);">${inv.propertyName.replace('聚空間 - ', '')}</div>`
+            ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">${inv.propertyName.replace('聚空間 - ', '')}</div>`
             : '';
         const searchText = [inv.id, inv.propertyName || '', inv.tenant || '', inv.type, areaAttr, inv.note || '', inv.contractId || '', inv.paymentMethod || ''].join(' ').toLowerCase();
         const amountSign = inv.direction === 'out' ? '-' : '+';
@@ -116,12 +116,12 @@ export function renderFinance() {
         const discountCell = hasDiscount
             ? `<div style="display: flex; flex-direction: column; gap: 1px;">
                    <span style="font-weight: 600; color: var(--color-warning);">-$${inv.discount.toLocaleString()}</span>
-                   ${inv.discountReason ? `<span style="font-size: 0.68rem; color: var(--text-muted);">${formatDiscountReason(inv.discountReason)}</span>` : ''}
+                   ${inv.discountReason ? `<span style="font-size: var(--text-2xs); color: var(--text-muted);">${formatDiscountReason(inv.discountReason)}</span>` : ''}
                </div>`
-            : '<span style="color: var(--text-muted); font-size: 0.8rem;">—</span>';
+            : '<span style="color: var(--text-muted); font-size: var(--text-xs);">—</span>';
         const methodCell = inv.paymentMethod
-            ? `<span style="font-size: 0.75rem;">${inv.paymentMethod}</span>`
-            : '<span style="color: var(--text-muted); font-size: 0.8rem;">—</span>';
+            ? `<span style="font-size: var(--text-xs);">${inv.paymentMethod}</span>`
+            : '<span style="color: var(--text-muted); font-size: var(--text-xs);">—</span>';
 
         // v3 卡片 (mobile-only): 租客 + 金額 hero / type 語意色 chip / 副資訊區 chip 列 / 備註獨立區
         const tc = typeChip(inv.type);
@@ -155,20 +155,20 @@ export function renderFinance() {
             <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-area="${areaAttr}" data-search="${searchText}" class="finance-row row-desktop ${inv.direction === 'in' ? 'finance-row-in' : 'finance-row-out'}">
                 <td><span style="font-weight: 500;">${dateText}</span></td>
                 <td>${areaAttr}</td>
-                <td><span class="status-badge info" style="font-size: 0.72rem;">${inv.type}</span></td>
+                <td><span class="status-badge info" style="font-size: var(--text-2xs);">${inv.type}</span></td>
                 <td>${itemText}${periodText || propertyText}</td>
                 <td style="text-align: right;">
                     <div style="font-weight: 700; color: ${amountColor};">${amountSign}$${shown.toLocaleString()}</div>
-                    ${hasDiscount ? `<div style="font-size: 0.68rem; color: var(--text-muted);">原價 $${(inv.amount || 0).toLocaleString()}</div>` : ''}
+                    ${hasDiscount ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">原價 $${(inv.amount || 0).toLocaleString()}</div>` : ''}
                 </td>
                 <td style="text-align: right;">${discountCell}</td>
                 <td>${methodCell}</td>
-                <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${(inv.note || '').replace(/"/g, '&quot;')}"><span style="font-size: 0.8rem; color: var(--text-muted);">${inv.note || '—'}</span></td>
+                <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${(inv.note || '').replace(/"/g, '&quot;')}"><span style="font-size: var(--text-xs); color: var(--text-muted);">${inv.note || '—'}</span></td>
                 <td>
                     <div style="display: flex; gap: 0.4rem;">
-                        <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: 0.72rem;" data-action="view" data-id="${inv.id}" title="明細"><i class="ph ph-eye"></i></button>
-                        <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: 0.72rem;" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
-                        <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: 0.72rem; color: var(--color-danger);" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
+                        <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: var(--text-2xs);" data-action="view" data-id="${inv.id}" title="明細"><i class="ph ph-eye"></i></button>
+                        <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: var(--text-2xs);" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
+                        <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: var(--text-2xs); color: var(--color-danger);" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
                     </div>
                 </td>
             </tr>
@@ -262,7 +262,7 @@ export function renderFinance() {
                 <div class="finance-toolbar__actions">
                     <div class="search-bar finance-toolbar__search">
                         <i class="ph ph-magnifying-glass"></i>
-                        <input type="text" placeholder="搜尋帳單編號 / 對象 / 備註..." style="font-size: 0.875rem;">
+                        <input type="text" placeholder="搜尋帳單編號 / 對象 / 備註..." style="font-size: var(--text-base);">
                     </div>
                     <button class="btn btn-outline" id="btn-export-pdf" title="匯出當月已結帳目為 PDF">
                         <i class="ph ph-file-pdf"></i> 匯出 PDF
@@ -311,7 +311,7 @@ export function renderFinance() {
                         ${sortHeader('備註', 'note')}
                         <th>操作</th>
                     </tr></thead>
-                    <tbody>${tableRows || `<tr><td colspan="9" style="text-align: center; padding: 3rem; color: var(--text-muted);"><i class="ph ph-receipt-x" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i>${formatMonthLabel(financeState.viewMonth)} 尚無已結帳目<br><span style="font-size: 0.75rem;">未結租金請至「房租查帳」頁追蹤</span></td></tr>`}</tbody>
+                    <tbody>${tableRows || `<tr><td colspan="9" style="text-align: center; padding: 3rem; color: var(--text-muted);"><i class="ph ph-receipt-x" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i>${formatMonthLabel(financeState.viewMonth)} 尚無已結帳目<br><span style="font-size: var(--text-xs);">未結租金請至「房租查帳」頁追蹤</span></td></tr>`}</tbody>
                 </table>
             </div>
 

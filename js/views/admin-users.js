@@ -1,4 +1,4 @@
-// 帳號管理 — owner 專用
+﻿// 帳號管理 — owner 專用
 // 列出所有 admin，可新增 / 刪除其他帳號
 // RLS 已經把 INSERT/UPDATE/DELETE 限制給 owner，這層 UI 只是讓 owner 不用 SQL 也能操作
 //
@@ -55,17 +55,17 @@ function rowsHtml(admins) {
             <tr data-email="${a.email}">
                 <td>
                     <strong>${a.email}</strong>
-                    ${isSelf ? '<span class="status-badge" style="margin-left: 0.5rem; background: var(--bg-secondary); font-size: 0.65rem;">你</span>' : ''}
+                    ${isSelf ? '<span class="status-badge" style="margin-left: 0.5rem; background: var(--bg-secondary); font-size: var(--text-2xs);">你</span>' : ''}
                 </td>
                 <td>${a.display_name || '<span style="color: var(--text-muted);">—</span>'}</td>
                 <td>${roleBadge(a.role)}</td>
-                <td style="color: var(--text-muted); font-size: 0.8rem;">${formatDate(a.created_at)}</td>
+                <td style="color: var(--text-muted); font-size: var(--text-xs);">${formatDate(a.created_at)}</td>
                 <td style="text-align: right;">
                     ${canDelete
                         ? `<button class="btn btn-outline admin-delete-btn" data-email="${a.email}" data-name="${a.display_name || a.email}" title="移除此帳號" style="color: var(--color-danger); padding: 0.25rem 0.6rem;">
                               <i class="ph ph-trash"></i> 移除
                            </button>`
-                        : '<span style="color: var(--text-muted); font-size: 0.75rem;">不能移除自己</span>'
+                        : '<span style="color: var(--text-muted); font-size: var(--text-xs);">不能移除自己</span>'
                     }
                 </td>
             </tr>
@@ -79,7 +79,7 @@ export function renderAdminUsers() {
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <div>
                     <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-user-gear"></i> 帳號管理</h2>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">
                         管理可登入系統的 Google 帳號白名單。新增後該 email 需用 Google 登入一次才會啟用。
                     </p>
                 </div>
@@ -88,7 +88,7 @@ export function renderAdminUsers() {
                 </button>
             </div>
 
-            <div style="background: var(--bg-secondary); border-left: 3px solid var(--color-info, #0ea5e9); padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 4px; font-size: 0.8rem; color: var(--text-secondary);">
+            <div style="background: var(--bg-secondary); border-left: 3px solid var(--color-info, #0ea5e9); padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 4px; font-size: var(--text-xs); color: var(--text-secondary);">
                 <strong><i class="ph ph-info" aria-hidden="true"></i> 角色說明</strong>
                 <div style="margin-top: 0.4rem; line-height: 1.8; display: grid; gap: 0.25rem;">
                     <div><i class="ph-fill ph-crown" aria-hidden="true" style="color: var(--color-primary);"></i> <strong>Owner</strong> — 完整權限，可管理其他帳號（你跟老闆）</div>
@@ -132,7 +132,7 @@ function bindRowActions() {
             const name = btn.dataset.name;
             openConfirm({
                 title: '移除管理員',
-                message: `確定要移除 <strong>${name}</strong> (${email}) 的存取權限？<br><br><span style="color: var(--text-muted); font-size: 0.85rem;">移除後該 email 將無法再登入 BMS。</span>`,
+                message: `確定要移除 <strong>${name}</strong> (${email}) 的存取權限？<br><br><span style="color: var(--text-muted); font-size: var(--text-sm);">移除後該 email 將無法再登入 BMS。</span>`,
                 danger: true,
                 confirmLabel: '確定移除',
                 onConfirm: async () => {

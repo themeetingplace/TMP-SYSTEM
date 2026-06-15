@@ -1,4 +1,4 @@
-// 待結帳款頁
+﻿// 待結帳款頁
 // 集中追蹤所有「欠繳 / 未付」帳款
 // 階段 2 新增：末 5 碼核對 / 批次結帳 / 一鍵產生本月帳單
 import { mockData, store, isUnsettled, ensureContractInvoices, previewContractInvoices, getSortedBuildings, deriveInvoiceStatus } from '../data.js';
@@ -57,8 +57,8 @@ export function renderUnsettled() {
     const tableRows = unsettled.map(inv => {
         const overdue = isOverdue(inv);
         const dirBadge = inv.direction === 'in'
-            ? '<span class="status-badge danger" style="font-size: 0.7rem;"><i class="ph ph-arrow-down"></i> 應收</span>'
-            : '<span class="status-badge warning" style="font-size: 0.7rem;"><i class="ph ph-arrow-up"></i> 應付</span>';
+            ? '<span class="status-badge danger" style="font-size: var(--text-2xs);"><i class="ph ph-arrow-down"></i> 應收</span>'
+            : '<span class="status-badge warning" style="font-size: var(--text-2xs);"><i class="ph ph-arrow-up"></i> 應付</span>';
         const target = inv.direction === 'in'
             ? `${inv.tenant || ''} · ${(inv.propertyName || '').replace('聚空間 - ', '')}`
             : (inv.contractId ? `合約 ${inv.contractId}` : '<span style="color: var(--text-muted);">整館共用</span>');
@@ -83,7 +83,7 @@ export function renderUnsettled() {
                    <i class="ph ${inv.bankVerified ? 'ph-check-circle' : 'ph-warning'}"></i>
                    末5碼 <strong>${inv.bankLast5}</strong>
                </div>`
-            : '<span style="font-size: 0.75rem; color: var(--text-muted);">—</span>';
+            : '<span style="font-size: var(--text-xs); color: var(--text-muted);">—</span>';
 
         // v3 卡片 (mobile-only)
         const tc = typeChip(inv.type);
@@ -122,39 +122,39 @@ export function renderUnsettled() {
                 <td>${dirBadge}</td>
                 <td>
                     <div style="display: flex; flex-direction: column;">
-                        <strong style="font-size: 0.875rem;">${inv.id}</strong>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${buildingName(inv.buildingId)} · ${inv.type}</span>
+                        <strong style="font-size: var(--text-base);">${inv.id}</strong>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${buildingName(inv.buildingId)} · ${inv.type}</span>
                     </div>
                 </td>
                 <td>${target}</td>
                 <td>
                     <div style="font-weight: 600; color: ${amountColor};">${amountSign}$${balance.toLocaleString()}</div>
                     ${isPartial
-                        ? `<div style="font-size: 0.7rem; color: var(--text-muted);">已收 $${paid.toLocaleString()} / 應收 $${due.toLocaleString()}${inv.discount ? ` (折 $${inv.discount.toLocaleString()})` : ''}</div>`
-                        : (inv.discount ? `<div style="font-size: 0.7rem; color: var(--text-muted);">應收 $${due.toLocaleString()} (折 $${inv.discount.toLocaleString()})</div>` : '')
+                        ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">已收 $${paid.toLocaleString()} / 應收 $${due.toLocaleString()}${inv.discount ? ` (折 $${inv.discount.toLocaleString()})` : ''}</div>`
+                        : (inv.discount ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">應收 $${due.toLocaleString()} (折 $${inv.discount.toLocaleString()})</div>` : '')
                     }
                 </td>
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <span style="font-weight: 500;">${inv.dueDate || '—'}</span>
-                        ${overdue ? '<span class="status-badge danger" style="font-size: 0.625rem; align-self: flex-start; margin-top: 2px;">逾期</span>' : ''}
+                        ${overdue ? '<span class="status-badge danger" style="font-size: var(--text-2xs); align-self: flex-start; margin-top: 2px;">逾期</span>' : ''}
                     </div>
                 </td>
                 <td>${bankBadge}</td>
                 <td>
                     <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
                         ${inv.bankLast5 && !inv.bankVerified ? `
-                            <button class="btn btn-success unsettled-action" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" data-action="verify" data-id="${inv.id}" title="核對銀行末 5 碼後結帳">
+                            <button class="btn btn-success unsettled-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);" data-action="verify" data-id="${inv.id}" title="核對銀行末 5 碼後結帳">
                                 <i class="ph ph-shield-check"></i> 核對結帳
                             </button>
                         ` : `
-                            <button class="btn btn-success unsettled-action" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" data-action="settle" data-id="${inv.id}" title="標記為${inv.direction === 'in' ? '已收' : '已付'}">
+                            <button class="btn btn-success unsettled-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);" data-action="settle" data-id="${inv.id}" title="標記為${inv.direction === 'in' ? '已收' : '已付'}">
                                 <i class="ph ph-check"></i> 結帳
                             </button>
                         `}
-                        <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="remind" data-id="${inv.id}" title="${inv.direction === 'in' ? '催繳' : '記錄通知'}"><i class="ph ph-bell"></i></button>
-                        <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
-                        <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-danger);" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
+                        <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="remind" data-id="${inv.id}" title="${inv.direction === 'in' ? '催繳' : '記錄通知'}"><i class="ph ph-bell"></i></button>
+                        <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
+                        <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
                     </div>
                 </td>
             </tr>
@@ -219,12 +219,12 @@ export function renderUnsettled() {
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-warning-circle"></i> 房租查帳</h2>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">租客尚未繳款的房租；核對通過後自動移到「總收支表」</p>
+                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">租客尚未繳款的房租；核對通過後自動移到「總收支表」</p>
                 </div>
                 <div class="flex gap-2" style="flex-wrap: wrap;">
                     <div class="search-bar" style="width: 220px;">
                         <i class="ph ph-magnifying-glass"></i>
-                        <input type="text" placeholder="搜尋編號 / 末 5 碼 / 對象..." style="font-size: 0.875rem;">
+                        <input type="text" placeholder="搜尋編號 / 末 5 碼 / 對象..." style="font-size: var(--text-base);">
                     </div>
                     <button class="btn btn-outline" id="btn-gen-monthly" title="檢查所有進行中合約是否都有對應帳單，若無則補產">
                         <i class="ph ph-arrows-clockwise"></i> 補產缺帳單
@@ -237,12 +237,12 @@ export function renderUnsettled() {
 
             <!-- 批次操作列 (有勾選才顯示) -->
             <div id="bulk-action-bar" style="display: none; padding: 0.625rem 0.875rem; background-color: var(--color-primary-light); border-radius: var(--radius-md); margin-bottom: 1rem; align-items: center; justify-content: space-between;">
-                <span style="font-size: 0.875rem; font-weight: 500;">已選 <strong id="bulk-count">0</strong> 筆</span>
+                <span style="font-size: var(--text-base); font-weight: 500;">已選 <strong id="bulk-count">0</strong> 筆</span>
                 <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-success" id="btn-bulk-settle" style="padding: 0.4rem 0.875rem; font-size: 0.8rem;">
+                    <button class="btn btn-success" id="btn-bulk-settle" style="padding: 0.4rem 0.875rem; font-size: var(--text-xs);">
                         <i class="ph ph-check"></i> 批次結帳
                     </button>
-                    <button class="btn btn-outline" id="btn-bulk-clear" style="padding: 0.4rem 0.875rem; font-size: 0.8rem;">清除選取</button>
+                    <button class="btn btn-outline" id="btn-bulk-clear" style="padding: 0.4rem 0.875rem; font-size: var(--text-xs);">清除選取</button>
                 </div>
             </div>
 
@@ -397,32 +397,32 @@ function backfillContractInvoices() {
     // 有要新增 → preview 列出每一筆
     const previewRows = wouldCreate.slice(0, 50).map(({ invoice, contract }) => `
         <tr>
-            <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-family: monospace; font-size: 0.75rem;">${contract.id}</td>
-            <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">${contract.tenant || '—'}</td>
-            <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">${(contract.propertyName || '').replace('聚空間 - ', '')}</td>
+            <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-family: monospace; font-size: var(--text-xs);">${contract.id}</td>
+            <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${contract.tenant || '—'}</td>
+            <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${(contract.propertyName || '').replace('聚空間 - ', '')}</td>
             <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); text-align: right; font-weight: 600; color: var(--color-primary);">$${(invoice.amount || 0).toLocaleString()}</td>
         </tr>
     `).join('');
     const previewHtml = `
-        <div style="margin-bottom: 1rem; padding: 0.75rem; background-color: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--color-warning); font-size: 0.85rem; line-height: 1.7;">
+        <div style="margin-bottom: 1rem; padding: 0.75rem; background-color: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--color-warning); font-size: var(--text-sm); line-height: 1.7;">
             <div style="font-weight: 600; color: var(--text-main); margin-bottom: 0.4rem;">
                 <i class="ph ph-info"></i> 將建立 <strong style="color: var(--color-primary);">${wouldCreate.length}</strong> 筆帳單${wouldSkip.length > 0 ? `（已跳過 ${wouldSkip.length} 筆已存在）` : ''}：
             </div>
         </div>
         <div style="max-height: 320px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+            <table style="width: 100%; border-collapse: collapse; font-size: var(--text-sm);">
                 <thead style="position: sticky; top: 0; background: var(--bg-secondary);">
                     <tr>
-                        <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: 0.75rem; color: var(--text-muted);">合約</th>
-                        <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: 0.75rem; color: var(--text-muted);">租客</th>
-                        <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: 0.75rem; color: var(--text-muted);">床位</th>
-                        <th style="padding: 0.5rem 0.6rem; text-align: right; font-weight: 600; font-size: 0.75rem; color: var(--text-muted);">金額</th>
+                        <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">合約</th>
+                        <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">租客</th>
+                        <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">床位</th>
+                        <th style="padding: 0.5rem 0.6rem; text-align: right; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">金額</th>
                     </tr>
                 </thead>
-                <tbody>${previewRows}${wouldCreate.length > 50 ? `<tr><td colspan="4" style="padding: 0.5rem; text-align: center; color: var(--text-muted); font-size: 0.75rem;">… 還有 ${wouldCreate.length - 50} 筆未列出</td></tr>` : ''}</tbody>
+                <tbody>${previewRows}${wouldCreate.length > 50 ? `<tr><td colspan="4" style="padding: 0.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-xs);">… 還有 ${wouldCreate.length - 50} 筆未列出</td></tr>` : ''}</tbody>
             </table>
         </div>
-        <div style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
+        <div style="margin-top: 0.75rem; font-size: var(--text-xs); color: var(--text-muted); line-height: 1.6;">
             一份合約 = 一張全期帳單。已存在的不重複建立。如果列表有不該補產的，請取消、先去合約頁調整再來。
         </div>
     `;

@@ -1,4 +1,4 @@
-// 總收支表 PDF 匯出 — 用瀏覽器列印產生 (A4 landscape，盡量一頁完成)
+﻿// 總收支表 PDF 匯出 — 用瀏覽器列印產生 (A4 landscape，盡量一頁完成)
 //
 // 流程：點 BMS「📄 匯出 PDF」→ 開新分頁顯示報告 → 點上方「列印」→ 瀏覽器存 PDF
 
@@ -30,7 +30,7 @@ export function buildFinanceReportHtml(ym) {
 
     const rows = invoices.map(inv => {
         const sign = inv.direction === 'out' ? '-' : '+';
-        const color = inv.direction === 'out' ? '#dc2626' : '#16a34a';
+        const color = inv.direction === 'out' ? '#b13535' : '#22946e';
         const item = inv.direction === 'in'
             ? (inv.tenant || '—')
             : (inv.contractId ? `合約 ${inv.contractId}` : '整館共用');
@@ -51,7 +51,7 @@ export function buildFinanceReportHtml(ym) {
                     ${hasDiscount ? `<div class="sub">原價 $${fmtMoney(inv.amount)}</div>` : ''}
                 </td>
                 <td class="right nowrap">${hasDiscount
-                    ? `<div style="color: #f59e0b; font-weight: 600;">-$${fmtMoney(inv.discount)}</div>
+                    ? `<div style="color: #b8871f; font-weight: 600;">-$${fmtMoney(inv.discount)}</div>
                        ${inv.discountReason ? `<div class="sub">${esc(formatDiscountReason(inv.discountReason))}</div>` : ''}`
                     : '<span class="muted">—</span>'}</td>
                 <td class="nowrap">${esc(inv.paymentMethod || '—')}</td>
@@ -61,7 +61,7 @@ export function buildFinanceReportHtml(ym) {
     }).join('');
 
     const emptyRow = invoices.length === 0
-        ? `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #94a3b8;">${esc(periodLabel)} 尚無已結帳目</td></tr>`
+        ? `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #6b7280;">${esc(periodLabel)} 尚無已結帳目</td></tr>`
         : '';
 
     return `<!DOCTYPE html>
@@ -74,7 +74,7 @@ export function buildFinanceReportHtml(ym) {
     * { box-sizing: border-box; }
     body {
         font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
-        color: #0f172a;
+        color: #1a1c23;
         margin: 0;
         padding: 1.5rem;
         background: #f1f5f9;
@@ -106,7 +106,7 @@ export function buildFinanceReportHtml(ym) {
         cursor: pointer;
     }
     .toolbar .btn-print {
-        background: linear-gradient(135deg, #f59e0b, #d97706);
+        background: linear-gradient(135deg, #b8871f, #d97706);
         color: white;
     }
     .toolbar .btn-close {
@@ -121,12 +121,12 @@ export function buildFinanceReportHtml(ym) {
         box-shadow: 0 4px 24px rgba(0,0,0,0.08);
     }
     header.report-header {
-        border-bottom: 3px solid #f59e0b;
+        border-bottom: 3px solid #b8871f;
         padding-bottom: 0.75rem;
         margin-bottom: 1rem;
     }
     h1 { margin: 0 0 0.2rem; font-size: 1.35rem; }
-    .meta { font-size: 0.8rem; color: #64748b; }
+    .meta { font-size: 0.8rem; color: #6b7280; }
 
     .kpi-grid {
         display: grid;
@@ -143,9 +143,9 @@ export function buildFinanceReportHtml(ym) {
         flex-direction: column;
         gap: 0.15rem;
     }
-    .kpi-label { font-size: 0.7rem; color: #64748b; }
+    .kpi-label { font-size: 0.7rem; color: #6b7280; }
     .kpi-value { font-size: 1.2rem; font-weight: 700; }
-    .kpi-sub { font-size: 0.7rem; color: #94a3b8; }
+    .kpi-sub { font-size: 0.7rem; color: #6b7280; }
 
     table {
         width: 100%;
@@ -170,7 +170,7 @@ export function buildFinanceReportHtml(ym) {
         font-weight: 600;
         color: #475569;
         font-size: 0.72rem;
-        border-bottom: 2px solid #cbd5e1;
+        border-bottom: 2px solid #d6dae1;
     }
     td {
         padding: 0.35rem 0.5rem;
@@ -181,8 +181,8 @@ export function buildFinanceReportHtml(ym) {
     td.nowrap, th.nowrap { white-space: nowrap; }
     td.right, th.right { text-align: right; }
     .amount { font-weight: 700; }
-    .sub { font-size: 0.66rem; color: #94a3b8; margin-top: 0.1rem; }
-    .muted { color: #cbd5e1; }
+    .sub { font-size: 0.66rem; color: #6b7280; margin-top: 0.1rem; }
+    .muted { color: #d6dae1; }
     .tag {
         display: inline-block;
         background: #e0f2fe;
@@ -196,7 +196,7 @@ export function buildFinanceReportHtml(ym) {
 
     tfoot td {
         padding: 0.55rem 0.5rem;
-        border-top: 2px solid #cbd5e1;
+        border-top: 2px solid #d6dae1;
         border-bottom: none;
         font-weight: 600;
         background: #f8fafc;
@@ -207,7 +207,7 @@ export function buildFinanceReportHtml(ym) {
         padding-top: 0.75rem;
         border-top: 1px solid #e2e8f0;
         font-size: 0.7rem;
-        color: #94a3b8;
+        color: #6b7280;
         display: flex;
         justify-content: space-between;
     }
@@ -228,17 +228,17 @@ export function buildFinanceReportHtml(ym) {
     <div class="kpi-grid">
         <div class="kpi">
             <div class="kpi-label">已收金額</div>
-            <div class="kpi-value" style="color: #16a34a;">$${fmtMoney(inAll)}</div>
+            <div class="kpi-value" style="color: #22946e;">$${fmtMoney(inAll)}</div>
             <div class="kpi-sub">${inCount} 筆收入</div>
         </div>
         <div class="kpi">
             <div class="kpi-label">支出金額</div>
-            <div class="kpi-value" style="color: #dc2626;">$${fmtMoney(outAll)}</div>
+            <div class="kpi-value" style="color: #b13535;">$${fmtMoney(outAll)}</div>
             <div class="kpi-sub">${outCount} 筆支出</div>
         </div>
         <div class="kpi">
             <div class="kpi-label">本月淨收益</div>
-            <div class="kpi-value" style="color: ${net >= 0 ? '#16a34a' : '#dc2626'};">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</div>
+            <div class="kpi-value" style="color: ${net >= 0 ? '#22946e' : '#b13535'};">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</div>
             <div class="kpi-sub">淨利率 ${inAll > 0 ? (net / inAll * 100).toFixed(1) + '%' : '—'}</div>
         </div>
     </div>
@@ -270,9 +270,9 @@ export function buildFinanceReportHtml(ym) {
         ${invoices.length > 0 ? `<tfoot>
             <tr>
                 <td colspan="4" style="text-align: right;">本月合計</td>
-                <td class="right" style="color: #16a34a;">+$${fmtMoney(inAll)}</td>
-                <td class="right" style="color: #dc2626;">-$${fmtMoney(outAll)}</td>
-                <td colspan="2" style="text-align: right;">淨 <span style="color: ${net >= 0 ? '#16a34a' : '#dc2626'};">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</span></td>
+                <td class="right" style="color: #22946e;">+$${fmtMoney(inAll)}</td>
+                <td class="right" style="color: #b13535;">-$${fmtMoney(outAll)}</td>
+                <td colspan="2" style="text-align: right;">淨 <span style="color: ${net >= 0 ? '#22946e' : '#b13535'};">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</span></td>
             </tr>
         </tfoot>` : ''}
     </table>

@@ -1,4 +1,4 @@
-import { mockData, store } from '../data.js';
+﻿import { mockData, store } from '../data.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 
@@ -26,20 +26,20 @@ export function renderMaintenance() {
             <tr data-row-id="${esc(m.id)}" data-status="${esc(m.status)}" data-search="${escapeAttr(searchText)}">
                 <td>
                     <div style="display: flex; flex-direction: column;">
-                        <strong style="font-size: 0.875rem;">${esc(m.id)}</strong>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${esc(m.propertyName || '')}</span>
+                        <strong style="font-size: var(--text-base);">${esc(m.id)}</strong>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${esc(m.propertyName || '')}</span>
                     </div>
                 </td>
                 <td>
                     <div style="max-width: 200px;">
                         <div style="font-weight: 500; margin-bottom: 0.25rem;">${esc(m.issue || '')}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted);">回報人: ${esc(m.reporter || '—')}</div>
+                        <div style="font-size: var(--text-xs); color: var(--text-muted);">回報人: ${esc(m.reporter || '—')}</div>
                     </div>
                 </td>
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <span style="font-weight: 500;">${esc(m.reportDate || '')}</span>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${days} 天前</span>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${days} 天前</span>
                     </div>
                 </td>
                 <td><span class="status-badge ${statusClass}">${esc(m.status)}</span></td>
@@ -47,22 +47,22 @@ export function renderMaintenance() {
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
                         ${m.status === '待處理' ? `
-                            <button class="btn btn-primary maintenance-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="start" data-id="${m.id}" title="開始處理">
+                            <button class="btn btn-primary maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="start" data-id="${m.id}" title="開始處理">
                                 <i class="ph ph-play"></i>
                             </button>
                         ` : ''}
                         ${m.status === '進行中' ? `
-                            <button class="btn btn-success maintenance-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="complete" data-id="${m.id}" title="完成維修">
+                            <button class="btn btn-success maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="complete" data-id="${m.id}" title="完成維修">
                                 <i class="ph ph-check"></i>
                             </button>
                         ` : ''}
-                        <button class="btn btn-outline maintenance-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="view" data-id="${m.id}" title="查看記錄">
+                        <button class="btn btn-outline maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="view" data-id="${m.id}" title="查看記錄">
                             <i class="ph ph-eye"></i>
                         </button>
-                        <button class="btn btn-outline maintenance-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-id="${m.id}" title="編輯維修">
+                        <button class="btn btn-outline maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${m.id}" title="編輯維修">
                             <i class="ph ph-pencil"></i>
                         </button>
-                        <button class="btn btn-outline maintenance-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-danger);" data-action="delete" data-id="${m.id}" title="刪除">
+                        <button class="btn btn-outline maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete" data-id="${m.id}" title="刪除">
                             <i class="ph ph-trash"></i>
                         </button>
                     </div>
@@ -85,7 +85,7 @@ export function renderMaintenance() {
                 <div class="flex gap-2">
                     <div class="search-bar" style="width: 250px;">
                         <i class="ph ph-magnifying-glass"></i>
-                        <input type="text" placeholder="搜尋工單編號或物件..." style="font-size: 0.875rem;">
+                        <input type="text" placeholder="搜尋工單編號或物件..." style="font-size: var(--text-base);">
                     </div>
                     <button class="btn btn-primary" id="btn-new-maintenance" data-fab="ph-wrench">
                         <i class="ph ph-plus"></i> 新增報修
@@ -163,8 +163,8 @@ export function showMaintenanceDetails(id) {
         ],
         extraHtml: `
             <div style="margin-top: 1.5rem;">
-                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">問題描述</div>
-                <div style="padding: 1rem; background-color: var(--color-background); border-radius: var(--radius-md); font-size: 0.875rem; line-height: 1.6;">${m.issue}</div>
+                <div style="font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">問題描述</div>
+                <div style="padding: 1rem; background-color: var(--color-background); border-radius: var(--radius-md); font-size: var(--text-base); line-height: 1.6;">${m.issue}</div>
             </div>
         `
     });
