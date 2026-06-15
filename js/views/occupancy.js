@@ -251,9 +251,11 @@ function renderBuildingTable(building, months, today) {
         const headerRow = `
             <tr class="occ-room-header">
                 <td colspan="${colCount}">
-                    <span class="occ-room-title">R${rn}</span>
-                    <span class="occ-room-type">${roomTypeLabel}</span>
-                    <span class="occ-room-meta">${roomBeds.length} 床 · 居住 ${rentedInRoom} / 空 ${roomBeds.length - rentedInRoom}</span>
+                    <div class="occ-room-header-inner">
+                        <span class="occ-room-title">R${rn}</span>
+                        <span class="occ-room-type">${roomTypeLabel}</span>
+                        <span class="occ-room-meta">${roomBeds.length} 床 · 居住 ${rentedInRoom} / 空 ${roomBeds.length - rentedInRoom}</span>
+                    </div>
                 </td>
             </tr>
         `;

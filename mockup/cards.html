@@ -203,6 +203,7 @@ h1 {
     line-height: 1.25;
 }
 .a-card .a-cell .a-val.muted { color: var(--text-muted); font-weight: 400; }
+.a-card .a-cell .a-val.nowrap { white-space: nowrap; }
 .a-card .a-cell .a-val .a-val-sub {
     display: block;
     font-size: 0.7rem;
@@ -250,7 +251,44 @@ h1 {
     font-weight: 500;
 }
 
-/* ─────────────────────── 方案 A+C: 英雄區金額大字 ─────────────────────── */
+/* ─────────────────────── 方案 A+C v2: 租客 / 金額等重 hero ─────────────────────── */
+.c-card .c-hero-equal {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+}
+.c-card .c-hero-who { flex: 1 1 auto; min-width: 0; }
+.c-card .c-hero-tenant {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    line-height: 1.25;
+}
+.c-card .c-hero-place {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+}
+.c-card .c-hero-side {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+}
+.c-card .c-hero-amt {
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+}
+.c-card .c-hero-amt.income { color: var(--color-success); }
+.c-card .c-hero-amt.expense { color: var(--color-danger); }
+
+/* ─────────────────────── 方案 A+C v1 (舊版): 英雄區金額大字 (留著對比參考) ─────────────────────── */
 .c-card .c-hero {
     display: flex;
     justify-content: space-between;
@@ -472,7 +510,7 @@ h1 {
         <div class="a-grid">
             <div class="a-cell">
                 <span class="a-cap">租金</span>
-                <span class="a-val">$18,000<span class="a-val-sub">/ 月</span></span>
+                <span class="a-val nowrap">$18,000 / 月</span>
             </div>
             <div class="a-cell">
                 <span class="a-cap">期間</span>
@@ -488,31 +526,6 @@ h1 {
             </div>
         </div>
         <div class="a-actions">
-            <button class="btn-outline">退租</button>
-            <button class="btn-primary">續租</button>
-        </div>
-    </div>
-</div>
-
-<div class="section-title">合約卡 <span class="chip chip-c">方案 A+C (英雄區)</span></div>
-<div class="viewport">
-    <div class="card c-card">
-        <div class="c-hero">
-            <div>
-                <div class="c-hero-amount">$18,000<span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0;"> / 月</span></div>
-                <div class="c-hero-meta">1 個月期 · 06/01 ~ 07/01</div>
-            </div>
-            <span class="badge success">進行中</span>
-        </div>
-        <div class="c-divider"></div>
-        <div class="c-sub-id">C001 · 王小明</div>
-        <div class="c-sub-meta">聚空間 - 松山館 R1-A</div>
-        <div class="c-chips">
-            <span class="c-chip warn"><i class="ph ph-clock"></i> 剩 16 天到期</span>
-            <span class="c-chip success"><i class="ph ph-check-circle"></i> 要續租</span>
-            <span class="c-chip"><i class="ph ph-arrow-counter-clockwise"></i> 續自 C000</span>
-        </div>
-        <div class="c-actions">
             <button class="btn-outline">退租</button>
             <button class="btn-primary">續租</button>
         </div>
@@ -556,21 +569,23 @@ h1 {
     </div>
 </div>
 
-<div class="section-title">已結帳目卡 <span class="chip chip-c">方案 A+C (推薦)</span></div>
+<div class="section-title">已結帳目卡 <span class="chip chip-c">方案 A+C v2 — 租客 / 金額等重</span></div>
 <div class="viewport">
     <div class="card c-card">
-        <div class="c-hero">
-            <div>
-                <div class="c-hero-amount income">+$18,000</div>
-                <div class="c-hero-meta">房租 · 2026-06-10</div>
+        <div class="c-hero-equal">
+            <div class="c-hero-who">
+                <div class="c-hero-tenant">王小明</div>
+                <div class="c-hero-place">松山館 R1-A</div>
             </div>
-            <span class="badge success">收入</span>
+            <div class="c-hero-side">
+                <div class="c-hero-amt income">+$18,000</div>
+                <span class="badge success">收入</span>
+            </div>
         </div>
         <div class="c-divider"></div>
-        <div class="c-sub-id">王小明 · 松山館 R1-A</div>
-        <div class="c-sub-meta">租期 06/01 ~ 06/30 · INV-2026-06-001</div>
+        <div class="c-sub-meta">房租 · 2026-06-10 · INV-2026-06-001</div>
         <div class="c-chips">
-            <span class="c-chip warn"><i class="ph ph-tag"></i> -$1,000 季繳優惠</span>
+            <span class="c-chip warn"><i class="ph ph-tag"></i> 折 -$1,000 季繳優惠</span>
             <span class="c-chip"><i class="ph ph-credit-card"></i> 匯款</span>
             <span class="c-chip"><i class="ph ph-note"></i> 6月房租尾款</span>
         </div>
@@ -583,19 +598,21 @@ h1 {
 </div>
 
 <!-- ═════════════════ 4. 房租查帳卡 ═════════════════ -->
-<div class="section-title">房租查帳 · 待結帳款 <span class="chip chip-c">方案 A+C (推薦)</span></div>
+<div class="section-title">房租查帳 · 待結帳款 <span class="chip chip-c">方案 A+C v2 — 租客 / 金額等重</span></div>
 <div class="viewport">
     <div class="card c-card">
-        <div class="c-hero">
-            <div>
-                <div class="c-hero-amount expense">$18,000</div>
-                <div class="c-hero-meta">應收 · 應結 06/10</div>
+        <div class="c-hero-equal">
+            <div class="c-hero-who">
+                <div class="c-hero-tenant">王小明</div>
+                <div class="c-hero-place">松山館 R1-A</div>
             </div>
-            <span class="badge danger">⚠ 逾期 3 天</span>
+            <div class="c-hero-side">
+                <div class="c-hero-amt expense">$18,000</div>
+                <span class="badge danger">⚠ 逾期 3 天</span>
+            </div>
         </div>
         <div class="c-divider"></div>
-        <div class="c-sub-id">王小明 · 松山館 R1-A</div>
-        <div class="c-sub-meta">INV-2026-06-001 · 房租</div>
+        <div class="c-sub-meta">房租 · 應結 06/10 · INV-2026-06-001</div>
         <div class="c-chips">
             <span class="c-chip success"><i class="ph ph-check"></i> 已收 $5,000</span>
             <span class="c-chip warn"><i class="ph ph-tag"></i> 折 $1,000</span>
