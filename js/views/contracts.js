@@ -247,7 +247,7 @@ export function renderContracts() {
         <div class="metrics-grid">
             <div class="card metric-card"><div class="metric-header"><span>進行中合約</span><div class="metric-icon success"><i class="ph ph-file-text"></i></div></div><div class="metric-value">${activeCount}</div><div class="metric-subtext">含即將到期/待決策</div></div>
             <div class="card metric-card ${decisionCount > 0 ? 'highlight-danger' : ''}"><div class="metric-header"><span>待決策</span><div class="metric-icon danger"><i class="ph ph-warning-circle"></i></div></div><div class="metric-value" style="color: ${decisionCount > 0 ? 'var(--color-danger)' : 'var(--text-main)'};">${decisionCount}</div><div class="metric-subtext">需要續租 / 退租決定</div></div>
-            <div class="card metric-card"><div class="metric-header"><span>即將到期</span><div class="metric-icon warning"><i class="ph ph-clock"></i></div></div><div class="metric-value">${expiringSoonCount}</div><div class="metric-subtext">14 天內到期</div></div>
+            <div class="card metric-card"><div class="metric-header"><span>即將到期</span><div class="metric-icon warning"><i class="ph ph-clock"></i></div></div><div class="metric-value">${expiringSoonCount}</div><div class="metric-subtext">10 天內到期</div></div>
             <div class="card metric-card"><div class="metric-header"><span>歷史合約</span><div class="metric-icon primary"><i class="ph ph-archive"></i></div></div><div class="metric-value">${archivedCount}</div><div class="metric-subtext">已續約 / 已終止</div></div>
         </div>
 
@@ -259,7 +259,7 @@ export function renderContracts() {
                         <i class="ph ph-magnifying-glass"></i>
                         <input type="text" placeholder="搜尋合約編號或租客..." style="font-size: var(--text-base);">
                     </div>
-                    <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 15 天內到期的合約，自動發 LINE 問租客要不要續租">
+                    <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 10 天內到期的合約，自動發 LINE 問租客要不要續租">
                         <i class="ph ph-chat-circle-dots"></i> 詢問續租
                     </button>
                     <button class="btn btn-primary" id="btn-new-contract" data-fab="ph-file-plus">
@@ -885,7 +885,7 @@ export function initContractActions(scope) {
         if (chip) chip.click();
     });
 
-    // 詢問續租 — 觸發 Edge Function renewal-poll (15 天前發)
+    // 詢問續租 — 觸發 Edge Function renewal-poll (10 天前發)
     scope.querySelector('#btn-ask-renewal')?.addEventListener('click', async () => {
         const expiringSoon = mockData.contracts.filter(c => {
             if (c.renewalState !== 'active') return false;
@@ -895,14 +895,14 @@ export function initContractActions(scope) {
             return c.endDate >= today && c.endDate <= in15;
         });
         if (expiringSoon.length === 0) {
-            showToast('15 天內沒有要到期的合約，不用發', 'info', 3000);
+            showToast('10 天內沒有要到期的合約，不用發', 'info', 3000);
             return;
         }
         openConfirm({
             title: '詢問續租意願',
-            message: `將自動掃描 <strong>15 天內到期</strong>的合約，發 LINE 問租客是否續租。<br><br>` +
+            message: `將自動掃描 <strong>10 天內到期</strong>的合約，發 LINE 問租客是否續租。<br><br>` +
                      `目前符合條件的合約有 <strong>${expiringSoon.length}</strong> 筆。<br>` +
-                     `<small style="color: var(--text-muted);">注意：7 天內已問過的會自動跳過。租客未綁 LINE 的也會跳過。</small>`,
+                     `<small style="color: var(--text-muted);">注意：5 天內已問過的會自動跳過。租客未綁 LINE 的也會跳過。</small>`,
             confirmLabel: `🚀 開始發送`,
             onConfirm: async () => {
                 showToast('掃描中…', 'info', 2000);

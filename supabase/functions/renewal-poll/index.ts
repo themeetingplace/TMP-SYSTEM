@@ -130,9 +130,9 @@ serve(async (req) => {
             // 跳過已問過的 (除非 force)
             const askedAt = c.renew_asked_at ? new Date(c.renew_asked_at) : null;
             if (!force && askedAt) {
-                // 7 天內問過就跳過
+                // 5 天內問過就跳過 (對齊 awaiting_decision threshold)
                 const ageDays = (Date.now() - askedAt.getTime()) / 86400000;
-                if (ageDays < 7) {
+                if (ageDays < 5) {
                     result.skipped_already_asked++;
                     result.contracts.push({ id: c.id, tenant: c.tenant, status: 'skipped_already_asked' });
                     continue;

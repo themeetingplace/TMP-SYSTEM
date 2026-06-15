@@ -606,8 +606,13 @@ export function getContractLifecycle(contract, today = new Date()) {
     const end = new Date(contract.endDate);
     const diffDays = Math.ceil((end - today) / 86400000);
 
-    if (diffDays > 14) return 'active';
-    if (diffDays > 7) return 'expiring_soon';
+    // 三段時間軸 (2026-06-15 確認):
+    //   > 10 天 = active
+    //   6 ~ 10 天 = expiring_soon (此區間 renewal-poll cron 會發 LINE 詢問)
+    //   0 ~ 5 天 = awaiting_decision (該管理者下決定了，不能再等)
+    //   < 0 天 = expired
+    if (diffDays > 10) return 'active';
+    if (diffDays > 5) return 'expiring_soon';
     if (diffDays >= 0) return 'awaiting_decision';
     return 'expired';
 }
