@@ -83,9 +83,11 @@ function renderResults(r, query) {
     if (r.properties.length) {
         html += `<div class="search-result-group"><div class="search-result-group-title">物件 (${r.properties.length})</div>`;
         r.properties.forEach(p => {
+            // 副標前置租客名稱 (如有)，讓「用名字搜→出物件」時看得到是誰住的
+            const tenantBit = p.tenant ? `${highlight(p.tenant, query)} · ` : '';
             html += `<div class="search-result-item" data-entity-type="property" data-entity-id="${escapeAttr(p.id)}">
                 <div class="search-result-item-title">${highlight(p.name, query)}</div>
-                <div class="search-result-item-sub">${escapeHtml(p.address || '')} · ${escapeHtml(p.status || '')}</div>
+                <div class="search-result-item-sub">${tenantBit}${escapeHtml(p.address || '')} · ${escapeHtml(p.status || '')}</div>
             </div>`;
         });
         html += `</div>`;
