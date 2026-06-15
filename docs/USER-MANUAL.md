@@ -1,9 +1,8 @@
 # 聚空間 PMS 使用手冊
 
 **版本** v1.3.0
-**最後更新** 2026-06-13
-**正式網址** https://themeetingplace-bms.pages.dev
-（網域維持舊網址以避免書籤失效；產品命名已改為 PMS = Property Management System）
+**最後更新** 2026-06-15
+**正式網址** https://themeetingplace-pms.pages.dev
 
 ---
 
@@ -41,7 +40,7 @@
 ## 2. 登入 / 帳號管理
 
 ### 登入
-1. 開 https://themeetingplace-bms.pages.dev
+1. 開 https://themeetingplace-pms.pages.dev
 2. 點「**使用 Google 帳號登入**」
 3. 選你的 Gmail（必須是白名單內的帳號）→ 同意授權
 4. 跳回 → 看到首頁 = 登入成功
@@ -242,7 +241,7 @@
 
 **已綁定房客的靜默原則**：當房客已綁定 LINE，傳的訊息**不是**末 5 碼 / 維修 / 帳單 / 找小編這類關鍵字時，系統會保持沉默，留給小編自然聊天。「找小編」是例外（強意圖）→ 不分綁定狀態都會回覆。
 
-**LIFF 登記表單**：https://themeetingplace-bms.pages.dev/liff/ — 對方點「住客登記」會開這個表單，填完自動建立租客資料 + 綁定 LINE。
+**LIFF 登記表單**：https://themeetingplace-pms.pages.dev/liff/ — 對方點「住客登記」會開這個表單，填完自動建立租客資料 + 綁定 LINE。
 
 ---
 
@@ -353,6 +352,6 @@
 - **LIFF**：同站 `/liff/` 子目錄
 - **LINE webhook**：Supabase Edge Function `line-webhook`
 - **LIFF Edge Function**：`tenant-register`
-- **正式網址**：https://themeetingplace-bms.pages.dev
+- **正式網址**：https://themeetingplace-pms.pages.dev
 - **GitHub**：kayaaa16/themeetingplace-bms（private）
 - **公司全名**：聚空間租賃管理顧問有限公司
