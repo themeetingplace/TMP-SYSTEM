@@ -2,6 +2,12 @@
 bms-backup-*.json
 *.xlsx
 data-import/
+# xlsx 萃取產物 (含住戶名 / 房客資料)
+XLSX_EXTRACT_*.json
+XLSX_EXTRACT_*.md
+XLSX_DELTA_*.md
+# 一次性匯入 SQL (含 INSERT 住戶資料)
+sql/19-import-xlsx-delta-*.sql
 
 # === 工作環境 ===
 .claude/

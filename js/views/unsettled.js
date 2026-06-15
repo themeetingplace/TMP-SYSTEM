@@ -483,6 +483,45 @@ function showUnsettledForm(invoice = null) {
         fields,
         values: invoice ?? {},
         submitLabel: isEdit ? '儲存變更' : '建立',
+        onFormMount: (form) => {
+            // 選定館別後，物件下拉只顯示該館的床位
+            const bldSel = form.querySelector('[name="buildingId"]');
+            const propSelWrap = form.querySelector('[name="propertyName"]')?.closest('.custom-select');
+            if (!bldSel || !propSelWrap) return;
+
+            function applyPropertyFilter() {
+                const bId = bldSel.value;
+                const bName = bId ? mockData.buildings.find(b => b.id === bId)?.name : null;
+                const propHidden = propSelWrap.querySelector('input[type="hidden"]');
+                const propValueEl = propSelWrap.querySelector('.custom-select-value');
+                // panel 可能 portal 到 body 也可能在原位
+                const panel = propSelWrap.querySelector('.custom-select-panel')
+                    || document.querySelector(`.custom-select-panel[data-cs-panel-id="${propSelWrap.dataset.csPanelId}"]`);
+
+                const options = panel ? panel.querySelectorAll('.custom-select-option') : [];
+                let visibleCount = 0;
+                options.forEach(opt => {
+                    const val = opt.dataset.value || '';
+                    const isPlaceholder = val === '';
+                    // name 結構: "聚空間 - 松山館 R1-A"，含 bName 就 match
+                    const match = isPlaceholder || !bName || val.includes(bName);
+                    opt.style.display = match ? '' : 'none';
+                    if (match && !isPlaceholder) visibleCount++;
+                });
+                // 若目前選定的物件 不屬於這個館 → 清掉
+                if (propHidden && propHidden.value && bName && !propHidden.value.includes(bName)) {
+                    propHidden.value = '';
+                    if (propValueEl) {
+                        propValueEl.textContent = '請選擇...';
+                        propValueEl.classList.add('placeholder');
+                    }
+                }
+            }
+
+            bldSel.addEventListener('change', applyPropertyFilter);
+            // 初始也跑一次 (編輯時可能已預選館別)
+            applyPropertyFilter();
+        },
         onSubmit: (values) => {
             const discount = Number(values.discount) || 0;
             const paidAmount = Number(values.paidAmount) || 0;
