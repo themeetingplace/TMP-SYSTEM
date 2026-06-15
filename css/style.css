@@ -2676,8 +2676,10 @@ select:focus-visible,
     .filter-tabs::-webkit-scrollbar { display: none; }
     .filter-tab,
     .chart-mode-btn,
-    .property-filter-btn {
+    .property-filter-btn,
+    .filter-tab-label {
         flex-shrink: 0;
+        white-space: nowrap;
     }
 }
 
