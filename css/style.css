@@ -6681,31 +6681,237 @@ button.omn-card { font-family: inherit; }
     .data-table:not(.occ-table) tr.empty-row td::before,
     .data-table:not(.occ-table) td[colspan]::before { display: none; }
 
-    /* === 方案 A+C v2: hero (租客 + 金額等重) — 給 .cards-with-hero 表 ===
-       帳務管理已結帳目 / 房租查帳 / 合約查帳 那種「誰 + 金額」型卡片
-       第一個 td 跟「對象」td (data-hero-amount) 並列在頂部 hero 區，等字級 */
-    .data-table:not(.occ-table).cards-with-hero tbody tr {
-        position: relative;
-    }
-    .data-table:not(.occ-table).cards-with-hero td:first-child {
-        grid-column: 1 / 2;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid var(--border-soft);
-        margin-bottom: 0;
-    }
-    .data-table:not(.occ-table).cards-with-hero td[data-hero-amount] {
-        grid-column: 2 / 3;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid var(--border-soft);
-        margin-bottom: 0;
-        text-align: right;
-        font-size: 1.02rem;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-    }
-    .data-table:not(.occ-table).cards-with-hero td[data-hero-amount]::before {
+    /* === 方案 v3: cards-with-hero 表用 dual-row 法
+       桌面 row-desktop 顯、row-mobile-card 隱
+       手機 row-desktop 隱、row-mobile-card 顯 (skip M-R-2 grid 2-col 完全自管 layout) === */
+    .data-table.cards-with-hero tbody tr.row-desktop {
         display: none;
     }
+    .data-table.cards-with-hero tbody tr.row-mobile-card {
+        display: block !important;
+        grid-template-columns: none !important;
+        padding: 0 !important;
+        margin-bottom: 0.85rem !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    .data-table.cards-with-hero tbody tr.row-mobile-card > td {
+        display: block !important;
+        padding: 0 !important;
+        grid-column: auto !important;
+        border: none !important;
+        font-size: inherit;
+        font-weight: 400;
+        color: inherit;
+        margin: 0 !important;
+    }
+    .data-table.cards-with-hero tbody tr.row-mobile-card > td::before {
+        display: none !important;
+    }
+}
+
+/* 桌面: row-mobile-card 隱 (cards-with-hero 才有這個 row) */
+.data-table tr.row-mobile-card {
+    display: none;
+}
+@media (min-width: 601px) {
+    .data-table.cards-with-hero tbody tr.row-mobile-card { display: none !important; }
+}
+
+/* ============================================================
+ * 手機 finance / unsettled card v3 — designer mockup
+ * 在 .row-mobile-card > td > .finance-mobile-card 容器內
+ * ============================================================ */
+@media (max-width: 600px) {
+    .finance-mobile-card {
+        background: var(--color-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 0.95rem 1rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+    .finance-mobile-card .c-hero-equal {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 0.65rem;
+    }
+    .finance-mobile-card .c-hero-who {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    .finance-mobile-card .c-hero-tenant {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-main);
+        line-height: 1.25;
+    }
+    .finance-mobile-card .c-hero-tags {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-top: 0.3rem;
+        flex-wrap: wrap;
+    }
+    .finance-mobile-card .c-hero-place {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+    }
+    .finance-mobile-card .c-hero-tags .dot {
+        width: 3px;
+        height: 3px;
+        background: var(--text-muted);
+        border-radius: 50%;
+        opacity: 0.6;
+    }
+    .finance-mobile-card .c-hero-side {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.35rem;
+    }
+    .finance-mobile-card .c-hero-amt {
+        font-size: 1.1rem;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        font-variant-numeric: tabular-nums;
+    }
+    .finance-mobile-card .c-hero-amt.income { color: var(--color-success); }
+    .finance-mobile-card .c-hero-amt.expense { color: var(--color-danger); }
+    .finance-mobile-card .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.18rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+    .finance-mobile-card .badge.success {
+        background: rgba(34, 148, 110, 0.12);
+        color: var(--color-success);
+    }
+    .finance-mobile-card .badge.danger {
+        background: rgba(177, 53, 53, 0.10);
+        color: var(--color-danger);
+    }
+    /* type-chip 語意色 */
+    .finance-mobile-card .type-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    .finance-mobile-card .type-chip i { font-size: 0.78rem; }
+    .finance-mobile-card .type-chip.rent     { background: rgba(255, 136, 89, 0.15); color: var(--color-primary-text); }
+    .finance-mobile-card .type-chip.deposit  { background: rgba(34, 148, 110, 0.12); color: var(--color-success); }
+    .finance-mobile-card .type-chip.utility  { background: rgba(156, 111, 12, 0.12); color: var(--color-warning-text); }
+    .finance-mobile-card .type-chip.misc     { background: rgba(107, 114, 128, 0.10); color: var(--text-muted); }
+    /* 分隔 */
+    .finance-mobile-card .c-divider {
+        height: 1px;
+        background: var(--border-soft);
+        margin: 0.65rem 0 0.7rem;
+    }
+    /* chip 列 (日期 / 期間 / 合約) */
+    .finance-mobile-card .c-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 0.75rem;
+    }
+    .finance-mobile-card .c-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 999px;
+        background: var(--bg-tertiary);
+        font-size: 0.72rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+    .finance-mobile-card .c-chip i { font-size: 0.85rem; }
+    /* 折扣 / 付款 2x2 grid */
+    .finance-mobile-card .c-meta-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6rem 1rem;
+        margin-bottom: 0.65rem;
+    }
+    .finance-mobile-card .c-meta-cell {
+        text-align: left;
+    }
+    .finance-mobile-card .c-meta-cap {
+        display: block;
+        font-size: 0.68rem;
+        color: var(--text-muted);
+        font-weight: 500;
+        margin-bottom: 0.15rem;
+        text-align: left;
+    }
+    .finance-mobile-card .c-meta-val {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--text-main);
+        font-weight: 600;
+        text-align: left;
+    }
+    .finance-mobile-card .c-meta-val-sub {
+        font-size: 0.68rem;
+        color: var(--text-muted);
+        font-weight: 400;
+        margin-left: 0.25rem;
+    }
+    .finance-mobile-card .c-meta-val-muted {
+        color: var(--text-muted);
+        font-weight: 400;
+    }
+    /* 備註區 (獨立、左 border 強調) */
+    .finance-mobile-card .c-note {
+        background: var(--bg-secondary);
+        border-left: 3px solid var(--border-strong);
+        border-radius: 0 6px 6px 0;
+        padding: 0.5rem 0.7rem;
+        margin-bottom: 0.85rem;
+    }
+    .finance-mobile-card .c-note .c-meta-cap { margin-bottom: 0.2rem; }
+    .finance-mobile-card .c-note-text {
+        font-size: 0.82rem;
+        color: var(--text-main);
+        line-height: 1.45;
+        word-break: break-word;
+    }
+    /* actions 列 (純靠右) */
+    .finance-mobile-card .c-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding-top: 0.7rem;
+        border-top: 1px solid var(--border-soft);
+    }
+    .finance-mobile-card .c-actions .btn-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: white;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        font-size: 1rem;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .finance-mobile-card .c-actions .btn-icon:active { background: var(--bg-secondary); }
+    .finance-mobile-card .c-actions .btn-icon.danger { color: var(--color-danger); }
 }
 
 

@@ -6,6 +6,7 @@ import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
 import { financeState } from './finance-state.js';
 import { exportFinanceReport } from './finance-export.js';
+import { escapeHtml } from '../utils/escape.js';
 
 const TODAY = new Date().toISOString().split('T')[0];
 // 表格排序狀態 (各欄位通用)
@@ -81,6 +82,15 @@ export function renderFinance() {
     const outCount = monthInvoices.filter(i => i.direction === 'out').length;
     const activeBuildings = getSortedBuildings({ activeOnly: true });
 
+    // 類別 → type-chip class (語意色 — 房租橘 / 押金綠 / 水電琥珀 / 其他灰)
+    function typeChip(type) {
+        const t = String(type || '');
+        if (/租|房租/.test(t)) return { cls: 'rent', icon: 'ph-house' };
+        if (/押/.test(t))      return { cls: 'deposit', icon: 'ph-vault' };
+        if (/水|電|瓦斯|能源|管理費|網路|寬頻/.test(t)) return { cls: 'utility', icon: 'ph-lightning' };
+        return { cls: 'misc', icon: 'ph-tag' };
+    }
+
     // 表格列 — 直覺排序：日期 / 館別 / 類別 / 項目 / 金額 / 備註 / 操作
     // 列底色用顏色區分收入(綠)/支出(紅) — 不再單獨一欄寫「方向」
     const tableRows = monthInvoices.map(inv => {
@@ -113,9 +123,37 @@ export function renderFinance() {
             ? `<span style="font-size: 0.75rem;">${inv.paymentMethod}</span>`
             : '<span style="color: var(--text-muted); font-size: 0.8rem;">—</span>';
 
+        // v3 卡片 (mobile-only): 租客 + 金額 hero / type 語意色 chip / 副資訊區 chip 列 / 備註獨立區
+        const tc = typeChip(inv.type);
+        const tenantName = inv.direction === 'in'
+            ? (inv.tenant || '—')
+            : (inv.contractId ? `合約 ${inv.contractId}` : '整館共用');
+        const placeName = inv.propertyName ? inv.propertyName.replace('聚空間 - ', '') : areaAttr;
+        const dateText = inv.paidDate || inv.dueDate || '—';
+        const periodChip = (inv.periodStart && inv.periodEnd)
+            ? `<span class="c-chip"><i class="ph ph-clock"></i> 租期 ${inv.periodStart.slice(5)} ~ ${inv.periodEnd.slice(5)}</span>`
+            : '';
+        const contractChip = inv.contractId
+            ? `<span class="c-chip"><i class="ph ph-hash"></i> ${inv.contractId}</span>`
+            : '';
+        const directionBadge = inv.direction === 'in'
+            ? '<span class="badge success">收入</span>'
+            : '<span class="badge danger">支出</span>';
+        const heroAmtClass = inv.direction === 'in' ? 'income' : 'expense';
+        const discountVal = hasDiscount
+            ? `-$${inv.discount.toLocaleString()}${inv.discountReason ? ` <span class="c-meta-val-sub">${formatDiscountReason(inv.discountReason)}</span>` : ''}`
+            : '<span class="c-meta-val-muted">—</span>';
+        const paymentVal = inv.paymentMethod || '<span class="c-meta-val-muted">—</span>';
+        const noteSection = (inv.note && inv.note.trim())
+            ? `<div class="c-note">
+                  <span class="c-meta-cap">備註</span>
+                  <div class="c-note-text">${escapeHtml(inv.note)}</div>
+               </div>`
+            : '';
+
         return `
-            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-area="${areaAttr}" data-search="${searchText}" class="finance-row ${inv.direction === 'in' ? 'finance-row-in' : 'finance-row-out'}">
-                <td><span style="font-weight: 500;">${inv.paidDate || inv.dueDate || '—'}</span></td>
+            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-area="${areaAttr}" data-search="${searchText}" class="finance-row row-desktop ${inv.direction === 'in' ? 'finance-row-in' : 'finance-row-out'}">
+                <td><span style="font-weight: 500;">${dateText}</span></td>
                 <td>${areaAttr}</td>
                 <td><span class="status-badge info" style="font-size: 0.72rem;">${inv.type}</span></td>
                 <td>${itemText}${periodText || propertyText}</td>
@@ -131,6 +169,48 @@ export function renderFinance() {
                         <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: 0.72rem;" data-action="view" data-id="${inv.id}" title="明細"><i class="ph ph-eye"></i></button>
                         <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: 0.72rem;" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
                         <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: 0.72rem; color: var(--color-danger);" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
+                    </div>
+                </td>
+            </tr>
+            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-area="${areaAttr}" data-search="${searchText}" class="finance-row row-mobile-card ${inv.direction === 'in' ? 'finance-row-in' : 'finance-row-out'}">
+                <td colspan="9">
+                    <div class="finance-mobile-card">
+                        <div class="c-hero-equal">
+                            <div class="c-hero-who">
+                                <div class="c-hero-tenant">${tenantName}</div>
+                                <div class="c-hero-tags">
+                                    <span class="c-hero-place">${placeName}</span>
+                                    <span class="dot"></span>
+                                    <span class="type-chip ${tc.cls}"><i class="ph ${tc.icon}"></i> ${inv.type}</span>
+                                </div>
+                            </div>
+                            <div class="c-hero-side">
+                                <div class="c-hero-amt ${heroAmtClass}">${amountSign}$${shown.toLocaleString()}</div>
+                                ${directionBadge}
+                            </div>
+                        </div>
+                        <div class="c-divider"></div>
+                        <div class="c-chips">
+                            <span class="c-chip"><i class="ph ph-calendar"></i> ${dateText}</span>
+                            ${periodChip}
+                            ${contractChip}
+                        </div>
+                        <div class="c-meta-grid">
+                            <div class="c-meta-cell">
+                                <span class="c-meta-cap">折扣</span>
+                                <span class="c-meta-val">${discountVal}</span>
+                            </div>
+                            <div class="c-meta-cell">
+                                <span class="c-meta-cap">付款</span>
+                                <span class="c-meta-val">${paymentVal}</span>
+                            </div>
+                        </div>
+                        ${noteSection}
+                        <div class="c-actions">
+                            <button class="btn-icon finance-action" data-action="view" data-id="${inv.id}" title="明細"><i class="ph ph-eye"></i></button>
+                            <button class="btn-icon finance-action" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
+                            <button class="btn-icon finance-action danger" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
+                        </div>
                     </div>
                 </td>
             </tr>
@@ -208,7 +288,7 @@ export function renderFinance() {
             </div>
 
             <div class="table-container">
-                <table class="data-table finance-table">
+                <table class="data-table finance-table cards-with-hero">
                     <colgroup>
                         <col style="width: 100px;">
                         <col style="width: 90px;">
