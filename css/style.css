@@ -100,6 +100,13 @@
     --chart-fill-expense: rgba(177, 53, 53, 0.08);
     --chart-grid: rgba(15, 23, 42, 0.06);                /* 介於 dashboard 0.05 跟 reports #cbd5e1 之間 */
     --chart-axis-text: #6b7280;                          /* = text-muted */
+    /* 住房一覽 sticky 左欄底色 — 不同列狀態用不同色，sticky cell 必須不透明才不會透出底層
+       (P0-4 audit: 把寫死的 hex 抽到 token) */
+    --occ-sticky-bg-default: var(--color-surface);
+    --occ-sticky-bg-vacant: #f1f3f5;        /* = rgba(148,163,184,0.10) over white 等效 */
+    --occ-sticky-bg-terminated: #f8f9fa;    /* 跟 terminated 漸層底一致 */
+    --occ-sticky-bg-stripe-b: #fafbfa;      /* = rgba(0,0,0,0.02) over white 等效 */
+
     /* Categorical — 多館 / 分類 / pie 用，取代 BUILDING_COLOR_PALETTE / PIE_COLORS 兩套 */
     --chart-cat-1: #ff8859;  /* brand */
     --chart-cat-2: #3f7c8a;
@@ -1350,11 +1357,13 @@ select:focus-visible,
     background: var(--bg-tertiary, #f1f5f9);
     border-color: var(--border-color-strong, #cbd5e1);
 }
+/* P1-5 audit: active 樣式對齊 .bldg-subtab 的柔 active (橘 light + 橘字 + 軟邊)，不要漸層 + 白字
+   reports 各館 sub-tab 跟 occupancy 各館 tab 是同一個意圖，視覺應一致 */
 .occ-tab.active {
-    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-    color: white;
-    border-color: transparent;
-    box-shadow: 0 2px 6px rgba(255, 136, 89, 0.3);
+    background: rgba(255, 136, 89, 0.12);
+    color: var(--color-primary-text);
+    border-color: rgba(255, 136, 89, 0.35);
+    box-shadow: none;
 }
 .occ-tab-count {
     font-size: 0.7rem;
@@ -1364,7 +1373,8 @@ select:focus-visible,
     font-weight: 600;
 }
 .occ-tab.active .occ-tab-count {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 136, 89, 0.18);
+    color: var(--color-primary-text);
 }
 
 /* Room group header — 房間分隔列 */
@@ -1419,7 +1429,7 @@ select:focus-visible,
 
 /* Row 狀態 — 用單一明顯底色，覆蓋 stripe (用不透明 hex 避免 sticky 透過去看到底層) */
 .occ-table tr.occ-row-vacant > td {
-    background: #f1f3f5 !important;  /* = rgba(148,163,184,0.10) over white 不透明等效 */
+    background: var(--occ-sticky-bg-vacant) !important;
 }
 .occ-table tr.occ-row-terminated > td {
     background: repeating-linear-gradient(
@@ -2861,6 +2871,20 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 }
 @media (max-width: 640px) {
     .finance-sub-tab .fst-label { display: none; }
+    /* 手機: 跟其他 filter 列一致改水平捲動 (P1-3 audit)
+       3 個 sub-tab 一般會 fit，但有 icon-only / label 切換時防擠掉 */
+    .finance-sub-tabs {
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-wrap: nowrap;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    .finance-sub-tabs::-webkit-scrollbar { display: none; }
+    .finance-sub-tab {
+        flex-shrink: 0;
+        flex-basis: auto;
+    }
 }
 
 /* 升級版分頁 (P1-9) */
@@ -6109,15 +6133,15 @@ select.form-input {
        否則橫滾時底層的 +入住 button / 月份格 會透出來，視覺髒 */
     .occ-table tr.occ-row-vacant > td:nth-child(1),
     .occ-table tr.occ-row-vacant > td:nth-child(2) {
-        background: #f1f3f5 !important;
+        background: var(--occ-sticky-bg-vacant) !important;
     }
     .occ-table tr.occ-row-terminated > td:nth-child(1),
     .occ-table tr.occ-row-terminated > td:nth-child(2) {
-        background: #f8f9fa !important;
+        background: var(--occ-sticky-bg-terminated) !important;
     }
     /* stripe-b 列的 sticky 房客欄底色要跟列底色一致 (本身是 rgba(0,0,0,0.02) 半透明，sticky 漏底) */
     .occ-table tr.occ-room-stripe-b:not(.occ-row-vacant):not(.occ-row-terminated) > td:nth-child(2) {
-        background: #fafbfa !important;
+        background: var(--occ-sticky-bg-stripe-b) !important;
     }
 
     /* 防禦規則: 防範未來再加新全域 thead 規則時把矩陣表 clip 掉 (V2 designer 建議) */
