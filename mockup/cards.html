@@ -344,6 +344,174 @@ h1 {
 .c-card .c-chip.success { background: rgba(34, 148, 110, 0.10); color: var(--color-success); }
 .c-card .c-chip.warn { background: rgba(156, 111, 12, 0.12); color: var(--color-warning-text); }
 .c-card .c-chip.danger { background: rgba(177, 53, 53, 0.10); color: var(--color-danger); }
+.c-card .c-chip.muted { background: var(--bg-tertiary); color: var(--text-muted); }
+
+/* ─────────────────────── v3: 類別 chip (語意色) ───────────────────────
+   取代 .status-badge.info (藍灰)，依帳目類型給 brand 暖色 */
+.type-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.22rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.01em;
+}
+.type-chip.rent     { background: rgba(255, 136, 89, 0.15); color: var(--color-primary-text); }   /* 房租 = 暖橘 */
+.type-chip.deposit  { background: rgba(34, 148, 110, 0.12); color: var(--color-success); }       /* 押金 = 暖綠 */
+.type-chip.utility  { background: rgba(156, 111, 12, 0.12); color: var(--color-warning-text); }  /* 水電 = 暖琥珀 */
+.type-chip.misc     { background: rgba(107, 114, 128, 0.10); color: var(--text-muted); }         /* 其他 = 灰 */
+
+/* ─────────────────────── v3: hero meta row (類型 chip + 日期同一行) ─────────────────────── */
+.c-card .c-hero-tags {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.3rem;
+    flex-wrap: wrap;
+}
+.c-card .c-hero-tags .c-hero-place { margin-top: 0; }
+.c-card .c-hero-tags .dot {
+    width: 3px; height: 3px; border-radius: 50%;
+    background: var(--text-muted);
+    display: inline-block;
+    opacity: 0.5;
+}
+
+/* ─────────────────────── v3: 副資訊 grid (折扣 / 付款 / 日期) ─────────────────────── */
+.c-card .c-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem 1rem;
+    margin-top: 0.55rem;
+}
+.c-card .c-meta-cell { min-width: 0; }
+.c-card .c-meta-cap {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-bottom: 0.15rem;
+    letter-spacing: 0.02em;
+}
+.c-card .c-meta-val {
+    display: block;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--text-main);
+    line-height: 1.3;
+    text-align: left;       /* 防止 inline text-align:right 從桌面版漏進來 */
+}
+.c-card .c-meta-val.muted { color: var(--text-muted); font-weight: 400; }
+.c-card .c-meta-val .sub {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+}
+
+/* ─────────────────────── v3: 備註區 (獨立寬版，不跟 grid 搶寬度) ─────────────────────── */
+.c-card .c-note {
+    margin-top: 0.7rem;
+    padding: 0.55rem 0.7rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border-left: 2px solid var(--border-color);
+}
+.c-card .c-note .c-meta-cap { margin-bottom: 0.2rem; }
+.c-card .c-note .c-note-text {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+/* ─────────────────────── broken 樣 (重現用戶截圖 — 對照參考) ─────────────────────── */
+.broken-card {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1rem;
+    row-gap: 0.85rem;
+}
+.broken-card .b-td {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+.broken-card .b-td .b-lbl {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-bottom: 0.2rem;
+}
+.broken-card .b-td.full { grid-column: 1 / -1; }
+.broken-card .b-td.title {
+    grid-column: 1 / -1;
+    font-size: 1.02rem;
+    font-weight: 700;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--border-soft);
+}
+.broken-card .b-td.actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border-soft);
+}
+.broken-card .b-td.actions .btn-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: white;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+/* 還原藍灰 status-badge info (這就是用戶截圖看到的房租 chip 顏色，不對) */
+.broken-card .status-badge-info {
+    display: inline-block;
+    padding: 0.18rem 0.55rem;
+    border-radius: 6px;
+    background: #dbeafe;
+    color: #1e40af;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+/* 折扣 td 的內聯 text-align:right 在 grid 下害值變右靠看起來亂 */
+.broken-card .b-td.right-stuck { text-align: right; }
+/* 備註 nowrap 撐出空白橫條 */
+.broken-card .b-td.nowrap-bug {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* 第 9 個 td (操作) 上面那條空白是因為「操作」label 被 ::before 渲染 + 內容 td 內 padding 撐出來 */
+.broken-card .b-td.empty-actions-bug {
+    grid-column: 1 / -1;
+    min-height: 1.5rem;
+    background: #fff;
+}
+.broken-card .b-td.empty-actions-bug::before {
+    content: "操作";
+    display: block;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+/* v3 chip with chip-v3 label (highlight 推薦) */
+.chip-v3   { background: #15803d; color: #fff; }
+.chip-bad  { background: #7f1d1d; color: #fef2f2; }
 .c-card .c-actions {
     display: flex;
     gap: 0.5rem;
@@ -569,7 +737,216 @@ h1 {
     </div>
 </div>
 
-<div class="section-title">已結帳目卡 <span class="chip chip-c">方案 A+C v2 — 租客 / 金額等重</span></div>
+<!-- ─── 實況 broken：M-R-2 grid 套用後的副作用 (用戶實際看到，4 個問題) ─── -->
+<div class="section-title">已結帳目卡 <span class="chip chip-bad">實況 broken — M-R-2 grid 直套</span></div>
+<div class="viewport">
+    <div class="broken-card">
+        <!-- ① 日期跑到 title — 用戶要的是「誰的」 -->
+        <div class="b-td title">2026-06-12</div>
+        <div class="b-td"><span class="b-lbl">館別</span>師大館</div>
+        <!-- ② 房租 chip 是藍灰 (status-badge info)，跟暖橘 brand 完全不搭 -->
+        <div class="b-td"><span class="b-lbl">類別</span><span class="status-badge-info">房租</span></div>
+        <div class="b-td"><span class="b-lbl">項目</span>陳可晴<div style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-top:0.15rem;">租期 05-31~05-31</div></div>
+        <div class="b-td right-stuck"><span class="b-lbl">實收 / 實付</span><span style="color:var(--color-success);">+$0</span></div>
+        <!-- ③ 折扣 td 帶 inline text-align:right，內容是「—」變成怪怪地懸在右上 -->
+        <div class="b-td right-stuck"><span class="b-lbl">折扣</span><span style="color:var(--text-muted);">—</span></div>
+        <div class="b-td"><span class="b-lbl">付款</span>匯款</div>
+        <!-- ④ 備註 td 套 nowrap + ellipsis，撐滿橫條看起來像空白條 -->
+        <div class="b-td full nowrap-bug"><span class="b-lbl">備註</span>C087 1 個月 房租·簽約已收</div>
+        <!-- 操作 td 顯示「操作」label 撐出莫名空白 -->
+        <div class="b-td actions">
+            <button class="btn-icon"><i class="ph ph-eye"></i></button>
+            <button class="btn-icon"><i class="ph ph-pencil"></i></button>
+            <button class="btn-icon"><i class="ph ph-trash"></i></button>
+        </div>
+    </div>
+    <div style="text-align:center;color:#ef4444;font-size:0.7rem;margin-top:0.4rem;line-height:1.5;">
+        Bugs: ① 日期當 title 不對 · ② 房租 chip 藍灰非 brand 暖橘 · ③ 折扣 td 內容右靠像浮空 · ④ 備註 nowrap 撐空白橫條
+    </div>
+</div>
+
+<!-- ─── 方案 v3：修正版 (推薦，把實況 case 套上 v2 + 修四個問題) ─── -->
+<div class="section-title">已結帳目卡 <span class="chip chip-v3">方案 v3 — 修正版 (推薦)</span></div>
+<div class="viewport">
+    <!-- v3 範例 #1：實況截圖那筆 — 陳可晴 / 師大館 / 房租 / +$0 / 簽約已收 -->
+    <div class="card c-card">
+        <div class="c-hero-equal">
+            <div class="c-hero-who">
+                <!-- 視覺主角：租客在最上 -->
+                <div class="c-hero-tenant">陳可晴</div>
+                <!-- 副標：館別 + 類型 chip (暖橘房租) 同一行 -->
+                <div class="c-hero-tags">
+                    <span class="c-hero-place">師大館</span>
+                    <span class="dot"></span>
+                    <span class="type-chip rent"><i class="ph ph-house"></i> 房租</span>
+                </div>
+            </div>
+            <div class="c-hero-side">
+                <!-- 金額等字級，跟租客同字重 (符合用戶 feedback：金額不一定是主角，但要 hero 等重) -->
+                <div class="c-hero-amt income">+$0</div>
+                <span class="badge success">收入</span>
+            </div>
+        </div>
+        <div class="c-divider"></div>
+        <!-- 副資訊區：日期 / 期間 / 合約 用 chip 列 (跟「房租查帳」一致) -->
+        <div class="c-chips">
+            <span class="c-chip"><i class="ph ph-calendar"></i> 2026-06-12</span>
+            <span class="c-chip"><i class="ph ph-clock"></i> 租期 05-31 ~ 05-31</span>
+            <span class="c-chip"><i class="ph ph-hash"></i> C087</span>
+        </div>
+        <!-- 折扣 / 付款 改 2x2 grid，靠左對齊 (不再置中) -->
+        <div class="c-meta-grid">
+            <div class="c-meta-cell">
+                <span class="c-meta-cap">折扣</span>
+                <span class="c-meta-val muted">—</span>
+            </div>
+            <div class="c-meta-cell">
+                <span class="c-meta-cap">付款</span>
+                <span class="c-meta-val">匯款</span>
+            </div>
+        </div>
+        <!-- 備註：獨立區塊不擠 grid，自然換行，避開 nowrap bug -->
+        <div class="c-note">
+            <span class="c-meta-cap">備註</span>
+            <div class="c-note-text">C087 1 個月 房租 · 簽約已收</div>
+        </div>
+        <!-- actions：靠右、無空白 prefix -->
+        <div class="c-actions">
+            <button class="btn-icon"><i class="ph ph-eye"></i></button>
+            <button class="btn-icon"><i class="ph ph-pencil"></i></button>
+            <button class="btn-icon"><i class="ph ph-trash"></i></button>
+        </div>
+    </div>
+
+    <!-- v3 範例 #2：典型有折扣 + 完整資料 (王小明 房租 18000) -->
+    <div class="card c-card">
+        <div class="c-hero-equal">
+            <div class="c-hero-who">
+                <div class="c-hero-tenant">王小明</div>
+                <div class="c-hero-tags">
+                    <span class="c-hero-place">松山館 R1-A</span>
+                    <span class="dot"></span>
+                    <span class="type-chip rent"><i class="ph ph-house"></i> 房租</span>
+                </div>
+            </div>
+            <div class="c-hero-side">
+                <div class="c-hero-amt income">+$18,000</div>
+                <span class="badge success">收入</span>
+            </div>
+        </div>
+        <div class="c-divider"></div>
+        <div class="c-chips">
+            <span class="c-chip"><i class="ph ph-calendar"></i> 2026-06-10</span>
+            <span class="c-chip"><i class="ph ph-clock"></i> 租期 06-10 ~ 07-09</span>
+            <span class="c-chip"><i class="ph ph-hash"></i> INV-2026-06-001</span>
+        </div>
+        <div class="c-meta-grid">
+            <div class="c-meta-cell">
+                <span class="c-meta-cap">折扣</span>
+                <span class="c-meta-val" style="color:var(--color-warning-text);">
+                    -$1,000
+                    <span class="sub">季繳優惠 · 原價 $19,000</span>
+                </span>
+            </div>
+            <div class="c-meta-cell">
+                <span class="c-meta-cap">付款</span>
+                <span class="c-meta-val">匯款</span>
+            </div>
+        </div>
+        <div class="c-note">
+            <span class="c-meta-cap">備註</span>
+            <div class="c-note-text">6月房租尾款 已對 LINE</div>
+        </div>
+        <div class="c-actions">
+            <button class="btn-icon"><i class="ph ph-eye"></i></button>
+            <button class="btn-icon"><i class="ph ph-pencil"></i></button>
+            <button class="btn-icon"><i class="ph ph-trash"></i></button>
+        </div>
+    </div>
+
+    <!-- v3 範例 #3：押金 (測 type-chip.deposit = 暖綠) -->
+    <div class="card c-card">
+        <div class="c-hero-equal">
+            <div class="c-hero-who">
+                <div class="c-hero-tenant">林雅琪</div>
+                <div class="c-hero-tags">
+                    <span class="c-hero-place">師大館 B2</span>
+                    <span class="dot"></span>
+                    <span class="type-chip deposit"><i class="ph ph-shield-check"></i> 押金</span>
+                </div>
+            </div>
+            <div class="c-hero-side">
+                <div class="c-hero-amt income">+$30,000</div>
+                <span class="badge success">收入</span>
+            </div>
+        </div>
+        <div class="c-divider"></div>
+        <div class="c-chips">
+            <span class="c-chip"><i class="ph ph-calendar"></i> 2026-06-08</span>
+            <span class="c-chip"><i class="ph ph-hash"></i> C091</span>
+        </div>
+        <div class="c-meta-grid">
+            <div class="c-meta-cell">
+                <span class="c-meta-cap">折扣</span>
+                <span class="c-meta-val muted">—</span>
+            </div>
+            <div class="c-meta-cell">
+                <span class="c-meta-cap">付款</span>
+                <span class="c-meta-val">現金</span>
+            </div>
+        </div>
+        <div class="c-actions">
+            <button class="btn-icon"><i class="ph ph-eye"></i></button>
+            <button class="btn-icon"><i class="ph ph-pencil"></i></button>
+            <button class="btn-icon"><i class="ph ph-trash"></i></button>
+        </div>
+    </div>
+
+    <!-- v3 範例 #4：水電支出 (測 type-chip.utility + expense 紅) -->
+    <div class="card c-card">
+        <div class="c-hero-equal">
+            <div class="c-hero-who">
+                <div class="c-hero-tenant">合約 C087</div>
+                <div class="c-hero-tags">
+                    <span class="c-hero-place">師大館 (整館共用)</span>
+                    <span class="dot"></span>
+                    <span class="type-chip utility"><i class="ph ph-lightning"></i> 水電費</span>
+                </div>
+            </div>
+            <div class="c-hero-side">
+                <div class="c-hero-amt expense">-$2,450</div>
+                <span class="badge danger">支出</span>
+            </div>
+        </div>
+        <div class="c-divider"></div>
+        <div class="c-chips">
+            <span class="c-chip"><i class="ph ph-calendar"></i> 2026-06-05</span>
+        </div>
+        <div class="c-meta-grid">
+            <div class="c-meta-cell">
+                <span class="c-meta-cap">付款</span>
+                <span class="c-meta-val">轉帳</span>
+            </div>
+            <div class="c-meta-cell">
+                <span class="c-meta-cap">類別</span>
+                <span class="c-meta-val">公用事業</span>
+            </div>
+        </div>
+        <div class="c-actions">
+            <button class="btn-icon"><i class="ph ph-eye"></i></button>
+            <button class="btn-icon"><i class="ph ph-pencil"></i></button>
+            <button class="btn-icon"><i class="ph ph-trash"></i></button>
+        </div>
+    </div>
+
+    <div style="text-align:center;color:#16a34a;font-size:0.7rem;margin-top:0.4rem;line-height:1.6;">
+        Fixed: ① 租客 = 主角 (師大館 + 房租 chip 為副標) · ② 房租 chip 暖橘 / 押金暖綠 / 水電琥珀 (brand 語意色)<br>
+        ③ 折扣 / 付款 改 2x2 grid 靠左對齊 · ④ 備註改獨立卡 (背景灰 + 邊條)，避開 nowrap & 空白橫條
+    </div>
+</div>
+
+<!-- ─── 保留 v2 對照 (僅參考 — 上一輪用戶看過的) ─── -->
+<div class="section-title">已結帳目卡 <span class="chip chip-c">v2 (上一輪) — 對照參考</span></div>
 <div class="viewport">
     <div class="card c-card">
         <div class="c-hero-equal">
@@ -700,7 +1077,7 @@ h1 {
 <div class="foot">
     ─ 卡片高度 (現況 vs A vs A+C) 可滑上下比較 ─<br>
     開發提示: 桌面不變 / token 沿用 / modal 不動<br>
-    mockup/cards.html · 2026-06-15
+    mockup/cards.html · 2026-06-15 · 帳務卡 v3 修正版
 </div>
 
 </body>
