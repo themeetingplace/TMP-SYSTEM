@@ -6705,6 +6705,7 @@ button.omn-card { font-family: inherit; }
         font-weight: 400;
         color: inherit;
         margin: 0 !important;
+        text-align: left !important;  /* 蓋掉 td[colspan] 的 text-align: center (那條是給空狀態訊息用) */
     }
     .data-table.cards-with-hero tbody tr.row-mobile-card > td::before {
         display: none !important;
