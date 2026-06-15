@@ -174,7 +174,7 @@ export function renderFinance() {
             </tr>
             <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-area="${areaAttr}" data-search="${searchText}" class="finance-row row-mobile-card ${inv.direction === 'in' ? 'finance-row-in' : 'finance-row-out'}">
                 <td colspan="9">
-                    <div class="finance-mobile-card">
+                    <div class="entity-mobile-card">
                         <div class="c-hero-equal">
                             <div class="c-hero-who">
                                 <div class="c-hero-tenant">${tenantName}</div>

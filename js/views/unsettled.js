@@ -160,7 +160,7 @@ export function renderUnsettled() {
             </tr>
             <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="row-mobile-card ${overdue ? 'is-overdue-row' : ''}">
                 <td colspan="8">
-                    <div class="finance-mobile-card">
+                    <div class="entity-mobile-card">
                         <div class="c-hero-equal">
                             <div class="c-hero-who">
                                 <div class="c-hero-tenant">${escapeHtml(tenantName)}</div>

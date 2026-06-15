@@ -298,7 +298,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.body.dataset.role = window.__currentRole;
     if (window.__currentRole === 'owner') {
         const navAdminUsers = document.getElementById('nav-admin-users');
-        if (navAdminUsers) navAdminUsers.style.display = '';
+        if (navAdminUsers) navAdminUsers.classList.remove('is-hidden');
     }
     // helper → 隱藏非白名單的 nav 項目 (包含首頁)
     if (window.__currentRole === 'helper') {

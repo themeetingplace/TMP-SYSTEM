@@ -505,6 +505,8 @@ select:focus-visible,
 }
 
 .sidebar.is-collapsed .nav-item .nav-label { display: none; }
+/* 通用 is-hidden 切換 (P2-4 audit: 替代 markup inline style="display:none") */
+.nav-item.is-hidden { display: none; }
 
 .sidebar.is-collapsed .nav-item.active {
     /* 收合狀態下沒有左 padding 文字，indicator 還是用 inset shadow */
@@ -3460,8 +3462,11 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     overflow: hidden;
     transition: background 0.15s, border-color 0.15s;
 }
+/* P1-5 audit: stat-tile / connector-card / report-chart-card hover 跟全站 .card:hover 對齊
+   (原本 reports 系列用 surface-warm 背景，其他頁用 shadow，視覺不一致) */
 .stat-tile:hover {
-    background: var(--surface-warm);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06), 0 8px 24px -8px rgba(15, 23, 42, 0.12);
+    border-color: var(--border-strong);
 }
 .stat-tile-label {
     display: flex;
@@ -3779,7 +3784,10 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     margin-bottom: 1rem;
     transition: background 0.15s;
 }
-.connector-card:hover { background: var(--surface-warm); }
+.connector-card:hover {
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06), 0 8px 24px -8px rgba(15, 23, 42, 0.12);
+    border-color: var(--border-strong);
+}
 .connector-card-icon {
     width: 36px;
     height: 36px;
@@ -6724,68 +6732,68 @@ button.omn-card { font-family: inherit; }
 
 /* ============================================================
  * 手機 finance / unsettled card v3 — designer mockup
- * 在 .row-mobile-card > td > .finance-mobile-card 容器內
+ * 在 .row-mobile-card > td > .entity-mobile-card 容器內
  * ============================================================ */
 @media (max-width: 600px) {
-    .finance-mobile-card {
+    .entity-mobile-card {
         background: var(--color-surface);
         border: 1px solid var(--border-color);
         border-radius: 12px;
         padding: 0.95rem 1rem;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     }
-    .finance-mobile-card .c-hero-equal {
+    .entity-mobile-card .c-hero-equal {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
         gap: 0.75rem;
         margin-bottom: 0.65rem;
     }
-    .finance-mobile-card .c-hero-who {
+    .entity-mobile-card .c-hero-who {
         flex: 1 1 auto;
         min-width: 0;
     }
-    .finance-mobile-card .c-hero-tenant {
+    .entity-mobile-card .c-hero-tenant {
         font-size: 1.1rem;
         font-weight: 700;
         color: var(--text-main);
         line-height: 1.25;
     }
-    .finance-mobile-card .c-hero-tags {
+    .entity-mobile-card .c-hero-tags {
         display: flex;
         align-items: center;
         gap: 0.45rem;
         margin-top: 0.3rem;
         flex-wrap: wrap;
     }
-    .finance-mobile-card .c-hero-place {
+    .entity-mobile-card .c-hero-place {
         font-size: 0.78rem;
         color: var(--text-muted);
     }
-    .finance-mobile-card .c-hero-tags .dot {
+    .entity-mobile-card .c-hero-tags .dot {
         width: 3px;
         height: 3px;
         background: var(--text-muted);
         border-radius: 50%;
         opacity: 0.6;
     }
-    .finance-mobile-card .c-hero-side {
+    .entity-mobile-card .c-hero-side {
         flex: 0 0 auto;
         display: flex;
         flex-direction: column;
         align-items: flex-end;
         gap: 0.35rem;
     }
-    .finance-mobile-card .c-hero-amt {
+    .entity-mobile-card .c-hero-amt {
         font-size: 1.1rem;
         font-weight: 700;
         line-height: 1.2;
         letter-spacing: -0.01em;
         font-variant-numeric: tabular-nums;
     }
-    .finance-mobile-card .c-hero-amt.income { color: var(--color-success); }
-    .finance-mobile-card .c-hero-amt.expense { color: var(--color-danger); }
-    .finance-mobile-card .badge {
+    .entity-mobile-card .c-hero-amt.income { color: var(--color-success); }
+    .entity-mobile-card .c-hero-amt.expense { color: var(--color-danger); }
+    .entity-mobile-card .badge {
         display: inline-flex;
         align-items: center;
         padding: 0.18rem 0.6rem;
@@ -6793,16 +6801,16 @@ button.omn-card { font-family: inherit; }
         font-size: 0.72rem;
         font-weight: 600;
     }
-    .finance-mobile-card .badge.success {
+    .entity-mobile-card .badge.success {
         background: rgba(34, 148, 110, 0.12);
         color: var(--color-success);
     }
-    .finance-mobile-card .badge.danger {
+    .entity-mobile-card .badge.danger {
         background: rgba(177, 53, 53, 0.10);
         color: var(--color-danger);
     }
     /* type-chip 語意色 */
-    .finance-mobile-card .type-chip {
+    .entity-mobile-card .type-chip {
         display: inline-flex;
         align-items: center;
         gap: 0.2rem;
@@ -6811,25 +6819,25 @@ button.omn-card { font-family: inherit; }
         font-size: 0.7rem;
         font-weight: 600;
     }
-    .finance-mobile-card .type-chip i { font-size: 0.78rem; }
-    .finance-mobile-card .type-chip.rent     { background: rgba(255, 136, 89, 0.15); color: var(--color-primary-text); }
-    .finance-mobile-card .type-chip.deposit  { background: rgba(34, 148, 110, 0.12); color: var(--color-success); }
-    .finance-mobile-card .type-chip.utility  { background: rgba(156, 111, 12, 0.12); color: var(--color-warning-text); }
-    .finance-mobile-card .type-chip.misc     { background: rgba(107, 114, 128, 0.10); color: var(--text-muted); }
+    .entity-mobile-card .type-chip i { font-size: 0.78rem; }
+    .entity-mobile-card .type-chip.rent     { background: rgba(255, 136, 89, 0.15); color: var(--color-primary-text); }
+    .entity-mobile-card .type-chip.deposit  { background: rgba(34, 148, 110, 0.12); color: var(--color-success); }
+    .entity-mobile-card .type-chip.utility  { background: rgba(156, 111, 12, 0.12); color: var(--color-warning-text); }
+    .entity-mobile-card .type-chip.misc     { background: rgba(107, 114, 128, 0.10); color: var(--text-muted); }
     /* 分隔 */
-    .finance-mobile-card .c-divider {
+    .entity-mobile-card .c-divider {
         height: 1px;
         background: var(--border-soft);
         margin: 0.65rem 0 0.7rem;
     }
     /* chip 列 (日期 / 期間 / 合約) */
-    .finance-mobile-card .c-chips {
+    .entity-mobile-card .c-chips {
         display: flex;
         flex-wrap: wrap;
         gap: 0.4rem;
         margin-bottom: 0.75rem;
     }
-    .finance-mobile-card .c-chip {
+    .entity-mobile-card .c-chip {
         display: inline-flex;
         align-items: center;
         gap: 0.25rem;
@@ -6840,30 +6848,30 @@ button.omn-card { font-family: inherit; }
         color: var(--text-secondary);
         font-weight: 500;
     }
-    .finance-mobile-card .c-chip i { font-size: 0.85rem; }
-    .finance-mobile-card .c-chip.danger {
+    .entity-mobile-card .c-chip i { font-size: 0.85rem; }
+    .entity-mobile-card .c-chip.danger {
         background: rgba(177, 53, 53, 0.10);
         color: var(--color-danger);
     }
-    .finance-mobile-card .c-chip.warn {
+    .entity-mobile-card .c-chip.warn {
         background: rgba(156, 111, 12, 0.12);
         color: var(--color-warning-text);
     }
-    .finance-mobile-card .c-chip.success {
+    .entity-mobile-card .c-chip.success {
         background: rgba(34, 148, 110, 0.12);
         color: var(--color-success);
     }
     /* 折扣 / 付款 2x2 grid */
-    .finance-mobile-card .c-meta-grid {
+    .entity-mobile-card .c-meta-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 0.6rem 1rem;
         margin-bottom: 0.65rem;
     }
-    .finance-mobile-card .c-meta-cell {
+    .entity-mobile-card .c-meta-cell {
         text-align: left;
     }
-    .finance-mobile-card .c-meta-cap {
+    .entity-mobile-card .c-meta-cap {
         display: block;
         font-size: 0.68rem;
         color: var(--text-muted);
@@ -6871,47 +6879,47 @@ button.omn-card { font-family: inherit; }
         margin-bottom: 0.15rem;
         text-align: left;
     }
-    .finance-mobile-card .c-meta-val {
+    .entity-mobile-card .c-meta-val {
         display: block;
         font-size: 0.85rem;
         color: var(--text-main);
         font-weight: 600;
         text-align: left;
     }
-    .finance-mobile-card .c-meta-val-sub {
+    .entity-mobile-card .c-meta-val-sub {
         font-size: 0.68rem;
         color: var(--text-muted);
         font-weight: 400;
         margin-left: 0.25rem;
     }
-    .finance-mobile-card .c-meta-val-muted {
+    .entity-mobile-card .c-meta-val-muted {
         color: var(--text-muted);
         font-weight: 400;
     }
     /* 備註區 (獨立、左 border 強調) */
-    .finance-mobile-card .c-note {
+    .entity-mobile-card .c-note {
         background: var(--bg-secondary);
         border-left: 3px solid var(--border-strong);
         border-radius: 0 6px 6px 0;
         padding: 0.5rem 0.7rem;
         margin-bottom: 0.85rem;
     }
-    .finance-mobile-card .c-note .c-meta-cap { margin-bottom: 0.2rem; }
-    .finance-mobile-card .c-note-text {
+    .entity-mobile-card .c-note .c-meta-cap { margin-bottom: 0.2rem; }
+    .entity-mobile-card .c-note-text {
         font-size: 0.82rem;
         color: var(--text-main);
         line-height: 1.45;
         word-break: break-word;
     }
     /* actions 列 (純靠右) */
-    .finance-mobile-card .c-actions {
+    .entity-mobile-card .c-actions {
         display: flex;
         justify-content: flex-end;
         gap: 0.5rem;
         padding-top: 0.7rem;
         border-top: 1px solid var(--border-soft);
     }
-    .finance-mobile-card .c-actions .btn-icon {
+    .entity-mobile-card .c-actions .btn-icon {
         width: 36px;
         height: 36px;
         border-radius: 8px;
@@ -6925,10 +6933,10 @@ button.omn-card { font-family: inherit; }
         cursor: pointer;
         font-family: inherit;
     }
-    .finance-mobile-card .c-actions .btn-icon:active { background: var(--bg-secondary); }
-    .finance-mobile-card .c-actions .btn-icon.danger { color: var(--color-danger); }
+    .entity-mobile-card .c-actions .btn-icon:active { background: var(--bg-secondary); }
+    .entity-mobile-card .c-actions .btn-icon.danger { color: var(--color-danger); }
     /* primary 按鈕 (unsettled 用「核對結帳」/「結帳」) — 撐滿剩餘空間 */
-    .finance-mobile-card .c-actions .btn-primary {
+    .entity-mobile-card .c-actions .btn-primary {
         flex: 1 1 auto;
         height: 36px;
         padding: 0 0.9rem;
@@ -6945,10 +6953,10 @@ button.omn-card { font-family: inherit; }
         gap: 0.3rem;
         cursor: pointer;
     }
-    .finance-mobile-card .c-actions .btn-primary:active {
+    .entity-mobile-card .c-actions .btn-primary:active {
         background: var(--color-success-hover);
     }
-    .finance-mobile-card .c-actions .btn-primary i { font-size: 0.9rem; }
+    .entity-mobile-card .c-actions .btn-primary i { font-size: 0.9rem; }
 }
 
 
