@@ -19,7 +19,7 @@ export function showLogin() {
                 <span class="auth-logo"><img src="assets/logo-icon.png?v=20260603g" alt="聚空間"></span>
                 <div class="auth-brand-text">
                     <span class="auth-name">聚空間</span>
-                    <span class="auth-sub">BMS 物件管理系統</span>
+                    <span class="auth-sub">PMS 物件管理系統</span>
                 </div>
             </div>
             <button type="button" id="auth-google-btn" class="auth-google">
