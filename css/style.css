@@ -6839,6 +6839,18 @@ button.omn-card { font-family: inherit; }
         font-weight: 500;
     }
     .finance-mobile-card .c-chip i { font-size: 0.85rem; }
+    .finance-mobile-card .c-chip.danger {
+        background: rgba(177, 53, 53, 0.10);
+        color: var(--color-danger);
+    }
+    .finance-mobile-card .c-chip.warn {
+        background: rgba(156, 111, 12, 0.12);
+        color: var(--color-warning-text);
+    }
+    .finance-mobile-card .c-chip.success {
+        background: rgba(34, 148, 110, 0.12);
+        color: var(--color-success);
+    }
     /* 折扣 / 付款 2x2 grid */
     .finance-mobile-card .c-meta-grid {
         display: grid;
@@ -6913,6 +6925,28 @@ button.omn-card { font-family: inherit; }
     }
     .finance-mobile-card .c-actions .btn-icon:active { background: var(--bg-secondary); }
     .finance-mobile-card .c-actions .btn-icon.danger { color: var(--color-danger); }
+    /* primary 按鈕 (unsettled 用「核對結帳」/「結帳」) — 撐滿剩餘空間 */
+    .finance-mobile-card .c-actions .btn-primary {
+        flex: 1 1 auto;
+        height: 36px;
+        padding: 0 0.9rem;
+        border-radius: 8px;
+        background: var(--color-success);
+        color: white;
+        border: none;
+        font-size: 0.85rem;
+        font-weight: 600;
+        font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+        cursor: pointer;
+    }
+    .finance-mobile-card .c-actions .btn-primary:active {
+        background: var(--color-success-hover);
+    }
+    .finance-mobile-card .c-actions .btn-primary i { font-size: 0.9rem; }
 }
 
 

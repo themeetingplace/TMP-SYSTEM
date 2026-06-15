@@ -4,6 +4,16 @@
 import { mockData, store, isUnsettled, ensureContractInvoices, previewContractInvoices, getSortedBuildings, deriveInvoiceStatus } from '../data.js';
 import { openFormModal, openConfirm, showToast, refreshView } from '../utils/ui.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
+import { escapeHtml } from '../utils/escape.js';
+
+// 類別 → type-chip class (語意色 — 跟 finance.js 同套)
+function typeChip(type) {
+    const t = String(type || '');
+    if (/租|房租/.test(t)) return { cls: 'rent', icon: 'ph-house' };
+    if (/押/.test(t))      return { cls: 'deposit', icon: 'ph-vault' };
+    if (/水|電|瓦斯|能源|管理費|網路|寬頻/.test(t)) return { cls: 'utility', icon: 'ph-lightning' };
+    return { cls: 'misc', icon: 'ph-tag' };
+}
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -75,8 +85,39 @@ export function renderUnsettled() {
                </div>`
             : '<span style="font-size: 0.75rem; color: var(--text-muted);">—</span>';
 
+        // v3 卡片 (mobile-only)
+        const tc = typeChip(inv.type);
+        const tenantName = inv.direction === 'in'
+            ? (inv.tenant || '—')
+            : (inv.contractId ? `合約 ${inv.contractId}` : '整館共用');
+        const placeName = inv.propertyName ? inv.propertyName.replace('聚空間 - ', '') : buildingName(inv.buildingId);
+        const heroBadge = inv.direction === 'in'
+            ? '<span class="badge danger">應收</span>'
+            : '<span class="badge warn">應付</span>';
+        const heroAmtClass = inv.direction === 'in' ? 'expense' : 'expense';  // 都用紅 (應收/應付都是「未到手」)
+        const dueChipCls = overdue ? 'c-chip danger' : 'c-chip';
+        const dueText = overdue
+            ? `應結 ${inv.dueDate || '—'} · 逾期`
+            : `應結 ${inv.dueDate || '—'}`;
+        const bank5Chip = inv.bankLast5
+            ? `<span class="c-chip ${inv.bankVerified ? 'success' : 'warn'}"><i class="ph ${inv.bankVerified ? 'ph-shield-check' : 'ph-shield-warning'}"></i> 末5碼 ${inv.bankLast5}${!inv.bankVerified ? ' · 待核' : ''}</span>`
+            : '';
+        const partialChip = isPartial
+            ? `<span class="c-chip success"><i class="ph ph-check"></i> 已收 $${paid.toLocaleString()}</span>`
+            : '';
+        const discountChip = inv.discount
+            ? `<span class="c-chip warn"><i class="ph ph-tag"></i> 折 $${inv.discount.toLocaleString()}</span>`
+            : '';
+        const primaryBtn = (inv.bankLast5 && !inv.bankVerified)
+            ? `<button class="btn-primary unsettled-action" data-action="verify" data-id="${inv.id}">
+                  <i class="ph ph-shield-check"></i> 核對結帳
+               </button>`
+            : `<button class="btn-primary unsettled-action" data-action="settle" data-id="${inv.id}">
+                  <i class="ph ph-check"></i> 結帳
+               </button>`;
+
         return `
-            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="${overdue ? 'is-overdue-row' : ''} ${inv.bankLast5 && !inv.bankVerified ? 'is-await-verify-row' : ''}">
+            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="row-desktop ${overdue ? 'is-overdue-row' : ''} ${inv.bankLast5 && !inv.bankVerified ? 'is-await-verify-row' : ''}">
                 <td><input type="checkbox" class="row-check" data-id="${inv.id}"></td>
                 <td>${dirBadge}</td>
                 <td>
@@ -114,6 +155,40 @@ export function renderUnsettled() {
                         <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="remind" data-id="${inv.id}" title="${inv.direction === 'in' ? '催繳' : '記錄通知'}"><i class="ph ph-bell"></i></button>
                         <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
                         <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--color-danger);" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
+                    </div>
+                </td>
+            </tr>
+            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="row-mobile-card ${overdue ? 'is-overdue-row' : ''}">
+                <td colspan="8">
+                    <div class="finance-mobile-card">
+                        <div class="c-hero-equal">
+                            <div class="c-hero-who">
+                                <div class="c-hero-tenant">${escapeHtml(tenantName)}</div>
+                                <div class="c-hero-tags">
+                                    <span class="c-hero-place">${escapeHtml(placeName)}</span>
+                                    <span class="dot"></span>
+                                    <span class="type-chip ${tc.cls}"><i class="ph ${tc.icon}"></i> ${inv.type}</span>
+                                </div>
+                            </div>
+                            <div class="c-hero-side">
+                                <div class="c-hero-amt ${heroAmtClass}">${amountSign}$${balance.toLocaleString()}</div>
+                                ${heroBadge}
+                            </div>
+                        </div>
+                        <div class="c-divider"></div>
+                        <div class="c-chips">
+                            <span class="c-chip"><i class="ph ph-hash"></i> ${inv.id}</span>
+                            <span class="${dueChipCls}"><i class="ph ph-calendar"></i> ${dueText}</span>
+                            ${bank5Chip}
+                            ${partialChip}
+                            ${discountChip}
+                        </div>
+                        <div class="c-actions">
+                            ${primaryBtn}
+                            <button class="btn-icon unsettled-action" data-action="remind" data-id="${inv.id}" title="${inv.direction === 'in' ? '催繳' : '記錄通知'}"><i class="ph ph-bell"></i></button>
+                            <button class="btn-icon unsettled-action" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
+                            <button class="btn-icon unsettled-action danger" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
+                        </div>
                     </div>
                 </td>
             </tr>
@@ -187,7 +262,7 @@ export function renderUnsettled() {
             </div>
 
             <div class="table-container">
-                <table class="data-table">
+                <table class="data-table cards-with-hero">
                     <thead><tr>
                         <th style="width: 36px;"><input type="checkbox" id="check-all"></th>
                         <th>方向</th><th>帳單</th><th>對象</th><th>金額</th><th>應結日</th><th>銀行末 5 碼</th><th>操作</th>

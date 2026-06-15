@@ -50,7 +50,7 @@ export function initTableInteractions({ scope, rowsPerPage: initRpp = 10 } = {})
 
     // 取得目前符合條件的 row 陣列
     function getFilteredRows() {
-        const rows = Array.from(tbody.querySelectorAll('tr:not(.empty-row)'));
+        const rows = Array.from(tbody.querySelectorAll('tr:not(.empty-row):not(.row-mobile-card)'));
         return rows.filter(r => {
             // 每個 group 單獨比對 dataset[group]，例如 group=status -> r.dataset.status
             for (const [group, value] of Object.entries(filtersByGroup)) {
@@ -67,7 +67,7 @@ export function initTableInteractions({ scope, rowsPerPage: initRpp = 10 } = {})
     // 重算所有「Label (N)」格式的 filter tab 數字 (跟著當下其他 filter 連動)
     // 不會動到複雜版型的 tab (如館別卡用「空 X / 共 Y」格式) — regex 不 match 就跳過
     function updateTabCounts() {
-        const allRows = Array.from(tbody.querySelectorAll('tr:not(.empty-row)'));
+        const allRows = Array.from(tbody.querySelectorAll('tr:not(.empty-row):not(.row-mobile-card)'));
         const groups = new Set();
         filterCard.querySelectorAll('[data-filter-value][data-filter-group]').forEach(t => groups.add(t.dataset.filterGroup));
         // 沒標 group 的 status tabs 也納入 (default group = 'status')
@@ -111,7 +111,7 @@ export function initTableInteractions({ scope, rowsPerPage: initRpp = 10 } = {})
     }
 
     function applyView() {
-        const allRows = Array.from(tbody.querySelectorAll('tr:not(.empty-row)'));
+        const allRows = Array.from(tbody.querySelectorAll('tr:not(.empty-row):not(.row-mobile-card)'));
         const filtered = getFilteredRows();
         const total = filtered.length;
         // rowsPerPage 為 0 = 顯示全部
@@ -125,7 +125,13 @@ export function initTableInteractions({ scope, rowsPerPage: initRpp = 10 } = {})
         const visibleSet = new Set(filtered.slice(start, end));
 
         allRows.forEach(r => {
-            r.style.display = visibleSet.has(r) ? '' : 'none';
+            const show = visibleSet.has(r);
+            r.style.display = show ? '' : 'none';
+            // 同步 row-mobile-card sibling (dual-row 結構，桌面行隱手機卡也要跟著隱)
+            const next = r.nextElementSibling;
+            if (next && next.classList.contains('row-mobile-card')) {
+                next.style.display = show ? '' : 'none';
+            }
         });
 
         // 處理空狀態
