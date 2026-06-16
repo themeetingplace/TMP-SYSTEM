@@ -238,8 +238,8 @@ export function renderContracts() {
                     </div>
                 </td>
                 <td>${lifecycleBadge(lifecycle)}${renewIntentBadge(c)}</td>
-                <td>
-                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                <td style="text-align: right;">
+                    <div style="display: inline-flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end;">
                         ${decisionButtons}
                         ${standardButtons}
                     </div>
@@ -339,7 +339,7 @@ export function renderContracts() {
                         <th class="sortable-col" data-sort-col="start" title="點擊排序">起始日 ${sortArrow('start', currentSort)}</th>
                         <th class="sortable-col" data-sort-col="end" title="點擊排序">到期日 ${sortArrow('end', currentSort)}</th>
                         <th>狀態</th>
-                        <th>操作</th>
+                        <th style="text-align: right;">操作</th>
                     </tr></thead>
                     <tbody>${tableRows}</tbody>
                 </table>
@@ -426,7 +426,8 @@ function showContractForm(contract) {
             { name: 'startDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: initialStart },
             { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: contract.termMonths ?? 1 },
             { name: 'endDate', label: '到期日 (留空自動計算)', type: 'date', span: 2, hint: '依起始日 + 簽約期自動帶' },
-            { name: 'amount', label: '月租金', type: 'number', required: true, span: 2, hint: '會自動帶床位設定的租金，可調整；改完帳單也跟著改請去總收支表 / 房租查帳直接編輯 (帳單→合約會反向同步)' },
+            { name: 'amount', label: '月租金', type: 'number', required: true, hint: '改完帳單也跟著改請去總收支表 / 房租查帳直接編輯 (帳單→合約會反向同步)' },
+            { name: 'totalDue', label: '應收總額', type: 'number', hint: '月租金 × 合約期 (自動計算)' },
 
             // === 其他 ===
             { name: '__sep_misc', type: 'section', label: '簽署 / 押金' },
@@ -437,7 +438,8 @@ function showContractForm(contract) {
             ...contract,
             tenantPhone: linkedTenant?.phone || '',
             tenantEmail: linkedTenant?.email || '',
-            tenantEmergency: linkedTenant?.emergencyContact || ''
+            tenantEmergency: linkedTenant?.emergencyContact || '',
+            totalDue: (Number(contract.amount) || 0) * (contract.termMonths || 1)
         },
         submitLabel: '儲存變更',
         onFormMount: (form) => {
@@ -455,6 +457,15 @@ function showContractForm(contract) {
             const startInput = form.querySelector('[name="startDate"]');
             const endInput = form.querySelector('[name="endDate"]');
             const termWrap = form.querySelector('.custom-select[data-name="termMonths"]');
+            const amountInput = form.querySelector('[name="amount"]');
+            const termInput = form.querySelector('[name="termMonths"]');
+            const totalDueInput = form.querySelector('[name="totalDue"]');
+            const refreshTotal = () => {
+                if (!totalDueInput) return;
+                const amt = Number(amountInput?.value) || 0;
+                const t = parseInt(termInput?.value, 10) || 1;
+                totalDueInput.value = amt * t;
+            };
             const refresh = () => {
                 if (termWrap?.__setOptions) termWrap.__setOptions(buildTermOptions(startInput.value));
                 if (!endInput.value && startInput.value) {
@@ -466,9 +477,12 @@ function showContractForm(contract) {
                         endInput.value = d.toISOString().split('T')[0];
                     }
                 }
+                refreshTotal();
             };
             startInput.addEventListener('change', refresh);
             startInput.addEventListener('input', refresh);
+            amountInput?.addEventListener('input', refreshTotal);
+            termInput?.addEventListener('change', refreshTotal);
         },
         onSubmit: (values) => {
             const property = mockData.properties.find(p => p.name === values.propertyName);
@@ -484,8 +498,8 @@ function showContractForm(contract) {
                 endDate = d.toISOString().split('T')[0];
             }
 
-            // 抽離 tenant 子欄位 (這些是租客主檔，不寫 contract)
-            const { tenantPhone, tenantEmail, tenantEmergency, ...contractValues } = values;
+            // 抽離 tenant 子欄位 (這些是租客主檔，不寫 contract) + totalDue (顯示用)
+            const { tenantPhone, tenantEmail, tenantEmergency, totalDue: _td, ...contractValues } = values;
 
             const payload = {
                 ...contractValues,

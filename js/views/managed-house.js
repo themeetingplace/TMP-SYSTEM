@@ -386,7 +386,8 @@ function showHouseForm(building) {
         maxWidth: 760,
         fields: [
             { name: '__s1', type: 'section', label: '基本資訊' },
-            { name: 'name', label: '房屋名稱', type: 'text', required: true, placeholder: '例：仁愛代管屋' },
+            // ⚠ field name 'name' 跟 HTMLFormElement.name property + form.elements.namedItem 衝突 → 改用 houseName
+            { name: 'houseName', label: '房屋名稱', type: 'text', required: true, placeholder: '例：仁愛代管屋' },
             { name: 'status', label: '狀態', type: 'select', required: true, value: building?.status ?? 'active',
               options: [{ value: 'active', label: '啟用中' }, { value: 'inactive', label: '已停用' }] },
             { name: 'baseAddress', label: '地址', type: 'text', span: 2, placeholder: '台北市...' },
@@ -423,10 +424,10 @@ function showHouseForm(building) {
                 energyMode: 'owner', rentIncludesTax: false, taxReported: false,
                 feeType: 'fixed'
             };
-            // 把 feeConfig 解開到對應 sub-field (編輯時 prefill)
             const cfg = base?.feeConfig || {};
             return {
                 ...base,
+                houseName: base.name ?? '',  // 'name' 改 'houseName' 後 prefill
                 feeFixedAmount: cfg.amount ?? '',
                 feePercentRate: cfg.rate ?? '',
                 feeTierJson: cfg.tiers ? JSON.stringify(cfg.tiers) : '',
@@ -460,6 +461,9 @@ function showHouseForm(building) {
             feeTypeInput?.addEventListener('change', syncVisibility);
         },
         onSubmit: (values) => {
+            // houseName → name (避開 HTMLFormElement.name property 衝突)
+            values.name = values.houseName;
+            delete values.houseName;
             values.mode = 'managed';
             values.rentIncludesTax = values.rentIncludesTax === 'true' || values.rentIncludesTax === true;
             values.taxReported = values.taxReported === 'true' || values.taxReported === true;
