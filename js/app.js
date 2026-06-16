@@ -1,5 +1,10 @@
 import { renderDashboard } from './views/dashboard.js';
 import { renderPropertiesHub, initPropertiesHubActions, forceHubTab } from './views/properties-hub.js';
+import { renderManagedHouse, initManagedHouseActions, showNewManagedHouseForm } from './views/managed-house.js';
+import { renderManagedOwners, initManagedOwnersActions } from './views/managed-owners.js';
+import { renderManagedSettlements, initManagedSettlementsActions } from './views/managed-settlements.js';
+import { initModeSwitcher } from './utils/sidebarRender.js';
+import { getMode, applyModeAttribute } from './utils/appMode.js';
 import { promptRenewalAuditIfNeeded, promptBundleAuditIfNeeded } from './utils/renewalAudit.js';
 import { renderContracts, initContractActions } from './views/contracts.js';
 import { renderFinance, initFinanceActions } from './views/finance.js';
@@ -47,7 +52,12 @@ const routes = {
     maintenance:   { title: '維修管理',     group: '營運', render: renderMaintenance,init: initMaintenanceActions },
     tenants:       { title: '租客清單',     group: '營運', render: renderTenants,    init: initTenantActions },
     settings:      { title: '系統設定',     group: '系統', render: renderSettings,   init: initSettingsActions },
-    'admin-users': { title: '帳號管理',     group: '系統', render: renderAdminUsers, init: initAdminUsersActions, ownerOnly: true }
+    'admin-users': { title: '帳號管理',     group: '系統', render: renderAdminUsers, init: initAdminUsersActions, ownerOnly: true },
+    // 代管模式 routes
+    'm-house':       { title: '代管房屋',       group: '代管', render: renderManagedHouse,       init: initManagedHouseActions, dynamic: true },
+    'm-house-new':   { title: '新增代管房屋',   group: '代管', render: () => { setTimeout(showNewManagedHouseForm, 50); return '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">開啟新增代管房屋表單中…</div>'; } },
+    'm-owners':      { title: '屋主管理',       group: '代管', render: renderManagedOwners,      init: initManagedOwnersActions },
+    'm-settlements': { title: '屋主月結算',     group: '代管', render: renderManagedSettlements, init: initManagedSettlementsActions }
 };
 
 function handleRoute() {
@@ -58,14 +68,17 @@ function handleRoute() {
         window.location.hash = 'reports';
         return;
     }
-    if (!hash || !routes[hash]) {
+    // 動態 route: #m-house/{buildingId} → 取 base 'm-house' 查 routes
+    // (買 sidebar 動態連結) — 同樣模式未來加 #other/{id} 也可重用
+    const baseHash = hash.includes('/') ? hash.split('/')[0] : hash;
+    if (!hash || !routes[baseHash]) {
         // helper 預設進住房一覽，其他角色進首頁
         hash = window.__currentRole === 'helper' ? HELPER_DEFAULT_HASH : 'dashboard';
         window.location.hash = hash;
         return;
     }
 
-    const route = routes[hash];
+    const route = routes[baseHash];
     // owner-only route guard：非 owner 直接打 #admin-users 也擋掉
     if (route.ownerOnly && window.__currentRole !== 'owner') {
         showToast('此頁僅限 Owner 存取', 'warning');
@@ -95,12 +108,16 @@ function handleRoute() {
     // 帳務管理: finance / unsettled → 映射到 sidebar 的「帳務管理」
     // 收支分析已搬到 reports (報表) 之下
     const FINANCE_GROUP = ['finance', 'unsettled'];
-    const sidebarHash = FINANCE_GROUP.includes(hash) ? 'finance' : hash;
-    navItems.forEach(item => {
-        if (item.dataset.view === sidebarHash) {
-            item.classList.add('active');
+    const sidebarHash = FINANCE_GROUP.includes(baseHash) ? 'finance' : baseHash;
+    // sidebar 每次 mode 切換會重 render，所以 navItems 要重抓
+    document.querySelectorAll('.sidebar .nav-item').forEach(item => {
+        const matchesView = item.dataset.view === sidebarHash;
+        // 代管房屋 sidebar item 還要進一步比對 houseId
+        if (baseHash === 'm-house' && item.dataset.view === 'm-house') {
+            const houseIdInHash = hash.split('/')[1];
+            item.classList.toggle('active', item.dataset.houseId === houseIdInHash);
         } else {
-            item.classList.remove('active');
+            item.classList.toggle('active', matchesView);
         }
     });
 
@@ -122,7 +139,7 @@ function handleRoute() {
     //   settings: 有 sub-tab 自管表格
     //   occupancy: 矩陣表，不分頁；橫向滾動處理寬度
     //   hub: 自己管 (每個 tab 切換時呼叫 initTableInteractions)
-    if (hash !== 'dashboard' && hash !== 'settings' && hash !== 'occupancy' && !route.isHub) {
+    if (baseHash !== 'dashboard' && baseHash !== 'settings' && baseHash !== 'occupancy' && baseHash !== 'm-house' && !route.isHub) {
         initTableInteractions({ scope: viewElement, rowsPerPage: 10 });
     }
 
@@ -132,7 +149,7 @@ function handleRoute() {
     }
 
     // Dashboard 圖表
-    if (hash === 'dashboard' && window.initDashboardChart) {
+    if (baseHash === 'dashboard' && window.initDashboardChart) {
         window.initDashboardChart();
         if (window.initDashboardInteractions) {
             window.initDashboardInteractions();
@@ -331,6 +348,14 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // 3. 主介面初始化
     initSidebar();
+    applyModeAttribute();
+    initModeSwitcher({
+        onSwitch: (mode) => {
+            // 切換模式 → 跳到該模式的合理首頁
+            const target = mode === 'managed' ? 'm-owners' : 'dashboard';
+            window.location.hash = target;
+        }
+    });
     initGlobalSearch();
     initNotifications();
 
@@ -340,6 +365,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     hideBootLoading();
     if (!result.success) {
         showToast(`雲端載入失敗：${result.error?.message || result.error}。將使用本機備援資料`, 'warning', 8000);
+    }
+    // sync 完才有真實 buildings/owners → 代管 mode 需要重 render sidebar
+    if (getMode() === 'managed') {
+        const { renderSidebarForMode } = await import('./utils/sidebarRender.js');
+        renderSidebarForMode('managed');
     }
     handleRoute();
     // 資料載完後跑 audit (dry-run) — 有 affected 才彈 modal

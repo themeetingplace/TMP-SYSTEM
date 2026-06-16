@@ -1523,6 +1523,97 @@ select:focus-visible,
 /* 小幫手不顯決策按鈕 */
 body[data-role="helper"] .occ-decision-btns { display: none !important; }
 
+/* === 共居 / 代管 mode 切換器 (sidebar 頂端) === */
+.mode-switcher {
+    display: flex;
+    gap: 0.3rem;
+    margin: 0.5rem 0.75rem 0.75rem;
+    padding: 3px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+}
+.mode-switch-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.5rem;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.mode-switch-btn:hover {
+    color: var(--text-main);
+}
+.mode-switch-btn.active {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.mode-switch-btn i { font-size: 1rem; }
+
+/* 代管 mode 整體點綴色 (可選) */
+body[data-app-mode="managed"] .topbar-title h1::before {
+    content: '🏠 ';
+}
+
+.sidebar.is-collapsed .mode-switcher {
+    flex-direction: column;
+    padding: 2px;
+}
+.sidebar.is-collapsed .mode-switch-btn span { display: none; }
+.sidebar.is-collapsed .mode-switch-btn { padding: 0.4rem 0.25rem; }
+
+/* 代管 sidebar empty hint + add button */
+.nav-empty-hint {
+    padding: 0.6rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    text-align: center;
+}
+.nav-item-add {
+    color: var(--color-primary) !important;
+    font-style: italic;
+}
+.nav-item-add i { color: var(--color-primary); }
+.nav-badge-muted {
+    margin-left: auto;
+    padding: 1px 6px;
+    font-size: 0.65rem;
+    background: var(--color-warning-light);
+    color: var(--color-warning-text);
+    border-radius: 3px;
+}
+
+/* === 代管房屋 page === */
+.mhouse-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px dashed var(--border-color);
+}
+.mhouse-tab-content {
+    animation: fadeIn 0.2s ease;
+}
+.mhouse-room-block {
+    margin-bottom: 1.5rem;
+}
+.mhouse-room-header {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 2px solid var(--color-primary-light);
+}
+
 /* === 房屋資料 tab 一館一 tab === */
 .houses-tabs {
     display: flex;

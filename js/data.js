@@ -24,15 +24,27 @@ export const mockData = {
 
     // === 系統設定主檔 ===
 
-    // 館別主檔（禁刪，可停用） — group 用於財報合併（例：松師 = 松山+師大）
+    // 房屋主檔（禁刪，可停用）— group 用於財報合併（例：松師 = 松山+師大）
+    // mode: 'cohousing' (聚空間共居我們是房東) | 'managed' (聚空間代管 — 我們是屋主的管家)
     buildings: [
-        { id: 'B001', name: '松山館',  baseAddress: '台北市松山區南京東路 50 號',   group: '松師', status: 'active', note: '' },
-        { id: 'B002', name: '信義館',  baseAddress: '台北市信義區信義路五段 100 號', group: '信義', status: 'active', note: '' },
-        { id: 'B003', name: '中山館',  baseAddress: '台北市中山區中山北路二段 60 號', group: '中山', status: 'active', note: '' },
-        { id: 'B004', name: '古亭1館', baseAddress: '台北市大安區古亭街 120 號',     group: '古亭', status: 'active', note: '' },
-        { id: 'B005', name: '古亭2館', baseAddress: '台北市大安區古亭街 150 號',     group: '古亭', status: 'active', note: '' },
-        { id: 'B006', name: '師大館',  baseAddress: '台北市大安區師大路 88 號',       group: '松師', status: 'active', note: '' }
+        { id: 'B001', name: '松山館',  baseAddress: '台北市松山區南京東路 50 號',   group: '松師', status: 'active', mode: 'cohousing', note: '' },
+        { id: 'B002', name: '信義館',  baseAddress: '台北市信義區信義路五段 100 號', group: '信義', status: 'active', mode: 'cohousing', note: '' },
+        { id: 'B003', name: '中山館',  baseAddress: '台北市中山區中山北路二段 60 號', group: '中山', status: 'active', mode: 'cohousing', note: '' },
+        { id: 'B004', name: '古亭1館', baseAddress: '台北市大安區古亭街 120 號',     group: '古亭', status: 'active', mode: 'cohousing', note: '' },
+        { id: 'B005', name: '古亭2館', baseAddress: '台北市大安區古亭街 150 號',     group: '古亭', status: 'active', mode: 'cohousing', note: '' },
+        { id: 'B006', name: '師大館',  baseAddress: '台北市大安區師大路 88 號',       group: '松師', status: 'active', mode: 'cohousing', note: '' }
     ],
+
+    // 代管模式 — 屋主主檔 (公開表單 / 內部表單寫入)
+    owners: [],
+
+    // 代管模式 — 押金 ledger (房客交 → 我們暫收 → 月結時移交屋主)
+    // { id, contractId, tenantName, propertyName, buildingId, amount, holder: 'pms'|'owner', collectedDate, transferredDate, note }
+    deposits: [],
+
+    // 代管模式 — 屋主月結算 (一個月一張，可下載 PDF / LINE 傳屋主)
+    // { id, ownerId, buildingId, month, items[], ownerReceivable, deposit*, status, createdAt }
+    settlements: [],
 
     // 合約 PDF 樣板（每館一份）— pdfBase64 由使用者上傳
     // {  buildingId, fileName, pdfBase64, uploadedAt }
@@ -96,6 +108,9 @@ function persist() {
             maintenances: mockData.maintenances,
             checkins: mockData.checkins,
             buildings: mockData.buildings,
+            owners: mockData.owners,
+            deposits: mockData.deposits,
+            settlements: mockData.settlements,
             invoiceTypes: mockData.invoiceTypes,
             tenantSources: mockData.tenantSources,
             paymentMethods: mockData.paymentMethods,
@@ -136,6 +151,15 @@ function hydrate() {
         Object.keys(saved).forEach(key => {
             if (saved[key] !== undefined) mockData[key] = saved[key];
         });
+        // 代管 phase 1 migration:
+        //   既有 buildings 補上 mode='cohousing' (預設共居)
+        //   owners / deposits / settlements 沒有就給空陣列
+        if (Array.isArray(mockData.buildings)) {
+            mockData.buildings.forEach(b => { if (!b.mode) b.mode = 'cohousing'; });
+        }
+        if (!Array.isArray(mockData.owners)) mockData.owners = [];
+        if (!Array.isArray(mockData.deposits)) mockData.deposits = [];
+        if (!Array.isArray(mockData.settlements)) mockData.settlements = [];
         return true;
     } catch (e) {
         console.error('[hydrate] localStorage 毀損:', e);
@@ -1661,8 +1685,146 @@ export const store = {
     deleteCheckin(id) {
         mockData.checkins = mockData.checkins.filter(ci => ci.id !== id);
         persist();
+    },
+
+    // ===== 代管模式 =====
+
+    // ----- owners (屋主主檔) -----
+    addOwner(payload) {
+        const now = new Date().toISOString();
+        const item = {
+            id: nextId('O', mockData.owners),
+            name: '',
+            gender: '',
+            phone: '',
+            email: '',
+            lineId: '',
+            source: '員工面談',          // '屋主自填' (公開表單) / '員工面談' / '朋友推薦' / '其他'
+            howKnown: '',                // 'Facebook' / 'Google' / '朋友' / '路過看到房子' / '其他'
+            howKnownOther: '',
+            note: '',
+            status: 'active',            // 'pending_review' (公開表單) / 'active' / 'archived'
+            submittedAt: now,
+            reviewedBy: null,
+            reviewedAt: null,
+            ...payload
+        };
+        mockData.owners.push(item);
+        persist();
+        window.dispatchEvent(new CustomEvent('bms:create', { detail: { table: 'owners', id: item.id } }));
+        return item;
+    },
+    updateOwner(id, patch) {
+        const i = mockData.owners.findIndex(o => o.id === id);
+        if (i < 0) return null;
+        mockData.owners[i] = { ...mockData.owners[i], ...patch };
+        persist();
+        window.dispatchEvent(new CustomEvent('bms:update', { detail: { table: 'owners', id } }));
+        return mockData.owners[i];
+    },
+    archiveOwner(id) {
+        return this.updateOwner(id, { status: 'archived' });
+    },
+    approveOwner(id, reviewerId = null) {
+        return this.updateOwner(id, {
+            status: 'active',
+            reviewedBy: reviewerId,
+            reviewedAt: new Date().toISOString()
+        });
+    },
+    // 此屋主名下還有沒有 active 代管房屋（封存前檢查用）
+    ownerActiveHouseCount(ownerId) {
+        return mockData.buildings.filter(b => b.mode === 'managed' && b.ownerId === ownerId && b.status === 'active').length;
+    },
+
+    // ----- deposits (押金 ledger — 代管專用) -----
+    // 房客交 → holder='pms' → 月結時轉 holder='owner' + 記 transferredDate
+    addDeposit(payload) {
+        const item = {
+            id: nextId('D', mockData.deposits),
+            contractId: null,
+            tenantName: '',
+            propertyName: '',
+            buildingId: null,
+            amount: 0,
+            holder: 'pms',
+            collectedDate: new Date().toISOString().slice(0, 10),
+            transferredDate: null,
+            note: '',
+            ...payload
+        };
+        mockData.deposits.push(item);
+        persist();
+        return item;
+    },
+    transferDepositToOwner(id, transferDate = null) {
+        const i = mockData.deposits.findIndex(d => d.id === id);
+        if (i < 0) return null;
+        mockData.deposits[i] = {
+            ...mockData.deposits[i],
+            holder: 'owner',
+            transferredDate: transferDate || new Date().toISOString().slice(0, 10)
+        };
+        persist();
+        return mockData.deposits[i];
+    },
+    // 某棟代管房屋 (= 某屋主) 目前持有押金總額
+    ownerHoldingDepositTotal(buildingId) {
+        return mockData.deposits
+            .filter(d => d.buildingId === buildingId && d.holder === 'owner')
+            .reduce((s, d) => s + (Number(d.amount) || 0), 0);
+    },
+
+    // ----- settlements (屋主月結算 — P3) -----
+    // 自動產生一張月結算單，items 走預設 5 段：收租 / 能源 / 修繕 / 其他 / 代管費
+    // 結算邏輯需要 invoices / deposits / 房屋設定，這裡放骨架；實際計算 in views/managed/settlements.js
+    addSettlement(payload) {
+        const item = {
+            id: nextId('S', mockData.settlements),
+            ownerId: null,
+            buildingId: null,
+            month: new Date().toISOString().slice(0, 7),  // YYYY-MM
+            items: [],                                     // [{ type, label, amount, breakdown?, note? }]
+            ownerReceivable: 0,
+            depositCollectedThisMonth: 0,
+            depositTransferredThisMonth: 0,
+            ownerHoldingDepositTotal: 0,
+            status: 'draft',                               // 'draft' | 'sent' | 'settled'
+            createdAt: new Date().toISOString(),
+            sentAt: null,
+            ...payload
+        };
+        mockData.settlements.push(item);
+        persist();
+        return item;
+    },
+    updateSettlement(id, patch) {
+        const i = mockData.settlements.findIndex(s => s.id === id);
+        if (i < 0) return null;
+        mockData.settlements[i] = { ...mockData.settlements[i], ...patch };
+        persist();
+        return mockData.settlements[i];
+    },
+    deleteSettlement(id) {
+        mockData.settlements = mockData.settlements.filter(s => s.id !== id);
+        persist();
     }
 };
+
+// 代管 helpers (給 view 用)
+export function getOwnerById(id) {
+    return mockData.owners.find(o => o.id === id) || null;
+}
+export function getManagedBuildings({ activeOnly = false } = {}) {
+    return mockData.buildings
+        .filter(b => b.mode === 'managed' && (!activeOnly || b.status === 'active'))
+        .sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+}
+export function getCohousingBuildings({ activeOnly = false } = {}) {
+    return mockData.buildings
+        .filter(b => b.mode !== 'managed' && (!activeOnly || b.status === 'active'))
+        .sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+}
 
 // 收款金額：優先用 paidAmount (實收)，舊資料無此欄位則退回 amount
 function invoicePaidValue(inv) {

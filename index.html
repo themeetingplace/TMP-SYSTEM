@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/zh-tw.js"></script>
-    <link rel="stylesheet" href="css/style.css?v=20260616h">
+    <link rel="stylesheet" href="css/style.css?v=20260616i">
 </head>
 <body>
     <div class="app-container">
@@ -35,6 +35,16 @@
                 </a>
                 <button class="sidebar-toggle" data-action="toggle-sidebar" type="button" aria-label="收合側邊欄" title="收合 / 展開">
                     <i class="ph ph-sidebar-simple"></i>
+                </button>
+            </div>
+            <div class="mode-switcher" role="tablist" aria-label="模式切換">
+                <button type="button" class="mode-switch-btn active" data-mode="cohousing" role="tab" aria-selected="true">
+                    <i class="ph ph-users-three"></i>
+                    <span>共居</span>
+                </button>
+                <button type="button" class="mode-switch-btn" data-mode="managed" role="tab" aria-selected="false">
+                    <i class="ph ph-buildings"></i>
+                    <span>代管</span>
                 </button>
             </div>
             <nav class="sidebar-nav" aria-label="主要導覽">
@@ -156,6 +166,6 @@
     </div>
 
     <!-- Scripts (entry point only; the rest are imported as ES modules) -->
-    <script src="js/app.js?v=20260616e" type="module"></script>
+    <script src="js/app.js?v=20260616f" type="module"></script>
 </body>
 </html>
