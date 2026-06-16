@@ -427,20 +427,37 @@ function showContractForm(contract) {
             { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: contract.termMonths ?? 1 },
             { name: 'endDate', label: '到期日 (留空自動計算)', type: 'date', span: 2, hint: '依起始日 + 簽約期自動帶' },
             { name: 'amount', label: '月租金', type: 'number', required: true, hint: '會雙向同步：合約↔房租帳單金額連動 (含 bundle 額外床位也會一起算)' },
-            { name: 'totalDue', label: '應收總額', type: 'number', hint: '月租金 × 合約期 (自動計算)' },
+            { name: 'totalDue', label: '應收總額', type: 'number', hint: '月租金 × 合約期 + 加項 − 折扣 (自動計算)' },
+
+            // === 加減項目 (寫到該合約的房租帳單) ===
+            { name: '__sep_adj', type: 'section', label: '折扣 / 加收項目', hint: '會更新對應的房租帳單；沒有可以不填' },
+            { name: 'adjustments', type: 'placeholder' },
+            { name: 'discount', type: 'hidden', value: 0 },
+            { name: 'discountReason', type: 'hidden', value: '' },
 
             // === 其他 ===
             { name: '__sep_misc', type: 'section', label: '簽署 / 押金' },
             { name: 'depositAmount', label: '押金金額', type: 'number', value: contract.depositAmount ?? 0, hint: '預設 0（不收押金）；若有，會顯示在合約 PDF 上' },
             { name: 'status', label: '簽署狀態', type: 'select', required: true, options: CONTRACT_STATUSES, value: contract.status ?? '待簽署' }
         ],
-        values: {
-            ...contract,
-            tenantPhone: linkedTenant?.phone || '',
-            tenantEmail: linkedTenant?.email || '',
-            tenantEmergency: linkedTenant?.emergencyContact || '',
-            totalDue: (Number(contract.amount) || 0) * (contract.termMonths || 1)
-        },
+        values: (() => {
+            // 找該合約的首張房租 invoice (prefill 加減項目)
+            const rentInv = mockData.invoices.find(inv =>
+                inv.direction === 'in' && inv.type === '房租' && inv.contractId === contract.id
+            );
+            let initAdjItems = [];
+            try { initAdjItems = rentInv?.discountReason ? JSON.parse(rentInv.discountReason) : []; } catch {}
+            const initDiscount = rentInv?.discount ?? 0;
+            return {
+                ...contract,
+                tenantPhone: linkedTenant?.phone || '',
+                tenantEmail: linkedTenant?.email || '',
+                tenantEmergency: linkedTenant?.emergencyContact || '',
+                totalDue: Math.max(0, (Number(contract.amount) || 0) * (contract.termMonths || 1) - (Number(initDiscount) || 0)),
+                discount: initDiscount,
+                discountReason: initAdjItems.length ? JSON.stringify(initAdjItems) : ''
+            };
+        })(),
         submitLabel: '儲存變更',
         onFormMount: (form) => {
             // 模仿建立流程：合約 ID + 租客 sticky 在標題下 subtitle
@@ -460,12 +477,79 @@ function showContractForm(contract) {
             const amountInput = form.querySelector('[name="amount"]');
             const termInput = form.querySelector('[name="termMonths"]');
             const totalDueInput = form.querySelector('[name="totalDue"]');
+            const discountInput = form.querySelector('[name="discount"]');
+            const discountReasonInput = form.querySelector('[name="discountReason"]');
             const refreshTotal = () => {
                 if (!totalDueInput) return;
                 const amt = Number(amountInput?.value) || 0;
                 const t = parseInt(termInput?.value, 10) || 1;
-                totalDueInput.value = amt * t;
+                const disc = Number(discountInput?.value) || 0;
+                totalDueInput.value = Math.max(0, amt * t - disc);
             };
+
+            // === 加減項目子表單 (跟新增入住流程同款) ===
+            const adjustPh = form.querySelector('#ph-adjustments');
+            const recalcAdjustments = () => {
+                if (!adjustPh) return;
+                const items = Array.from(adjustPh.querySelectorAll('.adj-row')).map(row => ({
+                    kind: row.querySelector('[data-adj="kind"]').value,
+                    label: row.querySelector('[data-adj="label"]').value.trim(),
+                    amount: Number(row.querySelector('[data-adj="amount"]').value) || 0
+                })).filter(x => x.amount > 0);
+                let sub = 0, add = 0;
+                items.forEach(x => x.kind === 'sub' ? (sub += x.amount) : (add += x.amount));
+                const net = sub - add;
+                if (discountInput) discountInput.value = net;
+                if (discountReasonInput) discountReasonInput.value = items.length ? JSON.stringify(items) : '';
+                refreshTotal();
+            };
+            const adjRowHtml = (row = { kind: 'sub', label: '', amount: '' }) => `
+                <div class="adj-row" style="display: grid; grid-template-columns: 130px 1fr 120px 32px; gap: 0.5rem; align-items: center; padding: 0.55rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 0.4rem;">
+                    <div class="adj-kind-toggle">
+                        <button type="button" class="adj-kind-btn ${row.kind === 'sub' ? 'is-active' : ''}" data-kind="sub" title="折扣 / 減項">− 折扣</button>
+                        <button type="button" class="adj-kind-btn ${row.kind === 'add' ? 'is-active' : ''}" data-kind="add" title="加收 / 額外費用">+ 加收</button>
+                    </div>
+                    <input type="hidden" data-adj="kind" value="${row.kind || 'sub'}">
+                    <input data-adj="label" type="text" class="form-input" placeholder="說明 (例：季繳優惠 / 能源費)" value="${row.label || ''}" style="font-size: var(--text-sm);">
+                    <input data-adj="amount" type="number" class="form-input" placeholder="金額" value="${row.amount || ''}" style="font-size: var(--text-sm); text-align: right;">
+                    <button type="button" class="adj-del" title="移除這筆" style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: 1rem; padding: 0.2rem;"><i class="ph ph-x"></i></button>
+                </div>
+            `;
+            if (adjustPh) {
+                adjustPh.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label style="font-weight: 500; font-size: var(--text-base);">折扣 / 加收項目 <small style="color: var(--text-muted); font-weight: 400;">(可多筆)</small></label>
+                        <button type="button" id="adj-add" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">
+                            <i class="ph ph-plus"></i> 新增項目
+                        </button>
+                    </div>
+                    <div id="adj-list"></div>
+                    <small class="form-hint" style="color: var(--text-muted); font-size: var(--text-2xs);">例：季繳優惠 -1000 (折扣) / 能源費 +500 (加收)。沒有可以不填。</small>
+                `;
+                const listEl = adjustPh.querySelector('#adj-list');
+                const addRow = (row) => {
+                    const div = document.createElement('div');
+                    div.innerHTML = adjRowHtml(row).trim();
+                    const rowEl = div.firstChild;
+                    listEl.appendChild(rowEl);
+                    rowEl.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recalcAdjustments));
+                    rowEl.querySelector('.adj-del').addEventListener('click', () => { rowEl.remove(); recalcAdjustments(); });
+                    rowEl.querySelectorAll('.adj-kind-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const kind = btn.dataset.kind;
+                            rowEl.querySelectorAll('.adj-kind-btn').forEach(b => b.classList.toggle('is-active', b.dataset.kind === kind));
+                            rowEl.querySelector('[data-adj="kind"]').value = kind;
+                            recalcAdjustments();
+                        });
+                    });
+                };
+                adjustPh.querySelector('#adj-add').addEventListener('click', () => addRow());
+                // Prefill 既有 adjustments
+                let prefillItems = [];
+                try { prefillItems = discountReasonInput?.value ? JSON.parse(discountReasonInput.value) : []; } catch {}
+                prefillItems.forEach(it => addRow(it));
+                recalcAdjustments();
+            }
             const refresh = () => {
                 if (termWrap?.__setOptions) termWrap.__setOptions(buildTermOptions(startInput.value));
                 if (!endInput.value && startInput.value) {
@@ -498,8 +582,8 @@ function showContractForm(contract) {
                 endDate = d.toISOString().split('T')[0];
             }
 
-            // 抽離 tenant 子欄位 (這些是租客主檔，不寫 contract) + totalDue (顯示用)
-            const { tenantPhone, tenantEmail, tenantEmergency, totalDue: _td, ...contractValues } = values;
+            // 抽離 tenant 子欄位 (這些是租客主檔，不寫 contract) + totalDue (顯示用) + adjustments (寫到 invoice)
+            const { tenantPhone, tenantEmail, tenantEmergency, totalDue: _td, discount: adjDiscount, discountReason: adjReason, ...contractValues } = values;
 
             const payload = {
                 ...contractValues,
@@ -545,6 +629,18 @@ function showContractForm(contract) {
             }
             const saved = store.updateContract(contract.id, payload);
             showToast('已更新合約', 'success');
+
+            // 把加減項目寫到對應的房租 invoice (discount + discountReason)
+            const rentInv = mockData.invoices.find(inv =>
+                inv.direction === 'in' && inv.type === '房租' && inv.contractId === contract.id
+            );
+            if (rentInv) {
+                const newDiscount = Number(adjDiscount) || 0;
+                const newReason = adjReason || '';
+                if (newDiscount !== (rentInv.discount || 0) || newReason !== (rentInv.discountReason || '')) {
+                    store.updateInvoice(rentInv.id, { discount: newDiscount, discountReason: newReason });
+                }
+            }
 
             if (saved) {
                 store.updateProperty(property.id, {
