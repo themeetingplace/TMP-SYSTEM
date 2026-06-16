@@ -1421,12 +1421,10 @@ select:focus-visible,
     margin-left: 2px;
 }
 
-/* 同房間床位交替底色 (整個房間統一色) — 只用在「有人住」的 row，留白 / 極淺 */
-.occ-table tr.occ-room-stripe-a:not(.occ-row-vacant):not(.occ-row-terminated) > td:not(.occ-bed-label) {
-    background: white;
-}
+/* 同房間床位底色 — 統一白 (2026-06-16 拿掉交替灰，全部對齊) */
+.occ-table tr.occ-room-stripe-a:not(.occ-row-vacant):not(.occ-row-terminated) > td:not(.occ-bed-label),
 .occ-table tr.occ-room-stripe-b:not(.occ-row-vacant):not(.occ-row-terminated) > td:not(.occ-bed-label) {
-    background: rgba(0, 0, 0, 0.02);
+    background: white;
 }
 
 /* Row 狀態 — 用單一明顯底色，覆蓋 stripe (用不透明 hex 避免 sticky 透過去看到底層) */
@@ -6342,9 +6340,9 @@ select.form-input {
     .occ-table tr.occ-row-terminated > td:nth-child(2) {
         background: var(--occ-sticky-bg-terminated) !important;
     }
-    /* stripe-b 列的 sticky 房客欄底色要跟列底色一致 (本身是 rgba(0,0,0,0.02) 半透明，sticky 漏底) */
+    /* 2026-06-16: stripe-b 已不再用灰底，sticky 第 2 欄統一白 */
     .occ-table tr.occ-room-stripe-b:not(.occ-row-vacant):not(.occ-row-terminated) > td:nth-child(2) {
-        background: var(--occ-sticky-bg-stripe-b) !important;
+        background: white !important;
     }
 
     /* 防禦規則: 防範未來再加新全域 thead 規則時把矩陣表 clip 掉 (V2 designer 建議) */
