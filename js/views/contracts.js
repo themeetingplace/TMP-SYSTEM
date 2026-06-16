@@ -426,7 +426,7 @@ function showContractForm(contract) {
             { name: 'startDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: initialStart },
             { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: contract.termMonths ?? 1 },
             { name: 'endDate', label: '到期日 (留空自動計算)', type: 'date', span: 2, hint: '依起始日 + 簽約期自動帶' },
-            { name: 'amount', label: '月租金', type: 'number', required: true, hint: '只改合約，不會動到已產生的帳單；要連帳單一起改請去總收支表 / 房租查帳改帳單金額，會反向同步回合約' },
+            { name: 'amount', label: '月租金', type: 'number', required: true, hint: '會雙向同步：合約↔房租帳單金額連動 (含 bundle 額外床位也會一起算)' },
             { name: 'totalDue', label: '應收總額', type: 'number', hint: '月租金 × 合約期 (自動計算)' },
 
             // === 其他 ===

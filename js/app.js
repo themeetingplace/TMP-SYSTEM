@@ -205,6 +205,21 @@ window.addEventListener('bms:invoice-sync-contract', (e) => {
     );
 });
 
+// 合約月租改動 → 反向同步房租 invoice 金額
+window.addEventListener('bms:contract-sync-invoice', (e) => {
+    const { contractId, invoiceId, oldAmount, newAmount } = e.detail || {};
+    if (!invoiceId) return;
+    const diff = (Number(newAmount) || 0) - (Number(oldAmount) || 0);
+    const sign = diff >= 0 ? '+' : '−';
+    const absDiff = Math.abs(diff).toLocaleString();
+    showToast(
+        `已連動更新：帳單 <strong>${invoiceId}</strong> 金額同步為 <strong>$${(newAmount || 0).toLocaleString()}</strong> ` +
+        `<span style="opacity:0.8;">(合約 ${contractId} ${sign}$${absDiff})</span>`,
+        'success',
+        6000
+    );
+});
+
 // M-R-1: 手機 sidebar drawer 開關
 function isMobileDrawerOpen() {
     return document.querySelector('.sidebar')?.classList.contains('is-mobile-open');

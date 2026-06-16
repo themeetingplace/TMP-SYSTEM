@@ -1151,12 +1151,48 @@ export const store = {
     },
     updateContract(id, patch) {
         const i = mockData.contracts.findIndex(c => c.id === id);
-        if (i >= 0) {
-            mockData.contracts[i] = { ...mockData.contracts[i], ...patch };
-            recalcMetrics();
-            return mockData.contracts[i];
+        if (i < 0) return null;
+        const before = mockData.contracts[i];
+        mockData.contracts[i] = { ...before, ...patch };
+        const after = mockData.contracts[i];
+
+        // 改合約月租 → 反向同步該合約的房租 invoice 跟床位 property.rent
+        // 注意只對 main 合約做，bundle 子合約 (bundleParentContractId) 沒 invoice 略過
+        if ('amount' in patch
+            && Number(before.amount) !== Number(after.amount)
+            && !after.bundleParentContractId) {
+            const term = after.termMonths || 1;
+            const extraRentSum = mockData.contracts
+                .filter(c => c.bundleParentContractId === after.id)
+                .reduce((s, c) => s + (Number(c.amount) || 0), 0);
+            const newInvoiceAmount = (Number(after.amount) + extraRentSum) * term;
+
+            mockData.invoices.forEach((inv, idx) => {
+                if (inv.contractId !== after.id) return;
+                if (inv.direction !== 'in' || inv.type !== '房租') return;
+                const oldAmt = Number(inv.amount) || 0;
+                if (oldAmt === newInvoiceAmount) return;
+                mockData.invoices[idx] = { ...inv, amount: newInvoiceAmount };
+                window.dispatchEvent(new CustomEvent('bms:contract-sync-invoice', {
+                    detail: {
+                        contractId: after.id,
+                        invoiceId: inv.id,
+                        oldAmount: oldAmt,
+                        newAmount: newInvoiceAmount,
+                        newMonthlyRent: after.amount
+                    }
+                }));
+            });
+
+            // 床位 property.rent 同步
+            const property = mockData.properties.find(p => p.name === after.propertyName);
+            if (property) {
+                const pi = mockData.properties.indexOf(property);
+                mockData.properties[pi] = { ...property, rent: after.amount };
+            }
         }
-        return null;
+        recalcMetrics();
+        return after;
     },
     deleteContract(id) {
         const c = mockData.contracts.find(x => x.id === id);
