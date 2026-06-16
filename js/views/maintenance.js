@@ -1,12 +1,13 @@
 ﻿import { mockData, store } from '../data.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
+import { filterMaintenancesByMode, filterPropertiesByMode } from '../utils/modeFilter.js';
 
 const MAINTENANCE_STATUSES = ['待處理', '進行中', '已完成'];
 const TODAY = new Date().toISOString().split('T')[0];
 
 export function renderMaintenance() {
-    const { maintenances } = mockData;
+    const maintenances = filterMaintenancesByMode(mockData.maintenances);
 
     const totalRequests = maintenances.length;
     const pendingCount = maintenances.filter(m => m.status === '待處理').length;
@@ -128,7 +129,7 @@ export function renderMaintenance() {
 
 function showMaintenanceForm(item = null) {
     const isEdit = !!item;
-    const propertyOptions = mockData.properties.map(p => p.name);
+    const propertyOptions = filterPropertiesByMode(mockData.properties).map(p => p.name);
 
     openFormModal({
         title: isEdit ? `編輯維修：${item.id}` : '新增報修',

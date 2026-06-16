@@ -5,6 +5,7 @@ import { mockData, store, isUnsettled, ensureContractInvoices, previewContractIn
 import { openFormModal, openConfirm, showToast, refreshView } from '../utils/ui.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { escapeHtml } from '../utils/escape.js';
+import { filterInvoicesByMode } from '../utils/modeFilter.js';
 
 // 類別 → type-chip class (語意色 — 跟 finance.js 同套)
 function typeChip(type) {
@@ -28,7 +29,7 @@ function isOverdue(inv) {
 export function renderUnsettled() {
     // 待結帳款只追蹤「租客應收」(direction='in')
     // 公司支出 (水電/房東租金/薪水…) 通常是付完才登記，直接記在「總收支表」即可
-    const unsettled = mockData.invoices
+    const unsettled = filterInvoicesByMode(mockData.invoices)
         .filter(i => isUnsettled(i) && i.direction === 'in')
         .sort((a, b) => {
             const ao = isOverdue(a) ? 0 : 1;
@@ -59,9 +60,10 @@ export function renderUnsettled() {
         const dirBadge = inv.direction === 'in'
             ? '<span class="status-badge danger" style="font-size: var(--text-2xs);"><i class="ph ph-arrow-down"></i> 應收</span>'
             : '<span class="status-badge warning" style="font-size: var(--text-2xs);"><i class="ph ph-arrow-up"></i> 應付</span>';
+        const cLink = (cid) => `<button type="button" class="contract-link" data-action="open-contract" data-cid="${cid}" style="background: none; border: none; padding: 0; color: var(--color-primary); cursor: pointer; font: inherit; text-decoration: underline;">${cid}</button>`;
         const target = inv.direction === 'in'
             ? `${inv.tenant || ''} · ${(inv.propertyName || '').replace('聚空間 - ', '')}`
-            : (inv.contractId ? `合約 ${inv.contractId}` : '<span style="color: var(--text-muted);">整館共用</span>');
+            : (inv.contractId ? `合約 ${cLink(inv.contractId)}` : '<span style="color: var(--text-muted);">整館共用</span>');
         const amountSign = inv.direction === 'out' ? '-' : '';
         const amountColor = inv.direction === 'out' ? 'var(--color-warning)' : 'var(--color-danger)';
         const due = (inv.amount || 0) - (inv.discount || 0);
@@ -582,6 +584,15 @@ function remindUnsettled(id) {
 export function initUnsettledActions(scope) {
     scope.querySelector('#btn-new-unsettled')?.addEventListener('click', () => showUnsettledForm());
     scope.querySelector('#btn-gen-monthly')?.addEventListener('click', () => backfillContractInvoices());
+
+    // 對象欄裡的合約 ID button → 跳合約 detail
+    scope.addEventListener('click', (e) => {
+        const link = e.target.closest('[data-action="open-contract"]');
+        if (!link) return;
+        e.preventDefault();
+        const cid = link.dataset.cid;
+        if (cid && window.openEntity) window.openEntity('contract', cid);
+    });
 
     scope.querySelectorAll('.unsettled-action').forEach(btn => {
         btn.addEventListener('click', (e) => {

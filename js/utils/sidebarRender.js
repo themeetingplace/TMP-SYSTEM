@@ -63,10 +63,6 @@ function buildManagedNavHtml() {
                 <i class="ph ph-wallet"></i>
                 <span class="nav-label">帳務管理</span>
             </a>
-            <a href="#unsettled" class="nav-item" data-view="unsettled" data-label="房租查帳">
-                <i class="ph ph-magnifying-glass-plus"></i>
-                <span class="nav-label">房租查帳</span>
-            </a>
             <a href="#maintenance" class="nav-item" data-view="maintenance" data-label="維修管理">
                 <i class="ph ph-wrench"></i>
                 <span class="nav-label">維修管理</span>

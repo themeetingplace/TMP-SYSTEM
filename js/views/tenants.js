@@ -1,11 +1,12 @@
 ﻿import { mockData, store } from '../data.js';
 import { openFormModal, openConfirm, openDetailModal, openModal, showToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
+import { filterTenantsByMode } from '../utils/modeFilter.js';
 
 const TENANT_STATUSES = ['居住中', '待入住', '已退租'];
 
 export function renderTenants() {
-    const { tenants } = mockData;
+    const tenants = filterTenantsByMode(mockData.tenants);
 
     const totalTenants = tenants.length;
     const activeTenants = tenants.filter(t => t.status === '居住中').length;

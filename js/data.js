@@ -1456,9 +1456,44 @@ export const store = {
     updateInvoice(id, patch) {
         const i = mockData.invoices.findIndex(inv => inv.id === id);
         if (i >= 0) {
-            mockData.invoices[i] = { ...mockData.invoices[i], ...patch };
+            const before = mockData.invoices[i];
+            mockData.invoices[i] = { ...before, ...patch };
+            const after = mockData.invoices[i];
+
+            // 改帳單金額 → 合約月租同步反推
+            // 只處理：房租 invoice + 有 contractId + amount 真的變了
+            // 反推: contract.amount = (新 invoice.amount - bundle 額外床位月租 × term) / term
+            if ('amount' in patch
+                && after.direction === 'in'
+                && after.type === '房租'
+                && after.contractId
+                && Number(before.amount) !== Number(after.amount)) {
+                const contract = mockData.contracts.find(c => c.id === after.contractId);
+                if (contract) {
+                    const term = contract.termMonths || 1;
+                    const extraRentSum = mockData.contracts
+                        .filter(c => c.bundleParentContractId === contract.id)
+                        .reduce((s, c) => s + (Number(c.amount) || 0), 0);
+                    const newMainAmount = (Number(after.amount) / term) - extraRentSum;
+                    if (newMainAmount > 0 && newMainAmount !== contract.amount) {
+                        const ci = mockData.contracts.findIndex(c => c.id === contract.id);
+                        if (ci >= 0) {
+                            mockData.contracts[ci] = { ...mockData.contracts[ci], amount: newMainAmount };
+                            // 床位 property.rent 也同步 (主床位的月租 = contract.amount)
+                            const property = mockData.properties.find(p => p.name === contract.propertyName);
+                            if (property) {
+                                const pi = mockData.properties.indexOf(property);
+                                mockData.properties[pi] = { ...property, rent: newMainAmount };
+                            }
+                            window.dispatchEvent(new CustomEvent('bms:invoice-sync-contract', {
+                                detail: { invoiceId: id, contractId: contract.id, oldAmount: before.amount, newAmount: after.amount, newMonthlyRent: newMainAmount }
+                            }));
+                        }
+                    }
+                }
+            }
             recalcMetrics();
-            return mockData.invoices[i];
+            return after;
         }
         return null;
     },

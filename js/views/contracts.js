@@ -10,6 +10,8 @@ import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { fillContractPdf, downloadPdfBytes, formatRentalPeriod } from '../utils/pdfGen.js';
 import { showCheckinAssignmentForm } from './properties.js';
 import { pushToTenant, uploadPdfToStorage, resolveSignedPdfUrl, triggerRenewalPoll } from '../utils/line.js';
+import { filterContractsByMode } from '../utils/modeFilter.js';
+import { getMode } from '../utils/appMode.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
@@ -107,7 +109,7 @@ function daysLabel(days) {
 }
 
 export function renderContracts() {
-    const { contracts } = mockData;
+    const contracts = filterContractsByMode(mockData.contracts);
 
     // 加上 lifecycle 標籤排序：需要決策的優先
     const enriched = contracts.map(c => ({
@@ -153,8 +155,11 @@ export function renderContracts() {
         if (!a) return;
         areaCounts[a] = (areaCounts[a] || 0) + 1;
     });
-    // 依系統設定的館別順序排
-    const sortedAreaList = getSortedBuildings({ activeOnly: true }).map(b => `${b.name}館`);
+    // 依系統設定的館別順序排 (依當前 mode 篩)
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const sortedAreaList = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === targetMode)
+        .map(b => `${b.name}館`);
     const areaNames = [
         ...sortedAreaList.filter(n => areaCounts[n]),
         ...Object.keys(areaCounts).filter(n => !sortedAreaList.includes(n))
@@ -354,7 +359,11 @@ export function renderContracts() {
 // 編輯既有合約 — 不動帳單 (改帳單請去總收支表 / 房租查帳)
 // 建立合約走 showCheckinAssignmentForm (含租客 create-or-match + 收款)
 function showContractForm(contract) {
+    // 編輯時 dropdown 依當前 mode 篩 (避免共居/代管 properties 混在一起)
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const modeBuildingIds = new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === targetMode).map(b => b.id));
     const propertyOptions = mockData.properties
+        .filter(p => modeBuildingIds.has(p.buildingId))
         .slice()
         .sort((a, b) => {
             const ba = a.buildingId || '', bb = b.buildingId || '';
@@ -887,7 +896,7 @@ export function initContractActions(scope) {
 
     // 詢問續租 — 觸發 Edge Function renewal-poll (10 天前發)
     scope.querySelector('#btn-ask-renewal')?.addEventListener('click', async () => {
-        const expiringSoon = mockData.contracts.filter(c => {
+        const expiringSoon = filterContractsByMode(mockData.contracts).filter(c => {
             if (c.renewalState !== 'active') return false;
             if (!c.endDate) return false;
             const today = new Date().toISOString().slice(0, 10);

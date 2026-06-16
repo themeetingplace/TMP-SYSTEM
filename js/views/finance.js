@@ -7,8 +7,20 @@ import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, 
 import { financeState } from './finance-state.js';
 import { exportFinanceReport } from './finance-export.js';
 import { escapeHtml } from '../utils/escape.js';
+import { filterInvoicesByMode } from '../utils/modeFilter.js';
+import { getMode } from '../utils/appMode.js';
 
 const TODAY = new Date().toISOString().split('T')[0];
+
+// 把 invoice.note 裡的合約 ID (例: "C001" / "C-001") 換成可點擊連結
+// note 內容是內部產生 (e.g. buildContractInvoice 帶 contract.id 進去) — 不用怕 XSS，但仍 escape
+function linkifyNoteContracts(rawNote) {
+    if (!rawNote) return '<span style="color: var(--text-muted)">—</span>';
+    const escaped = escapeHtml(rawNote);
+    return escaped.replace(/\b(C-?\d{3,})\b/g, (m, cid) =>
+        `<button type="button" class="contract-link" data-action="open-contract" data-cid="${cid}" title="跳到合約 ${cid}" style="background: none; border: none; padding: 0; color: var(--color-primary); cursor: pointer; font: inherit; text-decoration: underline;">${cid}</button>`
+    );
+}
 // 表格排序狀態 (各欄位通用)
 let sortField = 'date';  // 'date' | 'building' | 'type' | 'item' | 'amount' | 'note'
 let sortDesc = true;     // true = 大→小 / 新→舊 / Z→A
@@ -67,7 +79,7 @@ export function renderFinance() {
             default:         return '';
         }
     };
-    const monthInvoices = mockData.invoices
+    const monthInvoices = filterInvoicesByMode(mockData.invoices)
         .filter(inv => isSettled(inv) && invoiceMonth(inv) === financeState.viewMonth)
         .sort((a, b) => {
             const va = getSortVal(a), vb = getSortVal(b);
@@ -80,7 +92,9 @@ export function renderFinance() {
     const summary = computeAgg(monthInvoices);
     const inCount = monthInvoices.filter(i => i.direction === 'in').length;
     const outCount = monthInvoices.filter(i => i.direction === 'out').length;
-    const activeBuildings = getSortedBuildings({ activeOnly: true });
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const activeBuildings = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === targetMode);
 
     // 類別 → type-chip class (語意色 — 房租橘 / 押金綠 / 水電琥珀 / 其他灰)
     function typeChip(type) {
@@ -100,7 +114,7 @@ export function renderFinance() {
         const itemText = inv.direction === 'in'
             ? (inv.tenant ? `<strong>${inv.tenant}</strong>` : '<span style="color: var(--text-muted)">—</span>')
             : (inv.contractId
-                ? `<strong>合約 ${inv.contractId}</strong>`
+                ? `<strong>合約 <button type="button" class="contract-link" data-action="open-contract" data-cid="${inv.contractId}" title="跳到合約 ${inv.contractId}" style="background: none; border: none; padding: 0; color: var(--color-primary); cursor: pointer; font: inherit; text-decoration: underline;">${inv.contractId}</button></strong>`
                 : '<span style="color: var(--text-muted);">整館共用</span>');
         const periodText = inv.periodStart && inv.periodEnd
             ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">租期 ${inv.periodStart.slice(5)}~${inv.periodEnd.slice(5)}</div>`
@@ -163,7 +177,7 @@ export function renderFinance() {
                 </td>
                 <td style="text-align: right;">${discountCell}</td>
                 <td>${methodCell}</td>
-                <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${(inv.note || '').replace(/"/g, '&quot;')}"><span style="font-size: var(--text-xs); color: var(--text-muted);">${inv.note || '—'}</span></td>
+                <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${(inv.note || '').replace(/"/g, '&quot;')}"><span style="font-size: var(--text-xs); color: var(--text-muted);">${linkifyNoteContracts(inv.note)}</span></td>
                 <td>
                     <div style="display: flex; gap: 0.4rem;">
                         <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: var(--text-2xs);" data-action="view" data-id="${inv.id}" title="明細"><i class="ph ph-eye"></i></button>
@@ -514,6 +528,15 @@ export function initFinanceActions(scope) {
             if (action === 'edit') showInvoiceForm(inv);
             if (action === 'delete') confirmDelete(id);
         });
+    });
+
+    // 備註 / 項目欄裡的合約 ID button → 跳去合約 detail
+    scope.addEventListener('click', (e) => {
+        const link = e.target.closest('[data-action="open-contract"]');
+        if (!link) return;
+        e.preventDefault();
+        const cid = link.dataset.cid;
+        if (cid && window.openEntity) window.openEntity('contract', cid);
     });
 
     scope.querySelectorAll('[data-area-link]').forEach(el => {
