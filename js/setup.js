@@ -70,6 +70,19 @@ export async function initializeMockData() {
 window.testSupabaseConnection = testSupabaseConnection;
 window.initializeMockData = initializeMockData;
 
+// 續租日期校正 — 在 console 跑 fixRenewalDates(false) 看 audit 報告，fixRenewalDates(true) 套用
+window.fixRenewalDates = async (apply = false) => {
+    const { store } = await import('./data.js');
+    const result = store.auditRenewalDates({ apply });
+    console.log(`%c[renewalAudit] ${apply ? 'APPLIED' : 'DRY-RUN'}`, 'color: #0a7;', result);
+    console.table(result.affected);
+    if (result.skipped.length) {
+        console.warn('Skipped (疑似手動編輯過):');
+        console.table(result.skipped);
+    }
+    return result;
+};
+
 // Also expose a simple test function that doesn't require imports
 window.quickTest = async () => {
     console.log('🔍 Quick Supabase connection test...');

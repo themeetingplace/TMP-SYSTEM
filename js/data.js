@@ -1176,14 +1176,12 @@ export const store = {
 
         const termMonths = oldContract.termMonths || 1;
         const days = termMonths === 3 ? 90 : 30;
-        const newStart = oldContract.endDate
-            ? new Date(oldContract.endDate)
-            : new Date();
-        newStart.setDate(newStart.getDate() + 1);
-        const newStartISO = newStart.toISOString().split('T')[0];
-        const newEnd = new Date(newStart);
-        newEnd.setDate(newEnd.getDate() + days - 1);
-        const newEndISO = newEnd.toISOString().split('T')[0];
+        // 跟初次建合約 convention 對齊 (properties.js: endDate = addDaysISO(start, term*30))
+        //   → endDate 視為「下期生效日」(半開區間 [start, end))
+        //   → 新合約 startDate = 舊 endDate (同一天交接，rangesOverlap 已允許)
+        //   → 新合約 endDate   = startDate + days
+        const newStartISO = oldContract.endDate || new Date().toISOString().split('T')[0];
+        const newEndISO = addDaysISO(newStartISO, days);
 
         const newContract = {
             id: nextId('C', mockData.contracts),
@@ -1223,6 +1221,76 @@ export const store = {
 
         recalcMetrics();
         return { ok: true, newContract };
+    },
+
+    // 歷史續租日期校正 — 舊邏輯多 +1 天，掃描所有 parentContractId != null 的合約
+    //   exact pattern: startDate === addDaysISO(parent.endDate, 1)
+    //   → 安全修：startDate := parent.endDate (endDate 不變)
+    //   其他模式 (使用者手動改過) → skip 不動
+    // 同步把 contract 的 invoice (dueDate / periodStart) 一起 shift -1 天
+    auditRenewalDates({ apply = false } = {}) {
+        const affected = [];
+        const skipped = [];
+        mockData.contracts.forEach(c => {
+            if (!c.parentContractId || !c.startDate) return;
+            const parent = mockData.contracts.find(p => p.id === c.parentContractId);
+            if (!parent || !parent.endDate) {
+                skipped.push({ contractId: c.id, reason: '無 parent endDate' });
+                return;
+            }
+            const expectedStart = parent.endDate;                 // 正確
+            const buggyStart = addDaysISO(parent.endDate, 1);     // 舊 bug 結果
+            if (c.startDate === expectedStart) {
+                // 已經對了 (可能已校正過 / 或用戶手動改過)
+                return;
+            }
+            if (c.startDate !== buggyStart) {
+                // 偏離超過 1 天 → 用戶手動改過，不動
+                skipped.push({
+                    contractId: c.id,
+                    reason: 'startDate 跟 buggy 模式不符，可能已手動編輯',
+                    currentStart: c.startDate,
+                    parentEnd: parent.endDate
+                });
+                return;
+            }
+            affected.push({
+                contractId: c.id,
+                tenant: c.tenant,
+                propertyName: c.propertyName,
+                parentEnd: parent.endDate,
+                oldStart: c.startDate,
+                newStart: expectedStart,
+                endDate: c.endDate
+            });
+        });
+
+        if (!apply) {
+            return { affected, skipped, applied: false };
+        }
+
+        // apply: 修 contract.startDate + 連動 invoice
+        const patchedInvoices = [];
+        affected.forEach(a => {
+            const idx = mockData.contracts.findIndex(c => c.id === a.contractId);
+            if (idx < 0) return;
+            mockData.contracts[idx] = { ...mockData.contracts[idx], startDate: a.newStart };
+            // 同步把同 contractId 的 invoice 也 shift (dueDate / periodStart 之前複製自 startDate)
+            mockData.invoices.forEach((inv, i) => {
+                if (inv.contractId !== a.contractId) return;
+                const patch = {};
+                if (inv.dueDate === a.oldStart) patch.dueDate = a.newStart;
+                if (inv.periodStart === a.oldStart) patch.periodStart = a.newStart;
+                if (Object.keys(patch).length) {
+                    mockData.invoices[i] = { ...inv, ...patch };
+                    patchedInvoices.push({ invoiceId: inv.id, ...patch });
+                }
+            });
+        });
+        persist();
+        recalcMetrics();
+        window.dispatchEvent(new CustomEvent('bms:audit-applied', { detail: { type: 'renewal-dates', count: affected.length } }));
+        return { affected, skipped, applied: true, patchedInvoices };
     },
 
     // 退租：終止合約 + 床位釋放 + 租客標記
