@@ -3,10 +3,11 @@
 //
 // 一次性歷史校正：舊 renewContract 多 +1 天，已在 data.js renewContract 修 forward；
 // 這裡負責把歷史已產生的續租合約一次補回來
-import { store } from '../data.js';
+import { store, mockData } from '../data.js';
 import { openModal, showToast } from './ui.js';
 
 const SESSION_DISMISS_KEY = 'pms-renewal-audit-dismissed';
+const BUNDLE_SESSION_KEY = 'pms-bundle-audit-dismissed';
 
 export function promptRenewalAuditIfNeeded() {
     try {
@@ -21,6 +22,108 @@ export function promptRenewalAuditIfNeeded() {
     }
     if (!report || !report.affected?.length) return;
     showRenewalAuditModal(report);
+}
+
+// bundle 重複 invoice audit
+export function promptBundleAuditIfNeeded() {
+    try {
+        if (sessionStorage.getItem(BUNDLE_SESSION_KEY) === '1') return;
+    } catch {}
+    let report;
+    try {
+        report = store.auditBundleInvoices({ apply: false });
+    } catch (err) {
+        console.error('[bundleAudit] dry-run 失敗', err);
+        return;
+    }
+    if (!report || !report.affected?.length) return;
+    showBundleAuditModal(report);
+}
+
+function showBundleAuditModal(report) {
+    const { affected, skipped } = report;
+    const totalDup = affected.reduce((s, a) => s + (a.dupAmount || 0), 0);
+
+    const rows = affected.map(a => `
+        <tr>
+            <td><code style="font-size: 0.75rem;">${a.mainInvoiceId}</code><br>
+                <span style="font-size: 0.7rem; color: var(--text-muted);">$${a.mainAmount?.toLocaleString()}</span></td>
+            <td><code style="font-size: 0.75rem; color: var(--color-danger);">${a.dupInvoiceId}</code><br>
+                <span style="font-size: 0.7rem; color: var(--color-danger);">$${a.dupAmount?.toLocaleString()}</span></td>
+            <td>${a.tenant}</td>
+            <td style="font-size: 0.78rem;">${a.propertyName}</td>
+            <td><code style="font-size: 0.75rem;">${a.dueDate}</code></td>
+        </tr>
+    `).join('');
+
+    const skippedBlock = skipped.length
+        ? `<details style="margin-top: 1rem;">
+            <summary style="cursor: pointer; color: var(--text-muted); font-size: var(--text-sm);">
+                另略過 ${skipped.length} 筆 (看不出 bundle 關係) — 點開檢視
+            </summary>
+            <ul style="margin: 0.5rem 0 0 1rem; font-size: var(--text-xs); color: var(--text-muted);">
+                ${skipped.map(s => `<li>${s.dupInvoiceId} — ${s.tenant} ${s.propertyName} — ${s.reason}</li>`).join('')}
+            </ul>
+        </details>` : '';
+
+    const bodyHtml = `
+        <div style="padding: 0 0 0.5rem;">
+            <p style="margin: 0 0 0.75rem;">
+                舊版多床位合約 (bundle) 額外床位的合約沒帶 <code>__skipInvoice</code>，
+                <code>addContract</code> 對 active 合約都自動開 invoice → 重複算帳。
+            </p>
+            <p style="margin: 0 0 0.75rem;">
+                找到 <strong style="color: var(--color-danger);">${affected.length}</strong> 筆重複 invoice
+                (重複金額共 <strong>$${totalDup.toLocaleString()}</strong>)：
+            </p>
+            <div style="max-height: 320px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
+                <table class="data-table" style="margin: 0;">
+                    <thead style="position: sticky; top: 0; background: #fafbfc; z-index: 1;">
+                        <tr>
+                            <th>主 invoice (保留)</th>
+                            <th>重複 invoice (刪除)</th>
+                            <th>租客</th>
+                            <th>床位</th>
+                            <th>應收日</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            ${skippedBlock}
+            <p style="margin: 1rem 0 0; font-size: var(--text-xs); color: var(--text-muted);">
+                修正會：刪除重複 invoice + 對應「額外床位合約」補上 <code>bundleParentContractId</code> 旗標。
+                合約本身不刪除 (住房一覽還要顯示誰住那床)。
+            </p>
+        </div>
+    `;
+
+    const footerHtml = `
+        <button type="button" class="btn btn-outline" data-action="dismiss">先不處理 (本次 session 不再提示)</button>
+        <button type="button" class="btn btn-primary" data-action="apply">
+            <i class="ph ph-check-circle"></i> 全部修正 (刪 ${affected.length} 筆重複)
+        </button>
+    `;
+
+    openModal({
+        title: `⚠ Bundle 重複 invoice — ${affected.length} 筆需處理`,
+        bodyHtml,
+        footerHtml,
+        maxWidth: 880,
+        onMount: (overlay, close) => {
+            overlay.querySelector('[data-action="dismiss"]').addEventListener('click', () => {
+                try { sessionStorage.setItem(BUNDLE_SESSION_KEY, '1'); } catch {}
+                close();
+            });
+            overlay.querySelector('[data-action="apply"]').addEventListener('click', () => {
+                const result = store.auditBundleInvoices({ apply: true });
+                showToast(`已刪除 ${result.deletedIds?.length || 0} 筆重複 invoice`, 'success', 5000);
+                try { sessionStorage.setItem(BUNDLE_SESSION_KEY, '1'); } catch {}
+                close();
+                window.dispatchEvent(new Event('hashchange'));
+            });
+        }
+    });
 }
 
 function showRenewalAuditModal(report) {

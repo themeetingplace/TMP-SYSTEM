@@ -83,6 +83,19 @@ window.fixRenewalDates = async (apply = false) => {
     return result;
 };
 
+// bundle 重複 invoice 校正 — 舊版多床位合約會在額外床位開重複 invoice
+window.fixBundleInvoices = async (apply = false) => {
+    const { store } = await import('./data.js');
+    const result = store.auditBundleInvoices({ apply });
+    console.log(`%c[bundleAudit] ${apply ? 'APPLIED' : 'DRY-RUN'}`, 'color: #a04;', result);
+    console.table(result.affected);
+    if (result.skipped.length) {
+        console.warn('Skipped:');
+        console.table(result.skipped);
+    }
+    return result;
+};
+
 // Also expose a simple test function that doesn't require imports
 window.quickTest = async () => {
     console.log('🔍 Quick Supabase connection test...');

@@ -1,6 +1,6 @@
 import { renderDashboard } from './views/dashboard.js';
 import { renderPropertiesHub, initPropertiesHubActions, forceHubTab } from './views/properties-hub.js';
-import { promptRenewalAuditIfNeeded } from './utils/renewalAudit.js';
+import { promptRenewalAuditIfNeeded, promptBundleAuditIfNeeded } from './utils/renewalAudit.js';
 import { renderContracts, initContractActions } from './views/contracts.js';
 import { renderFinance, initFinanceActions } from './views/finance.js';
 import { renderUnsettled, initUnsettledActions } from './views/unsettled.js';
@@ -342,8 +342,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         showToast(`雲端載入失敗：${result.error?.message || result.error}。將使用本機備援資料`, 'warning', 8000);
     }
     handleRoute();
-    // 資料載完後跑續租日期 audit (dry-run) — 有 affected 才彈 modal
+    // 資料載完後跑 audit (dry-run) — 有 affected 才彈 modal
     setTimeout(() => promptRenewalAuditIfNeeded(), 800);
+    setTimeout(() => promptBundleAuditIfNeeded(), 1200);
 });
 
 function updateUserProfile(user) {

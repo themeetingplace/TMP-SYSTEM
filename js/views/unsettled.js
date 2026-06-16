@@ -142,7 +142,7 @@ export function renderUnsettled() {
                 </td>
                 <td>${bankBadge}</td>
                 <td>
-                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 0.35rem; flex-wrap: nowrap; justify-content: flex-start;">
                         ${inv.bankLast5 && !inv.bankVerified ? `
                             <button class="btn btn-success unsettled-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);" data-action="verify" data-id="${inv.id}" title="核對銀行末 5 碼後結帳">
                                 <i class="ph ph-shield-check"></i> 核對結帳
@@ -265,13 +265,13 @@ export function renderUnsettled() {
                 <table class="data-table cards-with-hero" style="table-layout: fixed;">
                     <colgroup>
                         <col style="width: 36px;">
-                        <col style="width: 9%;">
-                        <col style="width: 22%;">
-                        <col style="width: 16%;">
-                        <col style="width: 12%;">
-                        <col style="width: 11%;">
-                        <col style="width: 13%;">
+                        <col style="width: 8%;">
+                        <col style="width: 20%;">
                         <col style="width: 14%;">
+                        <col style="width: 11%;">
+                        <col style="width: 10%;">
+                        <col style="width: 12%;">
+                        <col style="width: 22%;">
                     </colgroup>
                     <thead><tr>
                         <th><input type="checkbox" id="check-all"></th>

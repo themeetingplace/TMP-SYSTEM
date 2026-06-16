@@ -1114,11 +1114,12 @@ export const store = {
     // ----- contracts -----
     // payload 可帶 __payment: { discount, discountReason, paidAmount, paymentMethod } 給對應 invoice 用
     addContract(payload) {
-        const { __payment, ...contractFields } = payload;
+        const { __payment, __skipInvoice, ...contractFields } = payload;
         const item = { id: nextId('C', mockData.contracts), ...contractFields };
         mockData.contracts.push(item);
         // 一份合約 = 一張帳單：自動建立全期房租應收
-        if (item.renewalState === 'active' || !item.renewalState) {
+        // 例外: bundle 主合約 invoice 已含所有額外床位月租 → 額外合約傳 __skipInvoice 不再開帳單
+        if (!__skipInvoice && (item.renewalState === 'active' || !item.renewalState)) {
             createInvoiceForContract(item, __payment || {});
         }
         recalcMetrics();
@@ -1291,6 +1292,77 @@ export const store = {
         recalcMetrics();
         window.dispatchEvent(new CustomEvent('bms:audit-applied', { detail: { type: 'renewal-dates', count: affected.length } }));
         return { affected, skipped, applied: true, patchedInvoices };
+    },
+
+    // bundle 重複 invoice 校正 — 舊版額外床位合約沒帶 __skipInvoice
+    // 主合約 invoice 已含所有床位月租，額外合約自己也開了 invoice → 重複算
+    // 偵測規則: 主 invoice note 含「含額外 N 張床位」→ 找同 tenant + 同 dueDate + 同 buildingId 的其他 invoice 視為重複
+    auditBundleInvoices({ apply = false } = {}) {
+        const affected = [];
+        const skipped = [];
+        const bundleMains = mockData.invoices.filter(inv =>
+            inv.direction === 'in'
+            && inv.type === '房租'
+            && /含額外\s*(\d+)\s*張床位/.test(inv.note || '')
+        );
+        bundleMains.forEach(main => {
+            const dupes = mockData.invoices.filter(inv =>
+                inv.id !== main.id
+                && inv.direction === 'in'
+                && inv.type === '房租'
+                && inv.tenant === main.tenant
+                && inv.dueDate === main.dueDate
+                && inv.buildingId === main.buildingId
+                && inv.propertyName !== main.propertyName
+            );
+            dupes.forEach(dup => {
+                // 安全檢查：dup 的合約是 bundleParent=main.contractId 或 amount 跟主合約裡某個 extra 對得起來
+                const dupContract = mockData.contracts.find(c => c.id === dup.contractId);
+                const isLinkedBundle = dupContract?.bundleParentContractId === main.contractId;
+                // 沒 link 但 amount 規律對得起來 — 也算 (歷史 bug 產生的舊資料)
+                if (isLinkedBundle || (dupContract && dupContract.tenant === main.tenant && dupContract.startDate === dupContract.startDate)) {
+                    affected.push({
+                        mainInvoiceId: main.id,
+                        mainAmount: main.amount,
+                        dupInvoiceId: dup.id,
+                        dupAmount: dup.amount,
+                        tenant: dup.tenant,
+                        propertyName: dup.propertyName,
+                        dueDate: dup.dueDate,
+                        dupContractId: dup.contractId
+                    });
+                } else {
+                    skipped.push({
+                        dupInvoiceId: dup.id,
+                        reason: '對應合約看不出 bundle 關係 (可能是獨立帳單)',
+                        tenant: dup.tenant,
+                        propertyName: dup.propertyName
+                    });
+                }
+            });
+        });
+
+        if (!apply) return { affected, skipped, applied: false };
+
+        // apply: 刪除重複 invoice + 給對應合約補上 bundleParentContractId
+        const deletedIds = [];
+        affected.forEach(a => {
+            const idx = mockData.invoices.findIndex(inv => inv.id === a.dupInvoiceId);
+            if (idx >= 0) {
+                mockData.invoices.splice(idx, 1);
+                deletedIds.push(a.dupInvoiceId);
+            }
+            // 補旗標到合約上 (方便未來辨識 + 防呆)
+            const cIdx = mockData.contracts.findIndex(c => c.id === a.dupContractId);
+            if (cIdx >= 0 && !mockData.contracts[cIdx].bundleParentContractId) {
+                const mainInv = mockData.invoices.find(inv => inv.id === a.mainInvoiceId);
+                mockData.contracts[cIdx] = { ...mockData.contracts[cIdx], bundleParentContractId: mainInv?.contractId || null };
+            }
+        });
+        persist();
+        recalcMetrics();
+        window.dispatchEvent(new CustomEvent('bms:audit-applied', { detail: { type: 'bundle-invoices', count: deletedIds.length } }));
+        return { affected, skipped, applied: true, deletedIds };
     },
 
     // 退租：終止合約 + 床位釋放 + 租客標記

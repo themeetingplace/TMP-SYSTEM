@@ -1240,7 +1240,9 @@ export function showCheckinAssignmentForm(opts = {}) {
                     });
                     store.updateTenant(tenant.id, { currentProperty: bed.name, status: '居住中' });
 
-                    // 額外床位 — 各建一份合約 (相同期間、各自月租，無 __payment → 不獨立開 invoice，避免「主已收完、額外待繳」怪狀態)
+                    // 額外床位 — 各建一份合約 (相同期間、各自月租)
+                    // 帳務全走主合約那張，所以額外合約傳 __skipInvoice: true
+                    // (歷史 bug: 沒傳這旗標 → addContract 對任何 active 合約都會開 invoice → 重複)
                     const extraContractIds = [];
                     extraBeds.forEach(eb => {
                         const ec = store.addContract({
@@ -1254,11 +1256,12 @@ export function showCheckinAssignmentForm(opts = {}) {
                             amount: Number(eb.rent) || 0,
                             depositAmount: 0,
                             parentContractId: null,
+                            bundleParentContractId: contract.id,  // 標記為 bundle 子合約
                             renewalState: 'active',
                             snoozeUntil: null,
                             signedFileUrl: null,
-                            terminatedDate: null
-                            // 不傳 __payment → 不會產生獨立 invoice (帳務全部走主合約那張)
+                            terminatedDate: null,
+                            __skipInvoice: true                   // 不獨立開 invoice，帳務走主合約
                         });
                         store.updateProperty(eb.id, {
                             tenant: tenant.name, status: '已出租',
