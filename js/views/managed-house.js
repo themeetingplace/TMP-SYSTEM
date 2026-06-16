@@ -402,25 +402,63 @@ function showHouseForm(building) {
             { name: 'taxReported', label: '是否報稅', type: 'select', options: BOOL_OPTIONS, value: building?.taxReported ? 'true' : 'false' },
 
             { name: '__s3', type: 'section', label: '屋主 + 代管設定' },
+            // 2x2 排版：屋主 / 起始日 / 結束日 / 收費方式
             { name: 'ownerId', label: '屋主', type: 'select', required: true, options: owners, value: building?.ownerId ?? '', searchable: true },
             { name: 'managedStartDate', label: '代管起始日', type: 'date' },
             { name: 'managedEndDate', label: '代管結束日', type: 'date' },
             { name: 'feeType', label: '代管收費方式', type: 'select', options: FEE_TYPE_OPTIONS, value: building?.feeType ?? 'fixed' },
-            { name: 'feeFixedAmount', label: '固定月費 (NT$)', type: 'number', placeholder: '3000', hint: '收費方式選「固定月費」時填' },
-            { name: 'feePercentRate', label: '抽成 %', type: 'number', placeholder: '10', hint: '收費方式選「抽成」時填' },
-            { name: 'feeTierJson', label: '階梯設定 (JSON)', type: 'textarea', span: 2, rows: 2, placeholder: '[{"from":0,"to":30000,"rate":8},{"from":30001,"rate":12}]', hint: '收費方式選「階梯」時填；格式為 JSON 陣列' },
-            { name: 'feeOtherNote', label: '其他收費說明', type: 'text', span: 2, hint: '收費方式選「其他」時填' },
-            { name: 'energyMode', label: '能源費負擔', type: 'select', options: ENERGY_OPTIONS, value: building?.energyMode ?? 'owner' },
+            // 以下 4 個 sub-field 只顯示對應 feeType 選的那一個，全部 span 2 占滿一列
+            { name: 'feeFixedAmount', label: '固定月費 (NT$)', type: 'number', span: 2, placeholder: '例：3000' },
+            { name: 'feePercentRate', label: '抽成 %', type: 'number', span: 2, placeholder: '例：10' },
+            { name: 'feeTierJson', label: '階梯設定 (JSON)', type: 'textarea', span: 2, rows: 2, placeholder: '[{"from":0,"to":30000,"rate":8},{"from":30001,"rate":12}]', hint: '格式為 JSON 陣列' },
+            { name: 'feeOtherNote', label: '其他收費說明', type: 'text', span: 2 },
+            { name: 'energyMode', label: '能源費負擔', type: 'select', span: 2, options: ENERGY_OPTIONS, value: building?.energyMode ?? 'owner' },
 
             { name: '__s4', type: 'section', label: '備註' },
             { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 3, placeholder: '漏水修了 / 配合水電行...' }
         ],
-        values: building ?? {
-            status: 'active', mode: 'managed',
-            energyMode: 'owner', rentIncludesTax: false, taxReported: false,
-            feeType: 'fixed'
-        },
+        values: (() => {
+            const base = building ?? {
+                status: 'active', mode: 'managed',
+                energyMode: 'owner', rentIncludesTax: false, taxReported: false,
+                feeType: 'fixed'
+            };
+            // 把 feeConfig 解開到對應 sub-field (編輯時 prefill)
+            const cfg = base?.feeConfig || {};
+            return {
+                ...base,
+                feeFixedAmount: cfg.amount ?? '',
+                feePercentRate: cfg.rate ?? '',
+                feeTierJson: cfg.tiers ? JSON.stringify(cfg.tiers) : '',
+                feeOtherNote: cfg.note ?? ''
+            };
+        })(),
         submitLabel: isEdit ? '儲存變更' : '建立',
+        onFormMount: (form) => {
+            // feeType 改變時 → 只顯示對應的 sub-field
+            const subFieldNames = {
+                fixed:   'feeFixedAmount',
+                percent: 'feePercentRate',
+                tier:    'feeTierJson',
+                other:   'feeOtherNote'
+            };
+            const wrappers = {};
+            Object.entries(subFieldNames).forEach(([k, name]) => {
+                const input = form.querySelector(`[name="${name}"]`);
+                if (input) wrappers[k] = input.closest('.form-group');
+            });
+            const feeTypeInput = form.querySelector('[name="feeType"]');
+            function syncVisibility() {
+                const v = feeTypeInput?.value || 'fixed';
+                Object.entries(wrappers).forEach(([k, el]) => {
+                    if (!el) return;
+                    el.style.display = (k === v) ? '' : 'none';
+                });
+            }
+            syncVisibility();
+            // custom-select 在 dispatchEvent('change') 寫到 hidden input
+            feeTypeInput?.addEventListener('change', syncVisibility);
+        },
         onSubmit: (values) => {
             values.mode = 'managed';
             values.rentIncludesTax = values.rentIncludesTax === 'true' || values.rentIncludesTax === true;
