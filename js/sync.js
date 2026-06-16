@@ -203,25 +203,25 @@ window.addEventListener('bms:delete', async (e) => {
     markRecentlyDeleted(table, id);
     try {
         markJustPushed();
-        // ⚠ Supabase RLS 拒絕 DELETE 時不回錯誤，只回 0 筆
-        // 用 .select() 確認真的刪到才算成功，否則跳醒目 toast
-        const { data: deleted, error } = await supabase.from(table).delete().eq(t.pk, id).select();
+        // count: 'exact' 拿真的影響筆數 (繞過 .select() 被 RLS SELECT policy 卡的問題)
+        const { error, count } = await supabase.from(table).delete({ count: 'exact' }).eq(t.pk, id);
         if (error) {
             console.error(`[sync] DELETE ${table}/${id} 失敗:`, error);
             setStatus('error', `刪除同步失敗：${error.message}`);
             if (window.showToast) window.showToast(`雲端刪除失敗：${error.message}`, 'danger', 6000);
-        } else if (!deleted || deleted.length === 0) {
-            // RLS 靜默拒絕 — 本機刪了但雲端還在，下次 pull 又拉回
-            console.warn(`[sync] ⚠ DELETE ${table}/${id} 雲端 0 筆受影響 (可能是 RLS 阻擋)`);
+        } else if (count === 0) {
+            // RLS 真的擋掉 DELETE — 本機刪了但雲端還在
+            console.warn(`[sync] ⚠ DELETE ${table}/${id} 雲端 0 筆受影響 (RLS 阻擋)`);
             if (window.showToast) {
                 window.showToast(
-                    `雲端 RLS 阻擋了 <code>${table}/${id}</code> 的刪除 → 本機刪了但雲端還在，下次重整會回來。請用 Supabase SQL Editor 直接跑 <code>DELETE FROM ${table} WHERE id='${id}'</code>`,
+                    `雲端 RLS 阻擋 <code>${table}/${id}</code> 的刪除。請用 Supabase SQL Editor 直接跑 <code>DELETE FROM ${table} WHERE id='${id}'</code>`,
                     'danger',
                     10000
                 );
             }
         } else {
-            console.log(`[sync] 🗑 ${table}/${id} 已從雲端刪除 (${deleted.length} 筆)`);
+            // count 為 null (有些 PostgREST 版本不回 count) 或 >0 都當成功
+            console.log(`[sync] 🗑 ${table}/${id} 已從雲端刪除${count != null ? ` (${count} 筆)` : ''}`);
         }
     } catch (err) {
         console.error('[sync] DELETE 異常:', err);
