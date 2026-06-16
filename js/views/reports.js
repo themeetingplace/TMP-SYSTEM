@@ -29,7 +29,9 @@ function _md() {
 function _resetModeCache() { _modeData = null; }
 function _modeBuildings() {
     const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
-    return _modeBuildings().filter(b => (b.mode || 'cohousing') === targetMode);
+    // ⚠ 不能用 _modeBuildings() 否則無限遞迴 (歷史 replace_all 誤傷)
+    return getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === targetMode);
 }
 // 注意: reports.js 不從 chartTheme 讀色 — 全部 hex literal，跟 dashboard.js 一致避開 Chart.js v4.5 動畫 bug
 
