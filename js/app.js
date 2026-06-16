@@ -190,6 +190,21 @@ window.addEventListener('bms:storage-full', () => {
     showToast('本機儲存空間已滿，編輯可能無法保留到下次重整。請聯絡開發者改用 IndexedDB', 'danger', 8000);
 });
 
+// invoice 金額改動 → 反推合約月租 + property.rent，提示用戶有連動到
+window.addEventListener('bms:invoice-sync-contract', (e) => {
+    const { invoiceId, contractId, oldAmount, newAmount, newMonthlyRent } = e.detail || {};
+    if (!contractId) return;
+    const diff = (Number(newAmount) || 0) - (Number(oldAmount) || 0);
+    const sign = diff >= 0 ? '+' : '−';
+    const absDiff = Math.abs(diff).toLocaleString();
+    showToast(
+        `已連動更新：合約 <strong>${contractId}</strong> 月租同步為 <strong>$${(newMonthlyRent || 0).toLocaleString()}</strong> ` +
+        `<span style="opacity:0.8;">(帳單 ${invoiceId} ${sign}$${absDiff})</span>`,
+        'success',
+        6000
+    );
+});
+
 // M-R-1: 手機 sidebar drawer 開關
 function isMobileDrawerOpen() {
     return document.querySelector('.sidebar')?.classList.contains('is-mobile-open');
