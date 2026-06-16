@@ -124,11 +124,6 @@
     box-sizing: border-box;
 }
 
-/* 永遠保留垂直 scrollbar 空間，避免內容變少時 scrollbar 消失 → 頁寬變化 → 表格欄寬跑掉 */
-html {
-    scrollbar-gutter: stable;
-}
-
 body {
     font-family: 'Outfit', 'Noto Sans TC', sans-serif;
     background-color: var(--color-background);
@@ -2301,6 +2296,8 @@ select:focus-visible,
 .view-container {
     flex: 1;
     overflow-y: auto;
+    /* 永遠保留垂直 scrollbar 空間 — 避免內容變少時 scrollbar 消失導致表格欄寬重排 */
+    scrollbar-gutter: stable;
     padding: 1rem 1.5rem 2rem;
 }
 
