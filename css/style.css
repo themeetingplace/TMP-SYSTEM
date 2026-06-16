@@ -1579,6 +1579,10 @@ body[data-app-mode="managed"] .topbar-title h1::before {
     line-height: 1.5;
     text-align: center;
 }
+/* sidebar 收合時 hint 太長會直書一字一行 → 直接隱藏；add button 也只剩 icon */
+.sidebar.is-collapsed .nav-empty-hint { display: none; }
+.sidebar.is-collapsed .nav-item-add .nav-label,
+.sidebar.is-collapsed .nav-badge-muted { display: none; }
 .nav-item-add {
     color: var(--color-primary) !important;
     font-style: italic;

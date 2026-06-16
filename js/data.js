@@ -1563,7 +1563,9 @@ export const store = {
 
     // ----- buildings (館別) — 禁刪，可停用 -----
     addBuilding(payload) {
-        const item = { id: nextId('B', mockData.buildings), status: 'active', note: '', ...payload };
+        // 編號分流: 共居 = B001+, 代管 = M001+ (nextId 用 regex ^prefix\d+ 篩，互不干擾)
+        const prefix = payload?.mode === 'managed' ? 'M' : 'B';
+        const item = { id: nextId(prefix, mockData.buildings), status: 'active', note: '', ...payload };
         mockData.buildings.push(item);
         persist();
         return item;

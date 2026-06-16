@@ -196,13 +196,14 @@ function showOwnerDetail(owner) {
     });
 }
 
-function showOwnerForm(owner = null) {
+export function showOwnerForm(owner = null, opts = {}) {
     const isEdit = !!owner;
+    // ⚠ field 'name' 跟 HTMLFormElement.name property 衝突 → 用 ownerName
     openFormModal({
         title: isEdit ? `編輯屋主：${owner.name}` : '新增屋主',
         maxWidth: 600,
         fields: [
-            { name: 'name', label: '姓名', type: 'text', required: true },
+            { name: 'ownerName', label: '姓名', type: 'text', required: true },
             { name: 'gender', label: '性別', type: 'select', options: GENDER_OPTIONS, value: owner?.gender ?? '' },
             { name: 'phone', label: '電話', type: 'text', placeholder: '0912-345-678' },
             { name: 'email', label: '信箱', type: 'text', placeholder: 'name@example.com' },
@@ -212,17 +213,20 @@ function showOwnerForm(owner = null) {
             { name: 'howKnownOther', label: '其他說明', type: 'text', span: 2, hint: '怎麼知道選「其他」時填' },
             { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
         ],
-        values: owner ?? { source: '員工面談', status: 'active' },
+        values: owner ? { ...owner, ownerName: owner.name } : { source: '員工面談', status: 'active' },
         submitLabel: isEdit ? '儲存變更' : '建立',
         onSubmit: (values) => {
+            values.name = values.ownerName;
+            delete values.ownerName;
             if (isEdit) {
                 store.updateOwner(owner.id, values);
                 showToast(`已更新：${values.name}`, 'success');
             } else {
                 const created = store.addOwner({ ...values, status: 'active' });
                 showToast(`已新增屋主：${created.name}`, 'success');
+                if (opts.onCreated) opts.onCreated(created);
             }
-            refreshView();
+            if (!opts.skipRefresh) refreshView();
         }
     });
 }

@@ -5,6 +5,7 @@
 import { mockData, store, bedOccupied, getOwnerById } from '../data.js';
 import { openFormModal, openConfirm, showToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc } from '../utils/escape.js';
+import { showOwnerForm } from './managed-owners.js';
 
 const STORAGE_TAB_KEY = 'pms-m-house-tab';
 const VALID_TABS = ['data', 'occupancy', 'contracts', 'fee'];
@@ -371,15 +372,7 @@ function ownerOptions() {
 function showHouseForm(building) {
     const isEdit = !!building;
     const owners = ownerOptions();
-    if (!owners.length && !isEdit) {
-        openConfirm({
-            title: '請先建立屋主',
-            message: '新增代管房屋需要指定屋主，請先到「屋主管理」建檔。',
-            confirmLabel: '前往屋主管理',
-            onConfirm: () => { window.location.hash = '#m-owners'; }
-        });
-        return;
-    }
+    // 不擋 — 沒屋主也能開表單；屋主下拉旁邊有「+ 新增屋主」按鈕
 
     openFormModal({
         title: isEdit ? `編輯代管房屋：${building.name}` : '新增代管房屋',
@@ -459,6 +452,35 @@ function showHouseForm(building) {
             syncVisibility();
             // custom-select 在 dispatchEvent('change') 寫到 hidden input
             feeTypeInput?.addEventListener('change', syncVisibility);
+
+            // === 屋主下拉旁邊塞「+ 新增屋主」按鈕 — 流程以房屋為主，不用先去屋主管理 ===
+            const ownerCustomSelect = form.querySelector('.custom-select[data-name="ownerId"]');
+            const ownerWrapper = ownerCustomSelect?.closest('.form-group');
+            if (ownerWrapper && !ownerWrapper.querySelector('.inline-add-owner-btn')) {
+                const addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = 'btn btn-outline inline-add-owner-btn';
+                addBtn.style.cssText = 'margin-top: 0.35rem; padding: 0.25rem 0.6rem; font-size: var(--text-xs); align-self: flex-start;';
+                addBtn.innerHTML = '<i class="ph ph-plus"></i> 新增屋主';
+                addBtn.addEventListener('click', () => {
+                    showOwnerForm(null, {
+                        skipRefresh: true,
+                        onCreated: (newOwner) => {
+                            // 重新生 owners options + 自動選上新建的這位
+                            const refreshedOpts = mockData.owners
+                                .filter(o => o.status !== 'archived')
+                                .map(o => ({ value: o.id, label: `${o.name}${o.status === 'pending_review' ? ' (待審核)' : ''}` }));
+                            if (ownerCustomSelect.__setOptions) {
+                                ownerCustomSelect.__setOptions(refreshedOpts, '請選擇...');
+                                // __setOptions 把 selection 清空 → 手動點該 owner 的 option 觸發 select
+                                const newOpt = ownerCustomSelect.querySelector(`.custom-select-option[data-value="${newOwner.id}"]`);
+                                if (newOpt) newOpt.click();
+                            }
+                        }
+                    });
+                });
+                ownerWrapper.appendChild(addBtn);
+            }
         },
         onSubmit: (values) => {
             // houseName → name (避開 HTMLFormElement.name property 衝突)

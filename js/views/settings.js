@@ -3,6 +3,7 @@ import { openFormModal, openConfirm, openModal, showToast, refreshView } from '.
 import { showPropertyForm } from './properties.js';
 import { fileToBase64, fillContractPdf, downloadPdfBytes, previewPdfBytes, listPdfFields, formatRentalPeriod } from '../utils/pdfGen.js';
 import { downloadBackup, getLastBackupAt } from '../backup.js';
+import { getMode } from '../utils/appMode.js';
 
 const GENDER_OPTIONS = ['男', '女', '不限'];
 const STATUS_OPTIONS = [
@@ -39,9 +40,11 @@ export function renderSettings() {
     `;
 }
 
-// === Tab: 館別管理 ===
+// === Tab: 房屋管理 (依當前 mode 篩 - 共居只顯 B 系列、代管只顯 M 系列) ===
 function renderBuildingsTab() {
-    const buildings = getSortedBuildings(); // 含已停用，但按 id 排好
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const buildings = getSortedBuildings() // 含已停用，但按 id 排好
+        .filter(b => (b.mode || 'cohousing') === targetMode);
     const { properties } = mockData;
     const totalBeds = (bid) => properties.filter(p => p.buildingId === bid).length;
     const rentedBeds = (bid) => properties.filter(p => p.buildingId === bid && bedOccupied(p.name)).length;
