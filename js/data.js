@@ -1142,8 +1142,11 @@ export const store = {
         const item = { id: nextId('C', mockData.contracts), ...contractFields };
         mockData.contracts.push(item);
         // 一份合約 = 一張帳單：自動建立全期房租應收
-        // 例外: bundle 主合約 invoice 已含所有額外床位月租 → 額外合約傳 __skipInvoice 不再開帳單
-        if (!__skipInvoice && (item.renewalState === 'active' || !item.renewalState)) {
+        // 例外:
+        //   1. bundle 主合約 invoice 已含所有額外床位月租 → 額外合約傳 __skipInvoice 不開帳單
+        //   2. 外部平台代收 (paymentChannel='platform') → 我們不收，跳過帳單
+        const isPlatform = item.paymentChannel === 'platform';
+        if (!__skipInvoice && !isPlatform && (item.renewalState === 'active' || !item.renewalState)) {
             createInvoiceForContract(item, __payment || {});
         }
         recalcMetrics();

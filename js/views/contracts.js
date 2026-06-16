@@ -217,10 +217,10 @@ export function renderContracts() {
 
         const areaName = extractArea(c.propertyName);
         return `
-            <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
+            <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-channel="${esc(c.paymentChannel || 'self')}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
                 <td>
                     <div style="display: flex; flex-direction: column;">
-                        <strong style="font-size: var(--text-base);">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: var(--text-2xs); color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}</strong>
+                        <strong style="font-size: var(--text-base);">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: var(--text-2xs); color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}${c.paymentChannel === 'platform' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="外部平台代收，不開帳單">🌐 ${esc(c.platformName || '外部平台')}</span>` : ''}</strong>
                         <span style="font-size: var(--text-xs); color: var(--text-muted);">${esc(c.propertyName || '')}</span>
                     </div>
                 </td>
@@ -319,6 +319,7 @@ export function renderContracts() {
                 <button class="filter-tab" data-filter-value="snoozed">已暫緩 (${enriched.filter(c => c._state === 'snoozed').length})</button>
                 <button class="filter-tab" data-filter-value="renewed">已續約 (${enriched.filter(c => c._state === 'renewed').length})</button>
                 <button class="filter-tab" data-filter-value="terminated">已終止 (${enriched.filter(c => c._state === 'terminated').length})</button>
+                <button class="filter-tab" data-filter-value="platform" data-filter-group="channel">🌐 外部平台 (${enriched.filter(c => c.paymentChannel === 'platform').length})</button>
             </div>
 
             <div class="table-container">
@@ -429,7 +430,16 @@ function showContractForm(contract) {
             { name: 'amount', label: '月租金', type: 'number', required: true, hint: '會雙向同步：合約↔房租帳單金額連動 (含 bundle 額外床位也會一起算)' },
             { name: 'totalDue', label: '應收總額', type: 'number', hint: '月租金 × 合約期 + 加項 − 折扣 (自動計算)' },
 
-            // === 加減項目 (寫到該合約的房租帳單) ===
+            // === 收費方式 (外部平台代收 → 不開帳單) ===
+            { name: '__sep_channel', type: 'section', label: '收費方式' },
+            { name: 'paymentChannel', label: '收費對象', type: 'select', required: true, span: 2,
+              options: [
+                  { value: 'self',     label: '自收 (我們開帳單收款)' },
+                  { value: 'platform', label: '外部平台代收 (Airbnb / 591 / 不開帳單)' }
+              ] },
+            { name: 'platformName', label: '平台名稱', type: 'text', span: 2, placeholder: 'Airbnb / 591 / KKday', hint: '收費對象選「外部平台代收」時填' },
+
+            // === 加減項目 (寫到該合約的房租帳單) — 平台代收沒帳單就不顯示 ===
             { name: '__sep_adj', type: 'section', label: '折扣 / 加收項目', hint: '會更新對應的房租帳單；沒有可以不填' },
             { name: 'adjustments', type: 'placeholder' },
             { name: 'discount', type: 'hidden', value: 0 },
@@ -450,6 +460,8 @@ function showContractForm(contract) {
             const initDiscount = rentInv?.discount ?? 0;
             return {
                 ...contract,
+                paymentChannel: contract.paymentChannel || 'self',
+                platformName: contract.platformName || '',
                 tenantPhone: linkedTenant?.phone || '',
                 tenantEmail: linkedTenant?.email || '',
                 tenantEmergency: linkedTenant?.emergencyContact || '',
@@ -469,6 +481,23 @@ function showContractForm(contract) {
                 sub.innerHTML = `合約 <span class="mono">${contract.id}</span> · 租客 <strong>${contract.tenant || '—'}</strong> <span class="modal-subtitle__faded">· ${contract.propertyName?.replace('聚空間 - ', '') || ''}</span>`;
                 headerEl.insertAdjacentElement('afterend', sub);
             }
+
+            // === 收費方式切換 — platform → 隱藏 platformName 以外的收款相關 ===
+            const channelInput = form.querySelector('[name="paymentChannel"]');
+            const platformNameWrap = form.querySelector('[name="platformName"]')?.closest('.form-group');
+            // 加減項目整塊 (找 __sep_adj section divider 跟它後面的 adjustments + totalDue)
+            const adjustPhWrap = form.querySelector('#ph-adjustments');
+            const totalDueWrap2 = form.querySelector('[name="totalDue"]')?.closest('.form-group');
+            function syncChannelVisibility() {
+                const v = channelInput?.value || 'self';
+                const isPlatform = v === 'platform';
+                if (platformNameWrap) platformNameWrap.style.display = isPlatform ? '' : 'none';
+                // 平台代收 → 沒有帳單，加減項目 + totalDue 都不顯
+                if (adjustPhWrap) adjustPhWrap.style.display = isPlatform ? 'none' : '';
+                if (totalDueWrap2) totalDueWrap2.style.display = isPlatform ? 'none' : '';
+            }
+            syncChannelVisibility();
+            channelInput?.addEventListener('change', syncChannelVisibility);
 
             // 起始日變更時：(1) 重算簽約期下拉的到期日標籤  (2) 若 endDate 空著自動填
             const startInput = form.querySelector('[name="startDate"]');
@@ -630,15 +659,17 @@ function showContractForm(contract) {
             const saved = store.updateContract(contract.id, payload);
             showToast('已更新合約', 'success');
 
-            // 把加減項目寫到對應的房租 invoice (discount + discountReason)
-            const rentInv = mockData.invoices.find(inv =>
-                inv.direction === 'in' && inv.type === '房租' && inv.contractId === contract.id
-            );
-            if (rentInv) {
-                const newDiscount = Number(adjDiscount) || 0;
-                const newReason = adjReason || '';
-                if (newDiscount !== (rentInv.discount || 0) || newReason !== (rentInv.discountReason || '')) {
-                    store.updateInvoice(rentInv.id, { discount: newDiscount, discountReason: newReason });
+            // 把加減項目寫到對應的房租 invoice — 平台代收沒帳單就不動
+            if (values.paymentChannel !== 'platform') {
+                const rentInv = mockData.invoices.find(inv =>
+                    inv.direction === 'in' && inv.type === '房租' && inv.contractId === contract.id
+                );
+                if (rentInv) {
+                    const newDiscount = Number(adjDiscount) || 0;
+                    const newReason = adjReason || '';
+                    if (newDiscount !== (rentInv.discount || 0) || newReason !== (rentInv.discountReason || '')) {
+                        store.updateInvoice(rentInv.id, { discount: newDiscount, discountReason: newReason });
+                    }
                 }
             }
 

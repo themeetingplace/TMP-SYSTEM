@@ -156,6 +156,11 @@ function renderContractRow(bed, contract, months, today, stripeClass, todayStr) 
     } else {
         tenantCell = `<strong>${tenantInner}</strong>`;
     }
+    // 外部平台代收 → 加個小 badge 標示 (Airbnb / 591 等)，方便 owner 一眼分辨
+    if (contract.paymentChannel === 'platform') {
+        const platformLabel = contract.platformName || '外部平台';
+        tenantCell += ` <span style="display: inline-block; font-size: 0.65rem; padding: 1px 4px; background: var(--color-info-light); color: var(--color-info); border-radius: 3px; vertical-align: middle;" title="外部平台代收，不開帳單">🌐 ${platformLabel}</span>`;
+    }
     // 備註欄：點擊編輯 (helper 透過 CSS pointer-events 鎖掉)；空白也可點新增備註
     const noteContent = tenantObj?.note
         ? `<span class="occ-note-clamp">${tenantObj.note}</span>`

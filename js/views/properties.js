@@ -504,7 +504,15 @@ export function showCheckinAssignmentForm(opts = {}) {
     const contractFields = [
         { name: 'scheduledDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: todayStr },
         { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(todayStr), value: '1' },
-        { name: 'amount', label: '月租金', type: 'number', required: true, value: preselectBed?.rent || 0, span: 2, hint: '會自動帶床位設定的租金，可調整' }
+        { name: 'amount', label: '月租金', type: 'number', required: true, value: preselectBed?.rent || 0, span: 2, hint: '會自動帶床位設定的租金，可調整' },
+        // === 收費方式 — 外部平台代收 (Airbnb / 591 / ...) 不開帳單 ===
+        { name: '__sep_channel', type: 'section', label: '收費方式' },
+        { name: 'paymentChannel', label: '收費對象', type: 'select', required: true, value: 'self', span: 2,
+          options: [
+              { value: 'self',     label: '自收 (我們開帳單收款)' },
+              { value: 'platform', label: '外部平台代收 (Airbnb / 591 / 不開帳單)' }
+          ] },
+        { name: 'platformName', label: '平台名稱', type: 'text', span: 2, placeholder: '例：Airbnb / 591 / KKday', hint: '收費對象選「外部平台代收」時填' }
     ];
     // 收款欄位（一律顯示；未填視為未收）
     // 折扣 / 加收項目改成「自由加減項目」可多筆 (新需求 #1) — 用 placeholder + onFormMount 動態渲染
@@ -564,6 +572,27 @@ export function showCheckinAssignmentForm(opts = {}) {
                 banner.innerHTML = headerHtml;
                 Array.from(banner.children).reverse().forEach(el => form.insertBefore(el, form.firstChild));
             }
+
+            // === 收費方式切換 — 平台代收 → 隱藏 platformName 以外的收款區塊 ===
+            const channelInput = form.querySelector('[name="paymentChannel"]');
+            const platformNameWrap = form.querySelector('[name="platformName"]')?.closest('.form-group');
+            // 收款記錄整塊 (section divider + adjustments + totalDue + paidAmount + paymentMethod)
+            const paymentSepDiv = form.querySelector('.form-section-divider:nth-of-type(2)') || null;
+            const adjustWrap = form.querySelector('#ph-adjustments');
+            const totalDueWrap = form.querySelector('[name="totalDue"]')?.closest('.form-group');
+            const paidAmountWrap = form.querySelector('[name="paidAmount"]')?.closest('.form-group');
+            const paymentMethodWrap = form.querySelector('[name="paymentMethod"]')?.closest('.form-group');
+            function syncChannelVisibility() {
+                const v = channelInput?.value || 'self';
+                const isPlatform = v === 'platform';
+                if (platformNameWrap) platformNameWrap.style.display = isPlatform ? '' : 'none';
+                // 平台代收 → 完全隱藏收款區
+                [adjustWrap, totalDueWrap, paidAmountWrap, paymentMethodWrap].forEach(el => {
+                    if (el) el.style.display = isPlatform ? 'none' : '';
+                });
+            }
+            syncChannelVisibility();
+            channelInput?.addEventListener('change', syncChannelVisibility);
 
             // 輸入姓名 / 電話時搜尋舊客，跳出建議列，點擊即載入
             const nameInput = form.querySelector('[name="tenantName"]');
@@ -1210,6 +1239,8 @@ export function showCheckinAssignmentForm(opts = {}) {
 
                     // 多床位 bundle: 主合約 invoice 自動含 額外床位月租；額外床位不獨立開 invoice
                     const extraBedRentList = extraBeds.map(eb => Number(eb.rent) || 0);
+                    const paymentChannel = values.paymentChannel || 'self';
+                    const platformName = paymentChannel === 'platform' ? (values.platformName || '').trim() : null;
                     const contract = store.addContract({
                         propertyId: bed.id,
                         propertyName: bed.name,
@@ -1226,7 +1257,9 @@ export function showCheckinAssignmentForm(opts = {}) {
                         snoozeUntil: null,
                         signedFileUrl: null,
                         terminatedDate: null,
-                        __payment: {
+                        paymentChannel,                // 'self' | 'platform'
+                        platformName,                  // 例: 'Airbnb' / '591' (platform 時才有值)
+                        __payment: paymentChannel === 'platform' ? null : {
                             discount,
                             discountReason: values.discountReason || null,
                             paidAmount: values.paidAmount != null && values.paidAmount !== '' ? Number(values.paidAmount) : null,
@@ -1261,6 +1294,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                             snoozeUntil: null,
                             signedFileUrl: null,
                             terminatedDate: null,
+                            paymentChannel,                       // 跟主合約一致 (self / platform)
+                            platformName,
                             __skipInvoice: true                   // 不獨立開 invoice，帳務走主合約
                         });
                         store.updateProperty(eb.id, {
