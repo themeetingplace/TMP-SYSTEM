@@ -94,11 +94,13 @@ export function renderProperties() {
     const properties = [...mockData.properties].sort(cmp);
 
     const totalProperties = properties.length;
-    // 「床位上有名字 = 居住」對齊住房一覽 (2026-06-16)
-    // 計數用 bedOccupied，但 filter tab 過濾用 data-occupied (見下 tableRows)
+    // 三段互斥分類，跟 effectiveStatus 對齊：
+    //   已出租 = bedOccupied (床位已入住，不管 p.status)
+    //   待簽約 = !bedOccupied 且 p.status==='待簽約' (簽約中但還沒住)
+    //   待租   = 其餘 (含 p.status='已出租' 但無 active 合約 = 髒資料)
     const rentedCount = properties.filter(p => bedOccupied(p.name)).length;
-    const vacantCount = properties.filter(p => !bedOccupied(p.name) && p.status !== '待簽約').length;
-    const pendingCount = properties.filter(p => p.status === '待簽約').length;
+    const pendingCount = properties.filter(p => !bedOccupied(p.name) && p.status === '待簽約').length;
+    const vacantCount = totalProperties - rentedCount - pendingCount;
     const totalVacant = vacantCount + pendingCount;
 
     const areaStats = buildAreaStats(properties);
@@ -110,9 +112,11 @@ export function renderProperties() {
     ];
 
     const tableRows = properties.map(p => {
-        // effectiveStatus: 床位有人住 → 視為「已出租」(對齊住房一覽計數)
+        // effectiveStatus: 三段互斥 → 對齊 rentedCount/pendingCount/vacantCount
         const occupied = bedOccupied(p.name);
-        const effectiveStatus = occupied ? '已出租' : (p.status === '已出租' ? '待租' : p.status);
+        const effectiveStatus = occupied
+            ? '已出租'
+            : (p.status === '待簽約' ? '待簽約' : '待租');
         const statusClass = statusClassOf(p.status);
         const { area, bed } = parsePropertyName(p.name);
         const building = mockData.buildings.find(b => b.id === p.buildingId);

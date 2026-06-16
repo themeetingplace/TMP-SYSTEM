@@ -1,6 +1,5 @@
 import { renderDashboard } from './views/dashboard.js';
-import { renderProperties, initPropertyActions } from './views/properties.js';
-import { renderOccupancy, initOccupancyActions } from './views/occupancy.js';
+import { renderPropertiesHub, initPropertiesHubActions, forceHubTab } from './views/properties-hub.js';
 import { renderContracts, initContractActions } from './views/contracts.js';
 import { renderFinance, initFinanceActions } from './views/finance.js';
 import { renderUnsettled, initUnsettledActions } from './views/unsettled.js';
@@ -38,8 +37,8 @@ const HELPER_ALLOWED = new Set(['properties', 'occupancy', 'tenants']);
 const HELPER_DEFAULT_HASH = 'occupancy';
 const routes = {
     dashboard:     { title: '首頁',         group: '總覽', render: renderDashboard },
-    properties:    { title: '物件管理',     group: '營運', render: renderProperties, init: initPropertyActions },
-    occupancy:     { title: '住房一覽',     group: '營運', render: renderOccupancy,  init: initOccupancyActions },
+    properties:    { title: '物件管理',     group: '營運', render: renderPropertiesHub, init: initPropertiesHubActions, isHub: true },
+    occupancy:     { title: '住房一覽',     group: '營運', render: renderPropertiesHub, init: initPropertiesHubActions, isHub: true, forceHubTab: 'occupancy' },
     contracts:     { title: '合約管理',     group: '營運', render: renderContracts,  init: initContractActions },
     finance:       { title: '總收支表',     group: '帳務', render: renderFinance,    init: initFinanceActions },
     unsettled:     { title: '房租查帳',     group: '帳務', render: renderUnsettled,  init: initUnsettledActions },
@@ -104,19 +103,25 @@ function handleRoute() {
         }
     });
 
+    // 物件管理 hub：#occupancy 進來會 lock 在「住房一覽」tab；其他用 localStorage
+    if (route.isHub) {
+        forceHubTab(route.forceHubTab || null);
+    }
+
     // Clear Container and Render
     viewContainer.innerHTML = '';
-    
+
     const viewElement = document.createElement('div');
     viewElement.className = 'view-section active';
     viewElement.innerHTML = route.render();
     viewContainer.appendChild(viewElement);
 
-    // 套用通用表格互動（dashboard / settings / occupancy 不適用）
+    // 套用通用表格互動（dashboard / settings / occupancy / hub 不適用）
     //   dashboard: 沒表格
     //   settings: 有 sub-tab 自管表格
     //   occupancy: 矩陣表，不分頁；橫向滾動處理寬度
-    if (hash !== 'dashboard' && hash !== 'settings' && hash !== 'occupancy') {
+    //   hub: 自己管 (每個 tab 切換時呼叫 initTableInteractions)
+    if (hash !== 'dashboard' && hash !== 'settings' && hash !== 'occupancy' && !route.isHub) {
         initTableInteractions({ scope: viewElement, rowsPerPage: 10 });
     }
 
