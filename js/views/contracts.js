@@ -356,8 +356,9 @@ export function renderContracts() {
     `;
 }
 
-// 編輯既有合約 — 不動帳單 (改帳單請去總收支表 / 房租查帳)
-// 建立合約走 showCheckinAssignmentForm (含租客 create-or-match + 收款)
+// 編輯既有合約 — 視覺對齊建立流程 (showCheckinAssignmentForm)
+// 區分 5 區: 床位 / 租客 / 合約期間 / 押金 / 簽署狀態 — 含 section 分隔
+// 額外: 連動更新租客主檔 (phone/email/緊急聯絡人)；提示帳單由總收支表反向同步
 function showContractForm(contract) {
     // 編輯時 dropdown 依當前 mode 篩 (避免共居/代管 properties 混在一起)
     const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
@@ -386,7 +387,9 @@ function showContractForm(contract) {
             : '';
         return { value: t.name, label: `${t.name}${tag}` };
     });
-    // 依起始日算簽約期 dropdown 標籤
+    // 拉現任租客主檔，prefill phone/email/緊急聯絡人 (跟建立流程對齊)
+    const linkedTenant = mockData.tenants.find(t => t.name === contract.tenant) || null;
+
     function buildTermOptions(startDate) {
         const fmt = (iso) => iso ? iso.slice(5).replace('-', '/') : '?';
         const addDays = (s, n) => {
@@ -405,20 +408,49 @@ function showContractForm(contract) {
 
     openFormModal({
         title: `編輯合約：${contract.id}`,
-        maxWidth: 700,
+        maxWidth: 640,
         fields: [
-            { name: 'propertyName', label: '物件', type: 'select', required: true, options: propertyOptions },
-            { name: 'tenant', label: '租客', type: 'select', required: true, options: tenantOptions, searchable: true },
-            { name: 'amount', label: '每月租金', type: 'number', required: true },
-            { name: 'termMonths', label: '簽約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: contract.termMonths ?? 1 },
+            // === 床位 ===
+            { name: '__sep_bed', type: 'section', label: '床位 / 物件', hint: '換床位會自動釋放原床位' },
+            { name: 'propertyName', label: '床位', type: 'select', required: true, span: 2, options: propertyOptions },
+
+            // === 租客資料 (含聯絡方式) ===
+            { name: '__sep_tenant', type: 'section', label: '租客資料', hint: '改電話 / Email / 緊急聯絡人會同步更新租客主檔' },
+            { name: 'tenant', label: '租客姓名', type: 'select', required: true, span: 2, options: tenantOptions, searchable: true },
+            { name: 'tenantPhone', label: '電話', type: 'text', value: linkedTenant?.phone || '' },
+            { name: 'tenantEmail', label: 'Email', type: 'text', value: linkedTenant?.email || '' },
+            { name: 'tenantEmergency', label: '緊急聯絡人', type: 'text', span: 2, value: linkedTenant?.emergencyContact || '', placeholder: '例：王媽媽 0911-222-333' },
+
+            // === 合約期間 ===
+            { name: '__sep_contract', type: 'section', label: '合約期間' },
+            { name: 'startDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: initialStart },
+            { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: contract.termMonths ?? 1 },
+            { name: 'endDate', label: '到期日 (留空自動計算)', type: 'date', span: 2, hint: '依起始日 + 簽約期自動帶' },
+            { name: 'amount', label: '月租金', type: 'number', required: true, span: 2, hint: '會自動帶床位設定的租金，可調整；改完帳單也跟著改請去總收支表 / 房租查帳直接編輯 (帳單→合約會反向同步)' },
+
+            // === 其他 ===
+            { name: '__sep_misc', type: 'section', label: '簽署 / 押金' },
             { name: 'depositAmount', label: '押金金額', type: 'number', value: contract.depositAmount ?? 0, hint: '預設 0（不收押金）；若有，會顯示在合約 PDF 上' },
-            { name: 'startDate', label: '起始日', type: 'date', required: true, value: initialStart },
-            { name: 'endDate', label: '到期日 (留空自動計算)', type: 'date', hint: '依起始日 + 簽約期自動帶' },
             { name: 'status', label: '簽署狀態', type: 'select', required: true, options: CONTRACT_STATUSES, value: contract.status ?? '待簽署' }
         ],
-        values: contract,
+        values: {
+            ...contract,
+            tenantPhone: linkedTenant?.phone || '',
+            tenantEmail: linkedTenant?.email || '',
+            tenantEmergency: linkedTenant?.emergencyContact || ''
+        },
         submitLabel: '儲存變更',
         onFormMount: (form) => {
+            // 模仿建立流程：合約 ID + 租客 sticky 在標題下 subtitle
+            const overlay = form.closest('.modal-overlay');
+            const headerEl = overlay?.querySelector('.modal-header h3');
+            if (headerEl && !headerEl.parentElement.querySelector('.modal-subtitle')) {
+                const sub = document.createElement('div');
+                sub.className = 'modal-subtitle';
+                sub.innerHTML = `合約 <span class="mono">${contract.id}</span> · 租客 <strong>${contract.tenant || '—'}</strong> <span class="modal-subtitle__faded">· ${contract.propertyName?.replace('聚空間 - ', '') || ''}</span>`;
+                headerEl.insertAdjacentElement('afterend', sub);
+            }
+
             // 起始日變更時：(1) 重算簽約期下拉的到期日標籤  (2) 若 endDate 空著自動填
             const startInput = form.querySelector('[name="startDate"]');
             const endInput = form.querySelector('[name="endDate"]');
@@ -451,8 +483,12 @@ function showContractForm(contract) {
                 d.setDate(d.getDate() + days);  // 6/8 + 30 = 7/8 (離開日)
                 endDate = d.toISOString().split('T')[0];
             }
+
+            // 抽離 tenant 子欄位 (這些是租客主檔，不寫 contract)
+            const { tenantPhone, tenantEmail, tenantEmergency, ...contractValues } = values;
+
             const payload = {
-                ...values,
+                ...contractValues,
                 termMonths: parseInt(values.termMonths, 10),
                 depositAmount: parseInt(values.depositAmount, 10) || 0,
                 endDate,
@@ -483,6 +519,15 @@ function showContractForm(contract) {
                         status: '待租', tenant: null, contractId: null, contractEnd: null
                     });
                 }
+            }
+            // 同步更新租客主檔 phone/email/緊急聯絡人 (若有變動)
+            const targetTenant = mockData.tenants.find(t => t.name === values.tenant);
+            if (targetTenant) {
+                const patch = {};
+                if (tenantPhone !== (targetTenant.phone || '')) patch.phone = tenantPhone;
+                if (tenantEmail !== (targetTenant.email || '')) patch.email = tenantEmail;
+                if (tenantEmergency !== (targetTenant.emergencyContact || '')) patch.emergencyContact = tenantEmergency;
+                if (Object.keys(patch).length) store.updateTenant(targetTenant.id, patch);
             }
             const saved = store.updateContract(contract.id, payload);
             showToast('已更新合約', 'success');
