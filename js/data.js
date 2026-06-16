@@ -50,42 +50,14 @@ export const mockData = {
     // {  buildingId, fileName, pdfBase64, uploadedAt }
     contractTemplates: [],
 
-    // 顧客來源主檔
-    tenantSources: [
-        { id: 'TS001', name: 'Facebook', note: '' },
-        { id: 'TS002', name: 'Airbnb',   note: '' },
-        { id: 'TS003', name: 'LINE',     note: '' },
-        { id: 'TS004', name: '591',      note: '' },
-        { id: 'TS005', name: '朋友介紹', note: '' },
-        { id: 'TS006', name: '其他',     note: '' }
-    ],
+    // 顧客來源主檔 (預設清空 — 同 invoiceTypes，避免幽靈復活)
+    tenantSources: [],
 
-    // 付款方式主檔
-    paymentMethods: [
-        { id: 'PM001', name: '匯款',   note: '' },
-        { id: 'PM002', name: '現金',   note: '' },
-        { id: 'PM003', name: '信用卡', note: '' }
-    ],
+    // 付款方式主檔 (預設清空)
+    paymentMethods: [],
 
-    // 帳單類型主檔（direction: in=收入, out=支出 / isRecurring: 每月固定）
-    invoiceTypes: [
-        // 收入類（房租全包，無另外水電費；訂金 = 一個月房租，併入房租即可）
-        { id: 'IT001', name: '房租',       direction: 'in',  isRecurring: true,  note: '向租客收的房租（含水電全包）' },
-        { id: 'IT002', name: '其他收入',   direction: 'in',  isRecurring: false, note: '' },
-
-        // 支出類
-        { id: 'IT101', name: '房東租金',   direction: 'out', isRecurring: true,  note: '付給房東的整棟租金' },
-        { id: 'IT102', name: '薪水',       direction: 'out', isRecurring: true,  note: '' },
-        { id: 'IT103', name: '水費',       direction: 'out', isRecurring: true,  note: '' },
-        { id: 'IT104', name: '電費',       direction: 'out', isRecurring: true,  note: '' },
-        { id: 'IT105', name: '瓦斯費',     direction: 'out', isRecurring: true,  note: '' },
-        { id: 'IT106', name: '網路費',     direction: 'out', isRecurring: true,  note: '' },
-        { id: 'IT107', name: '管理費',     direction: 'out', isRecurring: true,  note: '社區管理費' },
-        { id: 'IT108', name: '清潔用品',   direction: 'out', isRecurring: false, note: '' },
-        { id: 'IT109', name: '修繕雜支',   direction: 'out', isRecurring: false, note: '' },
-        { id: 'IT110', name: '紅利發放',   direction: 'out', isRecurring: false, note: '' },
-        { id: 'IT111', name: '其他支出',   direction: 'out', isRecurring: false, note: '' }
-    ]
+    // 帳單類型主檔 (預設清空 — 從 Supabase 拉，避免本機 hardcode 在「清空後又被默默載回」)
+    invoiceTypes: []
 };
 
 // === localStorage 持久化（避免重整時遺失修改） ===
