@@ -17,13 +17,27 @@ import { renderRangePicker, initRangePicker } from '../utils/dateRangePicker.js'
 import { reportState, invoiceInRange, getRangeLabel } from './report-state.js';
 import { exportLandlordReport } from './report-export.js';
 import { exportAnalysisReport } from './analysis-export.js';
+import { modeFilteredData } from '../utils/modeFilter.js';
+import { getMode } from '../utils/appMode.js';
+
+// 模組層快取 — 每次 renderReports 開頭 reset，內部 helper 都讀這個避免 14 處 mockData 散落各處
+let _modeData = null;
+function _md() {
+    if (!_modeData) _modeData = modeFilteredData();
+    return _modeData;
+}
+function _resetModeCache() { _modeData = null; }
+function _modeBuildings() {
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    return _modeBuildings().filter(b => (b.mode || 'cohousing') === targetMode);
+}
 // 注意: reports.js 不從 chartTheme 讀色 — 全部 hex literal，跟 dashboard.js 一致避開 Chart.js v4.5 動畫 bug
 
 // ───────────────────── 共用 helpers ─────────────────────
 const pct = v => `${(v * 100).toFixed(1)}%`;
 
 function settledInRange(range = reportState.viewRange) {
-    return mockData.invoices.filter(i => isSettled(i) && invoiceInRange(i, range));
+    return _md().invoices.filter(i => isSettled(i) && invoiceInRange(i, range));
 }
 
 function rangeDayCount(range = reportState.viewRange) {
@@ -46,7 +60,7 @@ function rangeMonthCount(range = reportState.viewRange) {
 
 // ───────────────────── Tab 1: 總覽 (老闆視角: NOI / 收款率 / 出租率 / 到期) ─────────────────────
 function computeOverviewKPIs(range) {
-    const allIncome = mockData.invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
+    const allIncome = _md().invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
     const settledOnly = settledInRange(range);
     const receivableTotal = allIncome.reduce((s, i) => s + ((Number(i.amount) || 0) - (Number(i.discount) || 0)), 0);
     const paidTotal = allIncome.reduce((s, i) => s + (Number(i.paidAmount) || 0), 0);
@@ -57,14 +71,14 @@ function computeOverviewKPIs(range) {
     const noi = paidTotal - expenseTotal;
 
     // 整體出租率 (snapshot)
-    const allBeds = mockData.properties || [];
+    const allBeds = _md().properties || [];
     const rentedBeds = allBeds.filter(p => bedOccupied(p.name)).length;
     const occRate = allBeds.length ? rentedBeds / allBeds.length : 0;
 
     // 30 天內到期合約數
     const today = new Date().toISOString().slice(0, 10);
     const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-    const expiringCount = mockData.contracts.filter(c =>
+    const expiringCount = _md().contracts.filter(c =>
         c.renewalState === 'active' && c.endDate && c.endDate >= today && c.endDate <= in30
     ).length;
 
@@ -86,8 +100,8 @@ function statusLight(rate, healthy, warn) {
 
 // 各館 應收/已收/待收 (取代收入結構 donut — 更有意義)
 function computeReceivableByBuilding(range) {
-    const buildings = getSortedBuildings({ activeOnly: true });
-    const allIncome = mockData.invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
+    const buildings = _modeBuildings();
+    const allIncome = _md().invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
     return buildings.map(b => {
         const rows = allIncome.filter(i => i.buildingId === b.id);
         const receivable = rows.reduce((s, i) => s + ((Number(i.amount) || 0) - (Number(i.discount) || 0)), 0);
@@ -305,8 +319,8 @@ function renderOverviewTab() {
 // building = null 表示全館合計
 function computeOperationalKPIs(building, range) {
     const beds = building
-        ? mockData.properties.filter(p => p.buildingId === building.id)
-        : (mockData.properties || []);
+        ? _md().properties.filter(p => p.buildingId === building.id)
+        : (_md().properties || []);
     const totalBeds = beds.length;
     const rentedBeds = beds.filter(p => bedOccupied(p.name)).length;
     const vacantBeds = totalBeds - rentedBeds;
@@ -319,7 +333,7 @@ function computeOperationalKPIs(building, range) {
     beds.forEach(p => {
         if (bedOccupied(p.name)) return; // 已出租跳過 (對齊住房一覽)
         // 找這個床位最近一次的合約 (有 terminatedDate 或 endDate < today)
-        const lastContract = mockData.contracts
+        const lastContract = _md().contracts
             .filter(c => c.propertyName === p.name)
             .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''))[0];
         if (lastContract && lastContract.endDate) {
@@ -332,7 +346,7 @@ function computeOperationalKPIs(building, range) {
         : 0;
 
     // 續租率 — 過去區間內到期 (endDate 落在 range) 的合約中，renewalState='renewed' 的比例
-    const expiredInRange = mockData.contracts.filter(c => {
+    const expiredInRange = _md().contracts.filter(c => {
         if (!c.endDate) return false;
         if (building && !beds.some(b => b.name === c.propertyName)) return false;
         return c.endDate >= range.start && c.endDate <= range.end;
@@ -341,12 +355,12 @@ function computeOperationalKPIs(building, range) {
     const renewalRate = expiredInRange.length > 0 ? renewedCount / expiredInRange.length : null;
 
     // 本期入住 / 退租 (區間內 startDate / terminatedDate)
-    const moveInCount = mockData.contracts.filter(c => {
+    const moveInCount = _md().contracts.filter(c => {
         if (!c.startDate) return false;
         if (building && !beds.some(b => b.name === c.propertyName)) return false;
         return c.startDate >= range.start && c.startDate <= range.end;
     }).length;
-    const moveOutCount = mockData.contracts.filter(c => {
+    const moveOutCount = _md().contracts.filter(c => {
         if (c.renewalState !== 'terminated') return false;
         if (!c.terminatedDate) return false;
         if (building && !beds.some(b => b.name === c.propertyName)) return false;
@@ -356,7 +370,7 @@ function computeOperationalKPIs(building, range) {
     // 30 天內到期合約數
     const todayIso = new Date().toISOString().slice(0, 10);
     const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-    const expiringSoonCount = mockData.contracts.filter(c => {
+    const expiringSoonCount = _md().contracts.filter(c => {
         if (c.renewalState !== 'active') return false;
         if (!c.endDate) return false;
         if (building && !beds.some(b => b.name === c.propertyName)) return false;
@@ -375,8 +389,8 @@ function computeOperationalKPIs(building, range) {
 // 月度入住 vs 退租 — 過去 N 個月每月計數
 function computeMoveInOutTrend(building, endDate, monthCount = 6) {
     const beds = building
-        ? mockData.properties.filter(p => p.buildingId === building.id)
-        : (mockData.properties || []);
+        ? _md().properties.filter(p => p.buildingId === building.id)
+        : (_md().properties || []);
     const end = new Date(endDate);
     const months = [];
     for (let i = monthCount - 1; i >= 0; i--) {
@@ -388,12 +402,12 @@ function computeMoveInOutTrend(building, endDate, monthCount = 6) {
         const lastDay = new Date(yyyy, d.getMonth() + 1, 0).getDate();
         const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
 
-        const moveIn = mockData.contracts.filter(c => {
+        const moveIn = _md().contracts.filter(c => {
             if (!c.startDate) return false;
             if (building && !beds.some(b => b.name === c.propertyName)) return false;
             return c.startDate >= monthStart && c.startDate <= monthEnd;
         }).length;
-        const moveOut = mockData.contracts.filter(c => {
+        const moveOut = _md().contracts.filter(c => {
             if (c.renewalState !== 'terminated') return false;
             if (!c.terminatedDate) return false;
             if (building && !beds.some(b => b.name === c.propertyName)) return false;
@@ -406,7 +420,7 @@ function computeMoveInOutTrend(building, endDate, monthCount = 6) {
 
 // 各館子標籤列 — Tab 2 / Tab 3 共用
 function renderBuildingSubTabs() {
-    const buildings = getSortedBuildings({ activeOnly: true });
+    const buildings = _modeBuildings();
     const active = reportState.activeBuilding || 'all';
     return `
         <div class="bldg-subtab-row">
@@ -474,7 +488,7 @@ function renderOperationalKpiTiles(k) {
 
 function renderBuildingsTab() {
     const range = reportState.viewRange;
-    const buildings = getSortedBuildings({ activeOnly: true });
+    const buildings = _modeBuildings();
     const active = reportState.activeBuilding || 'all';
     const subTabs = renderBuildingSubTabs();
 
@@ -851,7 +865,7 @@ function renderLandlordWarning(agg) {
 // 單一館的財務分析
 function renderSingleBuildingAnalysis(buildingId) {
     const range = reportState.viewRange;
-    const buildings = getSortedBuildings({ activeOnly: true });
+    const buildings = _modeBuildings();
     const building = buildings.find(b => b.id === buildingId);
     if (!building) {
         reportState.activeBuilding = 'all';
@@ -893,7 +907,7 @@ function renderAnalysisAllBuildings() {
     const rangeInvoices = settledInRange(range);
     const summary = computeAggForInvoices(rangeInvoices);
     const pareto = computeExpensePareto(rangeInvoices);
-    const activeBuildings = getSortedBuildings({ activeOnly: true });
+    const activeBuildings = _modeBuildings();
 
     // 月度趨勢 (全館合計，月數依區間動態)
     const months = computeMonthlyTrend(range);
@@ -989,6 +1003,8 @@ function renderTabBar() {
 }
 
 export function renderReports() {
+    // 每次 render 開頭 reset mode filter 快取 (用戶可能切過 mode)
+    _resetModeCache();
     // statement tab 被拿掉了，若 activeTab 還停在 statement 強制切回 overview
     if (reportState.activeTab === 'statement') reportState.activeTab = 'overview';
     let tabContent;

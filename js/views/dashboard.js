@@ -1,6 +1,8 @@
 ﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings, bedOccupied } from '../data.js';
 import { emptyState } from '../utils/emptyState.js';
 import { getChartColors } from '../utils/chartTheme.js';
+import { modeFilteredData } from '../utils/modeFilter.js';
+import { getMode } from '../utils/appMode.js';
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
 function extractAreaName(fullName) {
@@ -9,9 +11,11 @@ function extractAreaName(fullName) {
 }
 
 // 統計各館空床狀況（含性別分布）
-// 回傳順序跟系統設定的館別順序一致（getSortedBuildings）
-function buildEmptyBedsByProperty(properties) {
-    const sortedBuildings = getSortedBuildings({ activeOnly: true });
+// 回傳順序跟系統設定的館別順序一致（getSortedBuildings）— 只列當前 mode 的 buildings
+function buildEmptyBedsByProperty(properties, mode = getMode()) {
+    const targetMode = mode === 'managed' ? 'managed' : 'cohousing';
+    const sortedBuildings = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === targetMode);
     const propertiesByArea = {};
     // 先按設定順序預建 key，確保之後 Object.keys 順序對
     sortedBuildings.forEach(b => {
@@ -116,7 +120,10 @@ function buildMaintenanceTodos(maintenances) {
 }
 
 export function renderDashboard() {
-    const { properties, contracts, maintenances, invoices } = mockData;
+    // 依當前 mode (共居/代管) 篩出對應 buildings 的子集
+    const mode = getMode();
+    const filtered = modeFilteredData(mode);
+    const { properties, contracts, maintenances, invoices } = filtered;
     // 即時計算 metrics — 不再讀 mockData.metrics (避免清資料後快取殘留)
     const actualAmt = (i) => i.paidAmount != null && i.paidAmount > 0 ? i.paidAmount : (i.amount || 0);
     const thisMonthStr = new Date().toISOString().slice(0, 7);
@@ -344,7 +351,8 @@ function aggregateInvoicesByMonth(months) {
     // 回傳 { income: [m1, m2, ...], expense: [...] }
     const income = months.map(() => 0);
     const expense = months.map(() => 0);
-    mockData.invoices.forEach(inv => {
+    const invoices = modeFilteredData().invoices;
+    invoices.forEach(inv => {
         const m = invoiceMonth(inv);
         const idx = months.indexOf(m);
         if (idx < 0) return;
@@ -358,7 +366,8 @@ function aggregateNetByBuildingMonth(months, buildings) {
     // 回傳 { 'B001': [m1淨, m2淨, ...], ... }
     const result = {};
     buildings.forEach(b => { result[b.id] = months.map(() => 0); });
-    mockData.invoices.forEach(inv => {
+    const invoices = modeFilteredData().invoices;
+    invoices.forEach(inv => {
         const m = invoiceMonth(inv);
         const idx = months.indexOf(m);
         if (idx < 0) return;
@@ -372,7 +381,10 @@ function aggregateNetByBuildingMonth(months, buildings) {
 function buildChartData() {
     const months = lastNMonths(6);
     const monthLabels = months.map(m => `${parseInt(m.substring(5), 10)}月`);
-    const buildings = getSortedBuildings({ activeOnly: true });
+    // 依 mode 篩 buildings (代管 mode 圖表只顯代管房屋)
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const buildings = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === targetMode);
     const C = getChartColors();
 
     if (chartMode === 'total') {
@@ -481,7 +493,8 @@ window.initDashboardInteractions = function() {
         emptyBedsChart = null;
     }
 
-    const emptyBedsByProperty = buildEmptyBedsByProperty(mockData.properties);
+    // 圖表也要依 mode 篩 (用 modeFilteredData 取代直接讀 mockData.properties)
+    const emptyBedsByProperty = buildEmptyBedsByProperty(modeFilteredData().properties);
     const buttons = document.querySelectorAll('.property-filter-btn');
     const ctx = document.getElementById('emptyBedsChart');
     const centerEl = document.getElementById('empty-beds-center');
