@@ -6,15 +6,15 @@
 //   * 月份欄數依視窗寬度自動算 (從上個月起，向後填滿空間)
 //   * 顏色：今天=綠 / 本月=橘 / 過去=灰 / 未來=藍 / 已退房 row 整列灰
 
-import { mockData, formatRoomType, getSortedBuildings, isSettled } from '../data.js';
+import { mockData, formatRoomType, getSortedBuildings, isSettled, needsDecision } from '../data.js';
 import { showTenantNoteEditor, showTenantDetails } from './tenants.js';
 import { showPropertyDetails, showCheckinAssignmentForm } from './properties.js';
-import { showContractDetails, confirmTerminate } from './contracts.js';
+import { showContractDetails, confirmTerminate, confirmRenew, confirmSnooze } from './contracts.js';
 
 const START_OFFSET = -1; // 顯示從上個月開始
 const END_OFFSET = 8;    // 最後顯示到「今天 + 8 個月」(e.g. 5月 → 顯示到隔年 1 月) — 每月自動向後滾
 const COL_WIDTH = 55;    // 每月格目標寬度 (用來決定要塞幾個月)
-const FIXED_COLS = 385;  // 75+120+130+60 = 385 — 與 thead 的 width 完全對齊
+const FIXED_COLS = 425;  // 75+120+130+100 = 425 — 與 thead 的 width 完全對齊
 const CARD_PADDING = 80; // card padding (1.5rem×2) + container padding 預留
 const MAX_MONTHS = END_OFFSET - START_OFFSET + 1; // 10
 
@@ -172,14 +172,26 @@ function renderContractRow(bed, contract, months, today, stripeClass, todayStr) 
 
     const rowClass = [stripeClass, isFuture ? 'occ-row-future' : ''].filter(Boolean).join(' ');
 
+    // 操作 cell：待決策 / 已過期 / 租客已透過 LINE 表達意願 → 顯 3 顆續/退/暫按鈕
+    // 其他狀態維持原本「退房 checkbox」入口
+    const hasIntent = ['renew', 'decline', 'inquiry'].includes(contract.renewIntent);
+    const showDecisionButtons = needsDecision(contract, today) || hasIntent;
+    const actionCell = showDecisionButtons
+        ? `
+            <div class="occ-decision-btns" title="續租 / 退租 / 暫緩">
+                <button class="occ-action-btn occ-action-renew" data-action="renew-contract" data-contract-id="${contract.id}" title="續租"><i class="ph ph-arrow-clockwise"></i></button>
+                <button class="occ-action-btn occ-action-terminate" data-action="terminate-contract-btn" data-contract-id="${contract.id}" title="退租"><i class="ph ph-door-open"></i></button>
+                <button class="occ-action-btn occ-action-snooze" data-action="snooze-contract" data-contract-id="${contract.id}" title="暫緩"><i class="ph ph-clock-clockwise"></i></button>
+            </div>
+        `
+        : `<input type="checkbox" class="occ-terminate-check" data-action="terminate-contract" data-contract-id="${contract.id}" title="勾選後啟動退房流程" />`;
+
     return `
         <tr class="${rowClass}">
             <td class="occ-bed-label">${bedLabelHtml}</td>
             <td>${tenantCell}</td>
             <td><span style="font-size: var(--text-xs); color: var(--text-muted);">${noteCell}</span></td>
-            <td style="text-align: center;">
-                <input type="checkbox" class="occ-terminate-check" data-action="terminate-contract" data-contract-id="${contract.id}" title="勾選後啟動退房流程" />
-            </td>
+            <td style="text-align: center;">${actionCell}</td>
             ${cells}
         </tr>
     `;
@@ -307,7 +319,7 @@ function renderBuildingTable(building, months, today) {
                             <th style="width: 75px;">床位</th>
                             <th style="width: 120px;">房客</th>
                             <th style="width: 130px;">備註</th>
-                            <th style="width: 60px;">退房</th>
+                            <th style="width: 100px;">操作</th>
                             ${monthHeader}
                         </tr>
                     </thead>
@@ -543,6 +555,15 @@ export function initOccupancyActions(scope) {
                 e.preventDefault();
                 target.checked = false;
                 confirmTerminate(target.dataset.contractId);
+            } else if (action === 'renew-contract') {
+                e.preventDefault();
+                confirmRenew(target.dataset.contractId);
+            } else if (action === 'terminate-contract-btn') {
+                e.preventDefault();
+                confirmTerminate(target.dataset.contractId);
+            } else if (action === 'snooze-contract') {
+                e.preventDefault();
+                confirmSnooze(target.dataset.contractId);
             } else if (action === 'checkin-bed') {
                 showCheckinAssignmentForm({ preselectBedId: target.dataset.bedId });
             }

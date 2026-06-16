@@ -1492,6 +1492,39 @@ select:focus-visible,
     font-size: 0.75rem;
 }
 
+/* 住房一覽 — 待決策 3 顆 mini 按鈕 (續租 / 退租 / 暫緩) */
+.occ-decision-btns {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+    justify-content: center;
+}
+.occ-action-btn {
+    width: 26px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    background: var(--color-surface);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.72rem;
+    line-height: 1;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.occ-action-btn i { font-size: 0.85rem; }
+.occ-action-renew { color: var(--color-success); border-color: rgba(34, 148, 110, 0.35); }
+.occ-action-renew:hover { background: rgba(34, 148, 110, 0.12); border-color: var(--color-success); }
+.occ-action-terminate { color: var(--color-danger); border-color: rgba(220, 38, 38, 0.3); }
+.occ-action-terminate:hover { background: rgba(220, 38, 38, 0.1); border-color: var(--color-danger); }
+.occ-action-snooze { color: var(--color-info); }
+.occ-action-snooze:hover { background: rgba(59, 130, 246, 0.08); border-color: var(--color-info); }
+
+/* 小幫手不顯決策按鈕 */
+body[data-role="helper"] .occ-decision-btns { display: none !important; }
+
 /* 可點擊日期格 */
 .occ-clickable {
     cursor: pointer;

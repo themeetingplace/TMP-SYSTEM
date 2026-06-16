@@ -738,7 +738,7 @@ async function sendContractToLine(id) {
 
 // === 三種決策動作 ===
 
-function confirmRenew(id) {
+export function confirmRenew(id) {
     const c = mockData.contracts.find(x => x.id === id);
     if (!c) return;
     const days = c.termMonths === 3 ? 90 : 30;
@@ -851,7 +851,7 @@ export function confirmTerminate(id) {
     });
 }
 
-function confirmSnooze(id) {
+export function confirmSnooze(id) {
     const c = mockData.contracts.find(x => x.id === id);
     if (!c) return;
     openFormModal({
