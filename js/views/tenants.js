@@ -18,10 +18,13 @@ export function renderTenants() {
     const bindRate = activeTenants > 0 ? Math.round(activeBoundCount / activeTenants * 100) : 0;
 
     const tableRows = tenants.map(t => {
+        const hasStatus = !!t.status;
         let statusClass = 'primary';
+        let statusLabel = hasStatus ? t.status : '未標示';
         if (t.status === '居住中') statusClass = 'success';
-        if (t.status === '待入住') statusClass = 'warning';
-        if (t.status === '已退租') statusClass = 'info';
+        else if (t.status === '待入住') statusClass = 'warning';
+        else if (t.status === '已退租') statusClass = 'info';
+        else if (!hasStatus) statusClass = 'muted';
 
         // LINE 綁定狀態 cell
         const lineBound = !!t.lineUserId;
@@ -53,7 +56,7 @@ export function renderTenants() {
                 <td>
                     <div style="max-width: 200px;">
                         <div style="font-weight: 500; margin-bottom: 0.25rem;">${t.currentProperty ? esc(t.currentProperty) : '<span style="color: var(--text-muted)">未指定物件</span>'}</div>
-                        <span class="status-badge ${statusClass}" style="font-size: var(--text-xs);">${esc(t.status)}</span>
+                        <span class="status-badge ${statusClass}" style="font-size: var(--text-xs);">${esc(statusLabel)}</span>
                     </div>
                 </td>
                 <td>${lineCell}</td>
@@ -120,7 +123,15 @@ export function renderTenants() {
             </div>
 
             <div class="table-container">
-                <table class="data-table">
+                <table class="data-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 24%;">
+                        <col style="width: 13%;">
+                        <col style="width: 20%;">
+                        <col style="width: 12%;">
+                        <col style="width: 16%;">
+                        <col style="width: 15%;">
+                    </colgroup>
                     <thead><tr><th>租客資訊</th><th>聯絡方式</th><th>居住狀態</th><th>LINE 綁定</th><th>緊急聯絡人</th><th>操作</th></tr></thead>
                     <tbody>${tableRows}</tbody>
                 </table>

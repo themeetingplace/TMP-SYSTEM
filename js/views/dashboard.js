@@ -1,4 +1,4 @@
-﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings } from '../data.js';
+﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings, bedOccupied } from '../data.js';
 import { emptyState } from '../utils/emptyState.js';
 import { getChartColors } from '../utils/chartTheme.js';
 
@@ -32,7 +32,9 @@ function buildEmptyBedsByProperty(properties) {
             };
         }
         propertiesByArea[areaName].total++;
-        if (prop.status === '待租' || prop.status === '待簽約') {
+        // 床位有名字 (有 active/snoozed 已開始合約) = 居住; 沒有 = 空
+        // 不再用 prop.status，因為 status 可能跟實際合約狀況不同步
+        if (!bedOccupied(prop.name)) {
             propertiesByArea[areaName].vacant++;
             const g = prop.gender || '不限';
             if (propertiesByArea[areaName].vacantByGender[g] !== undefined) {
@@ -120,7 +122,7 @@ export function renderDashboard() {
     const thisMonthStr = new Date().toISOString().slice(0, 7);
     const metrics = {
         totalProperties: properties.length,
-        rentedProperties: properties.filter(p => p.status === '已出租').length,
+        rentedProperties: properties.filter(p => bedOccupied(p.name)).length,
         pendingContracts: contracts.filter(c => c.status === '待簽署' && c.renewalState === 'active').length,
         pendingMaintenances: maintenances.filter(m => m.status !== '已完成').length,
         monthlyIncome: invoices

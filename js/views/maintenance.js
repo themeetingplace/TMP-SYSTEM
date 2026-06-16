@@ -101,7 +101,15 @@ export function renderMaintenance() {
             </div>
 
             <div class="table-container">
-                <table class="data-table">
+                <table class="data-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 22%;">
+                        <col style="width: 28%;">
+                        <col style="width: 13%;">
+                        <col style="width: 10%;">
+                        <col style="width: 12%;">
+                        <col style="width: 15%;">
+                    </colgroup>
                     <thead><tr><th>工單資訊</th><th>報修內容</th><th>回報時間</th><th>狀態</th><th>維修費用</th><th>操作</th></tr></thead>
                     <tbody>${tableRows}</tbody>
                 </table>

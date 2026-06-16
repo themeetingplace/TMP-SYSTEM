@@ -262,9 +262,19 @@ export function renderUnsettled() {
             </div>
 
             <div class="table-container">
-                <table class="data-table cards-with-hero">
+                <table class="data-table cards-with-hero" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 36px;">
+                        <col style="width: 9%;">
+                        <col style="width: 22%;">
+                        <col style="width: 16%;">
+                        <col style="width: 12%;">
+                        <col style="width: 11%;">
+                        <col style="width: 13%;">
+                        <col style="width: 14%;">
+                    </colgroup>
                     <thead><tr>
-                        <th style="width: 36px;"><input type="checkbox" id="check-all"></th>
+                        <th><input type="checkbox" id="check-all"></th>
                         <th>方向</th><th>帳單</th><th>對象</th><th>金額</th><th>應結日</th><th>銀行末 5 碼</th><th>操作</th>
                     </tr></thead>
                     <tbody>${tableRows || `<tr><td colspan="8" style="text-align: center; padding: 3rem; color: var(--text-muted);"><i class="ph ph-check-circle" style="font-size: 2rem; display: block; margin-bottom: 0.5rem; color: var(--color-success);"></i>所有帳款都已結清 🎉</td></tr>`}</tbody>

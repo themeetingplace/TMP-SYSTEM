@@ -8,6 +8,7 @@ import {
     mockData,
     getSortedBuildings,
     activeContractFor,
+    bedOccupied,
     isSettled,
     invoiceActualAmount as actualAmount
 } from '../data.js';
@@ -57,7 +58,7 @@ function computeOverviewKPIs(range) {
 
     // 整體出租率 (snapshot)
     const allBeds = mockData.properties || [];
-    const rentedBeds = allBeds.filter(p => activeContractFor(p.name)).length;
+    const rentedBeds = allBeds.filter(p => bedOccupied(p.name)).length;
     const occRate = allBeds.length ? rentedBeds / allBeds.length : 0;
 
     // 30 天內到期合約數
@@ -307,7 +308,7 @@ function computeOperationalKPIs(building, range) {
         ? mockData.properties.filter(p => p.buildingId === building.id)
         : (mockData.properties || []);
     const totalBeds = beds.length;
-    const rentedBeds = beds.filter(p => activeContractFor(p.name)).length;
+    const rentedBeds = beds.filter(p => bedOccupied(p.name)).length;
     const vacantBeds = totalBeds - rentedBeds;
     const occRate = totalBeds ? rentedBeds / totalBeds : 0;
 
@@ -316,8 +317,7 @@ function computeOperationalKPIs(building, range) {
     const todayMs = Date.now();
     const vacantDaysArr = [];
     beds.forEach(p => {
-        const active = activeContractFor(p.name);
-        if (active) return; // 已出租跳過
+        if (bedOccupied(p.name)) return; // 已出租跳過 (對齊住房一覽)
         // 找這個床位最近一次的合約 (有 terminatedDate 或 endDate < today)
         const lastContract = mockData.contracts
             .filter(c => c.propertyName === p.name)

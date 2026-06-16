@@ -1,4 +1,4 @@
-﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts } from '../data.js';
+﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts, bedOccupied } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
 import { showTenantDetails } from './tenants.js';
@@ -56,7 +56,8 @@ function buildAreaStats(properties) {
         const { area } = parsePropertyName(p.name);
         if (!stats[area]) stats[area] = { total: 0, vacant: 0 };
         stats[area].total++;
-        if (p.status === '待租' || p.status === '待簽約') stats[area].vacant++;
+        // 「床位上有名字 = 居住」對齊 (2026-06-16)
+        if (!bedOccupied(p.name)) stats[area].vacant++;
     });
     return stats;
 }
@@ -93,8 +94,10 @@ export function renderProperties() {
     const properties = [...mockData.properties].sort(cmp);
 
     const totalProperties = properties.length;
-    const rentedCount = properties.filter(p => p.status === '已出租').length;
-    const vacantCount = properties.filter(p => p.status === '待租').length;
+    // 「床位上有名字 = 居住」對齊住房一覽 (2026-06-16)
+    // 計數用 bedOccupied，但 filter tab 過濾用 data-occupied (見下 tableRows)
+    const rentedCount = properties.filter(p => bedOccupied(p.name)).length;
+    const vacantCount = properties.filter(p => !bedOccupied(p.name) && p.status !== '待簽約').length;
     const pendingCount = properties.filter(p => p.status === '待簽約').length;
     const totalVacant = vacantCount + pendingCount;
 
@@ -107,6 +110,9 @@ export function renderProperties() {
     ];
 
     const tableRows = properties.map(p => {
+        // effectiveStatus: 床位有人住 → 視為「已出租」(對齊住房一覽計數)
+        const occupied = bedOccupied(p.name);
+        const effectiveStatus = occupied ? '已出租' : (p.status === '已出租' ? '待租' : p.status);
         const statusClass = statusClassOf(p.status);
         const { area, bed } = parsePropertyName(p.name);
         const building = mockData.buildings.find(b => b.id === p.buildingId);
@@ -134,7 +140,7 @@ export function renderProperties() {
         const searchText = [p.name, p.address, p.tenant || '', p.id, area, bed, p.contractId || ''].join(' ').toLowerCase();
 
         return `
-            <tr data-row-id="${p.id}" data-status="${p.status}" data-area="${displayArea}" data-search="${searchText}">
+            <tr data-row-id="${p.id}" data-status="${effectiveStatus}" data-area="${displayArea}" data-search="${searchText}">
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong style="font-size: var(--text-base);">${displayArea}</strong>
@@ -142,7 +148,7 @@ export function renderProperties() {
                         ${roomTypeBadge}
                     </div>
                 </td>
-                <td><span class="status-badge ${statusClass}">${p.status}</span></td>
+                <td><span class="status-badge ${statusClassOf(effectiveStatus)}">${effectiveStatus}</span></td>
                 <td>
                     <div style="font-size: var(--text-base); font-weight: 500;">${p.rent != null ? '$' + p.rent.toLocaleString() : '<span style="color: var(--text-muted)">—</span>'}</div>
                     <div style="font-size: var(--text-xs); color: var(--text-muted);">每月租金</div>
@@ -227,7 +233,15 @@ export function renderProperties() {
             </div>
 
             <div class="table-container">
-                <table class="data-table">
+                <table class="data-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 22%;">
+                        <col style="width: 12%;">
+                        <col style="width: 13%;">
+                        <col style="width: 20%;">
+                        <col style="width: 18%;">
+                        <col style="width: 15%;">
+                    </colgroup>
                     <thead>
                         <tr>
                             <th class="sortable-col" data-sort-col="info" title="點擊排序">物件資訊 ${propSortArrow('info', currentSort)}</th>

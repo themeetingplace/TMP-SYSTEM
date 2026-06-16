@@ -1,4 +1,4 @@
-﻿import { mockData, store, formatRoomType, getSortedBuildings } from '../data.js';
+﻿import { mockData, store, formatRoomType, getSortedBuildings, bedOccupied } from '../data.js';
 import { openFormModal, openConfirm, openModal, showToast, refreshView } from '../utils/ui.js';
 import { showPropertyForm } from './properties.js';
 import { fileToBase64, fillContractPdf, downloadPdfBytes, previewPdfBytes, listPdfFields, formatRentalPeriod } from '../utils/pdfGen.js';
@@ -44,7 +44,7 @@ function renderBuildingsTab() {
     const buildings = getSortedBuildings(); // 含已停用，但按 id 排好
     const { properties } = mockData;
     const totalBeds = (bid) => properties.filter(p => p.buildingId === bid).length;
-    const rentedBeds = (bid) => properties.filter(p => p.buildingId === bid && p.status === '已出租').length;
+    const rentedBeds = (bid) => properties.filter(p => p.buildingId === bid && bedOccupied(p.name)).length;
     const roomCount = (bid) => new Set(properties.filter(p => p.buildingId === bid).map(p => p.roomNumber)).size;
 
     const rows = buildings.map(b => {
@@ -206,7 +206,7 @@ function showBuildingRoomsModal(buildingId) {
         const roomNumbers = Object.keys(rooms).map(Number).sort((a, b) => a - b);
 
         const totalBeds = beds.length;
-        const rented = beds.filter(b => b.status === '已出租').length;
+        const rented = beds.filter(b => bedOccupied(b.name)).length;
         const vacant = totalBeds - rented;
 
         return `

@@ -240,11 +240,13 @@ function renderBuildingTable(building, months, today) {
         const roomBeds = roomMap.get(rn);
         const sample = roomBeds[0];
         const roomTypeLabel = formatRoomType(sample?.gender, sample?.capacity);
-        // 該房間有幾床是「現任」有人住 (排除純未來合約的床位)
+        // 該房間有幾床是「實際有人住」— 跟 display 邏輯對齊
+        // 「床位上有名字 = 居住」: 有 active/snoozed 合約且 startDate <= today (合約是否過期不論)
+        // (P2 用戶 2026-06-16: 之前 spans-today 嚴格判定漏掉合約已過期但 bed.tenant 還在的情況)
         const todayStrForCount = today.toISOString().slice(0, 10);
         const rentedInRoom = roomBeds.filter(b => {
             const cs = getBedContracts(b);
-            return cs.some(c => c.startDate <= todayStrForCount && c.endDate >= todayStrForCount);
+            return cs.some(c => c.startDate && c.startDate <= todayStrForCount);
         }).length;
         const stripeClass = idx % 2 === 0 ? 'occ-room-stripe-a' : 'occ-room-stripe-b';
 

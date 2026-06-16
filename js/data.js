@@ -404,6 +404,19 @@ export function activeContractFor(propertyName) {
     ) || null;
 }
 
+// 床位是否「實際有人住」— 對齊住房一覽顯示邏輯
+// 規則: renewalState='active' 或 'snoozed' 且 startDate <= today (已入住，不論合約是否過期)
+// 「床位上有名字 = 居住」(2026-06-16 用戶要求)
+export function bedOccupied(propertyName, today = new Date()) {
+    if (!propertyName) return false;
+    const todayStr = today.toISOString().slice(0, 10);
+    return mockData.contracts.some(c =>
+        c.propertyName === propertyName
+        && (c.renewalState === 'active' || c.renewalState === 'snoozed')
+        && c.startDate && c.startDate <= todayStr
+    );
+}
+
 // 找指定租客目前的「進行中」合約 (一個人同時只該有一份 active)
 export function activeContractOfTenant(tenantName) {
     if (!tenantName) return null;
@@ -1520,7 +1533,7 @@ function invoicePaidValue(inv) {
 function recalcMetrics() {
     const props = mockData.properties;
     mockData.metrics.totalProperties = props.length;
-    mockData.metrics.rentedProperties = props.filter(p => p.status === '已出租').length;
+    mockData.metrics.rentedProperties = props.filter(p => bedOccupied(p.name)).length;
     mockData.metrics.pendingContracts = mockData.contracts.filter(c => c.status === '待簽署').length;
     mockData.metrics.pendingMaintenances = mockData.maintenances.filter(m => m.status !== '已完成').length;
     // 月入帳：所有收款 invoice 的實收金額 (含部分繳款) — 跟 finance.js 的 actualAmount 對齊
