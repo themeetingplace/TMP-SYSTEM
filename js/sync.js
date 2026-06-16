@@ -199,14 +199,29 @@ window.addEventListener('bms:delete', async (e) => {
         return;
     }
     deleteInFlight.add(key);
+    // 本機剛刪 → 加黑名單，5s 內擋掉 realtime echo 的 UPDATE/INSERT 復活
+    markRecentlyDeleted(table, id);
     try {
         markJustPushed();
-        const { error } = await supabase.from(table).delete().eq(t.pk, id);
+        // ⚠ Supabase RLS 拒絕 DELETE 時不回錯誤，只回 0 筆
+        // 用 .select() 確認真的刪到才算成功，否則跳醒目 toast
+        const { data: deleted, error } = await supabase.from(table).delete().eq(t.pk, id).select();
         if (error) {
             console.error(`[sync] DELETE ${table}/${id} 失敗:`, error);
             setStatus('error', `刪除同步失敗：${error.message}`);
+            if (window.showToast) window.showToast(`雲端刪除失敗：${error.message}`, 'danger', 6000);
+        } else if (!deleted || deleted.length === 0) {
+            // RLS 靜默拒絕 — 本機刪了但雲端還在，下次 pull 又拉回
+            console.warn(`[sync] ⚠ DELETE ${table}/${id} 雲端 0 筆受影響 (可能是 RLS 阻擋)`);
+            if (window.showToast) {
+                window.showToast(
+                    `雲端 RLS 阻擋了 <code>${table}/${id}</code> 的刪除 → 本機刪了但雲端還在，下次重整會回來。請用 Supabase SQL Editor 直接跑 <code>DELETE FROM ${table} WHERE id='${id}'</code>`,
+                    'danger',
+                    10000
+                );
+            }
         } else {
-            console.log(`[sync] 🗑 ${table}/${id} 已從雲端刪除`);
+            console.log(`[sync] 🗑 ${table}/${id} 已從雲端刪除 (${deleted.length} 筆)`);
         }
     } catch (err) {
         console.error('[sync] DELETE 異常:', err);
@@ -262,6 +277,22 @@ function startRealtime() {
         });
 }
 
+// 最近刪除黑名單 — 防 race: 自己刪了之後，先前 upsert 的 echo 才到、會把剛刪的 row 復活
+const recentlyDeleted = new Map();  // key=`${table}/${id}` → expireAt timestamp
+const DELETE_BLACKLIST_MS = 5_000;
+function markRecentlyDeleted(table, id) {
+    recentlyDeleted.set(`${table}/${id}`, Date.now() + DELETE_BLACKLIST_MS);
+}
+function isRecentlyDeleted(table, id) {
+    const expire = recentlyDeleted.get(`${table}/${id}`);
+    if (!expire) return false;
+    if (Date.now() > expire) {
+        recentlyDeleted.delete(`${table}/${id}`);
+        return false;
+    }
+    return true;
+}
+
 function handleRealtimeChange(payload) {
     const t = TABLES.find(x => x.key === payload.table);
     if (!t) return;
@@ -272,6 +303,12 @@ function handleRealtimeChange(payload) {
     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
         const converted = t.fromDb(payload.new);
         const id = converted[pkJs];
+        // ⚠ 防復活: 最近 5s 內被本機刪過 → 不接受 INSERT/UPDATE echo
+        // (避免步驟 [upsert → broadcast UPDATE → 本機刪 → echo 才到] 把刪掉的 row push 回來)
+        if (isRecentlyDeleted(t.key, id)) {
+            console.log(`[realtime] ${payload.eventType} ${t.key}/${id} 略過 (最近剛刪)`);
+            return;
+        }
         const idx = mockData[t.src].findIndex(r => r[pkJs] === id);
         if (idx >= 0) {
             // 若本機資料完全相同 (通常是自己 push 後的迴響)，跳過 re-render
@@ -279,12 +316,18 @@ function handleRealtimeChange(payload) {
             const sameUpdatedAt = payload.new.updated_at && existing.updatedAt === payload.new.updated_at;
             if (sameUpdatedAt) return;
             mockData[t.src][idx] = { ...existing, ...converted };
-        } else {
+        } else if (payload.eventType === 'INSERT') {
+            // INSERT 才 push 進來 (別人新增)
             mockData[t.src].push(converted);
+        } else {
+            // UPDATE 但本機沒這筆 → 不復活；可能 race 或先前漏 INSERT
+            console.log(`[realtime] UPDATE ${t.key}/${id} 略過 (本機無此筆)`);
+            return;
         }
         console.log(`[realtime] ${payload.eventType} ${t.key}/${id}`);
     } else if (payload.eventType === 'DELETE') {
         const id = payload.old[t.pk];
+        markRecentlyDeleted(t.key, id);  // 接到 DELETE 也黑名單，防後續 echo 重新加回
         const before = mockData[t.src]?.length || 0;
         mockData[t.src] = (mockData[t.src] || []).filter(r => r[pkJs] !== id);
         if (mockData[t.src].length === before) return;
