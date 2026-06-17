@@ -1206,11 +1206,9 @@ function bShort(name) { return (name || '').replace(/館$/, ''); }
 function computeYearlyData(year) {
     const yearStr = String(year);
     const md = _md();
-    // 當前 mode 啟用中的 buildings，依 group → id 排序
-    const buildings = (md.properties.length ? mockData.buildings : mockData.buildings)
-        .filter(b => (md.mode === 'managed' ? b.mode === 'managed' : b.mode !== 'managed'))
-        .filter(b => b.status === 'active' || b.status == null)
-        .sort((a, b) => (a.group || '').localeCompare(b.group || '') || (a.id || '').localeCompare(b.id || ''));
+    // 走系統共用排序 — id 升冪，跟其他頁面一致
+    const buildings = getSortedBuildings({ activeOnly: true })
+        .filter(b => (md.mode === 'managed' ? b.mode === 'managed' : b.mode !== 'managed'));
 
     const invs = md.invoices.filter(i =>
         isSettled(i) && (i.paidDate || i.dueDate || '').startsWith(yearStr)
