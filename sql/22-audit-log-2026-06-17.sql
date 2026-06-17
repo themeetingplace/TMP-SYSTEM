@@ -93,10 +93,19 @@ DROP POLICY IF EXISTS audit_log_no_delete ON audit_log;
 CREATE POLICY audit_log_no_delete ON audit_log FOR DELETE TO authenticated USING (false);
 
 -- === 驗收 ===
-SELECT 'audit_log triggers' AS what, tablename FROM pg_trigger
-    JOIN pg_class c ON c.oid = pg_trigger.tgrelid
-    WHERE tgname LIKE 'audit_log_%' AND NOT tgisinternal
-    ORDER BY tablename;
+-- 1. 列 audit_log triggers (pg_class.relname, 不是 tablename)
+SELECT
+    c.relname AS table_name,
+    t.tgname AS trigger_name
+FROM pg_trigger t
+JOIN pg_class c ON c.oid = t.tgrelid
+WHERE t.tgname LIKE 'audit_log_%'
+  AND NOT t.tgisinternal
+ORDER BY c.relname;
+-- 應該看到 6 列: buildings/contracts/invoices/owners/properties/tenants 各 1 trigger
 
--- 最近 10 筆 audit (剛跑完應該空)
-SELECT changed_at, table_name, row_id, action, actor_email FROM audit_log ORDER BY changed_at DESC LIMIT 10;
+-- 2. 測一下 trigger 真的有 fire
+UPDATE buildings SET note = note WHERE id = 'B001';
+SELECT changed_at, table_name, row_id, action, actor_email
+FROM audit_log ORDER BY changed_at DESC LIMIT 3;
+-- 應該看到剛剛那筆 UPDATE buildings/B001 + actor_email = fankiki911116@gmail.com
