@@ -1567,16 +1567,29 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
 
 @media print {
     @page { size: A3 landscape; margin: 0.8cm; }
-    /* 隱藏所有 chrome：sidebar / topbar / tab bar / range picker / 其他 card */
+    /* 強制顏色保留 (印表機預設會去飽和) */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+    /* 解除整套 viewport 鎖定 (這套 layout 用 height: 100vh + overflow: hidden) */
+    body.is-printing-yearly,
+    body.is-printing-yearly .app-container,
+    body.is-printing-yearly .main-content,
+    body.is-printing-yearly .view-container {
+        display: block !important;
+        height: auto !important;
+        max-height: none !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        max-width: none !important;
+    }
+    /* 隱藏所有 chrome */
     body.is-printing-yearly .sidebar,
     body.is-printing-yearly .topbar,
     body.is-printing-yearly .reports-hub-tabs,
     body.is-printing-yearly .range-picker,
     body.is-printing-yearly .yearly-toolbar,
     body.is-printing-yearly .sidebar-backdrop { display: none !important; }
-    body.is-printing-yearly .main-content,
-    body.is-printing-yearly .view-container { margin: 0 !important; padding: 0 !important; max-width: none !important; }
-    body.is-printing-yearly .app-container { display: block !important; }
     /* print header 此時顯示 */
     body.is-printing-yearly .print-only { display: flex !important; }
     /* 表格：取消 sticky / max-height / shadow，讓整張表跨頁印 */
@@ -1586,14 +1599,18 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
         box-shadow: none !important;
         border-radius: 0 !important;
     }
-    body.is-printing-yearly .yearly-table { font-size: 9pt !important; }
+    body.is-printing-yearly .yearly-table {
+        font-size: 8.5pt !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        table-layout: auto !important;
+    }
+    body.is-printing-yearly .yearly-table thead { display: table-header-group !important; }  /* 跨頁每頁重覆表頭 */
     body.is-printing-yearly .yearly-table thead th { position: static !important; }
     body.is-printing-yearly .yearly-table .yearly-th-label,
-    body.is-printing-yearly .yearly-row .yearly-label { position: static !important; }
+    body.is-printing-yearly .yearly-row .yearly-label { position: static !important; background: transparent !important; }
     body.is-printing-yearly .yearly-row { page-break-inside: avoid; }
     body.is-printing-yearly .yearly-section-banner { page-break-after: avoid; }
-    /* 強制顏色保留 (印表機預設會去飽和) */
-    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
 }
 
 /* ─────────────────────── 支出分項 KPI grid (單館財務分析) ─────────────────────── */
