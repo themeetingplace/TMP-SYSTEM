@@ -1084,6 +1084,7 @@ function renderAnalysisAllBuildings() {
     const monthCount = months.length;
     // 統計單位固定為館別 (2026-06-17 拿掉群組 toggle，照用戶要求)
     reportState.viewGrouping = 'building';
+    const grouping = 'building';
 
     // 計算各 unit (館/群組) 的 agg + expense buckets
     const units = getReportUnits();
