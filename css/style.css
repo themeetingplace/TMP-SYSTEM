@@ -1564,8 +1564,9 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
     background: var(--color-surface);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
-    overflow-x: auto;
-    overflow-y: visible;
+    /* 內部捲動容器 — sticky thead 才能正確貼頂 */
+    max-height: calc(100vh - 240px);
+    overflow: auto;
 }
 .yearly-table {
     width: 100%;
