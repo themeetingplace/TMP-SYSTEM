@@ -1564,12 +1564,26 @@ body[data-app-mode="managed"] .topbar-title h1::before {
     content: '🏠 ';
 }
 
+/* sidebar 收合時 mode 切換器: 改縱列、只剩 icon、label 強制隱藏避免直書 */
 .sidebar.is-collapsed .mode-switcher {
     flex-direction: column;
     padding: 2px;
+    margin: 0.5rem 0.4rem 0.75rem;
+    gap: 2px;
 }
-.sidebar.is-collapsed .mode-switch-btn span { display: none; }
-.sidebar.is-collapsed .mode-switch-btn { padding: 0.4rem 0.25rem; }
+.sidebar.is-collapsed .mode-switch-btn {
+    padding: 0.45rem 0.25rem;
+    min-height: 36px;
+}
+.sidebar.is-collapsed .mode-switch-btn span,
+.sidebar.is-collapsed .mode-switch-btn > span,
+.sidebar.is-collapsed .mode-switcher span {
+    display: none !important;
+}
+.sidebar.is-collapsed .mode-switch-btn i {
+    font-size: 1.15rem;
+    margin: 0;
+}
 
 /* 代管 sidebar empty hint + add button */
 .nav-empty-hint {
