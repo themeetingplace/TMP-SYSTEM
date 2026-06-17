@@ -120,7 +120,7 @@ window.quickTest = async () => {
 
 // Auto-run connection test on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 BMS Application Loaded');
+    console.log('🚀 PMS Application Loaded');
     console.log('💡 Run testSupabaseConnection() in console to test database connection');
     console.log('💡 Or run quickTest() for a simple connection test');
     console.log('💡 Run initializeMockData() to test data insertion');

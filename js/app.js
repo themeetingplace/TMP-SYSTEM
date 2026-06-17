@@ -281,6 +281,8 @@ window.addEventListener('DOMContentLoaded', () => {
             if (!isTracking) return;
             const dx = e.touches[0].clientX - startX;
             const dy = e.touches[0].clientY - startY;
+            // audit: 加 dead zone — 移動 <8px 不跟手 (誤觸 / 抖動不算 swipe)
+            if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
             // 垂直滑動為主 (例如想滑 nav) → 不攔截
             if (Math.abs(dy) > Math.abs(dx)) { isTracking = false; sidebar.style.transition = ''; return; }
             // 只允許往左拖（dx < 0），往右拖固定 0

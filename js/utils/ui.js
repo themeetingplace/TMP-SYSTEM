@@ -201,13 +201,30 @@ export function openFormModal({ title, fields = [], values = {}, submitLabel = '
                         ? firstInvalid.querySelector('.custom-select-trigger')
                         : firstInvalid;
                     focusTarget?.focus();
-                    // 帶上具體欄位名 + 捲到視野內 (P1-17)
                     if (focusTarget?.scrollIntoView) focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     showToast(`「${firstInvalidLabel}」必填，請補上`, 'danger', 4000);
                     return;
                 }
+                // audit: 提交中 disable submit + 加 spinner，防連點
+                const submitBtn = document.querySelector(`button[form="${form.id}"][type="submit"]`);
+                const origLabel = submitBtn?.innerHTML;
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="ph ph-spinner-gap" style="animation: spin 0.8s linear infinite;"></i> 處理中…';
+                }
                 Promise.resolve(onSubmit(data)).then(result => {
                     if (result !== false) close();
+                    else if (submitBtn) {
+                        // 表單 reject (return false) → 還原 button 讓用戶改後再提
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = origLabel;
+                    }
+                }).catch(err => {
+                    console.error('[form] submit 失敗:', err);
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = origLabel;
+                    }
                 });
             });
             if (onFormMount) onFormMount(form);

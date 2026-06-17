@@ -39,3 +39,15 @@ export function isCohousing() {
 export function applyModeAttribute() {
     document.body.dataset.appMode = currentMode;
 }
+
+// audit: 跨分頁同步 — 另一個 tab 切了模式，本 tab 也跟著切
+// 不會觸發 setMode (那會 dispatch pms:mode-change 又 push localStorage 形成 echo loop)
+// 直接讀新值 + dispatch event，呼叫者用 event listener 重 render
+window.addEventListener('storage', (e) => {
+    if (e.key !== STORAGE_KEY) return;
+    if (!VALID_MODES.includes(e.newValue)) return;
+    if (e.newValue === currentMode) return;
+    currentMode = e.newValue;
+    document.body.dataset.appMode = currentMode;
+    window.dispatchEvent(new CustomEvent('pms:mode-change', { detail: { mode: currentMode, source: 'cross-tab' } }));
+});

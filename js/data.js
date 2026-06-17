@@ -156,7 +156,7 @@ function hydrate() {
 _persistDisabled = true;
 const wasHydrated = hydrate();
 _persistDisabled = false;
-if (wasHydrated) console.info('[BMS] 已從本機儲存載入既有資料');
+if (wasHydrated) console.info('[PMS] 已從本機儲存載入既有資料');
 
 // 提供清空與匯出工具給 console 偵錯用
 window.bmsResetData = function() {

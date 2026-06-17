@@ -1559,6 +1559,16 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
 .btn-icon.primary       { color: var(--color-primary); }
 .btn-icon.primary:hover { background: rgba(255, 122, 0, 0.08); border-color: var(--color-primary); }
 
+/* spinner 旋轉 (form submit / loading states) */
+@keyframes spin {
+    from { transform: rotate(0); }
+    to { transform: rotate(360deg); }
+}
+.ph-spin {
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+}
+
 /* a11y: 螢幕報讀可見、視覺不可見 (audit: 必填用「必填」字補 * 純色) */
 .sr-only {
     position: absolute !important;
@@ -4396,6 +4406,8 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     max-height: 85vh;
     /* dvh = 動態 viewport，鍵盤彈出時自動縮，避免 modal 內 input 被遮到拉不回 (P1 mobile follow-up #4) */
     max-height: 85dvh;
+    /* audit: 手機瀏海 / status bar 預留 — iOS safe-area-inset-top */
+    margin-top: env(safe-area-inset-top, 0);
     /* 改成 flex 容器 — 讓 header / body / footer 分層，只有 body 內部捲動 */
     display: flex;
     flex-direction: column;

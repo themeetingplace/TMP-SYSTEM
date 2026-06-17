@@ -310,11 +310,17 @@ function renderBuildingTable(building, months, today) {
                 <h3 class="card-title" style="margin: 0;">
                     <i class="ph ph-buildings"></i> ${building.name}
                 </h3>
-                <div style="font-size: var(--text-xs); color: var(--text-muted); display: flex; gap: 1rem;">
+                <div style="font-size: var(--text-xs); color: var(--text-muted); display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                     <span>共 <strong>${beds.length}</strong> 床</span>
                     <span style="color: var(--color-success);">居住 ${stats.active || 0}</span>
                     ${stats.snoozed ? `<span style="color: var(--color-warning);">暫緩 ${stats.snoozed}</span>` : ''}
                     <span>空床 ${stats.vacant || 0}</span>
+                    <!-- audit: 月份格 badge legend ─ 讓新用戶看得懂 ✓◐! 是什麼 -->
+                    <span style="display: inline-flex; gap: 0.4rem; align-items: center; padding-left: 1rem; border-left: 1px solid var(--border-color);" title="月份格繳費狀態說明">
+                        <span class="occ-pay-badge occ-pay-paid">✓</span><small>已繳</small>
+                        <span class="occ-pay-badge occ-pay-partial">◐</span><small>部分</small>
+                        <span class="occ-pay-badge occ-pay-unpaid">!</span><small>逾期</small>
+                    </span>
                 </div>
             </div>
             <div class="table-container occ-table-wrap">
