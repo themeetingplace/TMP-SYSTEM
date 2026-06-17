@@ -96,9 +96,9 @@ function renderDataTab(building) {
             ${fieldRow('LINE ID', owner.lineId)}
             ${fieldRow('來源', owner.source)}
             ${fieldRow('狀態', owner.status === 'active' ? '合作中' : (owner.status === 'pending_review' ? '待審核' : '已封存'))}
-            <div style="margin-top: 0.5rem;"><a href="#m-owners" class="btn btn-outline" style="padding: 0.3rem 0.7rem; font-size: var(--text-xs);"><i class="ph ph-arrow-right"></i> 至屋主管理</a></div>
+            <div style="margin-top: 0.5rem;"><a href="#m-owners" class="btn btn-outline" style="padding: 0.3rem 0.7rem; font-size: var(--text-xs);"><i class="ph ph-arrow-right"></i> 至屋主清單</a></div>
         `
-        : `<div style="color: var(--text-muted); font-size: var(--text-sm);">尚未指定屋主 → <a href="#m-owners" style="color: var(--color-primary);">先到屋主管理建檔</a>，再回來編輯房屋</div>`;
+        : `<div style="color: var(--text-muted); font-size: var(--text-sm);">尚未指定屋主 → <a href="#m-owners" style="color: var(--color-primary);">先到屋主清單建檔</a>，再回來編輯房屋</div>`;
 
     const layoutLine = [
         building.layout || '',

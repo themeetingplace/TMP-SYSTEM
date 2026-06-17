@@ -78,7 +78,7 @@ export function renderManagedOwners() {
         <div class="card">
             <div class="flex justify-between items-center mb-4">
                 <div>
-                    <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-user-circle"></i> 屋主管理</h2>
+                    <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-user-circle"></i> 屋主清單</h2>
                     <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">公開表單送進來的屋主會落在「待審核」</p>
                 </div>
                 <button class="btn btn-primary" id="btn-new-owner" data-fab="ph-plus">

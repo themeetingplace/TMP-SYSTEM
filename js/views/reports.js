@@ -1042,7 +1042,7 @@ function renderAnalysisAllBuildings() {
 
         <!-- P&L 對比表 (5 cols: 收入/支出/結餘/毛利率/淨利率) -->
         <div class="report-chart-card">
-            <div class="report-chart-title"><i class="ph ph-table"></i> ${grouping === 'group' ? '各群組' : '各館'} P&amp;L 對比</div>
+            <div class="report-chart-title"><i class="ph ph-table"></i> ${grouping === 'group' ? '各群組' : '各館'} 收支損益表</div>
             <div style="overflow-x: auto;">
                 <table class="report-table report-pnl-table">
                     <thead>
@@ -1081,7 +1081,7 @@ function renderAnalysisAllBuildings() {
 
         <!-- ${grouping === 'group' ? '各群組' : '各館'} 支出分項表 (rows = 項目, cols = 各${grouping === 'group' ? '群組' : '館'} + 全館合計) -->
         <div class="report-chart-card">
-            <div class="report-chart-title"><i class="ph ph-list-numbers"></i> ${grouping === 'group' ? '各群組' : '各館'} 支出分項</div>
+            <div class="report-chart-title"><i class="ph ph-list-numbers"></i> 本月總支出分析</div>
             <div style="overflow-x: auto;">
                 <table class="report-table report-itemized-table">
                     <thead>
@@ -1127,12 +1127,25 @@ function renderAnalysisAllBuildings() {
     `;
 }
 
+// ───────────────────── 年度總表 (R3 將實作熱度+MoM+Sparkline) ─────────────────────
+function renderYearlyTab() {
+    return `
+        <div class="card" style="padding: 3rem; text-align: center;">
+            <i class="ph ph-calendar" style="font-size: 3rem; color: var(--text-muted);"></i>
+            <h3 style="margin: 1rem 0 0.5rem;">年度總表</h3>
+            <p style="color: var(--text-muted); font-size: var(--text-sm);">
+                跨月比較 + 熱度色階 + MoM 箭頭 + Sparkline 趨勢 ─ 開發中
+            </p>
+        </div>
+    `;
+}
+
 // ───────────────────── Hub: tab bar + entry ─────────────────────
+// 2026-06-17 移除 overview tab (跟其他 tab 內容重複)
 const TABS = [
-    { key: 'overview',  icon: 'ph-gauge',         label: '總覽' },
     { key: 'buildings', icon: 'ph-buildings',     label: '各館報表' },
-    { key: 'analysis',  icon: 'ph-chart-pie',     label: '財務分析' }
-    // 對帳單已拿掉，等代管模式一起推出
+    { key: 'analysis',  icon: 'ph-chart-pie',     label: '財務分析' },
+    { key: 'yearly',    icon: 'ph-calendar',      label: '年度總表' }
 ];
 
 function renderTabBar() {
@@ -1150,14 +1163,14 @@ function renderTabBar() {
 export function renderReports() {
     // 每次 render 開頭 reset mode filter 快取 (用戶可能切過 mode)
     _resetModeCache();
-    // statement tab 被拿掉了，若 activeTab 還停在 statement 強制切回 overview
-    if (reportState.activeTab === 'statement') reportState.activeTab = 'overview';
+    // 舊 tab 名強制 redirect (2026-06-17 拿掉 overview/statement)
+    if (reportState.activeTab === 'statement' || reportState.activeTab === 'overview') reportState.activeTab = 'buildings';
     let tabContent;
     switch (reportState.activeTab) {
-        case 'buildings': tabContent = renderBuildingsTab(); break;
-        case 'analysis':  tabContent = renderAnalysisTab(); break;
-        case 'overview':
-        default:          tabContent = renderOverviewTab(); break;
+        case 'analysis': tabContent = renderAnalysisTab(); break;
+        case 'yearly':   tabContent = renderYearlyTab(); break;
+        case 'buildings':
+        default:         tabContent = renderBuildingsTab(); break;
     }
     return `
         <div style="margin-bottom: 1rem;">

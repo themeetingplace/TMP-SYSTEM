@@ -22,7 +22,7 @@ function buildManagedNavHtml() {
         <div class="nav-group">
             <span class="nav-section-label">代管房屋</span>
             ${managedHouses.length === 0
-                ? `<div class="nav-empty-hint">尚無代管房屋<br><span style="font-size: 0.7rem; color: var(--text-muted);">至「屋主管理」先建屋主<br>再新增代管房屋</span></div>`
+                ? `<div class="nav-empty-hint">尚無代管房屋<br><span style="font-size: 0.7rem; color: var(--text-muted);">直接新增代管房屋<br>屋主可在表單裡 inline 建檔</span></div>`
                 : managedHouses.map(b => `
                     <a href="#m-house/${esc(b.id)}" class="nav-item" data-view="m-house" data-house-id="${esc(b.id)}" data-label="${esc(b.name)}">
                         <i class="ph ${b.status === 'active' ? 'ph-house' : 'ph-house-line'}"></i>
@@ -41,10 +41,6 @@ function buildManagedNavHtml() {
     const managementGroup = `
         <div class="nav-group">
             <span class="nav-section-label">代管管理</span>
-            <a href="#m-owners" class="nav-item" data-view="m-owners" data-label="屋主管理">
-                <i class="ph ph-user-circle"></i>
-                <span class="nav-label">屋主管理</span>
-            </a>
             <a href="#m-settlements" class="nav-item" data-view="m-settlements" data-label="屋主月結算">
                 <i class="ph ph-receipt"></i>
                 <span class="nav-label">屋主月結算</span>
@@ -52,6 +48,7 @@ function buildManagedNavHtml() {
         </div>
     `;
 
+    // 2026-06-17: 屋主管理 → 改名「屋主清單」+ 移到「跨房屋」group
     const sharedGroup = `
         <div class="nav-group">
             <span class="nav-section-label">跨房屋</span>
@@ -70,6 +67,10 @@ function buildManagedNavHtml() {
             <a href="#tenants" class="nav-item" data-view="tenants" data-label="租客清單">
                 <i class="ph ph-users"></i>
                 <span class="nav-label">租客清單</span>
+            </a>
+            <a href="#m-owners" class="nav-item" data-view="m-owners" data-label="屋主清單">
+                <i class="ph ph-user-circle"></i>
+                <span class="nav-label">屋主清單</span>
             </a>
         </div>
     `;
