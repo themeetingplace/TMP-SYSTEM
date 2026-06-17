@@ -1559,6 +1559,19 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
 .btn-icon.primary       { color: var(--color-primary); }
 .btn-icon.primary:hover { background: rgba(255, 122, 0, 0.08); border-color: var(--color-primary); }
 
+/* 年度總表: section 直書 cell (左側分區帶) */
+.yearly-table .yearly-section-cell {
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    letter-spacing: 0.2em;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-align: center;
+    vertical-align: middle;
+    padding: 0.5rem 0.25rem;
+    white-space: nowrap;
+}
+
 /* 群組累金 bar — 單行 chip 樣式 (各館報表頂端，非視覺重點) */
 .cum-bar {
     display: flex;

@@ -1201,22 +1201,24 @@ function renderAnalysisAllBuildings() {
     `;
 }
 
-// ───────────────────── 年度總表 (R3: 熱度+MoM+Sparkline) ─────────────────────
+// ───────────────────── 年度總表 (R3: 館×類型 cross-grid + 熱度 + MoM + Sparkline) ─────────────────────
 const MONTHS_LABEL = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const BONUS_TYPE = '紅利發放';
+// 顯示用房名 (去掉「館」字)
+function bShort(name) { return (name || '').replace(/館$/, ''); }
 
 function computeYearlyData(year) {
-    // 抓今年度全部 settled invoices
     const yearStr = String(year);
-    const invs = _md().invoices.filter(i =>
+    const md = _md();
+    // 當前 mode 啟用中的 buildings，依 group → id 排序
+    const buildings = (md.properties.length ? mockData.buildings : mockData.buildings)
+        .filter(b => (md.mode === 'managed' ? b.mode === 'managed' : b.mode !== 'managed'))
+        .filter(b => b.status === 'active' || b.status == null)
+        .sort((a, b) => (a.group || '').localeCompare(b.group || '') || (a.id || '').localeCompare(b.id || ''));
+
+    const invs = md.invoices.filter(i =>
         isSettled(i) && (i.paidDate || i.dueDate || '').startsWith(yearStr)
     );
-
-    // 收集所有 in/out types
-    const inTypes  = [...new Set(invs.filter(i => i.direction === 'in').map(i => i.type))].filter(Boolean);
-    const outTypes = [...new Set(invs.filter(i => i.direction === 'out').map(i => i.type))].filter(Boolean);
-    // 紅利發放 拉到最後
-    const otherOutTypes = outTypes.filter(t => t !== '紅利發放');
-    const hasBonusType = outTypes.includes('紅利發放');
 
     function monthly(filterFn) {
         const arr = new Array(12).fill(0);
@@ -1226,43 +1228,116 @@ function computeYearlyData(year) {
         });
         return arr;
     }
-
-    const rows = [];
-    // === 收入 section ===
-    inTypes.forEach(t => {
-        rows.push({ label: t, kind: 'income', monthlyValues: monthly(i => i.direction === 'in' && i.type === t) });
-    });
-    const monIncomeTotal = monthly(i => i.direction === 'in');
-    rows.push({ label: '月收入合計', kind: 'income-total', monthlyValues: monIncomeTotal, isSubtotal: true });
-
-    // === 支出 + 結餘 subtotals ===
-    const monExpenseTotal = monthly(i => i.direction === 'out');
-    rows.push({ label: '月支出合計', kind: 'expense-total', monthlyValues: monExpenseTotal, isSubtotal: true });
-    const monNet = monIncomeTotal.map((v, i) => v - monExpenseTotal[i]);
-    rows.push({ label: '月結餘合計', kind: 'net', monthlyValues: monNet, isSubtotal: true });
-
-    // === 支出 break down ===
-    otherOutTypes.forEach(t => {
-        rows.push({ label: t, kind: 'expense', monthlyValues: monthly(i => i.direction === 'out' && i.type === t) });
-    });
-    if (hasBonusType) {
-        rows.push({ label: '紅利發放', kind: 'bonus', monthlyValues: monthly(i => i.direction === 'out' && i.type === '紅利發放') });
+    function monthlyBuilding(bId, filterFn) {
+        return monthly(i => i.buildingId === bId && filterFn(i));
     }
 
-    // 算每行 total / avg / pct
+    // 所有支出類型 (排除紅利，紅利當獨立列)
+    const allOutTypes = [...new Set(invs.filter(i => i.direction === 'out').map(i => i.type))].filter(Boolean);
+    const expenseTypes = allOutTypes.filter(t => t !== BONUS_TYPE);
+
+    const monIncomeTotal  = monthly(i => i.direction === 'in');
+    const monExpenseAll   = monthly(i => i.direction === 'out');                  // 含紅利
+    const monExpenseNoBonus = monthly(i => i.direction === 'out' && i.type !== BONUS_TYPE);
+    const monBonus        = monthly(i => i.direction === 'out' && i.type === BONUS_TYPE);
+    const monNet          = monIncomeTotal.map((v, i) => v - monExpenseAll[i]);
+
+    const rows = [];
+
+    // === Section A: 收入 (per building 房租 + 其它) ===
+    buildings.forEach(b => {
+        rows.push({
+            section: '收入', kind: 'income',
+            label: `${bShort(b.name)}房租收入`,
+            monthlyValues: monthlyBuilding(b.id, i => i.direction === 'in' && i.type === '房租')
+        });
+    });
+    rows.push({
+        section: '收入', kind: 'income', label: '其它收入',
+        monthlyValues: monthly(i => i.direction === 'in' && i.type !== '房租')
+    });
+
+    // === Section B: 收支總計 (3 subtotal rows) ===
+    rows.push({ section: '收支總計', kind: 'income-total',  label: '月收入合計', monthlyValues: monIncomeTotal,  isSubtotal: true });
+    rows.push({ section: '收支總計', kind: 'expense-total', label: '月支出合計', monthlyValues: monExpenseAll,   isSubtotal: true });
+    rows.push({ section: '收支總計', kind: 'net',           label: '月結餘合計', monthlyValues: monNet,          isSubtotal: true });
+
+    // === Section C: 花費總表 (per type × per building) ===
+    expenseTypes.forEach(t => {
+        buildings.forEach(b => {
+            const mv = monthlyBuilding(b.id, i => i.direction === 'out' && i.type === t);
+            // 全 0 不列，避免幾十個空白列
+            if (mv.every(v => v === 0)) return;
+            rows.push({
+                section: '花費總表', kind: 'expense',
+                label: `${bShort(b.name)}${t}`,
+                monthlyValues: mv
+            });
+        });
+    });
+    rows.push({ section: '花費總表', kind: 'expense-total', label: '總計',     monthlyValues: monExpenseNoBonus, isSubtotal: true });
+    rows.push({ section: '花費總表', kind: 'bonus',         label: BONUS_TYPE, monthlyValues: monBonus });
+
+    // === Section D: 各館成本支出 (per building 支出合計 + 每月小計) ===
+    buildings.forEach(b => {
+        rows.push({
+            section: '各館成本支出', kind: 'expense',
+            label: `${bShort(b.name)}支出`,
+            monthlyValues: monthlyBuilding(b.id, i => i.direction === 'out' && i.type !== BONUS_TYPE)
+        });
+    });
+    rows.push({ section: '各館成本支出', kind: 'expense-total', label: '每月小計', monthlyValues: monExpenseNoBonus, isSubtotal: true });
+
+    // === Section E: 各館結餘 (per building net) ===
+    buildings.forEach(b => {
+        const inc = monthlyBuilding(b.id, i => i.direction === 'in');
+        const exp = monthlyBuilding(b.id, i => i.direction === 'out' && i.type !== BONUS_TYPE);
+        rows.push({
+            section: '各館結餘', kind: 'net',
+            label: `${bShort(b.name)}結餘`,
+            monthlyValues: inc.map((v, idx) => v - exp[idx])
+        });
+    });
+    rows.push({ section: '各館結餘', kind: 'net', label: '每月小計', monthlyValues: monNet, isSubtotal: true });
+
+    // === Section F: 各館利率 (% = 結餘 / 收入) ===
+    buildings.forEach(b => {
+        const inc = monthlyBuilding(b.id, i => i.direction === 'in');
+        const exp = monthlyBuilding(b.id, i => i.direction === 'out' && i.type !== BONUS_TYPE);
+        const rate = inc.map((v, idx) => v > 0 ? (v - exp[idx]) / v : 0);
+        rows.push({
+            section: '各館利率', kind: 'rate',
+            label: `${bShort(b.name)}利率`,
+            monthlyValues: rate,
+            valueFormat: 'percent'
+        });
+    });
+
+    // === aggregates: total / avg / pct ===
     const grandIncome = sum(monIncomeTotal);
+    const grandExpense = sum(monExpenseAll);
     rows.forEach(r => {
+        if (r.valueFormat === 'percent') {
+            // 利率 row — total/avg/pct 都顯示為年度平均利率
+            const inc = sum(r.monthlyValues.map((_, idx) => {
+                // 重算這 row 對應的年度 income (用 label 反查)
+                return 0; // 不用，下面用 monthly 重算
+            }));
+            // 簡化：年度利率 = 全年結餘 / 全年收入 (再從 buildings 推回)
+            // 已經在 monthlyValues 算過 monthly rate；total 用 monthlyValues 平均
+            const nonZero = r.monthlyValues.filter(v => v !== 0);
+            r.total = nonZero.length ? nonZero.reduce((s, v) => s + v, 0) / nonZero.length : 0;
+            r.avg = r.total;
+            r.pct = null;
+            return;
+        }
         const total = sum(r.monthlyValues);
         r.total = total;
-        // 平均 = 只算有資料的月 (避免空月份拉低)
         const filled = r.monthlyValues.filter(v => v !== 0).length;
         r.avg = filled > 0 ? total / filled : 0;
-        // 占比基底: 收入類 % = total / 月收入合計 全年; 支出類 % = total / 月支出合計
         if (r.kind === 'income' || r.kind === 'income-total') r.pct = grandIncome > 0 ? total / grandIncome : 0;
-        else if (r.kind === 'expense' || r.kind === 'expense-total' || r.kind === 'bonus') {
-            const grandExpense = sum(monExpenseTotal);
-            r.pct = grandExpense > 0 ? total / grandExpense : 0;
-        } else r.pct = null;
+        else if (r.kind === 'expense' || r.kind === 'expense-total' || r.kind === 'bonus') r.pct = grandExpense > 0 ? total / grandExpense : 0;
+        else r.pct = null;
     });
     return rows;
 }
@@ -1309,34 +1384,61 @@ function sparkline(values, stroke = 'currentColor') {
     return `<svg width="${w}" height="${h}" style="display: block; vertical-align: middle;"><polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-function renderYearlyRow(r, currentMonth1based) {
-    const max = Math.max(...r.monthlyValues);
-    // subtotal row 即使全 0 也要顯示「—」讓行看得到
+// section → 顏色（左側 section 條 + sparkline 預設）
+const SECTION_META = {
+    '收入':         { color: '#22946e', bg: 'rgba(34, 148, 110, 0.05)' },
+    '收支總計':     { color: '#7c3aed', bg: 'rgba(124, 58, 237, 0.05)' },
+    '花費總表':     { color: '#dc2626', bg: 'rgba(220, 38, 38, 0.04)' },
+    '各館成本支出': { color: '#ea580c', bg: 'rgba(234, 88, 12, 0.04)' },
+    '各館結餘':     { color: '#2563eb', bg: 'rgba(37, 99, 235, 0.05)' },
+    '各館利率':     { color: '#0891b2', bg: 'rgba(8, 145, 178, 0.05)' }
+};
+
+function formatRowValue(r, v) {
+    if (v === 0) return '';
+    if (r.valueFormat === 'percent') return (v * 100).toFixed(1) + '%';
+    return v.toLocaleString();
+}
+
+function renderYearlyRow(r, currentMonth1based, sectionRowSpan) {
+    const isPercent = r.valueFormat === 'percent';
+    const max = Math.max(...r.monthlyValues.map(Math.abs));
     const zeroChar = r.isSubtotal ? '<span style="color: rgba(0,0,0,0.2);">—</span>' : '';
     const cells = r.monthlyValues.map((v, idx) => {
         const month = idx + 1;
         const isCurrent = month === currentMonth1based;
-        const arrow = isCurrent ? momArrow(r.monthlyValues, idx) : '';
-        const bg = heatBgFor(v, max, r.kind);
-        const txt = v === 0 ? zeroChar : v.toLocaleString();
-        return `<td style="text-align: right; font-variant-numeric: tabular-nums; ${bg}${isCurrent ? 'outline: 1px solid var(--color-primary); outline-offset: -1px;' : ''}">${txt}${arrow}</td>`;
+        const arrow = (isCurrent && !isPercent) ? momArrow(r.monthlyValues, idx) : '';
+        const bg = isPercent ? '' : heatBgFor(Math.abs(v), max, r.kind);
+        // net 行：負值染紅
+        const valColor = (r.kind === 'net' && v < 0) ? 'color: var(--color-danger);' : '';
+        const txt = v === 0 ? zeroChar : formatRowValue(r, v);
+        return `<td style="text-align: right; font-variant-numeric: tabular-nums; ${valColor}${bg}${isCurrent ? 'outline: 1px solid var(--color-primary); outline-offset: -1px;' : ''}">${txt}${arrow}</td>`;
     }).join('');
-    // sparkline 顏色跟 kind 對應
-    let sparkColor = 'var(--text-muted)';
-    if (r.kind === 'income' || r.kind === 'income-total') sparkColor = 'var(--color-success)';
-    else if (r.kind === 'expense' || r.kind === 'expense-total' || r.kind === 'bonus') sparkColor = 'var(--color-danger)';
-    else if (r.kind === 'net') sparkColor = 'var(--color-info)';
+
+    let sparkColor = SECTION_META[r.section]?.color || 'var(--text-muted)';
+    if (r.kind === 'net' && r.total < 0) sparkColor = 'var(--color-danger)';
 
     const labelStyle = r.isSubtotal ? 'font-weight: 700;' : '';
-    const rowBg = r.isSubtotal ? 'background: rgba(0, 0, 0, 0.025);' : '';
+    const sectionBg = SECTION_META[r.section]?.bg || '';
+    const rowBg = r.isSubtotal ? 'background: rgba(0, 0, 0, 0.035);' : `background: ${sectionBg};`;
+
+    // 第一行 section: 帶 rowspan 的 section 名稱 cell（直書）
+    const sectionCell = sectionRowSpan
+        ? `<td rowspan="${sectionRowSpan}" class="yearly-section-cell" style="background: ${SECTION_META[r.section]?.color || '#666'}; color: #fff;">${esc(r.section)}</td>`
+        : '';
+
+    const totalTxt = r.total === 0 ? zeroChar : formatRowValue(r, r.total);
+    const avgTxt = (r.avg === 0 || r.avg == null) ? zeroChar : formatRowValue(r, r.avg);
+
     return `
         <tr style="${rowBg}">
-            <td style="${labelStyle} padding-left: ${r.isSubtotal ? '0.75rem' : '1.5rem'};">${esc(r.label)}</td>
+            ${sectionCell}
+            <td style="${labelStyle} padding-left: ${r.isSubtotal ? '0.5rem' : '0.85rem'};">${esc(r.label)}</td>
             ${cells}
-            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;">${r.total === 0 ? zeroChar : r.total.toLocaleString()}</td>
-            <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">${r.avg === 0 ? zeroChar : Math.round(r.avg).toLocaleString()}</td>
+            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; background: rgba(255, 235, 180, 0.25);">${totalTxt}</td>
+            <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">${avgTxt}</td>
             <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">${pctStr(r.pct)}</td>
-            <td style="text-align: center;">${sparkline(r.monthlyValues, sparkColor)}</td>
+            <td style="text-align: center;">${sparkline(r.monthlyValues.map(v => isPercent ? v * 100 : v), sparkColor)}</td>
         </tr>
     `;
 }
@@ -1355,6 +1457,21 @@ function renderYearlyTab() {
         return `<th style="text-align: right; ${isCur ? 'background: rgba(255, 122, 0, 0.08);' : ''}">${label}</th>`;
     }).join('');
 
+    // 計算每個 section 的 rowspan (第一個 row 帶 rowspan)
+    const sectionSpans = {};
+    let lastSection = null;
+    rows.forEach((r, i) => {
+        if (r.section !== lastSection) {
+            sectionSpans[i] = 1;
+            lastSection = r.section;
+        } else {
+            // 找到此 section 的開始 row，++ 它的 span
+            let startIdx = i - 1;
+            while (startIdx > 0 && !(startIdx in sectionSpans)) startIdx--;
+            sectionSpans[startIdx]++;
+        }
+    });
+
     const emptyHint = hasAnyData ? '' : `
         <div style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.06); border-left: 3px solid var(--color-info); border-radius: 4px; font-size: var(--text-sm); color: var(--text-muted);">
             <i class="ph ph-info"></i> ${year} 年度尚無已結算資料 — 切換年份或新增帳單後再回來看。
@@ -1365,7 +1482,7 @@ function renderYearlyTab() {
         <div class="yearly-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
             <div>
                 <h3 style="margin: 0;"><i class="ph ph-calendar"></i> ${year} 年度總表</h3>
-                <p style="margin: 0.25rem 0 0; font-size: var(--text-xs); color: var(--text-muted);">熱度色階 = 該行最大值佔比；MoM 箭頭 = 當月 vs 上月；尾欄 Sparkline = 12 月趨勢</p>
+                <p style="margin: 0.25rem 0 0; font-size: var(--text-xs); color: var(--text-muted);">六大區塊：收入 / 收支總計 / 花費總表 (館×類型) / 各館成本 / 各館結餘 / 各館利率 — 熱度色階 + 當月 MoM + Sparkline</p>
             </div>
             <div class="filter-tabs">
                 ${[today.getFullYear() - 2, today.getFullYear() - 1, today.getFullYear()].map(y =>
@@ -1380,7 +1497,8 @@ function renderYearlyTab() {
             <table class="report-table yearly-table" style="font-size: var(--text-xs); min-width: 1200px;">
                 <thead>
                     <tr style="background: var(--bg-secondary);">
-                        <th style="text-align: left; width: 130px; position: sticky; left: 0; background: var(--bg-secondary); z-index: 1;">項目</th>
+                        <th style="width: 36px; background: var(--bg-secondary);"></th>
+                        <th style="text-align: left; width: 140px; position: sticky; left: 36px; background: var(--bg-secondary); z-index: 1;">項目</th>
                         ${headerMonths}
                         <th style="text-align: right; background: rgba(255, 235, 180, 0.4);">年度總計</th>
                         <th style="text-align: right;">每月平均</th>
@@ -1389,7 +1507,7 @@ function renderYearlyTab() {
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows.map(r => renderYearlyRow(r, currentMonth1based)).join('')}
+                    ${rows.map((r, i) => renderYearlyRow(r, currentMonth1based, sectionSpans[i] || 0)).join('')}
                 </tbody>
             </table>
         </div>
