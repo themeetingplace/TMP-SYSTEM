@@ -1657,32 +1657,52 @@ export function initReportsActions(scope) {
     });
 }
 
-// 年度總表匯出 — 開新視窗只放 table，套印刷 landscape A3 CSS 後叫 print
+// 年度總表匯出 — 開新視窗，引主站 CSS 拿全套 token + 表格樣式，自帶 print override
 function exportYearlyAsPdf() {
     const year = reportState.yearlyYear || new Date().getFullYear();
-    const tableEl = document.querySelector('.yearly-table');
-    if (!tableEl) return;
+    const wrapEl = document.querySelector('.yearly-table-wrap');
+    if (!wrapEl) return;
+    // 把整個 wrap (含 sticky 設定) 複製出去，print 時再 override 掉
+    const wrapClone = wrapEl.cloneNode(true);
     const w = window.open('', '_blank', 'width=1400,height=900');
     if (!w) return;
+    // 用主站 CSS 路徑 (含 cache buster) 讓 token 跟 yearly-* class 全部生效
+    const mainCssHref = `${location.origin}/css/style.css`;
+    const cacheLink = document.querySelector('link[href*="style.css"]')?.getAttribute('href') || 'css/style.css';
     w.document.write(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${year} 年度總表 — 聚空間 PMS</title>
+<html lang="zh-TW"><head>
+<meta charset="utf-8">
+<title>${year} 年度總表 — 聚空間 PMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="${location.origin}/${cacheLink}">
 <style>
 @page { size: A3 landscape; margin: 1cm; }
-body { font-family: 'Noto Sans TC', sans-serif; padding: 1rem; color: #222; }
-h1 { font-size: 18px; margin: 0 0 0.5rem; }
-.meta { font-size: 11px; color: #666; margin-bottom: 1rem; }
-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-th, td { padding: 4px 6px; border: 1px solid #ddd; }
-th { background: #f5f5f5; font-weight: 600; }
-tbody tr td:first-child { text-align: center; writing-mode: vertical-rl; text-orientation: upright; padding: 8px 4px; font-weight: 600; color: #fff; }
-@media print { .no-print { display: none; } }
-.no-print { position: fixed; top: 1rem; right: 1rem; background: #ff7a00; color: #fff; border: none; padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px; font-size: 13px; }
-</style></head><body>
+body { padding: 1rem; }
+.print-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; }
+.print-header h1 { font-size: 20px; margin: 0; color: var(--color-primary-text, #c44e1c); }
+.print-header .meta { font-size: 12px; color: var(--text-muted, #6b7280); }
+/* PDF override: 取消 sticky/max-height/scroll 讓整張表全列印 */
+.yearly-table-wrap { max-height: none !important; overflow: visible !important; box-shadow: none !important; }
+.yearly-table thead th { position: static !important; }
+.yearly-table .yearly-th-label,
+.yearly-row .yearly-label { position: static !important; }
+.yearly-row:hover td { background: inherit !important; }
+.no-print { position: fixed; top: 1rem; right: 1rem; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 13px; background: var(--color-primary, #ff8859); color: #fff; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+@media print { .no-print { display: none !important; } body { padding: 0; } }
+</style>
+</head><body>
 <button class="no-print" onclick="window.print()">列印 / 存成 PDF</button>
-<h1>${year} 年度總表</h1>
-<div class="meta">聚空間 PMS · 產生時間 ${new Date().toLocaleString('zh-TW')}</div>
-${tableEl.outerHTML}
-<script>setTimeout(() => window.print(), 500);</script>
+<div class="print-header">
+  <h1>${year} 年度總表</h1>
+  <span class="meta">聚空間 PMS · ${new Date().toLocaleString('zh-TW')}</span>
+</div>
+${wrapClone.outerHTML}
+<script>
+window.addEventListener('load', () => {
+    // 等字型 + CSS 載入完再 print，不然會印出無樣式版
+    setTimeout(() => window.print(), 800);
+});
+</script>
 </body></html>`);
     w.document.close();
 }
