@@ -1569,10 +1569,10 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
 }
 .yearly-table {
     width: 100%;
-    min-width: 1300px;
+    min-width: 1080px;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: var(--text-sm);
+    font-size: var(--text-xs);
     font-variant-numeric: tabular-nums;
 }
 /* header */
@@ -1583,25 +1583,24 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
     color: var(--text-muted);
     font-weight: 600;
     font-size: var(--text-2xs);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    letter-spacing: 0.04em;
     text-align: right;
-    padding: 0.6rem 0.6rem;
+    padding: 0.5rem 0.4rem;
     border-bottom: 1px solid var(--border-color);
     z-index: 2;
     white-space: nowrap;
 }
 .yearly-table .yearly-th-label {
     text-align: left;
-    width: 170px;
+    width: 130px;
     position: sticky;
     left: 0;
     background: var(--bg-tertiary);
     z-index: 3;
-    padding-left: 1rem;
+    padding-left: 0.75rem;
 }
 .yearly-table .yearly-th-total { color: var(--text-secondary); }
-.yearly-table .yearly-th-spark { width: 110px; text-align: center; }
+.yearly-table .yearly-th-spark { width: 84px; text-align: center; }
 
 /* section banner — 純色 + 細線 + token，無漸層 */
 .yearly-table .yearly-section-banner td {
@@ -1634,7 +1633,7 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
 
 /* data row */
 .yearly-row td {
-    padding: 0.45rem 0.6rem;
+    padding: 0.35rem 0.4rem;
     border-bottom: 1px solid var(--border-soft);
     transition: background 0.1s;
 }
@@ -1646,9 +1645,10 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
     left: 0;
     background: var(--color-surface);
     z-index: 1;
-    padding-left: 1.75rem;
+    padding-left: 1.25rem;
     font-weight: 500;
-    font-size: var(--text-sm);
+    font-size: var(--text-xs);
+    white-space: nowrap;
 }
 .yearly-row:hover .yearly-label { background: var(--bg-secondary); }
 .yearly-cell { text-align: right; color: var(--text-main); }

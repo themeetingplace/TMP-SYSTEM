@@ -1241,32 +1241,33 @@ function computeYearlyData(year) {
     const rows = [];
 
     // === Section A: 收入 (per building 房租 + 其它) ===
+    // section 已標「收入」，label 只留館名即可
     buildings.forEach(b => {
         rows.push({
             section: '收入', kind: 'income',
-            label: `${bShort(b.name)}房租收入`,
+            label: bShort(b.name),
             monthlyValues: monthlyBuilding(b.id, i => i.direction === 'in' && i.type === '房租')
         });
     });
     rows.push({
-        section: '收入', kind: 'income', label: '其它收入',
+        section: '收入', kind: 'income', label: '其它',
         monthlyValues: monthly(i => i.direction === 'in' && i.type !== '房租')
     });
 
     // === Section B: 收支總計 (3 subtotal rows) ===
-    rows.push({ section: '收支總計', kind: 'income-total',  label: '月收入合計', monthlyValues: monIncomeTotal,  isSubtotal: true });
-    rows.push({ section: '收支總計', kind: 'expense-total', label: '月支出合計', monthlyValues: monExpenseAll,   isSubtotal: true });
-    rows.push({ section: '收支總計', kind: 'net',           label: '月結餘合計', monthlyValues: monNet,          isSubtotal: true });
+    rows.push({ section: '收支總計', kind: 'income-total',  label: '收入', monthlyValues: monIncomeTotal,  isSubtotal: true });
+    rows.push({ section: '收支總計', kind: 'expense-total', label: '支出', monthlyValues: monExpenseAll,   isSubtotal: true });
+    rows.push({ section: '收支總計', kind: 'net',           label: '結餘', monthlyValues: monNet,          isSubtotal: true });
 
     // === Section C: 花費總表 (per type × per building) ===
+    // label 保留「館名+類型」(這 section 跨多類型，需要區分)
     expenseTypes.forEach(t => {
         buildings.forEach(b => {
             const mv = monthlyBuilding(b.id, i => i.direction === 'out' && i.type === t);
-            // 全 0 不列，避免幾十個空白列
             if (mv.every(v => v === 0)) return;
             rows.push({
                 section: '花費總表', kind: 'expense',
-                label: `${bShort(b.name)}${t}`,
+                label: `${bShort(b.name)}・${t}`,
                 monthlyValues: mv
             });
         });
@@ -1278,11 +1279,11 @@ function computeYearlyData(year) {
     buildings.forEach(b => {
         rows.push({
             section: '各館成本支出', kind: 'expense',
-            label: `${bShort(b.name)}支出`,
+            label: bShort(b.name),
             monthlyValues: monthlyBuilding(b.id, i => i.direction === 'out' && i.type !== BONUS_TYPE)
         });
     });
-    rows.push({ section: '各館成本支出', kind: 'expense-total', label: '每月小計', monthlyValues: monExpenseNoBonus, isSubtotal: true });
+    rows.push({ section: '各館成本支出', kind: 'expense-total', label: '小計', monthlyValues: monExpenseNoBonus, isSubtotal: true });
 
     // === Section E: 各館結餘 (per building net) ===
     buildings.forEach(b => {
@@ -1290,11 +1291,11 @@ function computeYearlyData(year) {
         const exp = monthlyBuilding(b.id, i => i.direction === 'out' && i.type !== BONUS_TYPE);
         rows.push({
             section: '各館結餘', kind: 'net',
-            label: `${bShort(b.name)}結餘`,
+            label: bShort(b.name),
             monthlyValues: inc.map((v, idx) => v - exp[idx])
         });
     });
-    rows.push({ section: '各館結餘', kind: 'net', label: '每月小計', monthlyValues: monNet, isSubtotal: true });
+    rows.push({ section: '各館結餘', kind: 'net', label: '小計', monthlyValues: monNet, isSubtotal: true });
 
     // === Section F: 各館利率 (% = 結餘 / 收入) ===
     buildings.forEach(b => {
@@ -1303,7 +1304,7 @@ function computeYearlyData(year) {
         const rate = inc.map((v, idx) => v > 0 ? (v - exp[idx]) / v : 0);
         rows.push({
             section: '各館利率', kind: 'rate',
-            label: `${bShort(b.name)}利率`,
+            label: bShort(b.name),
             monthlyValues: rate,
             valueFormat: 'percent'
         });
@@ -1404,7 +1405,7 @@ function formatRowValue(r, v) {
 
 // Sparkline 升級 — 帶 area fill + 高低點 dot
 function sparklineV2(values, accent) {
-    const w = 100, h = 26;
+    const w = 70, h = 22;
     const padding = 2;
     const max = Math.max(...values, 1);
     const min = Math.min(...values, 0);
@@ -1591,11 +1592,11 @@ export function renderReports() {
         case 'buildings':
         default:         tabContent = renderBuildingsTab(); break;
     }
+    // 年度總表自帶年份 picker，不需要區間日期
+    const showRangePicker = reportState.activeTab !== 'yearly';
     return `
-        <div style="margin-bottom: 1rem;">
-            ${renderRangePicker()}
-        </div>
         ${renderTabBar()}
+        ${showRangePicker ? `<div style="margin-bottom: 1rem;">${renderRangePicker()}</div>` : ''}
         ${tabContent}
     `;
 }
