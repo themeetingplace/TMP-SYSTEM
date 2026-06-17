@@ -905,38 +905,33 @@ function renderSingleBuildingAnalysis(buildingId) {
             </div>
         </div>
 
-        <!-- 該館支出分項 (對齊用戶 excel 表) -->
+        <!-- 該館支出分項 — KPI 卡片組 + 下方精簡 subtotal 表 -->
         <div class="report-chart-card">
             <div class="report-chart-title"><i class="ph ph-list-numbers"></i> ${building.name} 支出分項</div>
-            <div style="overflow-x: auto;">
-                <table class="report-table report-itemized-table" style="max-width: 420px;">
-                    <thead>
-                        <tr>
-                            <th style="background: rgba(255,200,200,0.4);">項目</th>
-                            <th style="text-align: right; background: rgba(255,200,200,0.4);">${building.name}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${EXPENSE_BUCKETS.map(b => `
-                            <tr>
-                                <td style="font-weight: 500;">${b.label}</td>
-                                ${moneyCell(buckets[b.key])}
-                            </tr>
-                        `).join('')}
-                        <tr style="background: rgba(255,200,200,0.25);">
-                            <td><strong>支出合計</strong></td>
-                            ${moneyCell(bucketSubtotal(buckets), { bold: true })}
-                        </tr>
-                        <tr>
-                            <td>紅利發放</td>
-                            ${moneyCell(buckets.bonus)}
-                        </tr>
-                        <tr style="background: rgba(255,235,180,0.4);">
-                            <td><strong>總合計</strong></td>
-                            ${moneyCell(bucketGrandTotal(buckets), { bold: true })}
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="expense-bucket-grid">
+                ${EXPENSE_BUCKETS.map(b => {
+                    const v = buckets[b.key] || 0;
+                    return `
+                        <div class="expense-bucket-tile ${v === 0 ? 'is-empty' : ''}">
+                            <div class="expense-bucket-label">${b.label}</div>
+                            <div class="expense-bucket-value">${v === 0 ? '—' : '$' + v.toLocaleString()}</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            <div class="expense-subtotal-list">
+                <div class="expense-subtotal-row">
+                    <span class="label">支出合計</span>
+                    <span class="value">$${bucketSubtotal(buckets).toLocaleString()}</span>
+                </div>
+                <div class="expense-subtotal-row">
+                    <span class="label">紅利發放</span>
+                    <span class="value">${buckets.bonus === 0 ? '—' : '$' + buckets.bonus.toLocaleString()}</span>
+                </div>
+                <div class="expense-subtotal-row is-total">
+                    <span class="label">總合計</span>
+                    <span class="value">$${bucketGrandTotal(buckets).toLocaleString()}</span>
+                </div>
             </div>
         </div>
     `;
@@ -1657,52 +1652,30 @@ export function initReportsActions(scope) {
     });
 }
 
-// 年度總表匯出 — 開新視窗，引主站 CSS 拿全套 token + 表格樣式，自帶 print override
+// 年度總表匯出 — 原地 window.print()，靠 @media print 隱藏其他 UI
+// 樣式跟畫面一模一樣 (token / CSS / 字型都是同 document)
 function exportYearlyAsPdf() {
     const year = reportState.yearlyYear || new Date().getFullYear();
-    const wrapEl = document.querySelector('.yearly-table-wrap');
-    if (!wrapEl) return;
-    // 把整個 wrap (含 sticky 設定) 複製出去，print 時再 override 掉
-    const wrapClone = wrapEl.cloneNode(true);
-    const w = window.open('', '_blank', 'width=1400,height=900');
-    if (!w) return;
-    // 用主站 CSS 路徑 (含 cache buster) 讓 token 跟 yearly-* class 全部生效
-    const mainCssHref = `${location.origin}/css/style.css`;
-    const cacheLink = document.querySelector('link[href*="style.css"]')?.getAttribute('href') || 'css/style.css';
-    w.document.write(`<!DOCTYPE html>
-<html lang="zh-TW"><head>
-<meta charset="utf-8">
-<title>${year} 年度總表 — 聚空間 PMS</title>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="${location.origin}/${cacheLink}">
-<style>
-@page { size: A3 landscape; margin: 1cm; }
-body { padding: 1rem; }
-.print-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; }
-.print-header h1 { font-size: 20px; margin: 0; color: var(--color-primary-text, #c44e1c); }
-.print-header .meta { font-size: 12px; color: var(--text-muted, #6b7280); }
-/* PDF override: 取消 sticky/max-height/scroll 讓整張表全列印 */
-.yearly-table-wrap { max-height: none !important; overflow: visible !important; box-shadow: none !important; }
-.yearly-table thead th { position: static !important; }
-.yearly-table .yearly-th-label,
-.yearly-row .yearly-label { position: static !important; }
-.yearly-row:hover td { background: inherit !important; }
-.no-print { position: fixed; top: 1rem; right: 1rem; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 13px; background: var(--color-primary, #ff8859); color: #fff; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-@media print { .no-print { display: none !important; } body { padding: 0; } }
-</style>
-</head><body>
-<button class="no-print" onclick="window.print()">列印 / 存成 PDF</button>
-<div class="print-header">
-  <h1>${year} 年度總表</h1>
-  <span class="meta">聚空間 PMS · ${new Date().toLocaleString('zh-TW')}</span>
-</div>
-${wrapClone.outerHTML}
-<script>
-window.addEventListener('load', () => {
-    // 等字型 + CSS 載入完再 print，不然會印出無樣式版
-    setTimeout(() => window.print(), 800);
-});
-</script>
-</body></html>`);
-    w.document.close();
+    const tableWrap = document.querySelector('.yearly-table-wrap');
+    if (!tableWrap) return;
+    // 注入 print header (只在列印時顯示)
+    let header = document.querySelector('.yearly-print-header');
+    if (!header) {
+        header = document.createElement('div');
+        header.className = 'yearly-print-header print-only';
+        tableWrap.parentNode.insertBefore(header, tableWrap);
+    }
+    header.innerHTML = `
+        <h1>${year} 年度總表</h1>
+        <span class="meta">聚空間 PMS · ${new Date().toLocaleString('zh-TW')}</span>
+    `;
+    // 標記 body 進入列印模式 → @media print 規則生效
+    document.body.classList.add('is-printing-yearly');
+    // print 完還原
+    const cleanup = () => {
+        document.body.classList.remove('is-printing-yearly');
+        window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => window.print(), 100);
 }

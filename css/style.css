@@ -1559,6 +1559,122 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
 .btn-icon.primary       { color: var(--color-primary); }
 .btn-icon.primary:hover { background: rgba(255, 122, 0, 0.08); border-color: var(--color-primary); }
 
+/* ─────────────────────── 年度總表匯出 PDF (原地 window.print) ─────────────────────── */
+.print-only { display: none; }
+.yearly-print-header { margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: baseline; }
+.yearly-print-header h1 { font-size: 18pt; margin: 0; color: var(--color-primary-text); font-weight: 700; }
+.yearly-print-header .meta { font-size: 10pt; color: var(--text-muted); }
+
+@media print {
+    @page { size: A3 landscape; margin: 0.8cm; }
+    /* 隱藏所有 chrome：sidebar / topbar / tab bar / range picker / 其他 card */
+    body.is-printing-yearly .sidebar,
+    body.is-printing-yearly .topbar,
+    body.is-printing-yearly .reports-hub-tabs,
+    body.is-printing-yearly .range-picker,
+    body.is-printing-yearly .yearly-toolbar,
+    body.is-printing-yearly .sidebar-backdrop { display: none !important; }
+    body.is-printing-yearly .main-content,
+    body.is-printing-yearly .view-container { margin: 0 !important; padding: 0 !important; max-width: none !important; }
+    body.is-printing-yearly .app-container { display: block !important; }
+    /* print header 此時顯示 */
+    body.is-printing-yearly .print-only { display: flex !important; }
+    /* 表格：取消 sticky / max-height / shadow，讓整張表跨頁印 */
+    body.is-printing-yearly .yearly-table-wrap {
+        max-height: none !important;
+        overflow: visible !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+    body.is-printing-yearly .yearly-table { font-size: 9pt !important; }
+    body.is-printing-yearly .yearly-table thead th { position: static !important; }
+    body.is-printing-yearly .yearly-table .yearly-th-label,
+    body.is-printing-yearly .yearly-row .yearly-label { position: static !important; }
+    body.is-printing-yearly .yearly-row { page-break-inside: avoid; }
+    body.is-printing-yearly .yearly-section-banner { page-break-after: avoid; }
+    /* 強制顏色保留 (印表機預設會去飽和) */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+}
+
+/* ─────────────────────── 支出分項 KPI grid (單館財務分析) ─────────────────────── */
+.expense-bucket-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+.expense-bucket-tile {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    padding: 0.65rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    transition: background 0.12s, border-color 0.12s;
+}
+.expense-bucket-tile:hover:not(.is-empty) {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+.expense-bucket-tile.is-empty {
+    background: transparent;
+    border-style: dashed;
+}
+.expense-bucket-label {
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+.expense-bucket-value {
+    font-size: var(--text-md);
+    font-weight: 700;
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+.expense-bucket-tile.is-empty .expense-bucket-value {
+    color: var(--border-strong);
+    font-weight: 500;
+}
+.expense-subtotal-list {
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+}
+.expense-subtotal-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.45rem 0.5rem;
+    font-size: var(--text-sm);
+}
+.expense-subtotal-row .label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+.expense-subtotal-row .value {
+    color: var(--text-main);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.expense-subtotal-row.is-total {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    margin-top: 0.25rem;
+    padding: 0.55rem 0.7rem;
+}
+.expense-subtotal-row.is-total .label {
+    color: var(--text-main);
+    font-weight: 700;
+}
+.expense-subtotal-row.is-total .value {
+    color: var(--color-primary-text);
+    font-weight: 700;
+    font-size: var(--text-base);
+}
+
 /* ─────────────────────── 年度總表 v3 — 走系統 token ─────────────────────── */
 .yearly-table-wrap {
     background: var(--color-surface);
