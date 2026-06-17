@@ -148,37 +148,43 @@ export async function pullAll() {
 //   1. firstPullDone gate — 首次 pull 完成才能推 (避免 stale localStorage blind 上雲)
 //   2. Sanity check — 雲端 0 筆 + 本機 >5 筆 = 強烈懷疑是 zombie restore，abort + 紅 toast
 //   3. catch error 也 abort 整批，避免半推半就
+//   4. in-flight lock — 多條 push 路徑 (bms:persist / online / template-changed) 序列化
+let pushInFlight = null;
 async function pushSmall() {
-    if (!navigator.onLine) return;
-    if (!firstPullDone) {
-        console.warn('[sync] skip pushSmall — bootstrap pull 未完成 (防資料復活)');
-        return;
-    }
-    setStatus('pushing');
-    try {
-        for (const t of SMALL_TABLES) {
-            const rows = (mockData[t.src] || []).map(t.toDb);
-            if (rows.length === 0) continue;
-            // sanity check: 雲端 0 筆但本機很多 → 強烈懷疑是 zombie restore，拒絕推
-            if (rows.length > 5) {
-                const { count: remoteCount } = await supabase.from(t.key).select('*', { count: 'exact', head: true });
-                if (remoteCount === 0) {
-                    const msg = `偵測到 zombie restore: 雲端 ${t.key} 是 0 筆但本機有 ${rows.length} 筆，拒絕 push 避免覆蓋雲端刪除。請先「清空本機快取」`;
-                    console.warn(`[sync] ${msg}`);
-                    if (window.showToast) window.showToast(msg, 'danger', 12000);
-                    setStatus('error', msg);
-                    return;
-                }
-            }
-            const { error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk });
-            if (error) throw new Error(`${t.key}: ${error.message}`);
+    if (pushInFlight) return pushInFlight;       // audit: 防止三條 push 路徑併發 (race + status 閃爍)
+    pushInFlight = (async () => {
+        if (!navigator.onLine) return;
+        if (!firstPullDone) {
+            console.warn('[sync] skip pushSmall — bootstrap pull 未完成 (防資料復活)');
+            return;
         }
-        markJustPushed();
-        setStatus('idle');
-    } catch (e) {
-        setStatus('error', e.message);
-        console.error('[sync] push 失敗:', e);
-    }
+        setStatus('pushing');
+        try {
+            for (const t of SMALL_TABLES) {
+                const rows = (mockData[t.src] || []).map(t.toDb);
+                if (rows.length === 0) continue;
+                // sanity check: 雲端 0 筆但本機很多 → 強烈懷疑是 zombie restore，拒絕推
+                if (rows.length > 5) {
+                    const { count: remoteCount } = await supabase.from(t.key).select('*', { count: 'exact', head: true });
+                    if (remoteCount === 0) {
+                        const msg = `偵測到 zombie restore: 雲端 ${t.key} 是 0 筆但本機有 ${rows.length} 筆，拒絕 push 避免覆蓋雲端刪除。請先「清空本機快取」`;
+                        console.warn(`[sync] ${msg}`);
+                        if (window.showToast) window.showToast(msg, 'danger', 12000);
+                        setStatus('error', msg);
+                        return;
+                    }
+                }
+                const { error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk });
+                if (error) throw new Error(`${t.key}: ${error.message}`);
+            }
+            markJustPushed();
+            setStatus('idle');
+        } catch (e) {
+            setStatus('error', e.message);
+            console.error('[sync] push 失敗:', e);
+        }
+    })().finally(() => { pushInFlight = null; });
+    return pushInFlight;
 }
 
 async function pushLarge() {
@@ -215,10 +221,18 @@ window.addEventListener('bms:template-changed', () => pushLarge());
 
 // 刪除事件 → 直接送 DELETE 到 Supabase (upsert 不會處理刪除，否則本機刪了雲端還在，下次 pull 又拉回)
 // P2-7: 用 in-flight Set 去重，避免連點刪除按鈕送 N 次 DELETE
+// audit: 加 timeout 15s + 失敗 rollback (本機 row 復活到 mockData，避免 pull 復活時 race)
 const deleteInFlight = new Set();
+const DELETE_TIMEOUT_MS = 15_000;
+function withTimeout(promise, ms, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timeout ${ms}ms`)), ms))
+    ]);
+}
 window.addEventListener('bms:delete', async (e) => {
     if (!navigator.onLine) return;
-    const { table, id } = e.detail || {};
+    const { table, id, snapshot } = e.detail || {};  // snapshot = row 被刪前的快照 (caller 可傳)
     if (!table || !id) return;
     const t = TABLES.find(x => x.key === table);
     if (!t) return;
@@ -228,16 +242,30 @@ window.addEventListener('bms:delete', async (e) => {
         return;
     }
     deleteInFlight.add(key);
-    // 本機剛刪 → 加黑名單，5s 內擋掉 realtime echo 的 UPDATE/INSERT 復活
     markRecentlyDeleted(table, id);
     try {
         markJustPushed();
-        // count: 'exact' 拿真的影響筆數 (繞過 .select() 被 RLS SELECT policy 卡的問題)
-        const { error, count } = await supabase.from(table).delete({ count: 'exact' }).eq(t.pk, id);
+        const { error, count } = await withTimeout(
+            supabase.from(table).delete({ count: 'exact' }).eq(t.pk, id),
+            DELETE_TIMEOUT_MS,
+            `DELETE ${table}/${id}`
+        );
         if (error) {
             console.error(`[sync] DELETE ${table}/${id} 失敗:`, error);
             setStatus('error', `刪除同步失敗：${error.message}`);
             if (window.showToast) window.showToast(`雲端刪除失敗：${error.message}`, 'danger', 6000);
+            // audit: 失敗 rollback — 把 row 加回 mockData，避免下次 pull 把雲端那筆又拉回造成「以為刪了其實沒刪」
+            if (snapshot && Array.isArray(mockData[t.src])) {
+                const exists = mockData[t.src].some(r => r[t.pk === 'building_id' ? 'buildingId' : 'id'] === id);
+                if (!exists) {
+                    mockData[t.src].push(snapshot);
+                    console.warn(`[sync] DELETE 失敗，rollback ${table}/${id} 回本機`);
+                    window.dispatchEvent(new CustomEvent('bms:data-changed', { detail: { source: 'delete-rollback' } }));
+                }
+            }
+            // 延長黑名單期 → 防 30s 內 sync 各種事件又把 row 復活
+            markRecentlyDeleted(table, id);
+            setTimeout(() => recentlyDeleted.delete(`${table}/${id}`), 30_000);
         } else if (count === 0) {
             // RLS 真的擋掉 DELETE — 本機刪了但雲端還在
             console.warn(`[sync] ⚠ DELETE ${table}/${id} 雲端 0 筆受影響 (RLS 阻擋)`);
@@ -268,14 +296,22 @@ function isOwnEcho() { return Date.now() - lastPushAt < 3000; }
 let realtimeChannel = null;
 
 // P1-11: 斷線重試
+// audit: 加上限 10 次 (auth 過期 / 雲端異常時不無限重連耗電池)
 let reconnectAttempt = 0;
 let reconnectTimer = null;
+const RECONNECT_MAX_ATTEMPTS = 10;
 function scheduleReconnect() {
     clearTimeout(reconnectTimer);
+    if (reconnectAttempt >= RECONNECT_MAX_ATTEMPTS) {
+        console.warn(`[sync] Realtime 重連達上限 (${RECONNECT_MAX_ATTEMPTS} 次)，停止自動重連`);
+        setStatus('error', 'Realtime 重連失敗多次，請手動重新整理');
+        if (window.showToast) window.showToast('Realtime 連線中斷多次，請手動重新整理頁面', 'warning', 8000);
+        return;
+    }
     // exponential backoff: 2s, 4s, 8s, 16s, 30s (cap)
     const delay = Math.min(30_000, 2_000 * 2 ** reconnectAttempt);
     reconnectAttempt++;
-    console.log(`[sync] Realtime reconnect in ${delay/1000}s (attempt #${reconnectAttempt})`);
+    console.log(`[sync] Realtime reconnect in ${delay/1000}s (attempt #${reconnectAttempt}/${RECONNECT_MAX_ATTEMPTS})`);
     reconnectTimer = setTimeout(() => {
         if (realtimeChannel) {
             try { supabase.removeChannel(realtimeChannel); } catch {}
@@ -370,6 +406,10 @@ function handleRealtimeChange(payload) {
 }
 
 function stopRealtime() {
+    // audit: 清掉 reconnect timer 避免關 tab 後還在等重連
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    reconnectAttempt = 0;
     if (realtimeChannel) {
         supabase.removeChannel(realtimeChannel);
         realtimeChannel = null;

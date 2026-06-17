@@ -43,12 +43,40 @@ async function linePush(toUserId: string, messages: any[]) {
     return r.json();
 }
 
+// audit: 加 JWT + admins 表查驗 (原本零授權, 任何拿到 anon key 的人都可推任意租客 LINE)
+async function requireAdmin(req: Request): Promise<{ ok: boolean; status?: number; reason?: string }> {
+    const auth = req.headers.get('Authorization') || '';
+    const jwt = auth.replace(/^Bearer\s+/i, '').trim();
+    if (!jwt) return { ok: false, status: 401, reason: 'Authorization Bearer JWT required' };
+    const userClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
+        global: { headers: { Authorization: `Bearer ${jwt}` } }
+    });
+    const { data: userRes, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userRes?.user) return { ok: false, status: 401, reason: 'invalid JWT' };
+    const email = (userRes.user.email || '').toLowerCase();
+    if (!email) return { ok: false, status: 403, reason: 'no email in JWT' };
+    // 用 service role client 查 admins 表 (繞 RLS)
+    const { data: admin } = await supabase
+        .from('admins').select('email,role').eq('email', email).maybeSingle();
+    if (!admin) return { ok: false, status: 403, reason: `${email} not in admins` };
+    return { ok: true };
+}
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: CORS_HEADERS });
     }
     if (req.method !== 'POST') {
         return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+    }
+
+    // === Auth gate ===
+    const auth = await requireAdmin(req);
+    if (!auth.ok) {
+        return new Response(JSON.stringify({ ok: false, error: auth.reason || 'unauthorized' }), {
+            status: auth.status || 401,
+            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+        });
     }
 
     try {
