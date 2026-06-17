@@ -224,8 +224,7 @@ export function renderUnsettled() {
         <div class="card">
             <div class="flex justify-between items-center mb-4">
                 <div>
-                    <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-warning-circle"></i> 房租查帳</h2>
-                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">租客尚未繳款的房租；核對通過後自動移到「總收支表」</p>
+                    <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-warning-circle"></i> 房租查帳</h2>
                 </div>
                 <div class="flex gap-2" style="flex-wrap: wrap;">
                     <div class="search-bar" style="width: 220px;">

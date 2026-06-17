@@ -1395,45 +1395,82 @@ function formatRowValue(r, v) {
     return v.toLocaleString();
 }
 
-function renderYearlyRow(r, currentMonth1based, sectionRowSpan) {
+// Sparkline 升級 — 帶 area fill + 高低點 dot
+function sparklineV2(values, accent) {
+    const w = 100, h = 26;
+    const padding = 2;
+    const max = Math.max(...values, 1);
+    const min = Math.min(...values, 0);
+    const span = max - min || 1;
+    const points = values.map((v, i) => {
+        const x = (i / 11) * (w - 2 * padding) + padding;
+        const y = h - padding - ((v - min) / span) * (h - 2 * padding);
+        return { x, y, v };
+    });
+    const pathLine = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+    const pathArea = pathLine + ` L${points[points.length-1].x.toFixed(1)},${h} L${points[0].x.toFixed(1)},${h} Z`;
+    const maxPt = points.reduce((acc, p) => p.v > acc.v ? p : acc, points[0]);
+    return `
+        <svg width="${w}" height="${h}" style="display: block; vertical-align: middle;">
+            <path d="${pathArea}" fill="${accent}" fill-opacity="0.12"/>
+            <path d="${pathLine}" fill="none" stroke="${accent}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            ${maxPt.v > 0 ? `<circle cx="${maxPt.x.toFixed(1)}" cy="${maxPt.y.toFixed(1)}" r="2.2" fill="${accent}"/>` : ''}
+        </svg>
+    `;
+}
+
+function renderYearlyRow(r, currentMonth1based) {
     const isPercent = r.valueFormat === 'percent';
-    const max = Math.max(...r.monthlyValues.map(Math.abs));
-    const zeroChar = r.isSubtotal ? '<span style="color: rgba(0,0,0,0.2);">—</span>' : '';
+    const values = r.monthlyValues.map(Math.abs);
+    const max = Math.max(...values);
+    // 只在 top tier (≥ 60%) 上色 — 避免每行整個發燒
+    const heatThreshold = 0.6;
+    const zeroChar = '<span class="yearly-zero">·</span>';
+
     const cells = r.monthlyValues.map((v, idx) => {
         const month = idx + 1;
         const isCurrent = month === currentMonth1based;
         const arrow = (isCurrent && !isPercent) ? momArrow(r.monthlyValues, idx) : '';
-        const bg = isPercent ? '' : heatBgFor(Math.abs(v), max, r.kind);
-        // net 行：負值染紅
+        // 熱度 — 只給 top tier 上色
+        const ratio = max > 0 ? Math.abs(v) / max : 0;
+        const bg = (!isPercent && ratio >= heatThreshold) ? heatBgFor(Math.abs(v), max, r.kind) : '';
         const valColor = (r.kind === 'net' && v < 0) ? 'color: var(--color-danger);' : '';
         const txt = v === 0 ? zeroChar : formatRowValue(r, v);
-        return `<td style="text-align: right; font-variant-numeric: tabular-nums; ${valColor}${bg}${isCurrent ? 'outline: 1px solid var(--color-primary); outline-offset: -1px;' : ''}">${txt}${arrow}</td>`;
+        const curCls = isCurrent ? ' is-current-month' : '';
+        return `<td class="yearly-cell${curCls}" style="${valColor}${bg}">${txt}${arrow}</td>`;
     }).join('');
 
-    let sparkColor = SECTION_META[r.section]?.color || 'var(--text-muted)';
+    let sparkColor = SECTION_META[r.section]?.color || '#888';
     if (r.kind === 'net' && r.total < 0) sparkColor = 'var(--color-danger)';
-
-    const labelStyle = r.isSubtotal ? 'font-weight: 700;' : '';
-    const sectionBg = SECTION_META[r.section]?.bg || '';
-    const rowBg = r.isSubtotal ? 'background: rgba(0, 0, 0, 0.035);' : `background: ${sectionBg};`;
-
-    // 第一行 section: 帶 rowspan 的 section 名稱 cell（直書）
-    const sectionCell = sectionRowSpan
-        ? `<td rowspan="${sectionRowSpan}" class="yearly-section-cell" style="background: ${SECTION_META[r.section]?.color || '#666'}; color: #fff;">${esc(r.section)}</td>`
-        : '';
 
     const totalTxt = r.total === 0 ? zeroChar : formatRowValue(r, r.total);
     const avgTxt = (r.avg === 0 || r.avg == null) ? zeroChar : formatRowValue(r, r.avg);
+    const rowCls = `yearly-row${r.isSubtotal ? ' is-subtotal' : ''} kind-${r.kind}`;
 
     return `
-        <tr style="${rowBg}">
-            ${sectionCell}
-            <td style="${labelStyle} padding-left: ${r.isSubtotal ? '0.5rem' : '0.85rem'};">${esc(r.label)}</td>
+        <tr class="${rowCls}">
+            <td class="yearly-label">${esc(r.label)}</td>
             ${cells}
-            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; background: rgba(255, 235, 180, 0.25);">${totalTxt}</td>
-            <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">${avgTxt}</td>
-            <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">${pctStr(r.pct)}</td>
-            <td style="text-align: center;">${sparkline(r.monthlyValues.map(v => isPercent ? v * 100 : v), sparkColor)}</td>
+            <td class="yearly-cell yearly-total">${totalTxt}</td>
+            <td class="yearly-cell yearly-avg">${avgTxt}</td>
+            <td class="yearly-cell yearly-pct">${pctStr(r.pct)}</td>
+            <td class="yearly-cell yearly-spark">${sparklineV2(r.monthlyValues.map(v => isPercent ? v * 100 : v), sparkColor)}</td>
+        </tr>
+    `;
+}
+
+// section banner row (跨整列、左色帶 + section 名)
+function renderYearlySectionBanner(section, rowCount, sectionTotals, currentMonth1based) {
+    const meta = SECTION_META[section] || { color: '#666' };
+    return `
+        <tr class="yearly-section-banner" style="--section-color: ${meta.color};">
+            <td colspan="17">
+                <div class="yearly-section-banner-inner">
+                    <span class="yearly-section-dot"></span>
+                    <span class="yearly-section-name">${esc(section)}</span>
+                    <span class="yearly-section-meta">${rowCount} 項</span>
+                </div>
+            </td>
         </tr>
     `;
 }
@@ -1452,31 +1489,28 @@ function renderYearlyTab() {
         return `<th style="text-align: right; ${isCur ? 'background: rgba(255, 122, 0, 0.08);' : ''}">${label}</th>`;
     }).join('');
 
-    // 計算每個 section 的 rowspan (第一個 row 帶 rowspan)
-    const sectionSpans = {};
-    let lastSection = null;
-    rows.forEach((r, i) => {
-        if (r.section !== lastSection) {
-            sectionSpans[i] = 1;
-            lastSection = r.section;
-        } else {
-            // 找到此 section 的開始 row，++ 它的 span
-            let startIdx = i - 1;
-            while (startIdx > 0 && !(startIdx in sectionSpans)) startIdx--;
-            sectionSpans[startIdx]++;
+    // section 分組
+    const sectionGroups = [];
+    let currentGroup = null;
+    rows.forEach(r => {
+        if (!currentGroup || currentGroup.section !== r.section) {
+            currentGroup = { section: r.section, rows: [] };
+            sectionGroups.push(currentGroup);
         }
+        currentGroup.rows.push(r);
     });
-
-    const emptyHint = hasAnyData ? '' : `
-        <div style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.06); border-left: 3px solid var(--color-info); border-radius: 4px; font-size: var(--text-sm); color: var(--text-muted);">
-            <i class="ph ph-info"></i> ${year} 年度尚無已結算資料 — 切換年份或新增帳單後再回來看。
-        </div>
-    `;
 
     const minYear = today.getFullYear() - 5;
     const maxYear = today.getFullYear() + 1;
     const canPrev = year > minYear;
     const canNext = year < maxYear;
+
+    // section banner + rows 交錯
+    const tbodyHtml = sectionGroups.map(g => {
+        const banner = renderYearlySectionBanner(g.section, g.rows.length);
+        const rows = g.rows.map(r => renderYearlyRow(r, currentMonth1based)).join('');
+        return banner + rows;
+    }).join('');
 
     return `
         <div class="yearly-toolbar">
@@ -1498,25 +1532,21 @@ function renderYearlyTab() {
                 </button>
             </div>
         </div>
-        <p class="yearly-toolbar-hint">六大區塊：收入 / 收支總計 / 花費總表 (館×類型) / 各館成本 / 各館結餘 / 各館利率 ─ 熱度色階 + 當月 MoM + Sparkline</p>
 
-        ${emptyHint}
-
-        <div class="report-chart-card" style="overflow-x: auto;">
-            <table class="report-table yearly-table" style="font-size: var(--text-xs); min-width: 1200px;">
+        <div class="yearly-table-wrap">
+            <table class="yearly-table">
                 <thead>
-                    <tr style="background: var(--bg-secondary);">
-                        <th style="width: 36px; background: var(--bg-secondary);"></th>
-                        <th style="text-align: left; width: 140px; position: sticky; left: 36px; background: var(--bg-secondary); z-index: 1;">項目</th>
+                    <tr>
+                        <th class="yearly-th-label">項目</th>
                         ${headerMonths}
-                        <th style="text-align: right; background: rgba(255, 235, 180, 0.4);">年度總計</th>
-                        <th style="text-align: right;">每月平均</th>
-                        <th style="text-align: right;">占比</th>
-                        <th style="text-align: center; width: 90px;">趨勢</th>
+                        <th class="yearly-th-total">年度總計</th>
+                        <th>每月平均</th>
+                        <th>占比</th>
+                        <th class="yearly-th-spark">趨勢</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows.map((r, i) => renderYearlyRow(r, currentMonth1based, sectionSpans[i] || 0)).join('')}
+                    ${tbodyHtml}
                 </tbody>
             </table>
         </div>

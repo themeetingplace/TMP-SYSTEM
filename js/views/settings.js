@@ -91,8 +91,7 @@ function renderBuildingsTab() {
         <div class="card">
             <div class="flex justify-between items-center mb-4">
                 <div>
-                    <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-buildings"></i> 館別管理</h2>
-                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">館別禁止刪除（會影響歷史資料），不再使用請改為「停用」</p>
+                    <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-buildings"></i> 館別管理</h2>
                 </div>
                 <button class="btn btn-primary" id="btn-new-building">
                     <i class="ph ph-plus"></i> 新增館別
@@ -550,8 +549,7 @@ function renderInvoiceTypesTab() {
         <div class="card">
             <div class="flex justify-between items-center mb-4">
                 <div>
-                    <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-receipt"></i> 帳單類型</h2>
-                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">新增帳單時可選擇的類型；改名會連動已存在的帳單</p>
+                    <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-receipt"></i> 帳單類型</h2>
                 </div>
                 <button class="btn btn-primary" id="btn-new-invoicetype">
                     <i class="ph ph-plus"></i> 新增類型
@@ -1066,8 +1064,7 @@ function renderSyncTab() {
         <div class="card">
             <div class="flex justify-between items-center mb-4">
                 <div>
-                    <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-cloud"></i> 雲端同步</h2>
-                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">雲端優先模式 — Supabase 是唯一真實來源，多裝置即時同步</p>
+                    <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-cloud"></i> 雲端同步</h2>
                 </div>
             </div>
 

@@ -155,8 +155,7 @@ export function renderHouses() {
         <div class="card">
             <div class="flex justify-between items-center mb-2" style="gap: 1rem;">
                 <div>
-                    <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-house"></i> 房屋資料</h2>
-                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">每館一個 tab — 房屋禁刪，不再使用請改停用</p>
+                    <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-house"></i> 房屋資料</h2>
                 </div>
                 <button class="btn btn-primary" id="btn-new-house" data-fab="ph-plus">
                     <i class="ph ph-plus"></i> 新增房屋

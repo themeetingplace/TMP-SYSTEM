@@ -58,8 +58,7 @@ export function renderManagedSettlements() {
         <div class="card">
             <div class="flex justify-between items-center mb-4">
                 <div>
-                    <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-receipt"></i> 屋主月結算</h2>
-                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 0;">至各代管房屋的「費用計算」tab 產生月結算單</p>
+                    <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-receipt"></i> 屋主月結算</h2>
                 </div>
             </div>
             ${settlements.length === 0
@@ -134,7 +133,6 @@ function viewSettlement(s) {
                 <div>本月移交給屋主: <strong>$${(s.depositTransferredThisMonth || 0).toLocaleString()}</strong></div>
                 <div>屋主目前持有押金總額: <strong style="color: var(--color-success);">$${(s.ownerHoldingDepositTotal || 0).toLocaleString()}</strong></div>
             </div>
-            <p style="margin-top: 0.75rem; font-size: var(--text-xs); color: var(--text-muted);">下一步 (P3 進階): PDF 下載 / LINE 直傳屋主</p>
         </div>
     `;
     openConfirm({

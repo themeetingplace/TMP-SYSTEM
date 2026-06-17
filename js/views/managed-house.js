@@ -1143,7 +1143,6 @@ function viewSettlement(id) {
                 <div>本月移交給屋主: $${(s.depositTransferredThisMonth || 0).toLocaleString()}</div>
                 <div>屋主目前持有押金總額: <strong>$${(s.ownerHoldingDepositTotal || 0).toLocaleString()}</strong></div>
             </div>
-            <p style="margin-top: 1rem; font-size: var(--text-xs); color: var(--text-muted);">P3 接下來：PDF 下載 + LINE 傳屋主 (待接入)</p>
         </div>
     `;
     openConfirm({
