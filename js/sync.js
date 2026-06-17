@@ -43,6 +43,11 @@ const state = {
     realtimeConnected: false
 };
 
+// ⚠ 防資料復活: 首次 pull 完成才允許 push 上雲
+// 沒這個 gate, stale localStorage 可能在 pull 還沒拉到雲端 truth 之前就 blind upsert
+// (forensic 確認 2026-06-16 用戶昨晚的資料復活就是這個 race)
+let firstPullDone = false;
+
 const listeners = new Set();
 function emit() { listeners.forEach(fn => { try { fn({ ...state }); } catch {} }); }
 function setStatus(s, error = null) {
@@ -119,8 +124,9 @@ export async function pullAll() {
             runMigration();
             window.dispatchEvent(new CustomEvent('bms:data-changed', { detail: { source: 'pull' } }));
             if (tableErrors.length === 0) {
+                firstPullDone = true;  // ✅ bootstrap pull 過關，允許 push (防資料復活第一道閘)
                 setStatus('idle');
-                console.log('✅ pull 完成');
+                console.log('✅ pull 完成 (firstPullDone=true，push 解鎖)');
             } else {
                 setStatus('error', `${tableErrors.length} 表 pull 失敗 (其他成功)`);
                 console.warn(`⚠ pull 部分失敗:`, tableErrors);
@@ -138,13 +144,32 @@ export async function pullAll() {
 }
 
 // === Push 小表 ===
+// 三層防禦防資料復活:
+//   1. firstPullDone gate — 首次 pull 完成才能推 (避免 stale localStorage blind 上雲)
+//   2. Sanity check — 雲端 0 筆 + 本機 >5 筆 = 強烈懷疑是 zombie restore，abort + 紅 toast
+//   3. catch error 也 abort 整批，避免半推半就
 async function pushSmall() {
     if (!navigator.onLine) return;
+    if (!firstPullDone) {
+        console.warn('[sync] skip pushSmall — bootstrap pull 未完成 (防資料復活)');
+        return;
+    }
     setStatus('pushing');
     try {
         for (const t of SMALL_TABLES) {
             const rows = (mockData[t.src] || []).map(t.toDb);
             if (rows.length === 0) continue;
+            // sanity check: 雲端 0 筆但本機很多 → 強烈懷疑是 zombie restore，拒絕推
+            if (rows.length > 5) {
+                const { count: remoteCount } = await supabase.from(t.key).select('*', { count: 'exact', head: true });
+                if (remoteCount === 0) {
+                    const msg = `偵測到 zombie restore: 雲端 ${t.key} 是 0 筆但本機有 ${rows.length} 筆，拒絕 push 避免覆蓋雲端刪除。請先「清空本機快取」`;
+                    console.warn(`[sync] ${msg}`);
+                    if (window.showToast) window.showToast(msg, 'danger', 12000);
+                    setStatus('error', msg);
+                    return;
+                }
+            }
             const { error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk });
             if (error) throw new Error(`${t.key}: ${error.message}`);
         }
@@ -158,6 +183,10 @@ async function pushSmall() {
 
 async function pushLarge() {
     if (!navigator.onLine) return;
+    if (!firstPullDone) {
+        console.warn('[sync] skip pushLarge — bootstrap pull 未完成');
+        return;
+    }
     setStatus('pushing');
     try {
         for (const t of LARGE_TABLES) {
@@ -361,13 +390,33 @@ export async function bootstrap() {
     }
 }
 
+// 清空本機快取重新同步 — 跑完 destructive SQL 後一鍵清，避免 stale localStorage 把刪除的資料 push 回 Supabase
+// 包：移除 localStorage data 快照 + last-sync + 重整頁面 → 重新 bootstrap pull 拿真實狀態
+export function clearLocalCacheAndReload() {
+    try {
+        localStorage.removeItem('bananas-pms-data-v1');
+        localStorage.removeItem('pms-last-sync');
+        localStorage.removeItem('bananas-bms-data-v1');  // 舊 key
+        localStorage.removeItem('bms-last-sync');
+    } catch (e) {
+        console.error('[sync] 清快取失敗:', e);
+    }
+    location.reload();
+}
+window.clearLocalCacheAndReload = clearLocalCacheAndReload;
+
 // === 網路狀態監聽 ===
-window.addEventListener('online', () => {
+// ⚠ 一定要序列化 pullAll → pushAll，原本平行賽跑會讓 stale local 把雲端覆蓋掉 (zombie restore)
+window.addEventListener('online', async () => {
     state.online = true;
     emit();
     console.log('[sync] 連線恢復');
-    pullAll().catch(() => {});
-    pushAll();
+    try {
+        await pullAll();
+        await pushAll();
+    } catch (e) {
+        console.warn('[sync] 連線恢復後同步失敗:', e);
+    }
 });
 window.addEventListener('offline', () => {
     state.online = false;

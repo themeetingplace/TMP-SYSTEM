@@ -1099,6 +1099,9 @@ function renderSyncTab() {
                 <button class="btn btn-outline sync-action" data-action="migrate" title="一次性把全部 mockData 上傳（含 PDF）">
                     <i class="ph ph-database"></i> 完整遷移
                 </button>
+                <button class="btn btn-outline sync-action" data-action="clear-cache" style="margin-left: auto; color: var(--color-danger); border-color: var(--color-danger);" title="跑完 destructive SQL 後一鍵清，防止本機 stale 資料 push 回 Supabase 復活已刪除的 row">
+                    <i class="ph ph-broom"></i> 清空本機快取重新同步
+                </button>
             </div>
 
             <div style="padding: 1rem; background: var(--bg-tertiary, #1a1a1a); border-radius: var(--radius-md); font-size: var(--text-xs); line-height: 1.7; color: var(--text-muted);">
@@ -1152,6 +1155,16 @@ function bindSyncActions(scope) {
                 if (action === 'pull')     { showToast('開始下載…', 'info'); await window.pullFromSupabase(); showToast('下載完成', 'success'); }
                 if (action === 'push')     { showToast('開始上傳…', 'info'); await window.pushToSupabase();   showToast('上傳完成', 'success'); }
                 if (action === 'migrate')  { showToast('完整遷移中…', 'info'); await window.migrateToSupabase(); showToast('遷移完成', 'success'); }
+                if (action === 'clear-cache') {
+                    openConfirm({
+                        title: '清空本機快取重新同步',
+                        message: '<p>會清掉本機暫存 (<code>bananas-pms-data-v1</code> + <code>pms-last-sync</code>) 並重新從 Supabase 拉真實資料。</p><p style="color: var(--color-warning); margin-top: 0.5rem;"><strong>適用場景</strong>: 跑完 destructive SQL (例如 <code>DELETE FROM invoices</code>) 之後一定要清，否則本機 stale 資料會被 sync push 回 Supabase 復活已刪除 row。</p><p style="margin-top: 0.5rem; font-size: var(--text-sm); color: var(--text-muted);">未推送的本機改動會遺失。</p>',
+                        confirmLabel: '清空 + 重新同步',
+                        danger: true,
+                        onConfirm: () => { window.clearLocalCacheAndReload(); }
+                    });
+                    return;
+                }
                 // 重繪面板（狀態可能變了）
                 const content = document.getElementById('settings-content');
                 if (content && currentTab === 'sync') {

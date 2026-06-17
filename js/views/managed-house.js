@@ -5,7 +5,7 @@
 import { mockData, store, bedOccupied, getOwnerById } from '../data.js';
 import { openFormModal, openConfirm, showToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc } from '../utils/escape.js';
-import { showOwnerForm } from './managed-owners.js';
+// 屋主資料現在 inline 在房屋表單，不再需要 showOwnerForm 入口
 
 const STORAGE_TAB_KEY = 'pms-m-house-tab';
 const VALID_TABS = ['data', 'occupancy', 'contracts', 'fee'];
@@ -363,16 +363,9 @@ export function showNewManagedHouseForm() {
     showHouseForm(null);
 }
 
-function ownerOptions() {
-    return mockData.owners
-        .filter(o => o.status !== 'archived')
-        .map(o => ({ value: o.id, label: `${o.name}${o.status === 'pending_review' ? ' (待審核)' : ''}` }));
-}
-
 function showHouseForm(building) {
     const isEdit = !!building;
-    const owners = ownerOptions();
-    // 不擋 — 沒屋主也能開表單；屋主下拉旁邊有「+ 新增屋主」按鈕
+    // 屋主資料 inline 直接填，submit 時 lookup-or-create owner
 
     openFormModal({
         title: isEdit ? `編輯代管房屋：${building.name}` : '新增代管房屋',
@@ -395,9 +388,19 @@ function showHouseForm(building) {
             { name: 'rentTerm', label: '租金條件', type: 'text', placeholder: '押二付一' },
             { name: 'taxReported', label: '是否報稅', type: 'select', options: BOOL_OPTIONS, value: building?.taxReported ? 'true' : 'false' },
 
-            { name: '__s3', type: 'section', label: '屋主 + 代管設定' },
-            // 2x2 排版：屋主 / 起始日 / 結束日 / 收費方式
-            { name: 'ownerId', label: '屋主', type: 'select', required: true, options: owners, value: building?.ownerId ?? '', searchable: true },
+            { name: '__s3', type: 'section', label: '屋主資料', hint: '同姓名屋主已存在 → 自動連動更新；不存在 → 自動建檔' },
+            { name: 'ownerName', label: '屋主姓名', type: 'text', required: true, span: 2, placeholder: '例：王小明' },
+            { name: 'ownerGender', label: '性別', type: 'select', options: [
+                { value: '',     label: '不指定' },
+                { value: '男',   label: '男' },
+                { value: '女',   label: '女' },
+                { value: '其他', label: '其他' }
+            ] },
+            { name: 'ownerPhone', label: '電話', type: 'text', placeholder: '0912-345-678' },
+            { name: 'ownerEmail', label: '信箱', type: 'text', placeholder: 'name@example.com' },
+            { name: 'ownerLineId', label: 'LINE ID', type: 'text', placeholder: '@xxx 或 userId' },
+
+            { name: '__s3b', type: 'section', label: '代管設定' },
             { name: 'managedStartDate', label: '代管起始日', type: 'date' },
             { name: 'managedEndDate', label: '代管結束日', type: 'date' },
             { name: 'feeType', label: '代管收費方式', type: 'select', options: FEE_TYPE_OPTIONS, value: building?.feeType ?? 'fixed' },
@@ -418,9 +421,16 @@ function showHouseForm(building) {
                 feeType: 'fixed'
             };
             const cfg = base?.feeConfig || {};
+            // 編輯模式 prefill 屋主 inline 欄位 (從 owners 表反查)
+            const linkedOwner = base.ownerId ? getOwnerById(base.ownerId) : null;
             return {
                 ...base,
-                houseName: base.name ?? '',  // 'name' 改 'houseName' 後 prefill
+                houseName: base.name ?? '',
+                ownerName:   linkedOwner?.name   ?? '',
+                ownerGender: linkedOwner?.gender ?? '',
+                ownerPhone:  linkedOwner?.phone  ?? '',
+                ownerEmail:  linkedOwner?.email  ?? '',
+                ownerLineId: linkedOwner?.lineId ?? '',
                 feeFixedAmount: cfg.amount ?? '',
                 feePercentRate: cfg.rate ?? '',
                 feeTierJson: cfg.tiers ? JSON.stringify(cfg.tiers) : '',
@@ -453,37 +463,11 @@ function showHouseForm(building) {
             // custom-select 在 dispatchEvent('change') 寫到 hidden input
             feeTypeInput?.addEventListener('change', syncVisibility);
 
-            // === 屋主下拉旁邊塞「+ 新增屋主」按鈕 — 流程以房屋為主，不用先去屋主管理 ===
-            const ownerCustomSelect = form.querySelector('.custom-select[data-name="ownerId"]');
-            const ownerWrapper = ownerCustomSelect?.closest('.form-group');
-            if (ownerWrapper && !ownerWrapper.querySelector('.inline-add-owner-btn')) {
-                const addBtn = document.createElement('button');
-                addBtn.type = 'button';
-                addBtn.className = 'btn btn-outline inline-add-owner-btn';
-                addBtn.style.cssText = 'margin-top: 0.35rem; padding: 0.25rem 0.6rem; font-size: var(--text-xs); align-self: flex-start;';
-                addBtn.innerHTML = '<i class="ph ph-plus"></i> 新增屋主';
-                addBtn.addEventListener('click', () => {
-                    showOwnerForm(null, {
-                        skipRefresh: true,
-                        onCreated: (newOwner) => {
-                            // 重新生 owners options + 自動選上新建的這位
-                            const refreshedOpts = mockData.owners
-                                .filter(o => o.status !== 'archived')
-                                .map(o => ({ value: o.id, label: `${o.name}${o.status === 'pending_review' ? ' (待審核)' : ''}` }));
-                            if (ownerCustomSelect.__setOptions) {
-                                ownerCustomSelect.__setOptions(refreshedOpts, '請選擇...');
-                                // __setOptions 把 selection 清空 → 手動點該 owner 的 option 觸發 select
-                                const newOpt = ownerCustomSelect.querySelector(`.custom-select-option[data-value="${newOwner.id}"]`);
-                                if (newOpt) newOpt.click();
-                            }
-                        }
-                    });
-                });
-                ownerWrapper.appendChild(addBtn);
-            }
+            // 屋主資料 inline 直接填，不需要獨立「+ 新增屋主」按鈕
+            // submit 時自動 lookup-or-create owner，user 不用先去屋主管理建檔
         },
         onSubmit: (values) => {
-            // houseName → name (避開 HTMLFormElement.name property 衝突)
+            // houseName → name
             values.name = values.houseName;
             delete values.houseName;
             values.mode = 'managed';
@@ -491,6 +475,37 @@ function showHouseForm(building) {
             values.taxReported = values.taxReported === 'true' || values.taxReported === true;
             if (values.monthlyRent != null && values.monthlyRent !== '') values.monthlyRent = Number(values.monthlyRent);
             if (values.areaSize != null && values.areaSize !== '') values.areaSize = Number(values.areaSize);
+
+            // ===== 屋主 lookup-or-create (取代之前 dropdown + 新增屋主 button 流程) =====
+            const ownerName = (values.ownerName || '').trim();
+            if (!ownerName) {
+                showToast('「屋主姓名」必填', 'danger');
+                return false;
+            }
+            const ownerPatch = {
+                name:   ownerName,
+                gender: values.ownerGender ?? '',
+                phone:  values.ownerPhone  ?? '',
+                email:  values.ownerEmail  ?? '',
+                lineId: values.ownerLineId ?? ''
+            };
+            // 找同名 owner — 若已存在，update 該筆並取其 id；否則建一筆 active
+            let ownerId = building?.ownerId || null;
+            const existing = mockData.owners.find(o => o.name === ownerName && o.status !== 'archived');
+            if (existing) {
+                store.updateOwner(existing.id, ownerPatch);
+                ownerId = existing.id;
+            } else {
+                const created = store.addOwner({ ...ownerPatch, source: '員工面談', status: 'active' });
+                ownerId = created.id;
+            }
+            values.ownerId = ownerId;
+            // 清掉 inline 臨時欄位 (不寫進 buildings)
+            delete values.ownerName;
+            delete values.ownerGender;
+            delete values.ownerPhone;
+            delete values.ownerEmail;
+            delete values.ownerLineId;
 
             // 收費 config 從 4 個臨時欄位收成 feeConfig 物件
             const feeConfig = {};
