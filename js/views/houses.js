@@ -3,6 +3,7 @@
 import { mockData, store, getSortedBuildings, bedOccupied } from '../data.js';
 import { openFormModal, showToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc } from '../utils/escape.js';
+import { getMode } from '../utils/appMode.js';
 
 const STORAGE_KEY = 'pms-houses-active-building';
 const STATUS_OPTIONS = [
@@ -126,7 +127,9 @@ function renderBuildingDetail(building) {
 }
 
 export function renderHouses() {
-    const buildings = getSortedBuildings();
+    // 跟 mode 切開：共居 hub 只顯示共居房屋，代管走 #m-house/* route
+    const mode = getMode();
+    const buildings = getSortedBuildings().filter(b => (b.mode || 'cohousing') === (mode === 'managed' ? 'managed' : 'cohousing'));
 
     if (buildings.length === 0) {
         return `

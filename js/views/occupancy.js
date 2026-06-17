@@ -8,6 +8,7 @@
 
 import { mockData, formatRoomType, getSortedBuildings, isSettled, needsDecision } from '../data.js';
 import { showTenantNoteEditor, showTenantDetails } from './tenants.js';
+import { getMode } from '../utils/appMode.js';
 import { showPropertyDetails, showCheckinAssignmentForm } from './properties.js';
 import { showContractDetails, confirmTerminate, confirmRenew, confirmSnooze } from './contracts.js';
 
@@ -506,7 +507,10 @@ export function renderOccupancy() {
     const today = new Date();
     const monthCount = calculateMonthCount();
     const months = buildMonths(today, monthCount);
-    const buildings = getSortedBuildings({ activeOnly: true });
+    // 跟 mode 切開：共居 mode 只列共居館，代管同理
+    const mode = getMode();
+    const buildings = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === (mode === 'managed' ? 'managed' : 'cohousing'));
 
     if (!currentBuildingId || !buildings.find(b => b.id === currentBuildingId)) {
         currentBuildingId = buildings[0]?.id;

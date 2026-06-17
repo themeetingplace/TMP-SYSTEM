@@ -2,6 +2,8 @@
 import { escapeHtml as esc } from '../utils/escape.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
 import { showTenantDetails } from './tenants.js';
+import { filterPropertiesByMode } from '../utils/modeFilter.js';
+import { getMode } from '../utils/appMode.js';
 
 const PROPERTY_STATUSES = ['已出租', '待租', '待簽約'];
 const NAME_PREFIX = '聚空間 - ';
@@ -91,7 +93,8 @@ export function renderProperties() {
     const sortedKey = currentSort.col || 'info';
     const baseCmp = PROP_SORT_COLS[sortedKey].cmp;
     const cmp = currentSort.dir === 'desc' ? (a, b) => -baseCmp(a, b) : baseCmp;
-    const properties = [...mockData.properties].sort(cmp);
+    // 跟 mode 切開：共居 mode 只顯示 cohousing buildings 的床位，代管同理
+    const properties = filterPropertiesByMode(mockData.properties).slice().sort(cmp);
 
     const totalProperties = properties.length;
     // 三段互斥分類，跟 effectiveStatus 對齊：
