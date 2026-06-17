@@ -1434,16 +1434,11 @@ function renderYearlyRow(r, currentMonth1based) {
     const zeroChar = '<span class="yearly-zero">·</span>';
 
     const cells = r.monthlyValues.map((v, idx) => {
-        const month = idx + 1;
-        const isCurrent = month === currentMonth1based;
-        const arrow = (isCurrent && !isPercent) ? momArrow(r.monthlyValues, idx) : '';
-        // 熱度 — 只給 top tier 上色
         const ratio = max > 0 ? Math.abs(v) / max : 0;
         const bg = (!isPercent && ratio >= heatThreshold) ? heatBgFor(Math.abs(v), max, r.kind) : '';
         const valColor = (r.kind === 'net' && v < 0) ? 'color: var(--color-danger);' : '';
         const txt = v === 0 ? zeroChar : formatRowValue(r, v);
-        const curCls = isCurrent ? ' is-current-month' : '';
-        return `<td class="yearly-cell${curCls}" style="${valColor}${bg}">${txt}${arrow}</td>`;
+        return `<td class="yearly-cell" style="${valColor}${bg}">${txt}</td>`;
     }).join('');
 
     let sparkColor = sectionVar(r.section);
@@ -1489,10 +1484,9 @@ function renderYearlyTab() {
     const currentMonth1based = isCurrentYear ? today.getMonth() + 1 : 12;
     const rows = computeYearlyData(year);
     const hasAnyData = rows.some(r => r.total !== 0);
-    const headerMonths = MONTHS_LABEL.map((label, idx) => {
-        const isCur = (idx + 1) === currentMonth1based && isCurrentYear;
-        return `<th style="text-align: right; ${isCur ? 'background: rgba(255, 122, 0, 0.08);' : ''}">${label}</th>`;
-    }).join('');
+    const headerMonths = MONTHS_LABEL.map(label =>
+        `<th style="text-align: right;">${label}</th>`
+    ).join('');
 
     // section 分組
     const sectionGroups = [];

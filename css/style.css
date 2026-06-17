@@ -1652,10 +1652,6 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
 }
 .yearly-row:hover .yearly-label { background: var(--bg-secondary); }
 .yearly-cell { text-align: right; color: var(--text-main); }
-.yearly-cell.is-current-month {
-    background-color: var(--color-primary-light);
-    color: var(--color-primary-text);
-}
 .yearly-total {
     font-weight: 600;
     background: var(--bg-secondary);
