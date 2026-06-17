@@ -355,9 +355,10 @@ export function showTenantNoteEditor(tenantId) {
 
     openModal({
         title: '編輯備註',
-        bodyHtml: `<div style="margin: -0.25rem 0 0; padding: 0 0 1rem; font-size: var(--text-base); color: var(--text-muted); border-bottom: 1px dashed var(--border-color); margin-bottom: 1rem;">${subtitle}</div>${bodyHtml}`,
+        bodyHtml: `<div style="margin: -0.25rem 0 0; padding: 0 0 1rem; font-size: var(--text-base); color: var(--text-muted); border-bottom: 1px dashed var(--border-color); margin-bottom: 1rem;">${esc(subtitle)}</div>${bodyHtml}`,
         footerHtml,
         maxWidth: 480,
+        lockOutsideClose: true,  // 打 200 字打到一半點外面會整段消失 — 鎖住，震動提醒
         onMount: (overlay, close) => {
             const textarea = overlay.querySelector('#tenant-note-input');
             const counter = overlay.querySelector('#tenant-note-count');

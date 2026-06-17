@@ -60,11 +60,11 @@ function clampToMonthEnd(year, month, day) {
 // 回傳: 'paid' | 'partial' | 'unpaid' | null  (null = 無對應 invoice，可能是新月份還沒建)
 function paymentStatusFor(contract, month) {
     const monthKey = `${month.year}-${String(month.month).padStart(2, '0')}`;
+    // audit: 移除 tenant name fallback 避免跨館同名串色 (房租 vs 租金 也順手只認 '房租' 收入)
     const relevant = mockData.invoices.filter(inv => {
         if (inv.direction !== 'in') return false;
-        if (inv.type !== '房租' && inv.type !== '租金') return false;
-        const matched = (inv.contractId === contract.id) || (inv.tenant && contract.tenant && inv.tenant === contract.tenant);
-        if (!matched) return false;
+        if (inv.type !== '房租') return false;
+        if (inv.contractId !== contract.id) return false;  // 嚴格只用 contractId 對應
         const m = (inv.paidDate || inv.dueDate || '').substring(0, 7);
         return m === monthKey;
     });

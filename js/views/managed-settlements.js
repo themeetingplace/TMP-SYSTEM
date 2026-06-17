@@ -5,6 +5,14 @@ import { mockData, store, getOwnerById } from '../data.js';
 import { openConfirm, showToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 
+// 狀態中文 label (audit: 中文 UI 不可突然蹦英文 draft/sent/settled)
+const STATUS_LABEL = {
+    draft:   '草稿',
+    sent:    '已傳送',
+    settled: '已結清'
+};
+const statusLabel = (s) => STATUS_LABEL[s] || s || '—';
+
 export function renderManagedSettlements() {
     const settlements = [...mockData.settlements].sort((a, b) =>
         (b.month || '').localeCompare(a.month || '')
@@ -27,7 +35,7 @@ export function renderManagedSettlements() {
                 <td>${b ? `<a href="#m-house/${esc(b.id)}" style="color: var(--color-primary);">${esc(b.name)}</a>` : '—'}</td>
                 <td style="text-align: right;"><strong>$${(s.ownerReceivable || 0).toLocaleString()}</strong></td>
                 <td style="text-align: right;">$${(s.ownerHoldingDepositTotal || 0).toLocaleString()}</td>
-                <td><span class="status-badge ${s.status === 'settled' ? 'success' : s.status === 'sent' ? 'info' : 'muted'}">${s.status}</span></td>
+                <td><span class="status-badge ${s.status === 'settled' ? 'success' : s.status === 'sent' ? 'info' : 'muted'}">${statusLabel(s.status)}</span></td>
                 <td>
                     <div style="display: flex; gap: 0.35rem;">
                         <button class="btn btn-outline settlement-action" data-action="view" data-id="${esc(s.id)}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs);" title="詳情"><i class="ph ph-eye"></i></button>
@@ -109,7 +117,7 @@ function viewSettlement(s) {
     const html = `
         <div>
             <p><strong>${esc(b?.name || '')}</strong> · 屋主：<strong>${esc(o?.name || '—')}</strong></p>
-            <p>結算月：<strong>${esc(s.month)}</strong> · 狀態：${esc(s.status)}</p>
+            <p>結算月：<strong>${esc(s.month)}</strong> · 狀態：${statusLabel(s.status)}</p>
             <table class="data-table" style="margin: 0.5rem 0;">
                 <thead><tr><th>項目</th><th style="text-align: right;">金額</th></tr></thead>
                 <tbody>

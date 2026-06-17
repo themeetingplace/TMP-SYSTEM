@@ -266,11 +266,16 @@ export function initCustomSelects(scope) {
         function position() {
             const rect = trigger.getBoundingClientRect();
             panel.style.minWidth = `${rect.width}px`;
-            panel.style.left = `${rect.left}px`;
+            // audit: clamp 水平位置，避免手機 panel 掉出畫面
+            const pw = panel.offsetWidth || rect.width;
+            const maxLeft = window.innerWidth - pw - 8;
+            panel.style.left = `${Math.max(8, Math.min(rect.left, maxLeft))}px`;
             panel.style.top = `${rect.bottom + 4}px`;
             // 翻到上方若空間不足
             const ph = panel.offsetHeight;
-            if (rect.bottom + ph + 8 > window.innerHeight) {
+            // visualViewport 處理 iOS 鍵盤彈出後高度變化
+            const viewportH = (window.visualViewport?.height) || window.innerHeight;
+            if (rect.bottom + ph + 8 > viewportH) {
                 panel.style.top = `${rect.top - ph - 4}px`;
             }
         }
@@ -423,7 +428,8 @@ function escapeAttr(s) {
 
 function renderField(field, currentValue) {
     const { name, label, type = 'text', required = false, placeholder = '', options = [], rows = 3, hint = '', span = 1 } = field;
-    const req = required ? '<span style="color: var(--color-danger);">*</span>' : '';
+    // 必填: 視覺紅星 + sr-only「必填」給螢幕報讀
+    const req = required ? '<span style="color: var(--color-danger);" aria-hidden="true">*</span><span class="sr-only">必填</span>' : '';
     const labelHtml = label ? `<label for="f-${name}">${label} ${req}</label>` : '';
     const hintHtml = hint ? `<small class="form-hint">${hint}</small>` : '';
     const wrapStyle = `style="grid-column: span ${span};"`;
