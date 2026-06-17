@@ -879,6 +879,8 @@ function renderSingleBuildingAnalysis(buildingId) {
     const months = computeMonthlyTrend(range, buildingId);
     const monthCount = months.length;
 
+    const buckets = bucketExpensesOf(invoices);
+
     return `
         <div class="bldg-hero">
             <div class="bldg-hero-info">
@@ -901,7 +903,103 @@ function renderSingleBuildingAnalysis(buildingId) {
                 ${renderTrendChart(months)}
             </div>
         </div>
+
+        <!-- 該館支出分項 (對齊用戶 excel 表) -->
+        <div class="report-chart-card">
+            <div class="report-chart-title"><i class="ph ph-list-numbers"></i> ${building.name} 支出分項</div>
+            <div style="overflow-x: auto;">
+                <table class="report-table report-itemized-table" style="max-width: 420px;">
+                    <thead>
+                        <tr>
+                            <th style="background: rgba(255,200,200,0.4);">項目</th>
+                            <th style="text-align: right; background: rgba(255,200,200,0.4);">${building.name}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${EXPENSE_BUCKETS.map(b => `
+                            <tr>
+                                <td style="font-weight: 500;">${b.label}</td>
+                                ${moneyCell(buckets[b.key])}
+                            </tr>
+                        `).join('')}
+                        <tr style="background: rgba(255,200,200,0.25);">
+                            <td><strong>支出合計</strong></td>
+                            ${moneyCell(bucketSubtotal(buckets), { bold: true })}
+                        </tr>
+                        <tr>
+                            <td>紅利發放</td>
+                            ${moneyCell(buckets.bonus)}
+                        </tr>
+                        <tr style="background: rgba(255,235,180,0.4);">
+                            <td><strong>總合計</strong></td>
+                            ${moneyCell(bucketGrandTotal(buckets), { bold: true })}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     `;
+}
+
+// === 支出分類桶 (對齊用戶 excel 表) ===
+// 對應 invoice.type；未匹配的歸到「其他」
+const EXPENSE_BUCKETS = [
+    { key: 'rent',     label: '租金',    matchTypes: ['房東租金', '租金'] },
+    { key: 'mgmt',     label: '管理費',  matchTypes: ['管理費'] },
+    { key: '591',      label: '591',     matchTypes: ['591'] },
+    { key: 'water',    label: '水費',    matchTypes: ['水費'] },
+    { key: 'electric', label: '電費',    matchTypes: ['電費'] },
+    { key: 'network',  label: '網路費',  matchTypes: ['網路費'] },
+    { key: 'gas',      label: '瓦斯費',  matchTypes: ['瓦斯費'] },
+    { key: 'misc',     label: '雜支',    matchTypes: ['修繕雜支', '雜支'] },
+    { key: 'salary',   label: '薪水',    matchTypes: ['薪水'] },
+    { key: 'other',    label: '其他',    matchTypes: ['其他支出', '其他', '清潔用品'] }
+];
+const BONUS_MATCH = ['紅利發放'];
+
+function bucketExpensesOf(invoices) {
+    const buckets = {};
+    EXPENSE_BUCKETS.forEach(b => buckets[b.key] = 0);
+    buckets.bonus = 0;
+    invoices.filter(i => i.direction === 'out').forEach(inv => {
+        const t = inv.type || '';
+        const amt = actualAmount(inv);
+        const bucket = EXPENSE_BUCKETS.find(b => b.matchTypes.includes(t));
+        if (bucket) buckets[bucket.key] += amt;
+        else if (BONUS_MATCH.includes(t)) buckets.bonus += amt;
+        else buckets.other += amt;  // 未匹配 type 歸到「其他」
+    });
+    return buckets;
+}
+function bucketSubtotal(b) { return EXPENSE_BUCKETS.reduce((s, x) => s + (b[x.key] || 0), 0); }
+function bucketGrandTotal(b) { return bucketSubtotal(b) + (b.bonus || 0); }
+
+// === 報表單位: 各館 (building) 或 群組 (group like 松師=松山+師大) ===
+function getReportUnits() {
+    const buildings = _modeBuildings();
+    const grouping = reportState.viewGrouping || 'building';
+    if (grouping === 'group') {
+        const map = new Map();
+        buildings.forEach(b => {
+            const g = b.group || b.name;
+            if (!map.has(g)) map.set(g, { id: g, name: g, buildingIds: [] });
+            map.get(g).buildingIds.push(b.id);
+        });
+        return [...map.values()];
+    }
+    return buildings.map(b => ({ id: b.id, name: b.name, buildingIds: [b.id] }));
+}
+function invoicesForUnit(unit, invoices) {
+    return invoices.filter(i => unit.buildingIds.includes(i.buildingId));
+}
+
+// 金額 cell — 0 顯示空白，跟 excel 一致
+function moneyCell(v, opts = {}) {
+    const v0 = Number(v) || 0;
+    const txt = v0 === 0 ? '' : `$${v0.toLocaleString()}`;
+    const w = opts.bold ? 'font-weight: 700;' : '';
+    const c = opts.color ? `color: ${opts.color};` : '';
+    return `<td style="text-align: right; font-variant-numeric: tabular-nums; ${w}${c}">${txt}</td>`;
 }
 
 function renderAnalysisAllBuildings() {
@@ -909,17 +1007,17 @@ function renderAnalysisAllBuildings() {
     const rangeInvoices = settledInRange(range);
     const summary = computeAggForInvoices(rangeInvoices);
     const pareto = computeExpensePareto(rangeInvoices);
-    const activeBuildings = _modeBuildings();
-
-    // 月度趨勢 (全館合計，月數依區間動態)
     const months = computeMonthlyTrend(range);
     const monthCount = months.length;
+    const grouping = reportState.viewGrouping || 'building';
 
-    // 各館 P&L 對比
-    const perBuilding = activeBuildings.map(b => {
-        const inv = rangeInvoices.filter(i => i.buildingId === b.id);
-        return { building: b, ...computeAggForInvoices(inv) };
+    // 計算各 unit (館/群組) 的 agg + expense buckets
+    const units = getReportUnits();
+    const perUnit = units.map(u => {
+        const inv = invoicesForUnit(u, rangeInvoices);
+        return { unit: u, agg: computeAggForInvoices(inv), buckets: bucketExpensesOf(inv) };
     });
+    const totalBuckets = bucketExpensesOf(rangeInvoices);
 
     return `
         ${renderFinancialKpiTiles(summary)}
@@ -935,41 +1033,86 @@ function renderAnalysisAllBuildings() {
             </div>
         </div>
 
+        <!-- 群組 / 各館 切換 -->
+        <div style="display: flex; justify-content: flex-end; gap: 0.4rem; margin: 0.75rem 0 0.5rem;">
+            <span style="font-size: var(--text-xs); color: var(--text-muted); align-self: center; margin-right: 0.3rem;">統計單位：</span>
+            <button type="button" class="chart-mode-btn ${grouping === 'building' ? 'active' : ''}" data-grouping="building">按館別</button>
+            <button type="button" class="chart-mode-btn ${grouping === 'group' ? 'active' : ''}" data-grouping="group">按群組</button>
+        </div>
+
+        <!-- P&L 對比表 (5 cols: 收入/支出/結餘/毛利率/淨利率) -->
         <div class="report-chart-card">
-            <div class="report-chart-title"><i class="ph ph-table"></i> 各館 P&amp;L 對比</div>
+            <div class="report-chart-title"><i class="ph ph-table"></i> ${grouping === 'group' ? '各群組' : '各館'} P&amp;L 對比</div>
             <div style="overflow-x: auto;">
                 <table class="report-table report-pnl-table">
                     <thead>
                         <tr>
-                            <th>館別</th>
+                            <th>${grouping === 'group' ? '群組' : '館別'}</th>
                             <th style="text-align: right;">收入</th>
-                            <th style="text-align: right;">租金</th>
-                            <th style="text-align: right;">其他支出</th>
-                            <th style="text-align: right;">淨利</th>
+                            <th style="text-align: right;">支出</th>
+                            <th style="text-align: right;">結餘</th>
                             <th style="text-align: right;">毛利率</th>
                             <th style="text-align: right;">淨利率</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${perBuilding.map(r => `
-                            <tr style="cursor: pointer;" data-building-sub="${r.building.id}">
-                                <td style="font-weight: 600;">${r.building.name}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums;">$${r.inAll.toLocaleString()}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">$${r.landlordRent.toLocaleString()}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">$${r.otherExpense.toLocaleString()}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: ${r.net >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">$${r.net.toLocaleString()}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums;">${r.inAll > 0 ? pct(r.grossMargin) : '—'}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: ${r.netMargin >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${r.inAll > 0 ? pct(r.netMargin) : '—'}</td>
+                        ${perUnit.map(r => `
+                            <tr ${grouping === 'building' ? `style="cursor: pointer;" data-building-sub="${r.unit.id}"` : ''}>
+                                <td style="font-weight: 600;">${r.unit.name}</td>
+                                ${moneyCell(r.agg.inAll)}
+                                ${moneyCell(r.agg.outAll)}
+                                ${moneyCell(r.agg.net, { bold: true, color: r.agg.net >= 0 ? 'var(--text-main)' : 'var(--color-danger)' })}
+                                <td style="text-align: right; font-variant-numeric: tabular-nums;">${r.agg.inAll > 0 ? pct(r.agg.grossMargin) : '—'}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: ${r.agg.netMargin >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${r.agg.inAll > 0 ? pct(r.agg.netMargin) : '—'}</td>
                             </tr>
                         `).join('')}
                         <tr class="pnl-total-row">
                             <td><strong>合計</strong></td>
-                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700;">$${summary.inAll.toLocaleString()}</td>
-                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700;">$${summary.landlordRent.toLocaleString()}</td>
-                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700;">$${summary.otherExpense.toLocaleString()}</td>
-                            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: ${summary.net >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">$${summary.net.toLocaleString()}</td>
+                            ${moneyCell(summary.inAll, { bold: true })}
+                            ${moneyCell(summary.outAll, { bold: true })}
+                            ${moneyCell(summary.net, { bold: true, color: summary.net >= 0 ? 'var(--text-main)' : 'var(--color-danger)' })}
                             <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700;">${summary.inAll > 0 ? pct(summary.grossMargin) : '—'}</td>
                             <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: ${summary.netMargin >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${summary.inAll > 0 ? pct(summary.netMargin) : '—'}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ${grouping === 'group' ? '各群組' : '各館'} 支出分項表 (rows = 項目, cols = 各${grouping === 'group' ? '群組' : '館'} + 全館合計) -->
+        <div class="report-chart-card">
+            <div class="report-chart-title"><i class="ph ph-list-numbers"></i> ${grouping === 'group' ? '各群組' : '各館'} 支出分項</div>
+            <div style="overflow-x: auto;">
+                <table class="report-table report-itemized-table">
+                    <thead>
+                        <tr>
+                            <th style="background: rgba(255,200,200,0.4);">項目</th>
+                            ${perUnit.map(u => `<th style="text-align: right;">${u.unit.name}</th>`).join('')}
+                            <th style="text-align: right; background: rgba(255,235,180,0.4);">全館合計</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${EXPENSE_BUCKETS.map(b => `
+                            <tr>
+                                <td style="font-weight: 500;">${b.label}</td>
+                                ${perUnit.map(u => moneyCell(u.buckets[b.key])).join('')}
+                                ${moneyCell(totalBuckets[b.key], { bold: true })}
+                            </tr>
+                        `).join('')}
+                        <tr style="background: rgba(255,200,200,0.25);">
+                            <td><strong>支出合計</strong></td>
+                            ${perUnit.map(u => moneyCell(bucketSubtotal(u.buckets), { bold: true })).join('')}
+                            ${moneyCell(bucketSubtotal(totalBuckets), { bold: true })}
+                        </tr>
+                        <tr>
+                            <td>紅利發放</td>
+                            ${perUnit.map(u => moneyCell(u.buckets.bonus)).join('')}
+                            ${moneyCell(totalBuckets.bonus, { bold: true })}
+                        </tr>
+                        <tr style="background: rgba(255,235,180,0.4);">
+                            <td><strong>總合計</strong></td>
+                            ${perUnit.map(u => moneyCell(bucketGrandTotal(u.buckets), { bold: true })).join('')}
+                            ${moneyCell(bucketGrandTotal(totalBuckets), { bold: true })}
                         </tr>
                     </tbody>
                 </table>
