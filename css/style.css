@@ -1559,36 +1559,37 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
 .btn-icon.primary       { color: var(--color-primary); }
 .btn-icon.primary:hover { background: rgba(255, 122, 0, 0.08); border-color: var(--color-primary); }
 
-/* 群組累金 bar (各館報表頂端) */
+/* 群組累金 bar — 單行 chip 樣式 (各館報表頂端，非視覺重點) */
 .cum-bar {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 0.75rem;
-    margin: 0 0 1rem;
-}
-.cum-tile {
-    background: linear-gradient(135deg, rgba(255, 200, 100, 0.08) 0%, rgba(255, 122, 0, 0.04) 100%);
-    border: 1px solid rgba(255, 122, 0, 0.18);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 1rem;
+    margin: 0 0 0.75rem;
+    padding: 0.4rem 0.75rem;
+    background: rgba(255, 122, 0, 0.03);
+    border: 1px solid rgba(255, 122, 0, 0.1);
     border-radius: var(--radius-md);
-    padding: 0.75rem 1rem;
-}
-.cum-tile-label {
     font-size: var(--text-xs);
+}
+.cum-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    font-variant-numeric: tabular-nums;
+}
+.cum-chip + .cum-chip { border-left: 1px solid rgba(0,0,0,0.08); padding-left: 1rem; }
+.cum-chip-label {
     color: var(--text-muted);
-    margin-bottom: 0.3rem;
     font-weight: 500;
 }
-.cum-tile-value {
-    font-size: 1.4rem;
-    font-weight: 700;
+.cum-chip-value {
     color: var(--color-primary);
-    font-variant-numeric: tabular-nums;
+    font-weight: 600;
 }
-.cum-tile-sub {
+.cum-chip-delta {
     font-size: var(--text-2xs);
-    color: var(--text-muted);
-    margin-top: 0.25rem;
-    font-variant-numeric: tabular-nums;
+    font-weight: 500;
 }
 
 /* spinner 旋轉 (form submit / loading states) */
@@ -1821,6 +1822,46 @@ body[data-app-mode="managed"] .topbar-title h1::before {
     font-size: 0.9rem;
     line-height: 1.6;
     white-space: pre-wrap;
+}
+
+/* === R5.1 inline-editable 欄位 (auto-save on blur/change) === */
+.inline-edit-row .houses-field-value {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.inline-edit-input {
+    width: 100%;
+    max-width: 320px;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.88rem;
+    line-height: 1.4;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-main);
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.inline-edit-input:hover {
+    background: #fafbfc;
+    border-color: rgba(0,0,0,0.08);
+}
+.inline-edit-input:focus {
+    outline: none;
+    background: #fff;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.12);
+}
+textarea.inline-edit-input { resize: vertical; min-height: 2.2rem; max-width: 100%; }
+select.inline-edit-input { cursor: pointer; max-width: 240px; }
+.inline-edit-input.is-saved {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.4);
+}
+.inline-edit-input.is-save-fail {
+    background: rgba(220, 38, 38, 0.08);
+    border-color: rgba(220, 38, 38, 0.4);
 }
 
 @media (max-width: 768px) {

@@ -25,9 +25,10 @@ function toIso(d) {
 
 export const reportState = {
     viewRange: defaultRange(),
-    viewGrouping: 'building', // 'building' | 'group'
-    activeTab: 'overview',    // 'overview' | 'buildings' | 'analysis'
-    activeBuilding: 'all',    // 'all' | <buildingId> — 各館報表 / 交叉分析 子分頁
+    viewGrouping: 'building',                     // 'building' | 'group'
+    activeTab: 'buildings',                       // 'buildings' | 'analysis' | 'yearly'
+    activeBuilding: 'all',                        // 'all' | <buildingId>
+    yearlyYear: new Date().getFullYear()          // R3: 年度總表選擇年份
 };
 
 // 預設區間選項，傳給 picker 用

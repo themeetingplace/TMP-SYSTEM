@@ -1111,14 +1111,18 @@ export const store = {
     // payload 可帶 __payment: { discount, discountReason, paidAmount, paymentMethod } 給對應 invoice 用
     addContract(payload) {
         const { __payment, __skipInvoice, ...contractFields } = payload;
+        // R4: 預設 contractType = cohousing (沒帶 = 共居)
+        if (!contractFields.contractType) contractFields.contractType = 'cohousing';
         const item = { id: nextId('C', mockData.contracts), ...contractFields };
         mockData.contracts.push(item);
         // 一份合約 = 一張帳單：自動建立全期房租應收
         // 例外:
         //   1. bundle 主合約 invoice 已含所有額外床位月租 → 額外合約傳 __skipInvoice 不開帳單
         //   2. 外部平台代收 (paymentChannel='platform') → 我們不收，跳過帳單
+        //   3. 代管合約 (managed-owner / managed-tenant) → 房租不是我們的，月結算手動處理
         const isPlatform = item.paymentChannel === 'platform';
-        if (!__skipInvoice && !isPlatform && (item.renewalState === 'active' || !item.renewalState)) {
+        const isManaged = item.contractType && item.contractType !== 'cohousing';
+        if (!__skipInvoice && !isPlatform && !isManaged && (item.renewalState === 'active' || !item.renewalState)) {
             createInvoiceForContract(item, __payment || {});
         }
         recalcMetrics();

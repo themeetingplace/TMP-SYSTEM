@@ -1034,21 +1034,18 @@ function computeGroupCumulatives() {
 
 function renderGroupCumulativeBar() {
     const cums = computeGroupCumulatives();
-    const tiles = Object.entries(cums).map(([key, c]) => `
-        <div class="cum-tile">
-            <div class="cum-tile-label">${key} 累金</div>
-            <div class="cum-tile-value">$${c.amount.toLocaleString()}</div>
-            <div class="cum-tile-sub" title="自 ${GROUP_CUM_BASELINES.asOf} 月底累計 + (結餘 − 紅利)">
-                baseline $${c.baseline.toLocaleString()}
-                ${c.delta >= 0 ? '<span style="color: var(--color-success);">+' : '<span style="color: var(--color-danger);">'}$${Math.abs(c.delta).toLocaleString()}</span>
-            </div>
-        </div>
-    `).join('');
-    return `
-        <div class="cum-bar" title="自 ${GROUP_CUM_BASELINES.asOf} 月底為基底，每月加上群組結餘 (扣紅利後留存)">
-            ${tiles}
-        </div>
-    `;
+    const chips = Object.entries(cums).map(([key, c]) => {
+        const deltaSign = c.delta >= 0 ? '+' : '−';
+        const deltaColor = c.delta >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+        return `
+            <span class="cum-chip" title="${key} 累金 = baseline $${c.baseline.toLocaleString()} (${GROUP_CUM_BASELINES.asOf}) + 結餘 − 紅利">
+                <span class="cum-chip-label">${key} 累金</span>
+                <span class="cum-chip-value">$${c.amount.toLocaleString()}</span>
+                ${c.delta !== 0 ? `<span class="cum-chip-delta" style="color: ${deltaColor};">${deltaSign}$${Math.abs(c.delta).toLocaleString()}</span>` : ''}
+            </span>
+        `;
+    }).join('');
+    return `<div class="cum-bar" title="自 ${GROUP_CUM_BASELINES.asOf} 月底為基底，每月加上群組結餘 (扣紅利後留存)">${chips}</div>`;
 }
 
 // === 報表單位: 各館 (building) 或 群組 (group like 松師=松山+師大) ===
@@ -1204,15 +1201,197 @@ function renderAnalysisAllBuildings() {
     `;
 }
 
-// ───────────────────── 年度總表 (R3 將實作熱度+MoM+Sparkline) ─────────────────────
-function renderYearlyTab() {
+// ───────────────────── 年度總表 (R3: 熱度+MoM+Sparkline) ─────────────────────
+const MONTHS_LABEL = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+function computeYearlyData(year) {
+    // 抓今年度全部 settled invoices
+    const yearStr = String(year);
+    const invs = _md().invoices.filter(i =>
+        isSettled(i) && (i.paidDate || i.dueDate || '').startsWith(yearStr)
+    );
+
+    // 收集所有 in/out types
+    const inTypes  = [...new Set(invs.filter(i => i.direction === 'in').map(i => i.type))].filter(Boolean);
+    const outTypes = [...new Set(invs.filter(i => i.direction === 'out').map(i => i.type))].filter(Boolean);
+    // 紅利發放 拉到最後
+    const otherOutTypes = outTypes.filter(t => t !== '紅利發放');
+    const hasBonusType = outTypes.includes('紅利發放');
+
+    function monthly(filterFn) {
+        const arr = new Array(12).fill(0);
+        invs.filter(filterFn).forEach(i => {
+            const m = parseInt((i.paidDate || i.dueDate || '').slice(5, 7), 10);
+            if (m >= 1 && m <= 12) arr[m - 1] += actualAmount(i);
+        });
+        return arr;
+    }
+
+    const rows = [];
+    // === 收入 section ===
+    inTypes.forEach(t => {
+        rows.push({ label: t, kind: 'income', monthlyValues: monthly(i => i.direction === 'in' && i.type === t) });
+    });
+    const monIncomeTotal = monthly(i => i.direction === 'in');
+    rows.push({ label: '月收入合計', kind: 'income-total', monthlyValues: monIncomeTotal, isSubtotal: true });
+
+    // === 支出 + 結餘 subtotals ===
+    const monExpenseTotal = monthly(i => i.direction === 'out');
+    rows.push({ label: '月支出合計', kind: 'expense-total', monthlyValues: monExpenseTotal, isSubtotal: true });
+    const monNet = monIncomeTotal.map((v, i) => v - monExpenseTotal[i]);
+    rows.push({ label: '月結餘合計', kind: 'net', monthlyValues: monNet, isSubtotal: true });
+
+    // === 支出 break down ===
+    otherOutTypes.forEach(t => {
+        rows.push({ label: t, kind: 'expense', monthlyValues: monthly(i => i.direction === 'out' && i.type === t) });
+    });
+    if (hasBonusType) {
+        rows.push({ label: '紅利發放', kind: 'bonus', monthlyValues: monthly(i => i.direction === 'out' && i.type === '紅利發放') });
+    }
+
+    // 算每行 total / avg / pct
+    const grandIncome = sum(monIncomeTotal);
+    rows.forEach(r => {
+        const total = sum(r.monthlyValues);
+        r.total = total;
+        // 平均 = 只算有資料的月 (避免空月份拉低)
+        const filled = r.monthlyValues.filter(v => v !== 0).length;
+        r.avg = filled > 0 ? total / filled : 0;
+        // 占比基底: 收入類 % = total / 月收入合計 全年; 支出類 % = total / 月支出合計
+        if (r.kind === 'income' || r.kind === 'income-total') r.pct = grandIncome > 0 ? total / grandIncome : 0;
+        else if (r.kind === 'expense' || r.kind === 'expense-total' || r.kind === 'bonus') {
+            const grandExpense = sum(monExpenseTotal);
+            r.pct = grandExpense > 0 ? total / grandExpense : 0;
+        } else r.pct = null;
+    });
+    return rows;
+}
+
+function sum(arr) { return arr.reduce((s, v) => s + v, 0); }
+function pctStr(v) { return v == null ? '—' : (v * 100).toFixed(1) + '%'; }
+
+// 熱度色階 (0..1 → bg opacity)
+function heatBgFor(value, max, kind) {
+    if (max === 0 || value === 0) return '';
+    const intensity = Math.min(1, value / max);
+    // 收入 = 綠系；支出 = 紅系；net = 中性藍
+    let rgb;
+    if (kind === 'income' || kind === 'income-total') rgb = '34, 148, 110';
+    else if (kind === 'net') rgb = '59, 130, 246';
+    else rgb = '220, 38, 38';
+    return `background: rgba(${rgb}, ${(intensity * 0.18).toFixed(3)});`;
+}
+
+// MoM 箭頭：current 月跟前一月比
+function momArrow(values, monthIdx) {
+    if (monthIdx === 0) return '';
+    const cur = values[monthIdx];
+    const prev = values[monthIdx - 1];
+    if (cur === 0 || prev === 0) return '';
+    const delta = ((cur - prev) / Math.abs(prev)) * 100;
+    if (Math.abs(delta) < 0.5) return '';
+    const isUp = delta > 0;
+    const color = isUp ? 'var(--color-success)' : 'var(--color-danger)';
+    const arrow = isUp ? '↑' : '↓';
+    return `<span style="font-size: 0.65rem; color: ${color}; margin-left: 2px;">${arrow}${Math.abs(delta).toFixed(0)}%</span>`;
+}
+
+// Sparkline SVG mini line chart
+function sparkline(values, stroke = 'currentColor') {
+    const w = 80, h = 22;
+    const max = Math.max(...values, 1);
+    const padding = 2;
+    const points = values.map((v, i) => {
+        const x = (i / 11) * (w - 2 * padding) + padding;
+        const y = h - padding - (v / max) * (h - 2 * padding);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    return `<svg width="${w}" height="${h}" style="display: block; vertical-align: middle;"><polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function renderYearlyRow(r, currentMonth1based) {
+    const max = Math.max(...r.monthlyValues);
+    // subtotal row 即使全 0 也要顯示「—」讓行看得到
+    const zeroChar = r.isSubtotal ? '<span style="color: rgba(0,0,0,0.2);">—</span>' : '';
+    const cells = r.monthlyValues.map((v, idx) => {
+        const month = idx + 1;
+        const isCurrent = month === currentMonth1based;
+        const arrow = isCurrent ? momArrow(r.monthlyValues, idx) : '';
+        const bg = heatBgFor(v, max, r.kind);
+        const txt = v === 0 ? zeroChar : v.toLocaleString();
+        return `<td style="text-align: right; font-variant-numeric: tabular-nums; ${bg}${isCurrent ? 'outline: 1px solid var(--color-primary); outline-offset: -1px;' : ''}">${txt}${arrow}</td>`;
+    }).join('');
+    // sparkline 顏色跟 kind 對應
+    let sparkColor = 'var(--text-muted)';
+    if (r.kind === 'income' || r.kind === 'income-total') sparkColor = 'var(--color-success)';
+    else if (r.kind === 'expense' || r.kind === 'expense-total' || r.kind === 'bonus') sparkColor = 'var(--color-danger)';
+    else if (r.kind === 'net') sparkColor = 'var(--color-info)';
+
+    const labelStyle = r.isSubtotal ? 'font-weight: 700;' : '';
+    const rowBg = r.isSubtotal ? 'background: rgba(0, 0, 0, 0.025);' : '';
     return `
-        <div class="card" style="padding: 3rem; text-align: center;">
-            <i class="ph ph-calendar" style="font-size: 3rem; color: var(--text-muted);"></i>
-            <h3 style="margin: 1rem 0 0.5rem;">年度總表</h3>
-            <p style="color: var(--text-muted); font-size: var(--text-sm);">
-                跨月比較 + 熱度色階 + MoM 箭頭 + Sparkline 趨勢 ─ 開發中
-            </p>
+        <tr style="${rowBg}">
+            <td style="${labelStyle} padding-left: ${r.isSubtotal ? '0.75rem' : '1.5rem'};">${esc(r.label)}</td>
+            ${cells}
+            <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;">${r.total === 0 ? zeroChar : r.total.toLocaleString()}</td>
+            <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">${r.avg === 0 ? zeroChar : Math.round(r.avg).toLocaleString()}</td>
+            <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted);">${pctStr(r.pct)}</td>
+            <td style="text-align: center;">${sparkline(r.monthlyValues, sparkColor)}</td>
+        </tr>
+    `;
+}
+
+function esc(s) { return String(s ?? '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+
+function renderYearlyTab() {
+    const year = reportState.yearlyYear || new Date().getFullYear();
+    const today = new Date();
+    const isCurrentYear = year === today.getFullYear();
+    const currentMonth1based = isCurrentYear ? today.getMonth() + 1 : 12;
+    const rows = computeYearlyData(year);
+    const hasAnyData = rows.some(r => r.total !== 0);
+    const headerMonths = MONTHS_LABEL.map((label, idx) => {
+        const isCur = (idx + 1) === currentMonth1based && isCurrentYear;
+        return `<th style="text-align: right; ${isCur ? 'background: rgba(255, 122, 0, 0.08);' : ''}">${label}</th>`;
+    }).join('');
+
+    const emptyHint = hasAnyData ? '' : `
+        <div style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.06); border-left: 3px solid var(--color-info); border-radius: 4px; font-size: var(--text-sm); color: var(--text-muted);">
+            <i class="ph ph-info"></i> ${year} 年度尚無已結算資料 — 切換年份或新增帳單後再回來看。
+        </div>
+    `;
+
+    return `
+        <div class="yearly-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+                <h3 style="margin: 0;"><i class="ph ph-calendar"></i> ${year} 年度總表</h3>
+                <p style="margin: 0.25rem 0 0; font-size: var(--text-xs); color: var(--text-muted);">熱度色階 = 該行最大值佔比；MoM 箭頭 = 當月 vs 上月；尾欄 Sparkline = 12 月趨勢</p>
+            </div>
+            <div class="filter-tabs">
+                ${[today.getFullYear() - 2, today.getFullYear() - 1, today.getFullYear()].map(y =>
+                    `<button type="button" class="filter-tab ${y === year ? 'active' : ''}" data-yearly-year="${y}">${y}</button>`
+                ).join('')}
+            </div>
+        </div>
+
+        ${emptyHint}
+
+        <div class="report-chart-card" style="overflow-x: auto;">
+            <table class="report-table yearly-table" style="font-size: var(--text-xs); min-width: 1200px;">
+                <thead>
+                    <tr style="background: var(--bg-secondary);">
+                        <th style="text-align: left; width: 130px; position: sticky; left: 0; background: var(--bg-secondary); z-index: 1;">項目</th>
+                        ${headerMonths}
+                        <th style="text-align: right; background: rgba(255, 235, 180, 0.4);">年度總計</th>
+                        <th style="text-align: right;">每月平均</th>
+                        <th style="text-align: right;">占比</th>
+                        <th style="text-align: center; width: 90px;">趨勢</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => renderYearlyRow(r, currentMonth1based)).join('')}
+                </tbody>
+            </table>
         </div>
     `;
 }
@@ -1303,6 +1482,14 @@ export function initReportsActions(scope) {
     scope.querySelectorAll('[data-grouping]').forEach(btn => {
         btn.addEventListener('click', () => {
             reportState.viewGrouping = btn.dataset.grouping;
+            refreshView();
+        });
+    });
+
+    // R3: 年度總表年份切換
+    scope.querySelectorAll('[data-yearly-year]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            reportState.yearlyYear = parseInt(btn.dataset.yearlyYear, 10);
             refreshView();
         });
     });

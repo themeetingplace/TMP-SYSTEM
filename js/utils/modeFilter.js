@@ -20,11 +20,17 @@ export function filterPropertiesByMode(properties, mode = getMode()) {
 
 export function filterContractsByMode(contracts, mode = getMode()) {
     const ids = currentModeBuildingIdSet(mode);
-    // contract 沒 buildingId，靠 propertyName 反查 properties
+    // contract 沒 buildingId 時靠 propertyName 反查 properties
     const allowedPropNames = new Set(
         mockData.properties.filter(p => ids.has(p.buildingId)).map(p => p.name)
     );
-    return contracts.filter(c => allowedPropNames.has(c.propertyName));
+    return contracts.filter(c => {
+        // R4: 代管合約 (managed-owner / managed-tenant) 走 buildingId 直接判斷
+        if (c.contractType && c.contractType !== 'cohousing') {
+            return c.buildingId && ids.has(c.buildingId);
+        }
+        return allowedPropNames.has(c.propertyName);
+    });
 }
 
 export function filterInvoicesByMode(invoices, mode = getMode()) {

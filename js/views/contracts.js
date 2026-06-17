@@ -220,8 +220,8 @@ export function renderContracts() {
             <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-channel="${esc(c.paymentChannel || 'self')}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
                 <td>
                     <div style="display: flex; flex-direction: column;">
-                        <strong style="font-size: var(--text-base);">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: var(--text-2xs); color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}${c.paymentChannel === 'platform' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="外部平台代收，不開帳單">🌐 ${esc(c.platformName || '外部平台')}</span>` : ''}</strong>
-                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${esc(c.propertyName || '')}</span>
+                        <strong style="font-size: var(--text-base);">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: var(--text-2xs); color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}${c.paymentChannel === 'platform' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="外部平台代收，不開帳單">🌐 ${esc(c.platformName || '外部平台')}</span>` : ''}${c.contractType === 'managed-owner' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="代管 — 屋主委託合約">📋 屋主委託</span>` : ''}${c.contractType === 'managed-tenant' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="代管 — 住客租賃合約">🏠 代管租賃</span>` : ''}</strong>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${esc(c.propertyName || (c.buildingId ? mockData.buildings.find(b => b.id === c.buildingId)?.name + ' (整棟)' : '') || '')}</span>
                     </div>
                 </td>
                 <td><strong>${esc(c.tenant || '')}</strong></td>

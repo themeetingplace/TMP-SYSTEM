@@ -89,7 +89,13 @@ export const toDb = {
         renew_intent: c.renewIntent ?? null,
         renew_asked_at: c.renewAskedAt ?? null,
         renew_response_at: c.renewResponseAt ?? null,
-        renew_note: c.renewNote ?? null
+        renew_note: c.renewNote ?? null,
+        // === 代管合約欄位 (R4 / sql/23-contract-types-2026-06-17.sql) ===
+        // contract_type: 'cohousing' | 'managed-owner' | 'managed-tenant'
+        contract_type: c.contractType ?? 'cohousing',
+        owner_id: c.ownerId ?? null,        // 代管時關聯到 owners.id
+        lessor_name: c.lessorName ?? null,  // 住客合約「出租人」欄位 (可填我們 / 屋主名義)
+        building_id: c.buildingId ?? null   // 代管房子 building (cohousing 可從 property 推回)
     }),
     invoice: i => ({
         id: i.id,
@@ -283,7 +289,12 @@ export const fromDb = {
         renewIntent: r.renew_intent,
         renewAskedAt: r.renew_asked_at,
         renewResponseAt: r.renew_response_at,
-        renewNote: r.renew_note
+        renewNote: r.renew_note,
+        // === 代管合約 (R4) ===
+        contractType: r.contract_type ?? 'cohousing',
+        ownerId: r.owner_id,
+        lessorName: r.lessor_name,
+        buildingId: r.building_id
     }),
     invoice: r => ({
         id: r.id,
