@@ -41,6 +41,18 @@ export const SYNC_TIMINGS = {
 // === 連結 / 檔案 ===
 export const SIGNED_URL_TTL_SECONDS = 7 * 24 * 3600;  // 7 天 (Supabase Storage signed URL)
 
+// === 群組累金 baselines (2026/05 月底) ===
+// 用戶 2026-06-17 確認: 純歷史資料寫死，未來每月用「上期 + 結餘 - 紅利」自動往後算
+// 中溫累金 = 中山 + 溫州 (歷史含, 未來只算中山因為溫州館已收)
+export const GROUP_CUM_BASELINES = {
+    asOf: '2026-05',  // baseline 月份 (含此月為止)
+    groups: {
+        '松師': 5_032_041,
+        '中溫': 334_758,
+        '古亭': 238_449
+    }
+};
+
 // === Storage key ===
 export const STORAGE_KEYS = {
     appMode: 'pms-app-mode',

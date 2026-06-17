@@ -19,6 +19,7 @@ import { exportLandlordReport } from './report-export.js';
 import { exportAnalysisReport } from './analysis-export.js';
 import { modeFilteredData } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
+import { GROUP_CUM_BASELINES } from '../constants.js';
 
 // 模組層快取 — 每次 renderReports 開頭 reset，內部 helper 都讀這個避免 14 處 mockData 散落各處
 let _modeData = null;
@@ -504,6 +505,7 @@ function renderBuildingsTab() {
 
         return `
             ${subTabs}
+            ${getMode() === 'cohousing' ? renderGroupCumulativeBar() : ''}
             ${renderOperationalKpiTiles(totals)}
 
             ${totals.expiringSoonCount > 0 ? `
@@ -973,6 +975,81 @@ function bucketExpensesOf(invoices) {
 }
 function bucketSubtotal(b) { return EXPENSE_BUCKETS.reduce((s, x) => s + (b[x.key] || 0), 0); }
 function bucketGrandTotal(b) { return bucketSubtotal(b) + (b.bonus || 0); }
+
+// === 群組累金 (R2 — 2026-06-17) ===
+// 公式: 上期累金 + 群組結餘 - 群組紅利發放
+//   結餘已含紅利支出 → 等價於 baseline + sum(月 net)
+// 2026/05 baseline (寫死在 constants.js) → 2026/06 起每月自動累加
+// building.group → 累金 key 映射 (中溫 包含舊溫州 收掉後 = 中山 only)
+const GROUP_TO_CUM_KEY = {
+    '松師': '松師',
+    '中山': '中溫',
+    '古亭': '古亭'
+    // 信義 不算 cum bar
+};
+
+function ymRangeAfter(startYM, endYM) {
+    // 回 ['2026-06', '2026-07', ...] startYM 之後到 endYM (含)
+    const out = [];
+    let [y, m] = startYM.split('-').map(Number);
+    m++;
+    if (m > 12) { m = 1; y++; }
+    const [ey, em] = endYM.split('-').map(Number);
+    while (y < ey || (y === ey && m <= em)) {
+        out.push(`${y}-${String(m).padStart(2, '0')}`);
+        m++;
+        if (m > 12) { m = 1; y++; }
+    }
+    return out;
+}
+
+function computeGroupCumulatives() {
+    const baselineYM = GROUP_CUM_BASELINES.asOf;
+    const todayYM = new Date().toISOString().slice(0, 7);
+    const months = ymRangeAfter(baselineYM, todayYM);
+    // groupKey → array of buildingIds
+    const groupBuildings = {};
+    Object.keys(GROUP_CUM_BASELINES.groups).forEach(g => groupBuildings[g] = []);
+    mockData.buildings.forEach(b => {
+        const cumKey = GROUP_TO_CUM_KEY[b.group];
+        if (cumKey && groupBuildings[cumKey]) groupBuildings[cumKey].push(b.id);
+    });
+    const allInvoices = mockData.invoices.filter(isSettled);
+    const result = {};
+    Object.entries(GROUP_CUM_BASELINES.groups).forEach(([groupKey, baseline]) => {
+        const buildingIds = new Set(groupBuildings[groupKey] || []);
+        let delta = 0;
+        months.forEach(ym => {
+            const monthInvs = allInvoices.filter(i =>
+                buildingIds.has(i.buildingId) && (i.paidDate || i.dueDate || '').startsWith(ym)
+            );
+            const inSum = monthInvs.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
+            const outSum = monthInvs.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
+            delta += (inSum - outSum);  // 結餘 (已含紅利扣減)
+        });
+        result[groupKey] = { amount: baseline + delta, baseline, delta, asOf: todayYM };
+    });
+    return result;
+}
+
+function renderGroupCumulativeBar() {
+    const cums = computeGroupCumulatives();
+    const tiles = Object.entries(cums).map(([key, c]) => `
+        <div class="cum-tile">
+            <div class="cum-tile-label">${key} 累金</div>
+            <div class="cum-tile-value">$${c.amount.toLocaleString()}</div>
+            <div class="cum-tile-sub" title="自 ${GROUP_CUM_BASELINES.asOf} 月底累計 + (結餘 − 紅利)">
+                baseline $${c.baseline.toLocaleString()}
+                ${c.delta >= 0 ? '<span style="color: var(--color-success);">+' : '<span style="color: var(--color-danger);">'}$${Math.abs(c.delta).toLocaleString()}</span>
+            </div>
+        </div>
+    `).join('');
+    return `
+        <div class="cum-bar" title="自 ${GROUP_CUM_BASELINES.asOf} 月底為基底，每月加上群組結餘 (扣紅利後留存)">
+            ${tiles}
+        </div>
+    `;
+}
 
 // === 報表單位: 各館 (building) 或 群組 (group like 松師=松山+師大) ===
 function getReportUnits() {
