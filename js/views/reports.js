@@ -1340,16 +1340,16 @@ function computeYearlyData(year) {
 function sum(arr) { return arr.reduce((s, v) => s + v, 0); }
 function pctStr(v) { return v == null ? '—' : (v * 100).toFixed(1) + '%'; }
 
-// 熱度色階 (0..1 → bg opacity)
+// 熱度色階 — 走系統 token (success / danger / info)
 function heatBgFor(value, max, kind) {
     if (max === 0 || value === 0) return '';
     const intensity = Math.min(1, value / max);
-    // 收入 = 綠系；支出 = 紅系；net = 中性藍
+    // 系統 token RGB: success #22946e, danger #b13535, info #1e56a3
     let rgb;
     if (kind === 'income' || kind === 'income-total') rgb = '34, 148, 110';
-    else if (kind === 'net') rgb = '59, 130, 246';
-    else rgb = '220, 38, 38';
-    return `background: rgba(${rgb}, ${(intensity * 0.18).toFixed(3)});`;
+    else if (kind === 'net') rgb = '30, 86, 163';
+    else rgb = '177, 53, 53';
+    return `background: rgba(${rgb}, ${(intensity * 0.14).toFixed(3)});`;
 }
 
 // MoM 箭頭：current 月跟前一月比
@@ -1379,15 +1379,21 @@ function sparkline(values, stroke = 'currentColor') {
     return `<svg width="${w}" height="${h}" style="display: block; vertical-align: middle;"><polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-// section → 顏色（左側 section 條 + sparkline 預設）
+// section → 走系統 semantic token（不再彩虹 6 色）
+// 收入=success / 支出=danger / 中性=primary
 const SECTION_META = {
-    '收入':         { color: '#22946e', bg: 'rgba(34, 148, 110, 0.05)' },
-    '收支總計':     { color: '#7c3aed', bg: 'rgba(124, 58, 237, 0.05)' },
-    '花費總表':     { color: '#dc2626', bg: 'rgba(220, 38, 38, 0.04)' },
-    '各館成本支出': { color: '#ea580c', bg: 'rgba(234, 88, 12, 0.04)' },
-    '各館結餘':     { color: '#2563eb', bg: 'rgba(37, 99, 235, 0.05)' },
-    '各館利率':     { color: '#0891b2', bg: 'rgba(8, 145, 178, 0.05)' }
+    '收入':         { token: 'success' },   // 綠
+    '收支總計':     { token: 'neutral' },   // 中性灰
+    '花費總表':     { token: 'danger' },    // 紅
+    '各館成本支出': { token: 'danger' },    // 紅
+    '各館結餘':     { token: 'primary' },   // 橘
+    '各館利率':     { token: 'primary' }    // 橘
 };
+function sectionVar(section) {
+    const t = SECTION_META[section]?.token || 'neutral';
+    if (t === 'neutral') return 'var(--text-secondary)';
+    return `var(--color-${t})`;
+}
 
 function formatRowValue(r, v) {
     if (v === 0) return '';
@@ -1440,7 +1446,7 @@ function renderYearlyRow(r, currentMonth1based) {
         return `<td class="yearly-cell${curCls}" style="${valColor}${bg}">${txt}${arrow}</td>`;
     }).join('');
 
-    let sparkColor = SECTION_META[r.section]?.color || '#888';
+    let sparkColor = sectionVar(r.section);
     if (r.kind === 'net' && r.total < 0) sparkColor = 'var(--color-danger)';
 
     const totalTxt = r.total === 0 ? zeroChar : formatRowValue(r, r.total);
@@ -1459,14 +1465,13 @@ function renderYearlyRow(r, currentMonth1based) {
     `;
 }
 
-// section banner row (跨整列、左色帶 + section 名)
-function renderYearlySectionBanner(section, rowCount, sectionTotals, currentMonth1based) {
-    const meta = SECTION_META[section] || { color: '#666' };
+// section divider row (簡潔灰底 + 左 token 條 + section 名)
+function renderYearlySectionBanner(section, rowCount) {
+    const color = sectionVar(section);
     return `
-        <tr class="yearly-section-banner" style="--section-color: ${meta.color};">
+        <tr class="yearly-section-banner" style="--section-color: ${color};">
             <td colspan="17">
                 <div class="yearly-section-banner-inner">
-                    <span class="yearly-section-dot"></span>
                     <span class="yearly-section-name">${esc(section)}</span>
                     <span class="yearly-section-meta">${rowCount} 項</span>
                 </div>
