@@ -505,7 +505,6 @@ function renderBuildingsTab() {
 
         return `
             ${subTabs}
-            ${getMode() === 'cohousing' ? renderGroupCumulativeBar() : ''}
             ${renderOperationalKpiTiles(totals)}
 
             ${totals.expiringSoonCount > 0 ? `
@@ -1083,7 +1082,8 @@ function renderAnalysisAllBuildings() {
     const pareto = computeExpensePareto(rangeInvoices);
     const months = computeMonthlyTrend(range);
     const monthCount = months.length;
-    const grouping = reportState.viewGrouping || 'building';
+    // 統計單位固定為館別 (2026-06-17 拿掉群組 toggle，照用戶要求)
+    reportState.viewGrouping = 'building';
 
     // 計算各 unit (館/群組) 的 agg + expense buckets
     const units = getReportUnits();
@@ -1096,6 +1096,8 @@ function renderAnalysisAllBuildings() {
     return `
         ${renderFinancialKpiTiles(summary)}
 
+        ${getMode() === 'cohousing' ? renderGroupCumulativeBar() : ''}
+
         <div class="charts-side-by-side">
             <div class="report-chart-card">
                 <div class="report-chart-title"><span><i class="ph ph-chart-pie"></i> 支出結構</span></div>
@@ -1107,16 +1109,9 @@ function renderAnalysisAllBuildings() {
             </div>
         </div>
 
-        <!-- 群組 / 各館 切換 -->
-        <div style="display: flex; justify-content: flex-end; gap: 0.4rem; margin: 0.75rem 0 0.5rem;">
-            <span style="font-size: var(--text-xs); color: var(--text-muted); align-self: center; margin-right: 0.3rem;">統計單位：</span>
-            <button type="button" class="chart-mode-btn ${grouping === 'building' ? 'active' : ''}" data-grouping="building">按館別</button>
-            <button type="button" class="chart-mode-btn ${grouping === 'group' ? 'active' : ''}" data-grouping="group">按群組</button>
-        </div>
-
         <!-- P&L 對比表 (5 cols: 收入/支出/結餘/毛利率/淨利率) -->
         <div class="report-chart-card">
-            <div class="report-chart-title"><i class="ph ph-table"></i> ${grouping === 'group' ? '各群組' : '各館'} 收支損益表</div>
+            <div class="report-chart-title"><i class="ph ph-table"></i> 各館 收支損益表</div>
             <div style="overflow-x: auto;">
                 <table class="report-table report-pnl-table">
                     <thead>
@@ -1478,18 +1473,32 @@ function renderYearlyTab() {
         </div>
     `;
 
+    const minYear = today.getFullYear() - 5;
+    const maxYear = today.getFullYear() + 1;
+    const canPrev = year > minYear;
+    const canNext = year < maxYear;
+
     return `
-        <div class="yearly-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-            <div>
-                <h3 style="margin: 0;"><i class="ph ph-calendar"></i> ${year} 年度總表</h3>
-                <p style="margin: 0.25rem 0 0; font-size: var(--text-xs); color: var(--text-muted);">六大區塊：收入 / 收支總計 / 花費總表 (館×類型) / 各館成本 / 各館結餘 / 各館利率 — 熱度色階 + 當月 MoM + Sparkline</p>
+        <div class="yearly-toolbar">
+            <div class="yearly-toolbar-meta">
+                <div class="yearly-toolbar-subtitle">年度總表</div>
+                <div class="yearly-year-nav">
+                    <button type="button" class="yearly-year-arrow ${canPrev ? '' : 'is-disabled'}" data-yearly-year="${year - 1}" ${canPrev ? '' : 'disabled'} title="上一年">
+                        <i class="ph ph-caret-left"></i>
+                    </button>
+                    <span class="yearly-year-display">${year}</span>
+                    <button type="button" class="yearly-year-arrow ${canNext ? '' : 'is-disabled'}" data-yearly-year="${year + 1}" ${canNext ? '' : 'disabled'} title="下一年">
+                        <i class="ph ph-caret-right"></i>
+                    </button>
+                </div>
             </div>
-            <div class="filter-tabs">
-                ${[today.getFullYear() - 2, today.getFullYear() - 1, today.getFullYear()].map(y =>
-                    `<button type="button" class="filter-tab ${y === year ? 'active' : ''}" data-yearly-year="${y}">${y}</button>`
-                ).join('')}
+            <div class="yearly-toolbar-actions">
+                <button type="button" class="btn btn-outline" data-action="export-yearly-pdf" title="匯出整張年度總表為 PDF">
+                    <i class="ph ph-file-pdf"></i> 匯出 PDF
+                </button>
             </div>
         </div>
+        <p class="yearly-toolbar-hint">六大區塊：收入 / 收支總計 / 花費總表 (館×類型) / 各館成本 / 各館結餘 / 各館利率 ─ 熱度色階 + 當月 MoM + Sparkline</p>
 
         ${emptyHint}
 
@@ -1604,11 +1613,47 @@ export function initReportsActions(scope) {
         });
     });
 
-    // R3: 年度總表年份切換
+    // R3: 年度總表年份切換 (◀ ▶ 箭頭)
     scope.querySelectorAll('[data-yearly-year]').forEach(btn => {
         btn.addEventListener('click', () => {
+            if (btn.disabled) return;
             reportState.yearlyYear = parseInt(btn.dataset.yearlyYear, 10);
             refreshView();
         });
     });
+
+    // R3: 年度總表 匯出 PDF — 用瀏覽器原生 print (帶 @page landscape)
+    scope.querySelectorAll('[data-action="export-yearly-pdf"]').forEach(btn => {
+        btn.addEventListener('click', () => exportYearlyAsPdf());
+    });
+}
+
+// 年度總表匯出 — 開新視窗只放 table，套印刷 landscape A3 CSS 後叫 print
+function exportYearlyAsPdf() {
+    const year = reportState.yearlyYear || new Date().getFullYear();
+    const tableEl = document.querySelector('.yearly-table');
+    if (!tableEl) return;
+    const w = window.open('', '_blank', 'width=1400,height=900');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${year} 年度總表 — 聚空間 PMS</title>
+<style>
+@page { size: A3 landscape; margin: 1cm; }
+body { font-family: 'Noto Sans TC', sans-serif; padding: 1rem; color: #222; }
+h1 { font-size: 18px; margin: 0 0 0.5rem; }
+.meta { font-size: 11px; color: #666; margin-bottom: 1rem; }
+table { width: 100%; border-collapse: collapse; font-size: 10px; }
+th, td { padding: 4px 6px; border: 1px solid #ddd; }
+th { background: #f5f5f5; font-weight: 600; }
+tbody tr td:first-child { text-align: center; writing-mode: vertical-rl; text-orientation: upright; padding: 8px 4px; font-weight: 600; color: #fff; }
+@media print { .no-print { display: none; } }
+.no-print { position: fixed; top: 1rem; right: 1rem; background: #ff7a00; color: #fff; border: none; padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px; font-size: 13px; }
+</style></head><body>
+<button class="no-print" onclick="window.print()">列印 / 存成 PDF</button>
+<h1>${year} 年度總表</h1>
+<div class="meta">聚空間 PMS · 產生時間 ${new Date().toLocaleString('zh-TW')}</div>
+${tableEl.outerHTML}
+<script>setTimeout(() => window.print(), 500);</script>
+</body></html>`);
+    w.document.close();
 }

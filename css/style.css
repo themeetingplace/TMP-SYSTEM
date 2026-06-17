@@ -1572,38 +1572,102 @@ body[data-role="helper"] .occ-decision-btns { display: none !important; }
     white-space: nowrap;
 }
 
-/* 群組累金 bar — 單行 chip 樣式 (各館報表頂端，非視覺重點) */
-.cum-bar {
+/* 年度總表 toolbar (年份切換 + 匯出) */
+.yearly-toolbar {
     display: flex;
-    flex-wrap: wrap;
+    justify-content: space-between;
     align-items: center;
-    gap: 0.4rem 1rem;
-    margin: 0 0 0.75rem;
-    padding: 0.4rem 0.75rem;
+    gap: 1rem;
+    margin-bottom: 0.4rem;
+    padding: 0.85rem 1rem;
+    background: linear-gradient(135deg, rgba(255, 200, 100, 0.05) 0%, rgba(255, 122, 0, 0.02) 100%);
+    border: 1px solid rgba(255, 122, 0, 0.15);
+    border-radius: var(--radius-md);
+    flex-wrap: wrap;
+}
+.yearly-toolbar-meta { display: flex; align-items: center; gap: 1rem; }
+.yearly-toolbar-subtitle {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+.yearly-year-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 999px;
+    padding: 0.2rem 0.35rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.yearly-year-arrow {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--color-primary);
+    font-size: 1rem;
+    transition: background 0.15s, transform 0.1s;
+}
+.yearly-year-arrow:hover { background: rgba(255, 122, 0, 0.1); }
+.yearly-year-arrow:active { transform: scale(0.92); }
+.yearly-year-arrow.is-disabled,
+.yearly-year-arrow[disabled] { opacity: 0.3; cursor: not-allowed; }
+.yearly-year-display {
+    min-width: 80px;
+    text-align: center;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: 0.05em;
+    font-variant-numeric: tabular-nums;
+}
+.yearly-toolbar-actions { display: flex; gap: 0.5rem; }
+.yearly-toolbar-hint {
+    margin: 0 0 1rem;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    padding-left: 0.25rem;
+}
+@media (max-width: 640px) {
+    .yearly-toolbar { padding: 0.6rem 0.75rem; }
+    .yearly-year-display { font-size: 1rem; min-width: 64px; }
+}
+
+/* 群組累金 bar — 3 等份置中 (財務分析 tab) */
+.cum-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    align-items: stretch;
+    margin: 0.5rem 0 0.75rem;
+    padding: 0.6rem 0;
     background: rgba(255, 122, 0, 0.03);
-    border: 1px solid rgba(255, 122, 0, 0.1);
+    border: 1px solid rgba(255, 122, 0, 0.12);
     border-radius: var(--radius-md);
     font-size: var(--text-xs);
 }
 .cum-chip {
-    display: inline-flex;
+    display: flex;
+    flex-direction: row;
     align-items: baseline;
-    gap: 0.35rem;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.1rem 0.75rem;
     font-variant-numeric: tabular-nums;
+    text-align: center;
 }
-.cum-chip + .cum-chip { border-left: 1px solid rgba(0,0,0,0.08); padding-left: 1rem; }
-.cum-chip-label {
-    color: var(--text-muted);
-    font-weight: 500;
-}
-.cum-chip-value {
-    color: var(--color-primary);
-    font-weight: 600;
-}
-.cum-chip-delta {
-    font-size: var(--text-2xs);
-    font-weight: 500;
-}
+.cum-chip + .cum-chip { border-left: 1px solid rgba(0,0,0,0.08); }
+.cum-chip-label { color: var(--text-muted); font-weight: 500; }
+.cum-chip-value { color: var(--color-primary); font-weight: 600; }
+.cum-chip-delta { font-size: var(--text-2xs); font-weight: 500; }
 
 /* spinner 旋轉 (form submit / loading states) */
 @keyframes spin {
