@@ -1526,7 +1526,7 @@ function renderYearlyTab() {
 // ───────────────────── Hub: tab bar + entry ─────────────────────
 // 2026-06-17 移除 overview tab (跟其他 tab 內容重複)
 const TABS = [
-    { key: 'buildings', icon: 'ph-buildings',     label: '各館報表' },
+    { key: 'buildings', icon: 'ph-buildings',     label: '物件營運' },
     { key: 'analysis',  icon: 'ph-chart-pie',     label: '財務分析' },
     { key: 'yearly',    icon: 'ph-calendar',      label: '年度總表' }
 ];
