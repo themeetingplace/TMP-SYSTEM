@@ -130,6 +130,48 @@ export const toDb = {
         file_name: ct.fileName ?? null,
         pdf_base64: ct.pdfBase64 ?? null,
         uploaded_at: ct.uploadedAt ?? null
+    }),
+    // === 代管模式 ===
+    owner: o => ({
+        id: o.id,
+        name: o.name,
+        gender: o.gender ?? '',
+        phone: o.phone ?? '',
+        email: o.email ?? '',
+        line_id: o.lineId ?? '',
+        source: o.source ?? '員工面談',
+        how_known: o.howKnown ?? '',
+        how_known_other: o.howKnownOther ?? '',
+        note: o.note ?? '',
+        status: o.status ?? 'active',
+        submitted_at: o.submittedAt ?? null,
+        reviewed_by: o.reviewedBy ?? null,
+        reviewed_at: o.reviewedAt ?? null
+    }),
+    deposit: d => ({
+        id: d.id,
+        contract_id: d.contractId ?? null,
+        tenant_name: d.tenantName ?? '',
+        property_name: d.propertyName ?? '',
+        building_id: d.buildingId ?? null,
+        amount: Number(d.amount) || 0,
+        holder: d.holder ?? 'pms',
+        collected_date: d.collectedDate ?? null,
+        transferred_date: d.transferredDate ?? null,
+        note: d.note ?? ''
+    }),
+    settlement: s => ({
+        id: s.id,
+        owner_id: s.ownerId ?? null,
+        building_id: s.buildingId ?? null,
+        month: s.month,
+        items: s.items ?? [],
+        owner_receivable: Number(s.ownerReceivable) || 0,
+        deposit_collected_this_month: Number(s.depositCollectedThisMonth) || 0,
+        deposit_transferred_this_month: Number(s.depositTransferredThisMonth) || 0,
+        owner_holding_deposit_total: Number(s.ownerHoldingDepositTotal) || 0,
+        status: s.status ?? 'draft',
+        sent_at: s.sentAt ?? null
     })
 };
 
@@ -261,6 +303,49 @@ export const fromDb = {
         fileName: r.file_name,
         pdfBase64: r.pdf_base64,
         uploadedAt: r.uploaded_at
+    }),
+    // === 代管模式 (sql/20-managed-mode-schema-2026-06-17.sql) ===
+    owner: r => ({
+        id: r.id,
+        name: r.name,
+        gender: r.gender ?? '',
+        phone: r.phone ?? '',
+        email: r.email ?? '',
+        lineId: r.line_id ?? '',
+        source: r.source ?? '員工面談',
+        howKnown: r.how_known ?? '',
+        howKnownOther: r.how_known_other ?? '',
+        note: r.note ?? '',
+        status: r.status ?? 'active',
+        submittedAt: r.submitted_at,
+        reviewedBy: r.reviewed_by ?? null,
+        reviewedAt: r.reviewed_at ?? null
+    }),
+    deposit: r => ({
+        id: r.id,
+        contractId: r.contract_id ?? null,
+        tenantName: r.tenant_name ?? '',
+        propertyName: r.property_name ?? '',
+        buildingId: r.building_id ?? null,
+        amount: Number(r.amount) || 0,
+        holder: r.holder ?? 'pms',
+        collectedDate: r.collected_date,
+        transferredDate: r.transferred_date,
+        note: r.note ?? ''
+    }),
+    settlement: r => ({
+        id: r.id,
+        ownerId: r.owner_id ?? null,
+        buildingId: r.building_id ?? null,
+        month: r.month,
+        items: Array.isArray(r.items) ? r.items : (r.items ? r.items : []),
+        ownerReceivable: Number(r.owner_receivable) || 0,
+        depositCollectedThisMonth: Number(r.deposit_collected_this_month) || 0,
+        depositTransferredThisMonth: Number(r.deposit_transferred_this_month) || 0,
+        ownerHoldingDepositTotal: Number(r.owner_holding_deposit_total) || 0,
+        status: r.status ?? 'draft',
+        sentAt: r.sent_at,
+        createdAt: r.created_at
     })
 };
 
@@ -277,7 +362,11 @@ export const TABLES = [
     { key: 'invoice_types',      src: 'invoiceTypes',      pk: 'id',          toDb: toDb.invoiceType,      fromDb: fromDb.invoiceType,      large: false },
     { key: 'tenant_sources',     src: 'tenantSources',     pk: 'id',          toDb: toDb.tenantSource,     fromDb: fromDb.tenantSource,     large: false },
     { key: 'payment_methods',    src: 'paymentMethods',    pk: 'id',          toDb: toDb.paymentMethod,    fromDb: fromDb.paymentMethod,    large: false },
-    { key: 'contract_templates', src: 'contractTemplates', pk: 'building_id', toDb: toDb.contractTemplate, fromDb: fromDb.contractTemplate, large: true  }
+    { key: 'contract_templates', src: 'contractTemplates', pk: 'building_id', toDb: toDb.contractTemplate, fromDb: fromDb.contractTemplate, large: true  },
+    // === 代管模式 (sql/20-managed-mode-schema-2026-06-17.sql) ===
+    { key: 'owners',             src: 'owners',            pk: 'id',          toDb: toDb.owner,            fromDb: fromDb.owner,            large: false },
+    { key: 'deposits',           src: 'deposits',          pk: 'id',          toDb: toDb.deposit,          fromDb: fromDb.deposit,          large: false },
+    { key: 'settlements',        src: 'settlements',       pk: 'id',          toDb: toDb.settlement,       fromDb: fromDb.settlement,       large: false }
 ];
 
 export const SMALL_TABLES = TABLES.filter(t => !t.large);

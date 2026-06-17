@@ -215,7 +215,7 @@ export function renderDashboard() {
                     </div>
                 </div>
                 <div class="metric-value">${metrics.pendingContracts}</div>
-                <div class="metric-subtext">請盡速完成簽署流程</div>
+                <div class="metric-subtext">${metrics.pendingContracts === 0 ? '本月合約都已簽署' : '請盡速完成簽署流程'}</div>
             </a>
 
             <a href="#maintenance" class="card metric-card metric-link" title="點擊前往維修管理">
@@ -226,7 +226,7 @@ export function renderDashboard() {
                     </div>
                 </div>
                 <div class="metric-value">${metrics.pendingMaintenances}</div>
-                <div class="metric-subtext">追蹤租客報修進度</div>
+                <div class="metric-subtext">${metrics.pendingMaintenances === 0 ? '目前無待處理報修' : '追蹤租客報修進度'}</div>
             </a>
 
             <a href="#finance" class="card metric-card metric-link" title="點擊前往總收支表">
@@ -237,7 +237,7 @@ export function renderDashboard() {
                     </div>
                 </div>
                 <div class="metric-value">$${metrics.monthlyIncome.toLocaleString()}</div>
-                <div class="metric-subtext">本月收入穩定上升</div>
+                <div class="metric-subtext">${metrics.monthlyIncome === 0 ? '尚無本月入帳' : '本月已入帳房租'}</div>
             </a>
         </div>
 

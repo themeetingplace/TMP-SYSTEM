@@ -1523,6 +1523,42 @@ select:focus-visible,
 /* 小幫手不顯決策按鈕 */
 body[data-role="helper"] .occ-decision-btns { display: none !important; }
 
+/* === 全域 .btn-icon — icon-only 操作按鈕 (audit C4: 收掉散落 inline style) ===
+   用法: <button class="btn-icon" title="編輯"><i class="ph ph-pencil"></i></button>
+   variants: .btn-icon.danger / .btn-icon.success / .btn-icon.primary */
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-main);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+.btn-icon:hover {
+    background: var(--bg-secondary);
+    border-color: var(--text-muted);
+}
+.btn-icon:active { transform: scale(0.96); }
+.btn-icon:disabled,
+.btn-icon[aria-disabled="true"] {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.btn-icon.danger        { color: var(--color-danger); }
+.btn-icon.danger:hover  { background: rgba(220, 38, 38, 0.08); border-color: var(--color-danger); }
+.btn-icon.success       { color: var(--color-success); }
+.btn-icon.success:hover { background: rgba(34, 148, 110, 0.08); border-color: var(--color-success); }
+.btn-icon.primary       { color: var(--color-primary); }
+.btn-icon.primary:hover { background: rgba(255, 122, 0, 0.08); border-color: var(--color-primary); }
+
 /* === 共居 / 代管 mode 切換器 (sidebar 頂端) === */
 .mode-switcher {
     display: flex;
@@ -2554,7 +2590,8 @@ body[data-app-mode="managed"] .topbar-title h1::before {
 
 @media (max-width: 768px) {
     .view-container {
-        padding: 1rem;
+        /* padding-bottom 預留 FAB 高度 (56px) + 16px gap，避免遮住列表最後一筆操作鈕 */
+        padding: 1rem 1rem 88px;
     }
 }
 

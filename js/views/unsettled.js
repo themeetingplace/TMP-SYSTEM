@@ -8,11 +8,15 @@ import { escapeHtml } from '../utils/escape.js';
 import { filterInvoicesByMode } from '../utils/modeFilter.js';
 
 // 類別 → type-chip class (語意色 — 跟 finance.js 同套)
-function typeChip(type) {
+// 房租 (in) vs 租金 (out) 用 direction 分色
+function typeChip(type, direction) {
     const t = String(type || '');
-    if (/租|房租/.test(t)) return { cls: 'rent', icon: 'ph-house' };
-    if (/押/.test(t))      return { cls: 'deposit', icon: 'ph-vault' };
-    if (/水|電|瓦斯|能源|管理費|網路|寬頻/.test(t)) return { cls: 'utility', icon: 'ph-lightning' };
+    if (direction === 'out') {
+        if (/水|電|瓦斯|能源|管理費|網路|寬頻/.test(t)) return { cls: 'utility', icon: 'ph-lightning' };
+        return { cls: 'misc', icon: 'ph-tag' };
+    }
+    if (/房租|^租$/.test(t)) return { cls: 'rent', icon: 'ph-house' };
+    if (/押/.test(t))         return { cls: 'deposit', icon: 'ph-vault' };
     return { cls: 'misc', icon: 'ph-tag' };
 }
 
@@ -88,7 +92,7 @@ export function renderUnsettled() {
             : '<span style="font-size: var(--text-xs); color: var(--text-muted);">—</span>';
 
         // v3 卡片 (mobile-only)
-        const tc = typeChip(inv.type);
+        const tc = typeChip(inv.type, inv.direction);
         const tenantName = inv.direction === 'in'
             ? (inv.tenant || '—')
             : (inv.contractId ? `合約 ${inv.contractId}` : '整館共用');

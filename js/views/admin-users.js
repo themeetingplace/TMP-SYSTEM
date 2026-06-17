@@ -8,6 +8,7 @@
 import { supabase } from '../supabase.js';
 import { getSession } from '../auth.js';
 import { openFormModal, openConfirm, showToast } from '../utils/ui.js';
+import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 
 let cachedAdmins = [];
 let currentEmail = null;
@@ -52,17 +53,17 @@ function rowsHtml(admins) {
         const isSelf = a.email === currentEmail;
         const canDelete = !isSelf;  // 不能刪自己；其他 RLS 會擋（非 owner 也按不到）
         return `
-            <tr data-email="${a.email}">
+            <tr data-email="${escapeAttr(a.email)}">
                 <td>
-                    <strong>${a.email}</strong>
+                    <strong>${esc(a.email)}</strong>
                     ${isSelf ? '<span class="status-badge" style="margin-left: 0.5rem; background: var(--bg-secondary); font-size: var(--text-2xs);">你</span>' : ''}
                 </td>
-                <td>${a.display_name || '<span style="color: var(--text-muted);">—</span>'}</td>
+                <td>${a.display_name ? esc(a.display_name) : '<span style="color: var(--text-muted);">—</span>'}</td>
                 <td>${roleBadge(a.role)}</td>
-                <td style="color: var(--text-muted); font-size: var(--text-xs);">${formatDate(a.created_at)}</td>
+                <td style="color: var(--text-muted); font-size: var(--text-xs);">${esc(formatDate(a.created_at))}</td>
                 <td style="text-align: right;">
                     ${canDelete
-                        ? `<button class="btn btn-outline admin-delete-btn" data-email="${a.email}" data-name="${a.display_name || a.email}" title="移除此帳號" style="color: var(--color-danger); padding: 0.25rem 0.6rem;">
+                        ? `<button class="btn btn-outline admin-delete-btn" data-email="${escapeAttr(a.email)}" data-name="${escapeAttr(a.display_name || a.email)}" title="移除此帳號" style="color: var(--color-danger); padding: 0.25rem 0.6rem;">
                               <i class="ph ph-trash"></i> 移除
                            </button>`
                         : '<span style="color: var(--text-muted); font-size: var(--text-xs);">不能移除自己</span>'
@@ -132,7 +133,7 @@ function bindRowActions() {
             const name = btn.dataset.name;
             openConfirm({
                 title: '移除管理員',
-                message: `確定要移除 <strong>${name}</strong> (${email}) 的存取權限？<br><br><span style="color: var(--text-muted); font-size: var(--text-sm);">移除後該 email 將無法再登入 BMS。</span>`,
+                message: `確定要移除 <strong>${esc(name)}</strong> (${esc(email)}) 的存取權限？<br><br><span style="color: var(--text-muted); font-size: var(--text-sm);">移除後該 email 將無法再登入 PMS。</span>`,
                 danger: true,
                 confirmLabel: '確定移除',
                 onConfirm: async () => {

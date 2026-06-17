@@ -1,6 +1,7 @@
 ﻿// 登入畫面 — 全螢幕 overlay
 // A6: 改成 Google OAuth only (對應 admins 白名單)。email/password 流程已停用，留 helper 給帳號設定 modal 用
 import { signInWithGoogle, signOut } from '../auth.js';
+import { escapeHtml as esc } from '../utils/escape.js';
 
 export function showLogin() {
     // 隱藏主 App
@@ -78,7 +79,7 @@ export function showAccessDenied(email) {
             </div>
             <div style="padding: 0.5rem 0 1rem; text-align: center;">
                 <p style="margin: 0 0 0.4rem; color: var(--text-muted); font-size: var(--text-sm);">你登入的帳號</p>
-                <p style="margin: 0 0 1rem; font-weight: 700; font-size: 1rem; word-break: break-all;">${email || '(unknown)'}</p>
+                <p style="margin: 0 0 1rem; font-weight: 700; font-size: 1rem; word-break: break-all;">${esc(email || '(unknown)')}</p>
                 <p style="margin: 0; color: var(--text-muted); font-size: var(--text-sm); line-height: 1.5;">不在管理員白名單內。<br>請聯絡系統管理員加入名單，或改用授權帳號登入。</p>
             </div>
             <button type="button" id="auth-logout-btn" class="auth-submit">

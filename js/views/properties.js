@@ -626,7 +626,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                     const isExactExisting = typedName && mockData.tenants.some(t => t.name === typedName);
                     const willCreateNew = typedName && !isExactExisting;
                     headerHtml = willCreateNew
-                        ? `<div class="ts-header ts-header-new">✨ 沒符合的舊資料 → 將建立新顧客「<strong>${typedName}</strong>」</div>`
+                        ? `<div class="ts-header ts-header-new">✨ 沒符合的舊資料 → 將建立新顧客「<strong>${esc(typedName)}</strong>」</div>`
                         : (matches.length > 0 ? `<div class="ts-header">找到 ${matches.length} 筆舊資料 — 點擊載入或繼續輸入新姓名</div>` : '');
                 } else {
                     headerHtml = matches.length > 0 ? `<div class="ts-header">找到 ${matches.length} 筆舊資料 — 點擊載入或繼續輸入新電話</div>` : '';
@@ -658,7 +658,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                 if (emergencyInput) emergencyInput.value = t.emergencyContact || '';
                 if (sourceSelect && t.source) sourceSelect.value = t.source;
                 // 清掉兩條建議列，顯示載入訊息
-                nameSuggestStrip.innerHTML = `<div class="ts-loaded">✅ 已載入 ${t.name} 的資料</div>`;
+                nameSuggestStrip.innerHTML = `<div class="ts-loaded">✅ 已載入 ${esc(t.name)} 的資料</div>`;
                 phoneSuggestStrip.innerHTML = '';
                 setTimeout(() => { nameSuggestStrip.innerHTML = ''; }, 1800);
             }

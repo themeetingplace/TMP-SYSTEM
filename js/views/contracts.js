@@ -478,7 +478,7 @@ function showContractForm(contract) {
             if (headerEl && !headerEl.parentElement.querySelector('.modal-subtitle')) {
                 const sub = document.createElement('div');
                 sub.className = 'modal-subtitle';
-                sub.innerHTML = `合約 <span class="mono">${contract.id}</span> · 租客 <strong>${contract.tenant || '—'}</strong> <span class="modal-subtitle__faded">· ${contract.propertyName?.replace('聚空間 - ', '') || ''}</span>`;
+                sub.innerHTML = `合約 <span class="mono">${esc(contract.id)}</span> · 租客 <strong>${esc(contract.tenant || '—')}</strong> <span class="modal-subtitle__faded">· ${esc(contract.propertyName?.replace('聚空間 - ', '') || '')}</span>`;
                 headerEl.insertAdjacentElement('afterend', sub);
             }
 

@@ -96,12 +96,19 @@ export function renderFinance() {
     const activeBuildings = getSortedBuildings({ activeOnly: true })
         .filter(b => (b.mode || 'cohousing') === targetMode);
 
-    // 類別 → type-chip class (語意色 — 房租橘 / 押金綠 / 水電琥珀 / 其他灰)
-    function typeChip(type) {
+    // 類別 → type-chip class (語意色)
+    // ⚠ 用戶硬規則: 房租=in (住客付給我們) ≠ 租金=out (我們付給房東) 絕對不能同色
+    // direction 判斷讓 typeChip 分流: in→橘(房租) / out→灰(misc)，免得審帳被視覺混淆
+    function typeChip(type, direction) {
         const t = String(type || '');
-        if (/租|房租/.test(t)) return { cls: 'rent', icon: 'ph-house' };
-        if (/押/.test(t))      return { cls: 'deposit', icon: 'ph-vault' };
-        if (/水|電|瓦斯|能源|管理費|網路|寬頻/.test(t)) return { cls: 'utility', icon: 'ph-lightning' };
+        if (direction === 'out') {
+            // 支出類: 不管 type 名字是「租金」/「房東租金」一律走 misc 灰
+            if (/水|電|瓦斯|能源|管理費|網路|寬頻/.test(t)) return { cls: 'utility', icon: 'ph-lightning' };
+            return { cls: 'misc', icon: 'ph-tag' };
+        }
+        // 收入類 (direction === 'in' 或 undefined)
+        if (/房租|^租$/.test(t)) return { cls: 'rent', icon: 'ph-house' };
+        if (/押/.test(t))         return { cls: 'deposit', icon: 'ph-vault' };
         return { cls: 'misc', icon: 'ph-tag' };
     }
 
@@ -138,7 +145,7 @@ export function renderFinance() {
             : '<span style="color: var(--text-muted); font-size: var(--text-xs);">—</span>';
 
         // v3 卡片 (mobile-only): 租客 + 金額 hero / type 語意色 chip / 副資訊區 chip 列 / 備註獨立區
-        const tc = typeChip(inv.type);
+        const tc = typeChip(inv.type, inv.direction);
         const tenantName = inv.direction === 'in'
             ? (inv.tenant || '—')
             : (inv.contractId ? `合約 ${inv.contractId}` : '整館共用');

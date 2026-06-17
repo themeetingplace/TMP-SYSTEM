@@ -572,19 +572,25 @@ function ensureToastContainer() {
     return toastContainer;
 }
 
+// ⚠ XSS 防禦: message 一律走 textContent (不再 innerHTML)
+// 之前的 toast.innerHTML = `... <span>${message}</span>` 會被 tenant 名稱裡的
+// <img onerror=...> payload 利用，audit 列為 high priority XSS sink
 export function showToast(message, type = 'success', duration = 2500) {
     ensureToastContainer();
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    // danger 類額外標 alert (打斷現在朗讀，立刻播)
     if (type === 'danger') toast.setAttribute('role', 'alert');
-    const icon = type === 'success' ? 'ph-check-circle' : type === 'danger' ? 'ph-x-circle' : type === 'warning' ? 'ph-warning' : 'ph-info';
-    toast.innerHTML = `<i class="ph-fill ${icon}" aria-hidden="true"></i> <span>${message}</span>`;
+    const iconName = type === 'success' ? 'ph-check-circle' : type === 'danger' ? 'ph-x-circle' : type === 'warning' ? 'ph-warning' : 'ph-info';
+    const iconEl = document.createElement('i');
+    iconEl.className = `ph-fill ${iconName}`;
+    iconEl.setAttribute('aria-hidden', 'true');
+    const span = document.createElement('span');
+    span.textContent = String(message ?? '');  // ← 安全寫入，不解析 HTML
+    toast.append(iconEl, ' ', span);
     toastContainer.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('show'));
     setTimeout(() => {
         toast.classList.remove('show');
-        // QW-AM3: dismiss timer 200 → 260，配合 CSS transition 0.25s 完整跑完
         setTimeout(() => toast.remove(), 260);
     }, duration);
 }
@@ -598,13 +604,28 @@ export function showUndoToast({ message, onUndo, onCommit, durationMs = 5000 }) 
     const toast = document.createElement('div');
     toast.className = 'toast toast-undo';
     toast.setAttribute('role', 'status');
-    toast.innerHTML = `
-        <i class="ph-fill ph-arrow-counter-clockwise" aria-hidden="true"></i>
-        <span class="undo-msg">${message}</span>
-        <button class="undo-btn" type="button">復原</button>
-        <span class="undo-countdown" aria-hidden="true">${Math.ceil(durationMs / 1000)}</span>
-        <span class="undo-progress" aria-hidden="true"><span class="undo-progress-fill"></span></span>
-    `;
+    // ⚠ XSS 防禦: 改 DOM 構建 + textContent (同 showToast)
+    const ic = document.createElement('i');
+    ic.className = 'ph-fill ph-arrow-counter-clockwise';
+    ic.setAttribute('aria-hidden', 'true');
+    const msgSpan = document.createElement('span');
+    msgSpan.className = 'undo-msg';
+    msgSpan.textContent = String(message ?? '');
+    const undoBtn = document.createElement('button');
+    undoBtn.className = 'undo-btn';
+    undoBtn.type = 'button';
+    undoBtn.textContent = '復原';
+    const countSpan = document.createElement('span');
+    countSpan.className = 'undo-countdown';
+    countSpan.setAttribute('aria-hidden', 'true');
+    countSpan.textContent = String(Math.ceil(durationMs / 1000));
+    const progressWrap = document.createElement('span');
+    progressWrap.className = 'undo-progress';
+    progressWrap.setAttribute('aria-hidden', 'true');
+    const progressFill = document.createElement('span');
+    progressFill.className = 'undo-progress-fill';
+    progressWrap.appendChild(progressFill);
+    toast.append(ic, msgSpan, undoBtn, countSpan, progressWrap);
     toastContainer.appendChild(toast);
     requestAnimationFrame(() => {
         toast.classList.add('show');

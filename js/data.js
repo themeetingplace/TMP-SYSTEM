@@ -1132,34 +1132,39 @@ export const store = {
         const after = mockData.contracts[i];
 
         // 改合約月租 → 反向同步該合約的房租 invoice 跟床位 property.rent
-        // 注意只對 main 合約做，bundle 子合約 (bundleParentContractId) 沒 invoice 略過
-        if ('amount' in patch
-            && Number(before.amount) !== Number(after.amount)
-            && !after.bundleParentContractId) {
-            const term = after.termMonths || 1;
+        // bundle 子合約 (bundleParentContractId) 改 amount → 透過 parent 重新觸發 cascade
+        // (audit: 之前完全沒同步 child 改動，對帳會漂移)
+        if ('amount' in patch && Number(before.amount) !== Number(after.amount)) {
+            let cascadeContract = after;
+            if (after.bundleParentContractId) {
+                // 子合約變動 → 找 parent 走 cascade
+                const parent = mockData.contracts.find(c => c.id === after.bundleParentContractId);
+                if (parent) cascadeContract = parent;
+            }
+            const term = cascadeContract.termMonths || 1;
             const extraRentSum = mockData.contracts
-                .filter(c => c.bundleParentContractId === after.id)
+                .filter(c => c.bundleParentContractId === cascadeContract.id)
                 .reduce((s, c) => s + (Number(c.amount) || 0), 0);
-            const newInvoiceAmount = (Number(after.amount) + extraRentSum) * term;
+            const newInvoiceAmount = Math.round((Number(cascadeContract.amount) + extraRentSum) * term);
 
             mockData.invoices.forEach((inv, idx) => {
-                if (inv.contractId !== after.id) return;
+                if (inv.contractId !== cascadeContract.id) return;
                 if (inv.direction !== 'in' || inv.type !== '房租') return;
                 const oldAmt = Number(inv.amount) || 0;
                 if (oldAmt === newInvoiceAmount) return;
                 mockData.invoices[idx] = { ...inv, amount: newInvoiceAmount };
                 window.dispatchEvent(new CustomEvent('bms:contract-sync-invoice', {
                     detail: {
-                        contractId: after.id,
+                        contractId: cascadeContract.id,
                         invoiceId: inv.id,
                         oldAmount: oldAmt,
                         newAmount: newInvoiceAmount,
-                        newMonthlyRent: after.amount
+                        newMonthlyRent: cascadeContract.amount
                     }
                 }));
             });
 
-            // 床位 property.rent 同步
+            // 床位 property.rent 同步 (主合約走 main propertyName, 子合約走自己的)
             const property = mockData.properties.find(p => p.name === after.propertyName);
             if (property) {
                 const pi = mockData.properties.indexOf(property);
@@ -1485,7 +1490,8 @@ export const store = {
                     const extraRentSum = mockData.contracts
                         .filter(c => c.bundleParentContractId === contract.id)
                         .reduce((s, c) => s + (Number(c.amount) || 0), 0);
-                    const newMainAmount = (Number(after.amount) / term) - extraRentSum;
+                    // ⚠ Math.round 避免浮點漂移 (audit: 50000/3 沒 round 會 silently overwrite 用戶手調)
+                    const newMainAmount = Math.round((Number(after.amount) / term) - extraRentSum);
                     if (newMainAmount > 0 && newMainAmount !== contract.amount) {
                         const ci = mockData.contracts.findIndex(c => c.id === contract.id);
                         if (ci >= 0) {
