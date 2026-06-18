@@ -2095,36 +2095,58 @@ body[data-app-mode="managed"] .topbar-title h1::before {
     margin-bottom: 1.25rem;
 }
 .houses-section-title {
-    margin: 0 0 0.6rem;
-    font-size: 0.85rem;
-    color: var(--text-muted);
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    font-size: var(--text-xs);
+    color: var(--color-primary-text);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     font-weight: 600;
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    background: var(--color-primary-light);
+    border-left: 3px solid var(--color-primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 .houses-section-title i { font-size: 1rem; color: var(--color-primary); }
+/* 2-col grid: 同 section 內欄位並排 */
+.houses-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 1.25rem;
+}
+.houses-fields-grid > [data-span="2"] { grid-column: span 2; }
+@media (max-width: 768px) {
+    .houses-fields-grid { grid-template-columns: 1fr; }
+    .houses-fields-grid > [data-span="2"] { grid-column: span 1; }
+}
 .houses-field-row {
     display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 0.5rem 1rem;
-    padding: 0.4rem 0;
-    border-bottom: 1px dotted rgba(0,0,0,0.05);
-    font-size: 0.9rem;
+    grid-template-columns: 110px 1fr;
+    gap: 0.5rem 0.75rem;
+    padding: 0.35rem 0;
+    align-items: center;
+    font-size: var(--text-sm);
 }
-.houses-field-row:last-child { border-bottom: none; }
 .houses-field-label {
-    color: var(--text-muted);
-    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    font-weight: 500;
 }
 .houses-field-value {
     color: var(--text-main);
+    min-width: 0;
+}
+.houses-field-readonly {
+    color: var(--text-muted);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--text-xs);
+    padding: 0.3rem 0.55rem;
 }
 .houses-field-hint {
     margin-left: 0.5rem;
-    font-size: 0.75rem;
+    font-size: var(--text-2xs);
     color: var(--text-muted);
 }
 .houses-note {
@@ -2137,45 +2159,170 @@ body[data-app-mode="managed"] .topbar-title h1::before {
     white-space: pre-wrap;
 }
 
-/* === R5.1 inline-editable 欄位 (auto-save on blur/change) === */
+/* === inline-editable 欄位 — 預設可見邊框 (Notion / Linear 風格) === */
 .inline-edit-row .houses-field-value {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
 }
 .inline-edit-input {
     width: 100%;
-    max-width: 320px;
-    padding: 0.3rem 0.55rem;
-    font-size: 0.88rem;
+    max-width: 100%;
+    padding: 0.35rem 0.55rem;
+    font-size: var(--text-sm);
     line-height: 1.4;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
     color: var(--text-main);
     font-family: inherit;
-    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .inline-edit-input:hover {
-    background: #fafbfc;
-    border-color: rgba(0,0,0,0.08);
+    background: var(--color-surface);
+    border-color: var(--color-primary);
 }
 .inline-edit-input:focus {
     outline: none;
-    background: #fff;
+    background: var(--color-surface);
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.12);
+    box-shadow: 0 0 0 2px var(--color-primary-light);
 }
-textarea.inline-edit-input { resize: vertical; min-height: 2.2rem; max-width: 100%; }
-select.inline-edit-input { cursor: pointer; max-width: 240px; }
+textarea.inline-edit-input { resize: vertical; min-height: 2.4rem; }
+select.inline-edit-input { cursor: pointer; }
 .inline-edit-input.is-saved {
-    background: rgba(34, 197, 94, 0.08);
-    border-color: rgba(34, 197, 94, 0.4);
+    background: var(--color-success-light, rgba(34, 148, 110, 0.1));
+    border-color: var(--color-success);
 }
 .inline-edit-input.is-save-fail {
-    background: rgba(220, 38, 38, 0.08);
-    border-color: rgba(220, 38, 38, 0.4);
+    background: var(--color-danger-light, rgba(177, 53, 53, 0.1));
+    border-color: var(--color-danger);
 }
+
+/* === 費用計算 tab (代管房屋) === */
+.fee-tab-card {
+    background: var(--color-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+.fee-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.fee-month-picker-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.fee-month-picker-wrap label {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+}
+.fee-month-picker-wrap input { max-width: 160px; }
+.fee-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+.fee-item-row {
+    display: grid;
+    grid-template-columns: 1fr 24px 180px;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--border-soft);
+}
+.fee-item-row:last-child { border-bottom: none; }
+.fee-item-label {
+    font-size: var(--text-sm);
+    color: var(--text-main);
+    font-weight: 500;
+}
+.fee-item-sign {
+    text-align: center;
+    font-weight: 700;
+    font-size: var(--text-md);
+}
+.fee-item-input {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.fee-receivable-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.75rem 0.85rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    margin-top: 0.5rem;
+}
+.fee-receivable-label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+.fee-receivable-value {
+    font-size: var(--text-lg);
+    color: var(--color-primary-text);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.fee-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+.fee-last-saved {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    margin-left: auto;
+}
+@media (max-width: 640px) {
+    .fee-item-row { grid-template-columns: 1fr 24px 130px; }
+}
+
+/* checkbox 行樣式 (含稅 / 報稅) */
+.inline-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.35rem 0.55rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    user-select: none;
+    transition: background 0.12s, border-color 0.12s;
+    width: 100%;
+}
+.inline-checkbox:hover { background: var(--color-surface); border-color: var(--color-primary); }
+.inline-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+.inline-checkbox-text {
+    font-size: var(--text-sm);
+    color: var(--text-main);
+}
+.inline-checkbox input:checked + .inline-checkbox-mark + .inline-checkbox-text {
+    color: var(--color-primary-text);
+    font-weight: 500;
+}
+.inline-checkbox-mark { display: none; } /* placeholder for selector chain */
 
 @media (max-width: 768px) {
     .houses-field-row {

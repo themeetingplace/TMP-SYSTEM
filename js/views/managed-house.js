@@ -69,19 +69,31 @@ function fieldRow(label, value, hint = '') {
     `;
 }
 
-// R5.1: inline 可編輯欄位 (auto-save on blur/change)
+// inline 可編輯欄位 (auto-save on blur/change)
 // data-inline-target: 'building' | 'owner' | 'feeConfig'
 // data-inline-coerce: 'number' | 'bool' | (default text)
+// opts.span: 1 (預設) | 2 (跨整列)
 function inlineField(label, value, opts = {}) {
     const {
         key, target = 'building',
         type = 'text', coerce = 'text',
-        options, placeholder = '', hint = '', rows = 2
+        options, placeholder = '', hint = '', rows = 2,
+        span = 1
     } = opts;
     let inputHtml;
     const v = value == null ? '' : String(value);
     const attrs = `data-inline-key="${esc(key)}" data-inline-target="${esc(target)}" data-inline-coerce="${esc(coerce)}"`;
-    if (type === 'select') {
+    if (type === 'checkbox') {
+        // bool checkbox: 純記號 ✓ 切換，視覺輕量
+        const checked = v === 'true' || v === '1';
+        inputHtml = `
+            <label class="inline-checkbox">
+                <input type="checkbox" class="inline-edit-input" ${attrs} ${checked ? 'checked' : ''}>
+                <span class="inline-checkbox-mark"></span>
+                <span class="inline-checkbox-text">${esc(opts.checkboxLabel || '勾選=是')}</span>
+            </label>
+        `;
+    } else if (type === 'select') {
         const opts2 = options || [];
         inputHtml = `<select class="inline-edit-input" ${attrs}>${
             opts2.map(o => `<option value="${esc(o.value)}" ${String(o.value) === v ? 'selected' : ''}>${esc(o.label)}</option>`).join('')
@@ -92,7 +104,7 @@ function inlineField(label, value, opts = {}) {
         inputHtml = `<input type="${type}" class="inline-edit-input" ${attrs} value="${esc(v)}" placeholder="${esc(placeholder)}">`;
     }
     return `
-        <div class="houses-field-row inline-edit-row">
+        <div class="houses-field-row inline-edit-row" ${span === 2 ? 'data-span="2"' : ''}>
             <div class="houses-field-label">${esc(label)}</div>
             <div class="houses-field-value">${inputHtml}${hint ? `<span class="houses-field-hint">${esc(hint)}</span>` : ''}</div>
         </div>
@@ -145,24 +157,26 @@ function renderDataTab(building) {
 
     const ownerSection = owner
         ? `
-            ${inlineField('姓名', owner.name, { key: 'name', target: 'owner' })}
-            ${inlineField('性別', owner.gender, {
-                key: 'gender', target: 'owner', type: 'select',
-                options: [
-                    { value: '',     label: '不指定' },
-                    { value: '男',   label: '男' },
-                    { value: '女',   label: '女' },
-                    { value: '其他', label: '其他' }
-                ]
-            })}
-            ${inlineField('電話', owner.phone, { key: 'phone', target: 'owner', placeholder: '0912-345-678' })}
-            ${inlineField('信箱', owner.email, { key: 'email', target: 'owner', placeholder: 'name@example.com' })}
-            ${inlineField('LINE ID', owner.lineId, { key: 'lineId', target: 'owner' })}
-            <div class="houses-field-row">
-                <div class="houses-field-label">狀態</div>
-                <div class="houses-field-value">
-                    <span class="status-badge ${owner.status === 'active' ? 'success' : (owner.status === 'pending_review' ? 'warning' : 'muted')}">${owner.status === 'active' ? '合作中' : (owner.status === 'pending_review' ? '待審核' : '已封存')}</span>
-                    <a href="#m-owners" style="margin-left: 1rem; font-size: var(--text-xs); color: var(--color-primary);"><i class="ph ph-arrow-right"></i> 至屋主清單</a>
+            <div class="houses-fields-grid">
+                ${inlineField('姓名', owner.name, { key: 'name', target: 'owner', span: 2 })}
+                ${inlineField('性別', owner.gender, {
+                    key: 'gender', target: 'owner', type: 'select',
+                    options: [
+                        { value: '',     label: '不指定' },
+                        { value: '男',   label: '男' },
+                        { value: '女',   label: '女' },
+                        { value: '其他', label: '其他' }
+                    ]
+                })}
+                ${inlineField('電話', owner.phone, { key: 'phone', target: 'owner', placeholder: '0912-345-678' })}
+                ${inlineField('信箱', owner.email, { key: 'email', target: 'owner', placeholder: 'name@example.com' })}
+                ${inlineField('LINE ID', owner.lineId, { key: 'lineId', target: 'owner' })}
+                <div class="houses-field-row" data-span="2">
+                    <div class="houses-field-label">狀態</div>
+                    <div class="houses-field-value">
+                        <span class="status-badge ${owner.status === 'active' ? 'success' : (owner.status === 'pending_review' ? 'warning' : 'muted')}">${owner.status === 'active' ? '合作中' : (owner.status === 'pending_review' ? '待審核' : '已封存')}</span>
+                        <a href="#m-owners" style="margin-left: 1rem; font-size: var(--text-xs); color: var(--color-primary);"><i class="ph ph-arrow-right"></i> 至屋主清單</a>
+                    </div>
                 </div>
             </div>
         `
@@ -171,27 +185,34 @@ function renderDataTab(building) {
     return `
         <div class="houses-section">
             <h4 class="houses-section-title"><i class="ph ph-info"></i> 基本資訊</h4>
-            ${fieldRow('房屋編號', building.id)}
-            ${inlineField('房屋名稱', building.name, { key: 'name' })}
-            ${inlineField('地址', building.baseAddress, { key: 'baseAddress', placeholder: '台北市...' })}
-            ${inlineField('原始格局', building.layout, { key: 'layout', placeholder: '3房2廳1衛' })}
-            ${inlineField('坪數', building.areaSize, { key: 'areaSize', type: 'number', coerce: 'number', placeholder: '32.5' })}
-            ${inlineField('開發人', building.developer, { key: 'developer' })}
-            ${inlineField('管理人', building.manager, { key: 'manager' })}
+            <div class="houses-fields-grid">
+                <div class="houses-field-row" data-readonly>
+                    <div class="houses-field-label">房屋編號</div>
+                    <div class="houses-field-value houses-field-readonly">${esc(building.id)}</div>
+                </div>
+                ${inlineField('房屋名稱', building.name, { key: 'name' })}
+                ${inlineField('地址', building.baseAddress, { key: 'baseAddress', placeholder: '台北市...', span: 2 })}
+                ${inlineField('原始格局', building.layout, { key: 'layout', placeholder: '3房2廳1衛' })}
+                ${inlineField('坪數', building.areaSize, { key: 'areaSize', type: 'number', coerce: 'number', placeholder: '32.5' })}
+                ${inlineField('開發人', building.developer, { key: 'developer' })}
+                ${inlineField('管理人', building.manager, { key: 'manager' })}
+            </div>
         </div>
 
         <div class="houses-section">
             <h4 class="houses-section-title"><i class="ph ph-currency-circle-dollar"></i> 租金</h4>
-            ${inlineField('月租金 (NT$)', building.monthlyRent, { key: 'monthlyRent', type: 'number', coerce: 'number', placeholder: '45000' })}
-            ${inlineField('租金含稅', building.rentIncludesTax, {
-                key: 'rentIncludesTax', type: 'select', coerce: 'bool',
-                options: TAX_OPTIONS
-            })}
-            ${inlineField('租金條件', building.rentTerm, { key: 'rentTerm', placeholder: '押二付一' })}
-            ${inlineField('是否報稅', building.taxReported, {
-                key: 'taxReported', type: 'select', coerce: 'bool',
-                options: BOOL_OPTIONS
-            })}
+            <div class="houses-fields-grid">
+                ${inlineField('月租金 (NT$)', building.monthlyRent, { key: 'monthlyRent', type: 'number', coerce: 'number', placeholder: '45000' })}
+                ${inlineField('租金條件', building.rentTerm, { key: 'rentTerm', placeholder: '押二付一' })}
+                ${inlineField('含稅', building.rentIncludesTax, {
+                    key: 'rentIncludesTax', type: 'checkbox', coerce: 'bool',
+                    checkboxLabel: '租金含稅'
+                })}
+                ${inlineField('報稅', building.taxReported, {
+                    key: 'taxReported', type: 'checkbox', coerce: 'bool',
+                    checkboxLabel: '已申報'
+                })}
+            </div>
         </div>
 
         <div class="houses-section">
@@ -201,28 +222,31 @@ function renderDataTab(building) {
 
         <div class="houses-section">
             <h4 class="houses-section-title"><i class="ph ph-key"></i> 代管設定</h4>
-            ${inlineField('代管起始日', building.managedStartDate, { key: 'managedStartDate', type: 'date' })}
-            ${inlineField('代管結束日', building.managedEndDate, { key: 'managedEndDate', type: 'date' })}
-            ${inlineField('代管收費方式', feeType, {
-                key: 'feeType', type: 'select',
-                options: FEE_TYPE_OPTIONS
-            })}
-            ${feeAmountField}
-            ${inlineField('能源費負擔', building.energyMode || 'owner', {
-                key: 'energyMode', type: 'select',
-                options: ENERGY_OPTIONS,
-                hint: building.energyMode === 'mixed' ? '(見備註)' : ''
-            })}
+            <div class="houses-fields-grid">
+                ${inlineField('起始日', building.managedStartDate, { key: 'managedStartDate', type: 'date' })}
+                ${inlineField('結束日', building.managedEndDate, { key: 'managedEndDate', type: 'date' })}
+                ${inlineField('收費方式', feeType, {
+                    key: 'feeType', type: 'select',
+                    options: FEE_TYPE_OPTIONS
+                })}
+                ${feeAmountField}
+                ${inlineField('能源費負擔', building.energyMode || 'owner', {
+                    key: 'energyMode', type: 'select',
+                    options: ENERGY_OPTIONS,
+                    span: 2,
+                    hint: building.energyMode === 'mixed' ? '(見備註)' : ''
+                })}
+            </div>
         </div>
 
         <div class="houses-section">
             <h4 class="houses-section-title"><i class="ph ph-note"></i> 備註</h4>
-            ${inlineField('內容', building.note, { key: 'note', type: 'textarea', rows: 4, placeholder: '漏水修了 / 配合水電行...' })}
+            ${inlineField('內容', building.note, { key: 'note', type: 'textarea', rows: 4, placeholder: '漏水修了 / 配合水電行...', span: 2 })}
         </div>
 
         <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center;">
             <button class="btn btn-outline" data-action="toggle-status"><i class="ph ${building.status === 'active' ? 'ph-pause' : 'ph-play'}"></i> ${building.status === 'active' ? '停用此房屋' : '啟用此房屋'}</button>
-            <span class="inline-save-hint" style="font-size: var(--text-xs); color: var(--text-muted);"><i class="ph ph-check-circle" style="color: var(--color-success);"></i> 所有欄位編輯後自動儲存</span>
+            <span class="inline-save-hint" style="font-size: var(--text-xs); color: var(--text-muted);"><i class="ph ph-check-circle" style="color: var(--color-success);"></i> 編輯後自動儲存</span>
         </div>
     `;
 }
@@ -430,18 +454,17 @@ function renderFeeTab(building) {
         });
     }
 
+    // 用 2-col grid 排版 (每行: label + sign + number input)
     const itemRows = FEE_ITEMS_TEMPLATE.map(item => {
         const val = existingMap[item.key] ?? defaults[item.key] ?? 0;
+        const signColor = item.sign === 'in' ? 'var(--color-success)' : 'var(--color-danger)';
         const signLabel = item.sign === 'in' ? '+' : '−';
-        const color = item.sign === 'in' ? 'var(--color-success)' : 'var(--color-danger)';
         return `
-            <tr>
-                <td><strong>${item.label}</strong></td>
-                <td style="text-align: center; color: ${color}; font-weight: 600;">${signLabel}</td>
-                <td style="text-align: right;">
-                    <input type="number" class="inline-edit-input" data-fee-key="${item.key}" data-fee-sign="${item.sign}" value="${val}" style="max-width: 140px; text-align: right; font-variant-numeric: tabular-nums;">
-                </td>
-            </tr>
+            <div class="fee-item-row">
+                <span class="fee-item-label">${item.label}</span>
+                <span class="fee-item-sign" style="color: ${signColor};">${signLabel}</span>
+                <input type="number" class="inline-edit-input fee-item-input" data-fee-key="${item.key}" data-fee-sign="${item.sign}" value="${val}">
+            </div>
         `;
     }).join('');
 
@@ -471,31 +494,26 @@ function renderFeeTab(building) {
         `;
 
     return `
-        <div class="houses-section">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div class="fee-tab-card">
+            <div class="fee-card-header">
                 <h4 class="houses-section-title" style="margin: 0;"><i class="ph ph-calculator"></i> ${ym} 月結算</h4>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <label style="font-size: var(--text-sm); color: var(--text-muted);">結算月</label>
-                    <input type="month" class="inline-edit-input" id="feeMonthPicker" value="${ym}" style="max-width: 160px;">
+                <div class="fee-month-picker-wrap">
+                    <label>結算月</label>
+                    <input type="month" class="inline-edit-input" id="feeMonthPicker" value="${ym}">
                 </div>
             </div>
 
-            <table class="data-table" style="margin: 0;">
-                <thead><tr><th style="width: 40%;">項目</th><th style="width: 60px; text-align: center;"></th><th style="text-align: right;">金額 (可編輯)</th></tr></thead>
-                <tbody>${itemRows}</tbody>
-                <tfoot>
-                    <tr style="border-top: 2px solid var(--border-color);">
-                        <td><strong>屋主應收</strong></td>
-                        <td></td>
-                        <td style="text-align: right;"><strong id="feeReceivable" style="font-size: 1.1rem;">$0</strong></td>
-                    </tr>
-                </tfoot>
-            </table>
+            <div class="fee-items-list">${itemRows}</div>
 
-            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <div class="fee-receivable-row">
+                <span class="fee-receivable-label">屋主應收</span>
+                <strong id="feeReceivable" class="fee-receivable-value">$0</strong>
+            </div>
+
+            <div class="fee-actions">
                 <button class="btn btn-primary" data-action="save-fee"><i class="ph ph-floppy-disk"></i> 儲存本月結算</button>
                 <button class="btn btn-outline" data-action="reset-fee"><i class="ph ph-arrow-counter-clockwise"></i> 重設為自動計算</button>
-                <span style="font-size: var(--text-xs); color: var(--text-muted); margin-left: auto;">${existing ? `上次儲存：${existing.month}` : '尚未儲存'}</span>
+                <span class="fee-last-saved">${existing ? `上次儲存：${existing.month}` : '尚未儲存'}</span>
             </div>
         </div>
 
@@ -644,7 +662,7 @@ export function initManagedHouseActions(scope) {
         }
     }, true);
     contentEl?.addEventListener('change', (e) => {
-        if (e.target.matches('select.inline-edit-input')) handleInlineSave(e);
+        if (e.target.matches('select.inline-edit-input, input[type="checkbox"].inline-edit-input')) handleInlineSave(e);
     });
 }
 
@@ -660,9 +678,12 @@ function handleInlineSave(e) {
     const key = input.dataset.inlineKey;
     const target = input.dataset.inlineTarget || 'building';
     const coerce = input.dataset.inlineCoerce || 'text';
-    let raw = input.value;
+    // checkbox 走 .checked 而非 .value
+    const isCheckbox = input.type === 'checkbox';
+    let raw = isCheckbox ? input.checked : input.value;
     let val;
-    if (coerce === 'number') val = raw === '' ? null : Number(raw);
+    if (isCheckbox) val = !!raw;
+    else if (coerce === 'number') val = raw === '' ? null : Number(raw);
     else if (coerce === 'bool') val = raw === 'true' || raw === true;
     else if (coerce === 'json') {
         try { val = raw === '' ? [] : JSON.parse(raw); }
