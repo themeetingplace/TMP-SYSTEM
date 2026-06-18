@@ -187,7 +187,7 @@ function nextLetter(beds) {
     return '?';
 }
 
-function showBuildingRoomsModal(buildingId) {
+export function showBuildingRoomsModal(buildingId) {
     const building = mockData.buildings.find(b => b.id === buildingId);
     if (!building) return;
 

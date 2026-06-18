@@ -4,6 +4,7 @@ import { mockData, store, getSortedBuildings, bedOccupied } from '../data.js';
 import { openFormModal, showToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 import { getMode } from '../utils/appMode.js';
+import { showBuildingRoomsModal } from './settings.js';
 
 const STORAGE_KEY = 'pms-houses-active-building';
 const STATUS_OPTIONS = [
@@ -114,7 +115,12 @@ function renderBuildingDetail(building) {
             </div>
 
             <div class="houses-section">
-                <h4 class="houses-section-title"><i class="ph ph-bed"></i> 房間 / 床位</h4>
+                <h4 class="houses-section-title" style="justify-content: space-between;">
+                    <span><i class="ph ph-bed"></i> 房間 / 床位</span>
+                    <button class="btn btn-outline" data-action="manage-rooms" data-building-id="${esc(building.id)}" style="padding: 0.2rem 0.6rem; font-size: var(--text-2xs); text-transform: none; letter-spacing: 0;">
+                        <i class="ph ph-list-bullets"></i> 管理房間/床位
+                    </button>
+                </h4>
                 <div style="font-size: var(--text-base);">
                     <strong>${rooms}</strong> 間 ·
                     <strong>${totalBeds}</strong> 床 ·
@@ -193,10 +199,17 @@ export function initHousesActions(scope) {
         });
 
         contentEl.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-action="edit-house"]');
-            if (!btn) return;
-            const building = mockData.buildings.find(b => b.id === btn.dataset.id);
-            if (building) showHouseForm(building);
+            const editBtn = e.target.closest('[data-action="edit-house"]');
+            if (editBtn) {
+                const building = mockData.buildings.find(b => b.id === editBtn.dataset.id);
+                if (building) showHouseForm(building);
+                return;
+            }
+            // #12 修補: 共居新增房間/床位入口 (從原本系統設定館別管理搬過來)
+            const roomBtn = e.target.closest('[data-action="manage-rooms"]');
+            if (roomBtn) {
+                showBuildingRoomsModal(roomBtn.dataset.buildingId);
+            }
         });
     }
 }
