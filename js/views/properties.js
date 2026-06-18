@@ -967,6 +967,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                 buildingId: 1, bedId: 1, extraBeds: 1,
                 source: 1, tenantName: 1, tenantPhone: 1, tenantEmail: 1, tenantEmergency: 1,
                 scheduledDate: 2, termMonths: 2, amount: 2,
+                paymentChannel: 3, platformName: 3,
                 __sep_payment: 3, adjustments: 3, discount: 3, discountReason: 3,
                 totalDue: 3, paidAmount: 3, paymentMethod: 3
             };
