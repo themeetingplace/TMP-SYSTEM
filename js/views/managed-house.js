@@ -502,15 +502,18 @@ function renderFeeTab(building) {
     const defaults = computeFeeDefaults(building, ym);
 
     // existing.items 是陣列；轉成 key → amount map
+    // ⚠ 全部存 abs — input 內不能帶負號 (符號用獨立 column 顯示)
+    // 否則 save 時 -(-3600)=3600 → 下次 reload 又 -3600，每次翻號 BUG
     const existingMap = {};
     if (existing && Array.isArray(existing.items)) {
         existing.items.forEach(it => {
-            if (it.key) existingMap[it.key] = it.amount;
-            else if (it.type === 'rent_income') existingMap.rentIncome = it.amount;
-            else if (it.type === 'energy')      existingMap.energy = Math.abs(it.amount);
-            else if (it.type === 'repair')      existingMap.repair = Math.abs(it.amount);
-            else if (it.type === 'other')       existingMap.other = Math.abs(it.amount);
-            else if (it.type === 'mgmt_fee')    existingMap.mgmtFee = Math.abs(it.amount);
+            const abs = Math.abs(it.amount || 0);
+            if (it.key) existingMap[it.key] = abs;
+            else if (it.type === 'rent_income') existingMap.rentIncome = abs;
+            else if (it.type === 'energy')      existingMap.energy = abs;
+            else if (it.type === 'repair')      existingMap.repair = abs;
+            else if (it.type === 'other')       existingMap.other = abs;
+            else if (it.type === 'mgmt_fee')    existingMap.mgmtFee = abs;
         });
     }
 
@@ -1631,8 +1634,9 @@ function showManagedTenantContractForm(building, opts = {}) {
 function readFeeInputs(scope) {
     const out = {};
     scope.querySelectorAll('[data-fee-key]').forEach(input => {
+        // 防呆：input 值一律取 abs，符號由 data-fee-sign 決定
         out[input.dataset.feeKey] = {
-            amount: Number(input.value) || 0,
+            amount: Math.abs(Number(input.value) || 0),
             sign: input.dataset.feeSign
         };
     });
