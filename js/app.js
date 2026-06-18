@@ -57,7 +57,7 @@ const routes = {
     'm-house':       { title: '代管房屋',       group: '代管', render: renderManagedHouse,       init: initManagedHouseActions, dynamic: true },
     'm-house-new':   { title: '新增代管房屋',   group: '代管', render: () => { setTimeout(showNewManagedHouseForm, 50); return '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">開啟新增代管房屋表單中…</div>'; } },
     'm-owners':      { title: '屋主清單',       group: '跨房屋', render: renderManagedOwners,      init: initManagedOwnersActions },
-    'm-settlements': { title: '屋主月結算',     group: '代管', render: renderManagedSettlements, init: initManagedSettlementsActions }
+    'm-settlements': { title: '屋主月結算',     group: '跨房屋', render: renderManagedSettlements, init: initManagedSettlementsActions }
 };
 
 function handleRoute() {

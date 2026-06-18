@@ -742,7 +742,10 @@ function deleteSimpleListItem(kind, id) {
 
 // === Tab: 合約範本 ===
 function renderContractTemplatesTab() {
-    const buildings = getSortedBuildings({ activeOnly: true });
+    // #10: 合約範本不跨模式 — 依當前 mode 篩
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const buildings = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === targetMode);
     const templates = mockData.contractTemplates || [];
 
     const rows = buildings.map(b => {

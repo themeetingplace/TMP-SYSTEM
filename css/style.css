@@ -2104,11 +2104,45 @@ body[data-app-mode="managed"] .topbar-title h1::before {
     font-weight: 600;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.4rem;
     background: var(--color-primary-light);
     border-left: 3px solid var(--color-primary);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
+.houses-section-title > span:first-child { display: inline-flex; align-items: center; gap: 0.4rem; }
+.section-actions { display: inline-flex; gap: 0.4rem; }
+.section-action-btn {
+    padding: 0.2rem 0.6rem !important;
+    font-size: var(--text-2xs) !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+/* readonly 顯示值 (section 未進編輯時) */
+.inline-readonly-value {
+    padding: 0.35rem 0.55rem;
+    font-size: var(--text-sm);
+    color: var(--text-main);
+    word-break: break-word;
+}
+.inline-readonly-textarea { white-space: pre-wrap; line-height: 1.6; }
+.inline-checkbox.is-readonly { pointer-events: none; opacity: 0.85; cursor: default; background: transparent; border-color: transparent; }
+/* 底端列 — 編輯提示 + 停用 button 右側 (#4) */
+.houses-data-footer {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.inline-save-hint { font-size: var(--text-xs); color: var(--text-muted); }
+.btn-toggle-status { margin-left: auto; }
 .houses-section-title i { font-size: 1rem; color: var(--color-primary); }
 /* 2-col grid: 同 section 內欄位並排 */
 .houses-fields-grid {
@@ -2227,6 +2261,41 @@ select.inline-edit-input { cursor: pointer; }
     letter-spacing: 0.05em;
 }
 .fee-month-picker-wrap input { max-width: 160px; }
+
+/* #7-1: 結算月 ◀ YYYY/MM ▶ 切換 */
+.fee-month-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    padding: 0.2rem 0.4rem;
+}
+.fee-month-arrow {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    transition: background 0.15s, color 0.15s;
+}
+.fee-month-arrow:hover { background: var(--color-primary-light); color: var(--color-primary-text); }
+.fee-month-display {
+    min-width: 84px;
+    text-align: center;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
+}
 .fee-items-list {
     display: flex;
     flex-direction: column;
@@ -4011,53 +4080,52 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 }
 
 /* === 報表 hub Tab 列 (monochrome — 唯一 brand 色保留給「active 文字」) === */
+/* #11: 報表 hub tabs 對齊帳務管理 (finance-sub-tabs) 樣式 */
 .reports-hub-tabs {
     display: flex;
-    gap: 0.15rem;
-    margin: 1rem 0 1rem;
-    background: var(--surface-warm);
-    border-radius: 12px;
-    padding: 0.25rem;
-    border: 1px solid var(--border-soft);
-    box-shadow: none;
+    gap: 0.25rem;
+    margin: 0 0 1rem;
+    padding: 0.3rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
     overflow-x: auto;
     scrollbar-width: none;
 }
 .reports-hub-tabs::-webkit-scrollbar { display: none; }
 .reports-hub-tab {
-    flex: 1 1 auto;
-    display: inline-flex;
+    flex: 1;
+    display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
-    padding: 0.6rem 0.85rem;
-    border-radius: 8px;
-    color: var(--text-muted);
+    gap: 0.5rem;
+    padding: 0.65rem 1rem;
+    border-radius: var(--radius-sm);
     text-decoration: none;
-    font-size: 0.88rem;
-    font-weight: 600;
-    transition: background 0.15s, color 0.15s;
+    color: var(--text-muted);
+    font-size: var(--text-base);
+    font-weight: 500;
+    transition: background-color 0.15s, color 0.15s;
     white-space: nowrap;
     border: none;
     background: none;
     font-family: inherit;
     cursor: pointer;
 }
-.reports-hub-tab:hover {
-    background: rgba(0, 0, 0, 0.03);
+.reports-hub-tab:hover:not(.is-active) {
+    background: rgba(0,0,0,0.04);
     color: var(--text-main);
 }
 .reports-hub-tab.is-active {
-    background: var(--color-surface);
+    background: white;
     color: var(--color-primary-text);
-    box-shadow: 0 1px 2px rgba(17,24,39,0.06);
+    box-shadow: var(--shadow-sm);
+    font-weight: 600;
 }
-.reports-hub-tab i { font-size: 1rem; }
+.reports-hub-tab i { font-size: 1.05rem; }
 @media (max-width: 640px) {
-    .reports-hub-tab {
-        padding: 0.55rem 0.65rem;
-        font-size: 0.8rem;
-    }
+    .reports-hub-tabs { flex-wrap: nowrap; }
+    .reports-hub-tab { flex-shrink: 0; flex-basis: auto; padding: 0.55rem 0.85rem; }
 }
 
 /* === 總覽 KPI 卡片組 === */
@@ -5903,7 +5971,8 @@ select.form-input {
     justify-content: space-between;
     gap: 0.5rem;
     width: 100%;
-    padding: 0.75rem;
+    /* #6-2: 對齊 form-input padding 讓表單欄高度一致 (0.625rem 0.75rem) */
+    padding: 0.625rem 0.75rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     background-color: var(--color-surface);

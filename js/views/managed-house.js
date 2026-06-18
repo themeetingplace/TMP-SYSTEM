@@ -3,7 +3,7 @@
 // 共居房屋資料在「物件管理 → 房屋資料 tab」，這頁專屬代管 mode
 
 import { mockData, store, bedOccupied, getOwnerById } from '../data.js';
-import { openFormModal, openConfirm, showToast, refreshView, initFlatpickr } from '../utils/ui.js';
+import { openFormModal, openConfirm, showToast, refreshView, initFlatpickr, initCustomSelects } from '../utils/ui.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 import { showRoomForm } from './settings.js';
 // 屋主資料現在 inline 在房屋表單，不再需要 showOwnerForm 入口
@@ -40,6 +40,8 @@ const BOOL_OPTIONS = [
 ];
 
 let currentHouseId = null;
+// 房屋資料 tab: 每 section 獨立編輯 — 紀錄當前正在編輯哪 section
+let editingSection = null; // 'basic' | 'rent' | 'owner' | 'managed' | 'note' | null
 
 function getActiveTab() {
     try {
@@ -69,45 +71,87 @@ function fieldRow(label, value, hint = '') {
     `;
 }
 
-// inline 可編輯欄位 (auto-save on blur/change)
-// data-inline-target: 'building' | 'owner' | 'feeConfig'
-// data-inline-coerce: 'number' | 'bool' | (default text)
-// opts.span: 1 (預設) | 2 (跨整列)
+// inline 可編輯欄位 — disabled 時純顯示，enabled 時可改
 function inlineField(label, value, opts = {}) {
     const {
         key, target = 'building',
         type = 'text', coerce = 'text',
         options, placeholder = '', hint = '', rows = 2,
-        span = 1
+        span = 1, disabled = false
     } = opts;
     let inputHtml;
     const v = value == null ? '' : String(value);
     const attrs = `data-inline-key="${esc(key)}" data-inline-target="${esc(target)}" data-inline-coerce="${esc(coerce)}"`;
+    const dis = disabled ? 'disabled' : '';
     if (type === 'checkbox') {
-        // bool checkbox: 純記號 ✓ 切換，視覺輕量
         const checked = v === 'true' || v === '1';
+        // 勾選顯示為 ✓ / ─ 視覺
         inputHtml = `
-            <label class="inline-checkbox">
-                <input type="checkbox" class="inline-edit-input" ${attrs} ${checked ? 'checked' : ''}>
+            <label class="inline-checkbox ${disabled ? 'is-readonly' : ''}">
+                <input type="checkbox" class="inline-edit-input" ${attrs} ${checked ? 'checked' : ''} ${dis}>
                 <span class="inline-checkbox-mark"></span>
                 <span class="inline-checkbox-text">${esc(opts.checkboxLabel || '勾選=是')}</span>
             </label>
         `;
     } else if (type === 'select') {
+        // 走系統 custom-select (跟全站視覺一致)
         const opts2 = options || [];
-        inputHtml = `<select class="inline-edit-input" ${attrs}>${
-            opts2.map(o => `<option value="${esc(o.value)}" ${String(o.value) === v ? 'selected' : ''}>${esc(o.label)}</option>`).join('')
-        }</select>`;
+        const current = opts2.find(o => String(o.value) === v);
+        const displayLabel = current ? current.label : (placeholder || '請選擇');
+        if (disabled) {
+            inputHtml = `<div class="inline-readonly-value">${esc(displayLabel || '—')}</div>`;
+        } else {
+            inputHtml = `
+                <div class="custom-select inline-custom-select" data-name="${esc(key)}">
+                    <input type="hidden" class="inline-edit-input" ${attrs} value="${esc(v)}">
+                    <button type="button" class="custom-select-trigger">
+                        <span class="custom-select-value">${esc(displayLabel)}</span>
+                        <i class="ph ph-caret-down"></i>
+                    </button>
+                    <div class="custom-select-panel" hidden>
+                        <div class="custom-select-options-wrap">
+                            ${opts2.map(o => `<button type="button" class="custom-select-option ${String(o.value) === v ? 'is-selected' : ''}" data-value="${esc(o.value)}">${esc(o.label)}</button>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
     } else if (type === 'textarea') {
-        inputHtml = `<textarea class="inline-edit-input" ${attrs} rows="${rows}" placeholder="${esc(placeholder)}">${esc(v)}</textarea>`;
+        if (disabled) {
+            inputHtml = `<div class="inline-readonly-value inline-readonly-textarea">${v ? esc(v).replace(/\n/g, '<br>') : '<span style="color: var(--text-muted);">—</span>'}</div>`;
+        } else {
+            inputHtml = `<textarea class="inline-edit-input" ${attrs} rows="${rows}" placeholder="${esc(placeholder)}">${esc(v)}</textarea>`;
+        }
     } else {
-        inputHtml = `<input type="${type}" class="inline-edit-input" ${attrs} value="${esc(v)}" placeholder="${esc(placeholder)}">`;
+        if (disabled) {
+            inputHtml = `<div class="inline-readonly-value">${v ? esc(v) : '<span style="color: var(--text-muted);">—</span>'}</div>`;
+        } else {
+            inputHtml = `<input type="${type}" class="inline-edit-input" ${attrs} value="${esc(v)}" placeholder="${esc(placeholder)}">`;
+        }
     }
     return `
         <div class="houses-field-row inline-edit-row" ${span === 2 ? 'data-span="2"' : ''}>
             <div class="houses-field-label">${esc(label)}</div>
             <div class="houses-field-value">${inputHtml}${hint ? `<span class="houses-field-hint">${esc(hint)}</span>` : ''}</div>
         </div>
+    `;
+}
+
+// section 標題列 — 含 [編輯] 或 [儲存][取消] 按鈕
+function sectionHeader(name, icon, label, isEditing) {
+    return `
+        <h4 class="houses-section-title">
+            <span><i class="ph ${icon}"></i> ${esc(label)}</span>
+            <div class="section-actions" data-section="${esc(name)}">
+                ${isEditing
+                    ? `
+                        <button type="button" class="btn btn-primary section-action-btn" data-section-action="save"><i class="ph ph-check"></i> 儲存</button>
+                        <button type="button" class="btn btn-outline section-action-btn" data-section-action="cancel">取消</button>
+                    `
+                    : `<button type="button" class="btn btn-outline section-action-btn" data-section-action="edit"><i class="ph ph-pencil"></i> 編輯</button>`
+                }
+            </div>
+        </h4>
     `;
 }
 
@@ -132,35 +176,39 @@ function renderDataTab(building) {
     const owner = building.ownerId ? getOwnerById(building.ownerId) : null;
     const feeConfig = building.feeConfig || {};
     const feeType = building.feeType || 'fixed';
+    const isBasic   = editingSection === 'basic';
+    const isRent    = editingSection === 'rent';
+    const isOwner   = editingSection === 'owner';
+    const isManaged = editingSection === 'managed';
+    const isNote    = editingSection === 'note';
 
-    // 收費 sub-field: 依 feeType 顯示對應的 input
+    // 收費 sub-field
     let feeAmountField = '';
     if (feeType === 'fixed') {
         feeAmountField = inlineField('固定月費 (NT$)', feeConfig.amount, {
-            key: 'amount', target: 'feeConfig', type: 'number', coerce: 'number', placeholder: '3000'
+            key: 'amount', target: 'feeConfig', type: 'number', coerce: 'number', placeholder: '3000', disabled: !isManaged
         });
     } else if (feeType === 'percent') {
         feeAmountField = inlineField('抽成 %', feeConfig.rate, {
-            key: 'rate', target: 'feeConfig', type: 'number', coerce: 'number', placeholder: '10'
+            key: 'rate', target: 'feeConfig', type: 'number', coerce: 'number', placeholder: '10', disabled: !isManaged
         });
     } else if (feeType === 'tier') {
         feeAmountField = inlineField('階梯設定 (JSON)', JSON.stringify(feeConfig.tiers || []), {
             key: 'tiers', target: 'feeConfig', type: 'textarea', coerce: 'json', rows: 2,
-            placeholder: '[{"from":0,"to":30000,"rate":8},{"from":30001,"rate":12}]',
-            hint: 'JSON 陣列'
+            placeholder: '[{"from":0,"to":30000,"rate":8}]', hint: 'JSON 陣列', disabled: !isManaged
         });
     } else {
         feeAmountField = inlineField('其他收費說明', feeConfig.note, {
-            key: 'note', target: 'feeConfig'
+            key: 'note', target: 'feeConfig', disabled: !isManaged
         });
     }
 
     const ownerSection = owner
         ? `
             <div class="houses-fields-grid">
-                ${inlineField('姓名', owner.name, { key: 'name', target: 'owner', span: 2 })}
+                ${inlineField('姓名', owner.name, { key: 'name', target: 'owner', span: 2, disabled: !isOwner })}
                 ${inlineField('性別', owner.gender, {
-                    key: 'gender', target: 'owner', type: 'select',
+                    key: 'gender', target: 'owner', type: 'select', disabled: !isOwner,
                     options: [
                         { value: '',     label: '不指定' },
                         { value: '男',   label: '男' },
@@ -168,9 +216,9 @@ function renderDataTab(building) {
                         { value: '其他', label: '其他' }
                     ]
                 })}
-                ${inlineField('電話', owner.phone, { key: 'phone', target: 'owner', placeholder: '0912-345-678' })}
-                ${inlineField('信箱', owner.email, { key: 'email', target: 'owner', placeholder: 'name@example.com' })}
-                ${inlineField('LINE ID', owner.lineId, { key: 'lineId', target: 'owner' })}
+                ${inlineField('電話', owner.phone, { key: 'phone', target: 'owner', placeholder: '0912-345-678', disabled: !isOwner })}
+                ${inlineField('信箱', owner.email, { key: 'email', target: 'owner', placeholder: 'name@example.com', disabled: !isOwner })}
+                ${inlineField('LINE ID', owner.lineId, { key: 'lineId', target: 'owner', disabled: !isOwner })}
                 <div class="houses-field-row" data-span="2">
                     <div class="houses-field-label">狀態</div>
                     <div class="houses-field-value">
@@ -183,70 +231,69 @@ function renderDataTab(building) {
         : `<div style="color: var(--text-muted); font-size: var(--text-sm); padding: 0.5rem 0;">尚未指定屋主 → <button class="btn btn-outline" data-action="set-owner" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);"><i class="ph ph-user-plus"></i> 新增屋主資料</button></div>`;
 
     return `
-        <div class="houses-section">
-            <h4 class="houses-section-title"><i class="ph ph-info"></i> 基本資訊</h4>
+        <div class="houses-section" data-section="basic">
+            ${sectionHeader('basic', 'ph-info', '基本資訊', isBasic)}
             <div class="houses-fields-grid">
                 <div class="houses-field-row" data-readonly>
                     <div class="houses-field-label">房屋編號</div>
                     <div class="houses-field-value houses-field-readonly">${esc(building.id)}</div>
                 </div>
-                ${inlineField('房屋名稱', building.name, { key: 'name' })}
-                ${inlineField('地址', building.baseAddress, { key: 'baseAddress', placeholder: '台北市...', span: 2 })}
-                ${inlineField('原始格局', building.layout, { key: 'layout', placeholder: '3房2廳1衛' })}
-                ${inlineField('坪數', building.areaSize, { key: 'areaSize', type: 'number', coerce: 'number', placeholder: '32.5' })}
-                ${inlineField('開發人', building.developer, { key: 'developer' })}
-                ${inlineField('管理人', building.manager, { key: 'manager' })}
+                ${inlineField('房屋名稱', building.name, { key: 'name', disabled: !isBasic })}
+                ${inlineField('地址', building.baseAddress, { key: 'baseAddress', placeholder: '台北市...', span: 2, disabled: !isBasic })}
+                ${inlineField('原始格局', building.layout, { key: 'layout', placeholder: '3房2廳1衛', disabled: !isBasic })}
+                ${inlineField('坪數', building.areaSize, { key: 'areaSize', type: 'number', coerce: 'number', placeholder: '32.5', disabled: !isBasic })}
+                ${inlineField('開發人', building.developer, { key: 'developer', disabled: !isBasic })}
+                ${inlineField('管理人', building.manager, { key: 'manager', disabled: !isBasic })}
             </div>
         </div>
 
-        <div class="houses-section">
-            <h4 class="houses-section-title"><i class="ph ph-currency-circle-dollar"></i> 租金</h4>
+        <div class="houses-section" data-section="rent">
+            ${sectionHeader('rent', 'ph-currency-circle-dollar', '租金', isRent)}
             <div class="houses-fields-grid">
-                ${inlineField('月租金 (NT$)', building.monthlyRent, { key: 'monthlyRent', type: 'number', coerce: 'number', placeholder: '45000' })}
-                ${inlineField('租金條件', building.rentTerm, { key: 'rentTerm', placeholder: '押二付一' })}
+                ${inlineField('月租金 (NT$)', building.monthlyRent, { key: 'monthlyRent', type: 'number', coerce: 'number', placeholder: '45000', disabled: !isRent })}
                 ${inlineField('含稅', building.rentIncludesTax, {
-                    key: 'rentIncludesTax', type: 'checkbox', coerce: 'bool',
-                    checkboxLabel: '租金含稅'
+                    key: 'rentIncludesTax', type: 'select', coerce: 'bool', disabled: !isRent,
+                    options: [{ value: 'true', label: '含稅' }, { value: 'false', label: '不含稅' }]
                 })}
-                ${inlineField('報稅', building.taxReported, {
-                    key: 'taxReported', type: 'checkbox', coerce: 'bool',
-                    checkboxLabel: '已申報'
+                ${inlineField('租金條件', building.rentTerm, { key: 'rentTerm', disabled: !isRent })}
+                ${inlineField('是否報稅', building.taxReported, {
+                    key: 'taxReported', type: 'select', coerce: 'bool', disabled: !isRent,
+                    options: [{ value: 'true', label: '是' }, { value: 'false', label: '否' }]
                 })}
             </div>
         </div>
 
-        <div class="houses-section">
-            <h4 class="houses-section-title"><i class="ph ph-user-circle"></i> 屋主</h4>
+        <div class="houses-section" data-section="owner">
+            ${sectionHeader('owner', 'ph-user-circle', '屋主', isOwner)}
             ${ownerSection}
         </div>
 
-        <div class="houses-section">
-            <h4 class="houses-section-title"><i class="ph ph-key"></i> 代管設定</h4>
+        <div class="houses-section" data-section="managed">
+            ${sectionHeader('managed', 'ph-key', '代管設定', isManaged)}
             <div class="houses-fields-grid">
-                ${inlineField('起始日', building.managedStartDate, { key: 'managedStartDate', type: 'date' })}
-                ${inlineField('結束日', building.managedEndDate, { key: 'managedEndDate', type: 'date' })}
+                ${inlineField('起始日', building.managedStartDate, { key: 'managedStartDate', type: 'date', disabled: !isManaged })}
+                ${inlineField('結束日', building.managedEndDate, { key: 'managedEndDate', type: 'date', disabled: !isManaged })}
                 ${inlineField('收費方式', feeType, {
                     key: 'feeType', type: 'select',
-                    options: FEE_TYPE_OPTIONS
+                    options: FEE_TYPE_OPTIONS, disabled: !isManaged
                 })}
                 ${feeAmountField}
                 ${inlineField('能源費負擔', building.energyMode || 'owner', {
                     key: 'energyMode', type: 'select',
-                    options: ENERGY_OPTIONS,
-                    span: 2,
+                    options: ENERGY_OPTIONS, span: 2, disabled: !isManaged,
                     hint: building.energyMode === 'mixed' ? '(見備註)' : ''
                 })}
             </div>
         </div>
 
-        <div class="houses-section">
-            <h4 class="houses-section-title"><i class="ph ph-note"></i> 備註</h4>
-            ${inlineField('內容', building.note, { key: 'note', type: 'textarea', rows: 4, placeholder: '漏水修了 / 配合水電行...', span: 2 })}
+        <div class="houses-section" data-section="note">
+            ${sectionHeader('note', 'ph-note', '備註', isNote)}
+            ${inlineField('內容', building.note, { key: 'note', type: 'textarea', rows: 4, placeholder: '漏水修了 / 配合水電行...', span: 2, disabled: !isNote })}
         </div>
 
-        <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center;">
-            <button class="btn btn-outline" data-action="toggle-status"><i class="ph ${building.status === 'active' ? 'ph-pause' : 'ph-play'}"></i> ${building.status === 'active' ? '停用此房屋' : '啟用此房屋'}</button>
-            <span class="inline-save-hint" style="font-size: var(--text-xs); color: var(--text-muted);"><i class="ph ph-check-circle" style="color: var(--color-success);"></i> 編輯後自動儲存</span>
+        <div class="houses-data-footer">
+            <span class="inline-save-hint"><i class="ph ph-info"></i> 每區獨立編輯 — 按右上「編輯」進入修改、「儲存」確認</span>
+            <button class="btn btn-outline btn-toggle-status" data-action="toggle-status"><i class="ph ${building.status === 'active' ? 'ph-pause' : 'ph-play'}"></i> ${building.status === 'active' ? '停用此房屋' : '啟用此房屋'}</button>
         </div>
     `;
 }
@@ -484,8 +531,9 @@ function renderFeeTab(building) {
                             <td style="text-align: right;">$${(s.ownerReceivable || 0).toLocaleString()}</td>
                             <td><span class="status-badge ${s.status === 'settled' ? 'success' : s.status === 'sent' ? 'info' : 'muted'}">${s.status || 'draft'}</span></td>
                             <td>
-                                <button class="btn btn-outline" data-action="view-settlement" data-id="${s.id}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs);"><i class="ph ph-eye"></i></button>
+                                <button class="btn btn-outline" data-action="view-settlement" data-id="${s.id}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs);" title="檢視"><i class="ph ph-eye"></i></button>
                                 <button class="btn btn-outline" data-action="load-fee-month" data-month="${s.month}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs);" title="載入此月到上方表單"><i class="ph ph-arrow-up-left"></i></button>
+                                <button class="btn btn-outline" data-action="del-settlement" data-id="${s.id}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除此結算"><i class="ph ph-trash"></i></button>
                             </td>
                         </tr>
                     `).join('')}
@@ -497,9 +545,10 @@ function renderFeeTab(building) {
         <div class="fee-tab-card">
             <div class="fee-card-header">
                 <h4 class="houses-section-title" style="margin: 0;"><i class="ph ph-calculator"></i> ${ym} 月結算</h4>
-                <div class="fee-month-picker-wrap">
-                    <label>結算月</label>
-                    <input type="month" class="inline-edit-input" id="feeMonthPicker" value="${ym}">
+                <div class="fee-month-nav">
+                    <button type="button" class="fee-month-arrow" data-action="fee-month-prev" title="上個月"><i class="ph ph-caret-left"></i></button>
+                    <span class="fee-month-display">${ym.replace('-', ' / ')}</span>
+                    <button type="button" class="fee-month-arrow" data-action="fee-month-next" title="下個月"><i class="ph ph-caret-right"></i></button>
                 </div>
             </div>
 
@@ -532,6 +581,28 @@ function currentFeeMonth(building) {
 }
 function setFeeMonth(building, ym) {
     _feeMonthOverride = { bId: building.id, ym };
+}
+// 月份位移 helper (YYYY-MM -> YYYY-MM ± N 月)
+function shiftMonth(ym, delta) {
+    const [y, m] = ym.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+// #7-2: 單筆結算刪除
+function delSettlement(id) {
+    const s = mockData.settlements?.find(x => x.id === id);
+    if (!s) return;
+    openConfirm({
+        title: `刪除 ${s.month} 結算？`,
+        message: '此操作不可復原。屋主已收到的金額不會自動退回。',
+        confirmLabel: '刪除',
+        danger: true,
+        onConfirm: () => {
+            store.deleteSettlement(s.id);
+            showToast(`已刪除 ${s.month} 結算`, 'success');
+            refreshView();
+        }
+    });
 }
 
 // === main render ===
@@ -593,6 +664,8 @@ export function initManagedHouseActions(scope) {
     const contentEl = scope.querySelector('.mhouse-tab-content');
     // #5 統一月曆選擇器 — 把 inline-edit-input 裡的 type=date / type=month 都升級成 Flatpickr
     initFlatpickr(scope);
+    // #3 性別 / 收費方式等下拉走 custom-select (跟全站視覺一致)
+    initCustomSelects(scope);
 
     if (tabsEl && contentEl) {
         tabsEl.addEventListener('click', (e) => {
@@ -601,6 +674,7 @@ export function initManagedHouseActions(scope) {
             const target = btn.dataset.mhouseTab;
             if (!VALID_TABS.includes(target) || target === contentEl.dataset.active) return;
             saveActiveTab(target);
+            editingSection = null;  // 換 tab 自動退出編輯狀態
             refreshView();
         });
     }
@@ -626,6 +700,12 @@ export function initManagedHouseActions(scope) {
         else if (action === 'add-bed')        addBed(building, parseInt(btn.dataset.room, 10));
         else if (action === 'del-room')       delRoom(building, parseInt(btn.dataset.room, 10));
         else if (action === 'del-bed')        delBed(building, btn.dataset.bed);
+        // R6.1: 房屋資料 per-section 編輯
+        else if (btn.matches('[data-section-action]')) {
+            const sectionName = btn.closest('[data-section]')?.dataset.section;
+            const sectionAction = btn.dataset.sectionAction;
+            handleSectionAction(building, sectionName, sectionAction);
+        }
         // R5.3: 合約 tab inline create / delete
         else if (action === 'new-owner-contract')  showManagedOwnerContractForm(building);
         else if (action === 'new-tenant-contract') showManagedTenantContractForm(building);
@@ -634,39 +714,97 @@ export function initManagedHouseActions(scope) {
         else if (action === 'save-fee')       saveFeeSettlement(building, scope);
         else if (action === 'reset-fee')      { setFeeMonth(building, currentFeeMonth(building)); resetFeeFormToDefaults(building, scope); }
         else if (action === 'load-fee-month') { setFeeMonth(building, btn.dataset.month); refreshView(); }
+        else if (action === 'fee-month-prev') { setFeeMonth(building, shiftMonth(currentFeeMonth(building), -1)); refreshView(); }
+        else if (action === 'fee-month-next') { setFeeMonth(building, shiftMonth(currentFeeMonth(building), +1)); refreshView(); }
+        else if (action === 'del-settlement') delSettlement(btn.dataset.id);
     });
 
-    // R5.4: live recalc 屋主應收 + month picker change
+    // R5.4: live recalc 屋主應收 (#7-1: 月份切換改走按鈕，不再需要 month picker change)
     contentEl?.addEventListener('input', (e) => {
         if (e.target.matches('[data-fee-key]')) recalcFeeReceivable(scope);
-    });
-    contentEl?.addEventListener('change', (e) => {
-        if (e.target.id === 'feeMonthPicker') {
-            const building = mockData.buildings.find(b => b.id === currentHouseId);
-            if (building && e.target.value) {
-                setFeeMonth(building, e.target.value);
-                refreshView();
-            }
-        }
     });
     // 初始 render 後算一次
     setTimeout(() => recalcFeeReceivable(scope), 0);
 
-    // R5.1: inline auto-save (blur for text/number/textarea; change for select)
+    // 床位月租 inline (住房一覽 tab) — 仍保留 auto-save
     contentEl?.addEventListener('blur', (e) => {
-        // bed rent inline save 走另一條
-        if (e.target.matches('[data-inline-bed]')) {
-            handleBedInlineSave(e);
-        } else {
-            handleInlineSave(e);
-        }
+        if (e.target.matches('[data-inline-bed]')) handleBedInlineSave(e);
     }, true);
-    contentEl?.addEventListener('change', (e) => {
-        if (e.target.matches('select.inline-edit-input, input[type="checkbox"].inline-edit-input')) handleInlineSave(e);
-    });
 }
 
-// === R5.1: inline auto-save handler ===
+// === 房屋資料 section 級編輯 (#1) ===
+// edit/save/cancel — 取代原本的 inline auto-save，避免每次 blur 都跳同步
+function handleSectionAction(building, sectionName, action) {
+    if (!sectionName || !action) return;
+    if (action === 'edit') {
+        editingSection = sectionName;
+        refreshView();
+        return;
+    }
+    if (action === 'cancel') {
+        editingSection = null;
+        refreshView();
+        return;
+    }
+    if (action === 'save') {
+        const sectionEl = document.querySelector(`[data-section="${sectionName}"]`);
+        if (!sectionEl) return;
+        const inputs = sectionEl.querySelectorAll('.inline-edit-input');
+        const buildingPatch = {};
+        const ownerPatch = {};
+        const feeConfigPatch = {};
+        let hasError = false;
+        inputs.forEach(input => {
+            if (input.disabled) return;
+            const key = input.dataset.inlineKey;
+            if (!key) return;
+            const target = input.dataset.inlineTarget || 'building';
+            const coerce = input.dataset.inlineCoerce || 'text';
+            const isCheckbox = input.type === 'checkbox';
+            let raw = isCheckbox ? input.checked : input.value;
+            let val;
+            if (isCheckbox) val = !!raw;
+            else if (coerce === 'number') val = raw === '' ? null : Number(raw);
+            else if (coerce === 'bool') val = raw === 'true' || raw === true;
+            else if (coerce === 'json') {
+                try { val = raw === '' ? [] : JSON.parse(raw); }
+                catch { showToast(`「${key}」JSON 格式錯誤`, 'danger'); hasError = true; return; }
+            }
+            else val = raw;
+            if (target === 'building') {
+                if (key === 'name') {
+                    const nv = String(val || '').trim();
+                    if (!nv) { showToast('房屋名稱不可空', 'danger'); hasError = true; return; }
+                    const dup = mockData.buildings.find(b => b.name === nv && b.id !== building.id);
+                    if (dup) { showToast(`房屋名稱「${nv}」已存在`, 'danger'); hasError = true; return; }
+                }
+                buildingPatch[key] = val;
+            } else if (target === 'owner') {
+                ownerPatch[key] = val;
+            } else if (target === 'feeConfig') {
+                feeConfigPatch[key] = val;
+            }
+        });
+        if (hasError) return;
+        if (Object.keys(buildingPatch).length) {
+            // feeConfig merge
+            if (Object.keys(feeConfigPatch).length) {
+                buildingPatch.feeConfig = { ...(building.feeConfig || {}), ...feeConfigPatch };
+            }
+            store.updateBuilding(building.id, buildingPatch);
+        } else if (Object.keys(feeConfigPatch).length) {
+            store.updateBuilding(building.id, { feeConfig: { ...(building.feeConfig || {}), ...feeConfigPatch } });
+        }
+        if (Object.keys(ownerPatch).length && building.ownerId) {
+            store.updateOwner(building.ownerId, ownerPatch);
+        }
+        editingSection = null;
+        showToast('已儲存', 'success', 1800);
+        refreshView();
+    }
+}
+
+// === (留作參考，未使用) ===
 function handleInlineSave(e) {
     const input = e.target.closest('.inline-edit-input');
     if (!input) return;
@@ -1256,10 +1394,11 @@ function showManagedTenantContractForm(building) {
     }));
     const today = new Date().toISOString().slice(0, 10);
     const ourName = '聚空間租賃管理顧問有限公司';
+    // #6-3: 拿掉「我們 (...)」label 前綴，直接顯示公司名 / 屋主名
     const lessorOptions = [
-        { value: ourName, label: `我們 (${ourName})` }
+        { value: ourName, label: ourName }
     ];
-    if (owner) lessorOptions.push({ value: owner.name, label: `屋主名義 (${owner.name})` });
+    if (owner) lessorOptions.push({ value: owner.name, label: owner.name });
 
     openFormModal({
         title: `新增住客合約 — ${building.name}`,
@@ -1267,7 +1406,8 @@ function showManagedTenantContractForm(building) {
         fields: [
             { name: '__s1', type: 'section', label: '床位 + 租客' },
             { name: 'propertyName', label: '床位', type: 'select', required: true, span: 2, options: bedOptions, searchable: true },
-            { name: 'tenant',       label: '租客姓名', type: 'text', required: true, span: 2 },
+            { name: 'tenant',       label: '租客姓名', type: 'text', required: true },
+            { name: 'tenantPhone',  label: '租客手機', type: 'text', placeholder: '0912-345-678' },  // #6-4
 
             { name: '__s2', type: 'section', label: '合約期間 + 月租' },
             { name: 'startDate', label: '入住日期', type: 'date', required: true, value: today },
@@ -1323,6 +1463,16 @@ function showManagedTenantContractForm(building) {
                 contractId: c.id,
                 contractEnd: endDate
             });
+            // #6-4: 租客手機 → 寫到 tenants 表 (跟共居用同個 tenant 主檔，方便日後 LINE 推播)
+            const phone = (values.tenantPhone || '').trim();
+            if (phone) {
+                const existingTenant = mockData.tenants.find(t => t.name === payload.tenant);
+                if (existingTenant) {
+                    if (existingTenant.phone !== phone) store.updateTenant(existingTenant.id, { phone });
+                } else {
+                    store.addTenant({ name: payload.tenant, phone, currentProperty: prop.name });
+                }
+            }
             showToast(`已建立住客合約 ${c.id}`, 'success');
             refreshView();
         }

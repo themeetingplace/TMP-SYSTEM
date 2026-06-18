@@ -38,17 +38,8 @@ function buildManagedNavHtml() {
         </div>
     `;
 
-    const managementGroup = `
-        <div class="nav-group">
-            <span class="nav-section-label">代管管理</span>
-            <a href="#m-settlements" class="nav-item" data-view="m-settlements" data-label="屋主月結算">
-                <i class="ph ph-receipt"></i>
-                <span class="nav-label">屋主月結算</span>
-            </a>
-        </div>
-    `;
-
     // 2026-06-17: 屋主管理 → 改名「屋主清單」+ 移到「跨房屋」group
+    // 2026-06-18 (#9): 屋主月結算 也移進「跨房屋」group，原本獨立的「代管管理」group 收掉
     const sharedGroup = `
         <div class="nav-group">
             <span class="nav-section-label">跨房屋</span>
@@ -71,6 +62,10 @@ function buildManagedNavHtml() {
             <a href="#m-owners" class="nav-item" data-view="m-owners" data-label="屋主清單">
                 <i class="ph ph-user-circle"></i>
                 <span class="nav-label">屋主清單</span>
+            </a>
+            <a href="#m-settlements" class="nav-item" data-view="m-settlements" data-label="屋主月結算">
+                <i class="ph ph-receipt"></i>
+                <span class="nav-label">屋主月結算</span>
             </a>
         </div>
     `;
@@ -109,7 +104,7 @@ function buildManagedNavHtml() {
         </div>
     `;
 
-    return overviewGroup + housesGroup + managementGroup + sharedGroup + analysisGroup + systemGroup;
+    return overviewGroup + housesGroup + sharedGroup + analysisGroup + systemGroup;
 }
 
 export function renderSidebarForMode(mode = getMode()) {
