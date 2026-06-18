@@ -430,15 +430,7 @@ function showContractForm(contract) {
             { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: contract.termMonths ?? 1 },
             { name: 'endDate', label: '到期日 (留空自動算)', type: 'date', span: 2 },
 
-            // 4. 租金 + 折扣加收 (跟金額相關)
-            { name: '__sep_rent', type: 'section', label: '租金' },
-            { name: 'amount', label: '月租金', type: 'number', required: true },
-            { name: 'totalDue', label: '應收總額', type: 'number' },
-            { name: 'adjustments', type: 'placeholder' },
-            { name: 'discount', type: 'hidden', value: 0 },
-            { name: 'discountReason', type: 'hidden', value: '' },
-
-            // 5. 收費方式
+            // 4. 收費方式 (先決定要不要開帳單)
             { name: '__sep_channel', type: 'section', label: '收費方式' },
             { name: 'paymentChannel', label: '收費對象', type: 'select', required: true, span: 2,
               options: [
@@ -446,6 +438,14 @@ function showContractForm(contract) {
                   { value: 'platform', label: '外部平台代收' }
               ] },
             { name: 'platformName', label: '平台名稱', type: 'text', span: 2, placeholder: 'Airbnb / 591 / KKday' },
+
+            // 5. 租金 + 折扣加收 (要建帳單時才填得到)
+            { name: '__sep_rent', type: 'section', label: '租金' },
+            { name: 'amount', label: '月租金', type: 'number', required: true },
+            { name: 'totalDue', label: '應收總額', type: 'number' },
+            { name: 'adjustments', type: 'placeholder' },
+            { name: 'discount', type: 'hidden', value: 0 },
+            { name: 'discountReason', type: 'hidden', value: '' },
 
             // 6. 押金 / 狀態
             { name: '__sep_misc', type: 'section', label: '押金 / 狀態' },
