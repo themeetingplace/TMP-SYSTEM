@@ -185,7 +185,7 @@ export function renderFinance() {
                 <td>${itemText}${periodText || propertyText}</td>
                 <td style="text-align: right;">
                     <div style="font-weight: 700; color: ${amountColor};">${amountSign}$${shown.toLocaleString()}</div>
-                    ${hasDiscount ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">原價 $${(inv.amount || 0).toLocaleString()}</div>` : ''}
+                    ${hasAdjustment ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">原價 $${(inv.amount || 0).toLocaleString()}</div>` : ''}
                 </td>
                 <td style="text-align: right;">${discountCell}</td>
                 <td>${methodCell}</td>
