@@ -83,7 +83,17 @@ function inlineField(label, value, opts = {}) {
     const v = value == null ? '' : String(value);
     const attrs = `data-inline-key="${esc(key)}" data-inline-target="${esc(target)}" data-inline-coerce="${esc(coerce)}"`;
     const dis = disabled ? 'disabled' : '';
-    if (type === 'checkbox') {
+    if (type === 'radio-pair') {
+        const opts2 = options || [];
+        inputHtml = `<div class="inline-radio-pair">${opts2.map(o => {
+            const checked = String(o.value) === v;
+            return `<label class="inline-radio">
+                <input type="radio" class="inline-edit-input" ${attrs} name="ip-${esc(key)}" value="${esc(o.value)}" ${checked ? 'checked' : ''} ${dis}>
+                <span class="inline-radio-box"></span>
+                <span class="inline-radio-text">${esc(o.label)}</span>
+            </label>`;
+        }).join('')}</div>`;
+    } else if (type === 'checkbox') {
         const checked = v === 'true' || v === '1';
         // 勾選顯示為 ✓ / ─ 視覺
         inputHtml = `
@@ -252,13 +262,13 @@ function renderDataTab(building) {
             <div class="houses-fields-grid">
                 ${inlineField('月租金 (NT$)', building.monthlyRent, { key: 'monthlyRent', type: 'number', coerce: 'number', placeholder: '45000', disabled: !isRent })}
                 ${inlineField('含稅', building.rentIncludesTax, {
-                    key: 'rentIncludesTax', type: 'checkbox', coerce: 'bool', disabled: !isRent,
-                    checkboxLabel: '租金已含稅'
+                    key: 'rentIncludesTax', type: 'radio-pair', coerce: 'bool', disabled: !isRent,
+                    options: [{ value: 'true', label: '含稅' }, { value: 'false', label: '不含稅' }]
                 })}
                 ${inlineField('租金條件', building.rentTerm, { key: 'rentTerm', disabled: !isRent })}
                 ${inlineField('是否報稅', building.taxReported, {
-                    key: 'taxReported', type: 'checkbox', coerce: 'bool', disabled: !isRent,
-                    checkboxLabel: '已申報'
+                    key: 'taxReported', type: 'radio-pair', coerce: 'bool', disabled: !isRent,
+                    options: [{ value: 'true', label: '是' }, { value: 'false', label: '否' }]
                 })}
             </div>
         </div>
@@ -812,6 +822,8 @@ function handleSectionAction(building, sectionName, action) {
             if (input.disabled) return;
             const key = input.dataset.inlineKey;
             if (!key) return;
+            // radio: 只取勾選那顆
+            if (input.type === 'radio' && !input.checked) return;
             const target = input.dataset.inlineTarget || 'building';
             const coerce = input.dataset.inlineCoerce || 'text';
             const isCheckbox = input.type === 'checkbox';
