@@ -3,8 +3,9 @@
 // 共居房屋資料在「物件管理 → 房屋資料 tab」，這頁專屬代管 mode
 
 import { mockData, store, bedOccupied, getOwnerById } from '../data.js';
-import { openFormModal, openConfirm, showToast, refreshView } from '../utils/ui.js';
+import { openFormModal, openConfirm, showToast, refreshView, initFlatpickr } from '../utils/ui.js';
 import { escapeHtml as esc } from '../utils/escape.js';
+import { showRoomForm } from './settings.js';
 // 屋主資料現在 inline 在房屋表單，不再需要 showOwnerForm 入口
 
 const STORAGE_TAB_KEY = 'pms-m-house-tab';
@@ -321,15 +322,15 @@ function renderContractsTab(building) {
     const ownerTable = ownerContracts.length === 0
         ? `<div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">尚無屋主委託合約</div>`
         : `
-            <table class="data-table">
-                <thead><tr><th>合約 ID</th><th>屋主</th><th>期間</th><th>委託月租 (我們付屋主)</th><th>狀態</th><th></th></tr></thead>
+            <table class="data-table is-compact">
+                <thead><tr><th style="width: 100px;">合約 ID</th><th>屋主</th><th>期間</th><th style="text-align: right; width: 130px;">委託月租</th><th style="width: 90px;">狀態</th><th style="width: 50px;"></th></tr></thead>
                 <tbody>
                     ${ownerContracts.map(c => `
                         <tr>
                             <td><code>${esc(c.id)}</code></td>
                             <td>${esc(getOwnerById(c.ownerId)?.name || c.lessorName || '—')}</td>
                             <td>${c.startDate || ''} ~ ${c.endDate || ''}</td>
-                            <td style="text-align: right;">$${(c.amount || 0).toLocaleString()}</td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(c.amount || 0).toLocaleString()}</td>
                             <td>${statusBadge(c)}</td>
                             <td><button class="btn btn-outline" data-action="del-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);"><i class="ph ph-trash"></i></button></td>
                         </tr>
@@ -341,8 +342,8 @@ function renderContractsTab(building) {
     const tenantTable = tenantContracts.length === 0
         ? `<div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">尚無住客合約</div>`
         : `
-            <table class="data-table">
-                <thead><tr><th>合約 ID</th><th>租客</th><th>床位</th><th>期間</th><th>月租</th><th>出租人</th><th>狀態</th><th></th></tr></thead>
+            <table class="data-table is-compact">
+                <thead><tr><th style="width: 100px;">合約 ID</th><th>租客</th><th>床位</th><th>期間</th><th style="text-align: right; width: 110px;">月租</th><th>出租人</th><th style="width: 90px;">狀態</th><th style="width: 50px;"></th></tr></thead>
                 <tbody>
                     ${tenantContracts.map(c => `
                         <tr>
@@ -350,7 +351,7 @@ function renderContractsTab(building) {
                             <td>${esc(c.tenant || '')}</td>
                             <td style="font-size: var(--text-sm);">${esc((c.propertyName || '').replace('聚空間 - ', ''))}</td>
                             <td>${c.startDate || ''} ~ ${c.endDate || ''}</td>
-                            <td style="text-align: right;">$${(c.amount || 0).toLocaleString()}</td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(c.amount || 0).toLocaleString()}</td>
                             <td style="font-size: var(--text-xs);">${esc(c.lessorName || '我們')}</td>
                             <td>${statusBadge(c)}</td>
                             <td><button class="btn btn-outline" data-action="del-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);"><i class="ph ph-trash"></i></button></td>
@@ -572,6 +573,8 @@ export function renderManagedHouse() {
 export function initManagedHouseActions(scope) {
     const tabsEl = scope.querySelector('.hub-tabs');
     const contentEl = scope.querySelector('.mhouse-tab-content');
+    // #5 統一月曆選擇器 — 把 inline-edit-input 裡的 type=date / type=month 都升級成 Flatpickr
+    initFlatpickr(scope);
 
     if (tabsEl && contentEl) {
         tabsEl.addEventListener('click', (e) => {
@@ -722,16 +725,8 @@ function nextBedLetter(building, roomNumber) {
 }
 
 function addRoom(building) {
-    const rn = nextRoomNumber(building);
-    const bedLetter = 'A';
-    const name = buildBedName(building, rn, bedLetter);
-    store.addProperty({
-        name, buildingId: building.id,
-        roomNumber: rn, bedLetter,
-        status: '待租', rent: 0, tenant: null, contractId: null
-    });
-    showToast(`已新增 R${rn} (含床位 R${rn}-A)`, 'success');
-    refreshView();
+    // 跟系統設定館別管理同款表單 (房號 / 性別 / 人數 / 床位數 / 起始字母 / 預設租金)
+    showRoomForm(building.id, null, () => refreshView());
 }
 
 function addBed(building, roomNumber) {

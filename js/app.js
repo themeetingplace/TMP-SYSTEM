@@ -383,8 +383,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     applyModeAttribute();
     initModeSwitcher({
         onSwitch: (mode) => {
-            // 切換模式 → 跳到該模式的合理首頁
-            const target = mode === 'managed' ? 'm-owners' : 'dashboard';
+            // 切換模式一律先回首頁 (共居/代管同此)
+            const target = 'dashboard';
             const current = window.location.hash.substring(1);
             if (current === target) {
                 // 同 hash 不會觸發 hashchange，手動 handleRoute 重 render

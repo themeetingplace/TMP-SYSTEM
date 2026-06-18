@@ -237,7 +237,7 @@ export function openFormModal({ title, fields = [], values = {}, submitLabel = '
 }
 
 // === Flatpickr 日期選擇器 ===
-function initFlatpickr(scope) {
+export function initFlatpickr(scope) {
     if (typeof window.flatpickr !== 'function') return;
     const baseLocale = window.flatpickr.l10ns?.zh_tw || {};
     const tightLocale = {
@@ -262,6 +262,29 @@ function initFlatpickr(scope) {
             disableMobile: true,
             position: 'auto',
             monthSelectorType: 'static' // 用 < 月 > 樣式，不用 dropdown
+        });
+    });
+    // 月份選擇器: 用 type="month" 或 [data-fp-month] 觸發 Flatpickr month-only mode
+    scope.querySelectorAll('input[type="month"], input[data-fp-month]').forEach(input => {
+        if (input.dataset.fpAttached === '1') return;
+        input.dataset.fpAttached = '1';
+        // type=month 的 value 是 YYYY-MM；Flatpickr 需要 type=text 才能完全接管
+        if (input.type === 'month') input.type = 'text';
+        window.flatpickr(input, {
+            locale: tightLocale,
+            dateFormat: 'Y-m',
+            allowInput: true,
+            disableMobile: true,
+            position: 'auto',
+            monthSelectorType: 'static',
+            // 只顯月份 — 抓 onChange 自動帶 YYYY-MM
+            onChange: (selectedDates, dateStr, instance) => {
+                if (selectedDates[0]) {
+                    const d = selectedDates[0];
+                    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    if (input.value !== ym) input.value = ym;
+                }
+            }
         });
     });
 }

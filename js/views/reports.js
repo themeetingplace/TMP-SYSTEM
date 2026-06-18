@@ -5,13 +5,14 @@
 // 跟舊版差異：所有計算都改用「區間」聚合，不再寫死月份；分析 / 各館報表都依區間切片
 
 import {
-    mockData,
+    mockData, store,
     getSortedBuildings,
     activeContractFor,
     bedOccupied,
     isSettled,
     invoiceActualAmount as actualAmount
 } from '../data.js';
+import { escapeHtml as esc } from '../utils/escape.js';
 import { refreshView } from '../utils/ui.js';
 import { renderRangePicker, initRangePicker } from '../utils/dateRangePicker.js';
 import { reportState, invoiceInRange, getRangeLabel } from './report-state.js';
@@ -789,12 +790,140 @@ function renderExpensePie(items) {
 }
 
 function renderAnalysisTab() {
+    // 代管 mode 走專屬內容 (屋主結算 / 代管費 / 押金)；共居走原本 P&L
+    if (getMode() === 'managed') return renderManagedAnalysis();
     const active = reportState.activeBuilding || 'all';
     const subTabs = renderBuildingSubTabs();
     if (active !== 'all') {
         return `${subTabs}${renderSingleBuildingAnalysis(active)}`;
     }
     return `${subTabs}${renderAnalysisAllBuildings()}`;
+}
+
+// === 代管財務分析 ===
+// 代管房租不是我們的收入，主軸:
+//   1. KPI: 本期屋主應收總額 / 代管費收入 (我們抽成) / 持有押金總額 / 房屋數
+//   2. 各屋主結算 (per owner)
+//   3. 各代管房屋本期結算明細
+function renderManagedAnalysis() {
+    const range = reportState.viewRange;
+    const md = _md();
+    const buildings = md.properties.length
+        ? mockData.buildings.filter(b => b.mode === 'managed' && b.status === 'active')
+        : [];
+    const settlements = (mockData.settlements || []).filter(s => {
+        const m = s.month || '';
+        const r = range;
+        return m >= (r.start || '').slice(0, 7) && m <= (r.end || '').slice(0, 7);
+    });
+
+    // KPI 算
+    let ownerReceivableTotal = 0;
+    let mgmtFeeTotal = 0;
+    settlements.forEach(s => {
+        ownerReceivableTotal += s.ownerReceivable || 0;
+        // 代管費 = items 內 kind === 'mgmt_fee' 或 key === 'mgmtFee'
+        (s.items || []).forEach(it => {
+            if (it.type === 'mgmt_fee' || it.key === 'mgmtFee') {
+                mgmtFeeTotal += Math.abs(it.amount || 0);
+            }
+        });
+    });
+    const holdingDepositTotal = buildings.reduce((sum, b) =>
+        sum + (store.ownerHoldingDepositTotal?.(b.id) ?? 0), 0
+    );
+    const houseCount = buildings.length;
+
+    // 各屋主匯總
+    const ownerMap = new Map();
+    settlements.forEach(s => {
+        if (!s.ownerId) return;
+        if (!ownerMap.has(s.ownerId)) ownerMap.set(s.ownerId, { receivable: 0, mgmtFee: 0, count: 0 });
+        const o = ownerMap.get(s.ownerId);
+        o.receivable += s.ownerReceivable || 0;
+        o.count += 1;
+        (s.items || []).forEach(it => {
+            if (it.type === 'mgmt_fee' || it.key === 'mgmtFee') {
+                o.mgmtFee += Math.abs(it.amount || 0);
+            }
+        });
+    });
+
+    const ownerRows = [...ownerMap.entries()].map(([ownerId, agg]) => {
+        const owner = mockData.owners?.find(o => o.id === ownerId);
+        return { owner, ...agg };
+    }).filter(r => r.owner)
+      .sort((a, b) => b.receivable - a.receivable);
+
+    return `
+        <div class="stat-tile-grid">
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-hand-coins"></i> 屋主應收總額</div>
+                <div class="stat-tile-value">$${ownerReceivableTotal.toLocaleString()}</div>
+                <div class="stat-tile-sub">本期 ${settlements.length} 張月結算</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-coin"></i> 代管費收入 (我們)</div>
+                <div class="stat-tile-value" style="color: var(--color-primary-text);">$${mgmtFeeTotal.toLocaleString()}</div>
+                <div class="stat-tile-sub">我們的抽成 / 服務費</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-vault"></i> 屋主持有押金</div>
+                <div class="stat-tile-value">$${holdingDepositTotal.toLocaleString()}</div>
+                <div class="stat-tile-sub">已移交給屋主保管的押金總額</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-buildings"></i> 代管房屋</div>
+                <div class="stat-tile-value">${houseCount}</div>
+                <div class="stat-tile-sub">啟用中的代管房屋數</div>
+            </div>
+        </div>
+
+        <div class="report-chart-card">
+            <div class="report-chart-title"><i class="ph ph-user-circle"></i> 各屋主結算 (本期)</div>
+            ${ownerRows.length === 0
+                ? `<div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">本期尚無屋主結算紀錄</div>`
+                : `<table class="data-table is-compact">
+                    <thead><tr><th>屋主</th><th style="text-align: right; width: 100px;">結算次數</th><th style="text-align: right; width: 160px;">屋主應收</th><th style="text-align: right; width: 160px;">代管費</th></tr></thead>
+                    <tbody>
+                        ${ownerRows.map(r => `
+                            <tr>
+                                <td><strong>${esc(r.owner.name)}</strong></td>
+                                <td style="text-align: right;">${r.count}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;">$${r.receivable.toLocaleString()}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--color-primary-text);">$${r.mgmtFee.toLocaleString()}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>`
+            }
+        </div>
+
+        <div class="report-chart-card">
+            <div class="report-chart-title"><i class="ph ph-receipt"></i> 本期月結算清單</div>
+            ${settlements.length === 0
+                ? `<div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">本期尚無月結算紀錄 — 至各代管房屋的「費用計算」tab 產生</div>`
+                : `<table class="data-table is-compact">
+                    <thead><tr><th>結算月</th><th>房屋</th><th>屋主</th><th style="text-align: right;">屋主應收</th><th style="text-align: right;">本月新收押</th><th style="text-align: right;">移交押金</th><th>狀態</th></tr></thead>
+                    <tbody>
+                        ${settlements.slice().sort((a, b) => (b.month || '').localeCompare(a.month || '')).map(s => {
+                            const b = mockData.buildings.find(x => x.id === s.buildingId);
+                            const o = mockData.owners?.find(x => x.id === s.ownerId);
+                            return `<tr>
+                                <td><strong>${esc(s.month)}</strong></td>
+                                <td>${esc(b?.name || '—')}</td>
+                                <td>${esc(o?.name || '—')}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;">$${(s.ownerReceivable || 0).toLocaleString()}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(s.depositCollectedThisMonth || 0).toLocaleString()}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(s.depositTransferredThisMonth || 0).toLocaleString()}</td>
+                                <td><span class="status-badge ${s.status === 'settled' ? 'success' : s.status === 'sent' ? 'info' : 'muted'}">${s.status || 'draft'}</span></td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>`
+            }
+        </div>
+    `;
 }
 
 // 共用 4 個財務面 KPI tile — NOI / 毛利率 / 淨利率 / OpEx
@@ -1470,7 +1599,7 @@ function renderYearlySectionBanner(section, rowCount) {
     `;
 }
 
-function esc(s) { return String(s ?? '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+// esc 改成從 utils/escape.js import (line 15)
 
 function renderYearlyTab() {
     const year = reportState.yearlyYear || new Date().getFullYear();

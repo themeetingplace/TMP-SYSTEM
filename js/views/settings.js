@@ -12,13 +12,12 @@ const STATUS_OPTIONS = [
 ];
 
 // === 主入口 ===
+// 館別管理 tab 2026-06-18 拿掉 — 房屋編輯走 物件管理 / 代管房屋頁
+// 房間/床位建立的 showRoomForm 仍 export 給代管住房一覽復用
 export function renderSettings() {
     return `
         <div class="settings-tabs">
-            <button class="settings-tab active" data-settings-tab="buildings">
-                <i class="ph ph-buildings"></i> 館別管理
-            </button>
-            <button class="settings-tab" data-settings-tab="invoiceTypes">
+            <button class="settings-tab active" data-settings-tab="invoiceTypes">
                 <i class="ph ph-receipt"></i> 帳單類型
             </button>
             <button class="settings-tab" data-settings-tab="tenantSources">
@@ -35,7 +34,7 @@ export function renderSettings() {
             </button>
         </div>
         <div id="settings-content" class="settings-content">
-            ${renderBuildingsTab()}
+            ${renderInvoiceTypesTab()}
         </div>
     `;
 }
@@ -361,7 +360,7 @@ function waitForModalClose(callback) {
     requestAnimationFrame(tick);
 }
 
-function showRoomForm(buildingId, existingRoomNumber, onDone) {
+export function showRoomForm(buildingId, existingRoomNumber, onDone) {
     const isEdit = existingRoomNumber !== null && existingRoomNumber !== undefined;
     const existingBeds = isEdit
         ? mockData.properties.filter(p => p.buildingId === buildingId && p.roomNumber === existingRoomNumber)
