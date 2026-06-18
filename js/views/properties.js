@@ -507,7 +507,12 @@ export function showCheckinAssignmentForm(opts = {}) {
     const contractFields = [
         { name: 'scheduledDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: todayStr },
         { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(todayStr), value: '1' },
-        { name: 'amount', label: '月租金', type: 'number', required: true, value: preselectBed?.rent || 0, span: 2, hint: '會自動帶床位設定的租金，可調整' }
+        { name: 'amount', label: '月租金', type: 'number', required: true, value: preselectBed?.rent || 0, hint: '會自動帶床位設定的租金，可調整' },
+        { name: 'status', label: '簽署狀態', type: 'select', required: true, value: '已簽署',
+          options: [
+              { value: '已簽署', label: '已簽署' },
+              { value: '待簽署', label: '待簽署' }
+          ] }
     ];
     // 收款欄位 — 收費對象拉到收款步驟頂端
     const paymentFields = [
@@ -965,7 +970,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             const STEP_MAP = {
                 buildingId: 1, bedId: 1, extraBeds: 1,
                 source: 1, tenantName: 1, tenantPhone: 1, tenantEmail: 1, tenantEmergency: 1,
-                scheduledDate: 2, termMonths: 2, amount: 2,
+                scheduledDate: 2, termMonths: 2, amount: 2, status: 2,
                 paymentChannel: 3, platformName: 3,
                 __sep_payment: 3, adjustments: 3, discount: 3, discountReason: 3,
                 totalDue: 3, paidAmount: 3, paymentMethod: 3
@@ -1249,7 +1254,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                         startDate,
                         endDate,
                         termMonths: term,
-                        status: '已簽署',
+                        status: values.status || '已簽署',
                         amount,
                         depositAmount: 0,
                         parentContractId: null,
@@ -1285,7 +1290,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                             signDate: startDate,
                             startDate, endDate,
                             termMonths: term,
-                            status: '已簽署',
+                            status: values.status || '已簽署',
                             amount: Number(eb.rent) || 0,
                             depositAmount: 0,
                             parentContractId: null,

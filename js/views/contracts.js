@@ -439,13 +439,15 @@ function showContractForm(contract) {
               ] },
             { name: 'platformName', label: '平台名稱', type: 'text', span: 2, placeholder: 'Airbnb / 591 / KKday' },
 
-            // 5. 租金 + 折扣加收 (要建帳單時才填得到)
+            // 5. 租金 + 折扣加收 + 收款 (要建帳單時才填得到)
             { name: '__sep_rent', type: 'section', label: '租金' },
             { name: 'amount', label: '月租金', type: 'number', required: true },
             { name: 'totalDue', label: '應收總額', type: 'number' },
             { name: 'adjustments', type: 'placeholder' },
             { name: 'discount', type: 'hidden', value: 0 },
             { name: 'discountReason', type: 'hidden', value: '' },
+            { name: 'paidAmount', label: '已收金額', type: 'number' },
+            { name: 'paymentMethod', label: '付款方式', type: 'select', options: (mockData.paymentMethods || []).map(p => ({ value: p.name, label: p.name })) },
 
             // 6. 押金 / 狀態
             { name: '__sep_misc', type: 'section', label: '押金 / 狀態' },
@@ -469,7 +471,9 @@ function showContractForm(contract) {
                 tenantEmergency: linkedTenant?.emergencyContact || '',
                 totalDue: Math.max(0, (Number(contract.amount) || 0) * (contract.termMonths || 1) - (Number(initDiscount) || 0)),
                 discount: initDiscount,
-                discountReason: initAdjItems.length ? JSON.stringify(initAdjItems) : ''
+                discountReason: initAdjItems.length ? JSON.stringify(initAdjItems) : '',
+                paidAmount: rentInv?.paidAmount ?? 0,
+                paymentMethod: rentInv?.paymentMethod || (mockData.paymentMethods || [])[0]?.name || '匯款'
             };
         })(),
         submitLabel: '儲存變更',
@@ -487,16 +491,18 @@ function showContractForm(contract) {
             // === 收費方式切換 — platform → 隱藏 platformName 以外的收款相關 ===
             const channelInput = form.querySelector('[name="paymentChannel"]');
             const platformNameWrap = form.querySelector('[name="platformName"]')?.closest('.form-group');
-            // 加減項目整塊 (找 __sep_adj section divider 跟它後面的 adjustments + totalDue)
+            // 平台代收時隱藏帳單相關欄位
             const adjustPhWrap = form.querySelector('#ph-adjustments');
             const totalDueWrap2 = form.querySelector('[name="totalDue"]')?.closest('.form-group');
+            const paidAmountWrap = form.querySelector('[name="paidAmount"]')?.closest('.form-group');
+            const paymentMethodWrap = form.querySelector('[name="paymentMethod"]')?.closest('.form-group');
             function syncChannelVisibility() {
                 const v = channelInput?.value || 'self';
                 const isPlatform = v === 'platform';
                 if (platformNameWrap) platformNameWrap.style.display = isPlatform ? '' : 'none';
-                // 平台代收 → 沒有帳單，加減項目 + totalDue 都不顯
-                if (adjustPhWrap) adjustPhWrap.style.display = isPlatform ? 'none' : '';
-                if (totalDueWrap2) totalDueWrap2.style.display = isPlatform ? 'none' : '';
+                [adjustPhWrap, totalDueWrap2, paidAmountWrap, paymentMethodWrap].forEach(el => {
+                    if (el) el.style.display = isPlatform ? 'none' : '';
+                });
             }
             syncChannelVisibility();
             channelInput?.addEventListener('change', syncChannelVisibility);
@@ -612,8 +618,11 @@ function showContractForm(contract) {
                 endDate = d.toISOString().split('T')[0];
             }
 
-            // 抽離 tenant 子欄位 (這些是租客主檔，不寫 contract) + totalDue (顯示用) + adjustments (寫到 invoice)
-            const { tenantPhone, tenantEmail, tenantEmergency, totalDue: _td, discount: adjDiscount, discountReason: adjReason, ...contractValues } = values;
+            // 抽離 tenant 子欄位 + totalDue (顯示用) + adjustments + paidAmount/paymentMethod (寫到 invoice)
+            const { tenantPhone, tenantEmail, tenantEmergency, totalDue: _td,
+                    discount: adjDiscount, discountReason: adjReason,
+                    paidAmount: _pa, paymentMethod: _pm,
+                    ...contractValues } = values;
 
             const payload = {
                 ...contractValues,
@@ -660,7 +669,7 @@ function showContractForm(contract) {
             const saved = store.updateContract(contract.id, payload);
             showToast('已更新合約', 'success');
 
-            // 把加減項目寫到對應的房租 invoice — 平台代收沒帳單就不動
+            // 把加減項目 + 收款 寫到對應的房租 invoice — 平台代收沒帳單就不動
             if (values.paymentChannel !== 'platform') {
                 const rentInv = mockData.invoices.find(inv =>
                     inv.direction === 'in' && inv.type === '房租' && inv.contractId === contract.id
@@ -668,9 +677,20 @@ function showContractForm(contract) {
                 if (rentInv) {
                     const newDiscount = Number(adjDiscount) || 0;
                     const newReason = adjReason || '';
-                    if (newDiscount !== (rentInv.discount || 0) || newReason !== (rentInv.discountReason || '')) {
-                        store.updateInvoice(rentInv.id, { discount: newDiscount, discountReason: newReason });
+                    const newPaidAmount = Number(values.paidAmount) || 0;
+                    const newPaymentMethod = values.paymentMethod || rentInv.paymentMethod || '';
+                    const patch = {};
+                    if (newDiscount !== (rentInv.discount || 0)) patch.discount = newDiscount;
+                    if (newReason !== (rentInv.discountReason || '')) patch.discountReason = newReason;
+                    if (newPaidAmount !== (rentInv.paidAmount || 0)) patch.paidAmount = newPaidAmount;
+                    if (newPaymentMethod !== (rentInv.paymentMethod || '')) patch.paymentMethod = newPaymentMethod;
+                    // 已收金額 = 應收 → invoice status 自動轉「已繳清」
+                    if ('paidAmount' in patch) {
+                        const due = (Number(values.amount) || 0) * (contract.termMonths || 1) - newDiscount;
+                        patch.status = newPaidAmount >= due && due > 0 ? '已繳清' : (newPaidAmount > 0 ? '部分繳' : '未繳');
+                        if (newPaidAmount > 0 && !rentInv.paidDate) patch.paidDate = new Date().toISOString().slice(0, 10);
                     }
+                    if (Object.keys(patch).length) store.updateInvoice(rentInv.id, patch);
                 }
             }
 
