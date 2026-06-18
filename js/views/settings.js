@@ -117,8 +117,8 @@ function showBuildingForm(building = null) {
         maxWidth: 540,
         fields: [
             { name: 'name', label: '館別名稱', type: 'text', required: true, placeholder: '例：松山館' },
-            { name: 'status', label: '狀態', type: 'select', required: true, options: STATUS_OPTIONS, value: building?.status ?? 'active', hint: '停用後新增床位無法選此館別' },
-            { name: 'baseAddress', label: '預設地址（不含樓層）', type: 'text', span: 2, placeholder: '例：台北市松山區南京東路 50 號', hint: '新增床位時會以此為預設地址' },
+            { name: 'status', label: '狀態', type: 'select', required: true, options: STATUS_OPTIONS, value: building?.status ?? 'active' },
+            { name: 'baseAddress', label: '預設地址（不含樓層）', type: 'text', span: 2, placeholder: '例：台北市松山區南京東路 50 號' },
             { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
         ],
         values: building ?? { status: 'active' },
