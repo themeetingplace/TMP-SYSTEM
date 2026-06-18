@@ -292,7 +292,6 @@ function renderDataTab(building) {
         </div>
 
         <div class="houses-data-footer">
-            <span class="inline-save-hint"><i class="ph ph-info"></i> 每區獨立編輯 — 按右上「編輯」進入修改、「儲存」確認</span>
             <button class="btn btn-outline btn-toggle-status" data-action="toggle-status"><i class="ph ${building.status === 'active' ? 'ph-pause' : 'ph-play'}"></i> ${building.status === 'active' ? '停用此房屋' : '啟用此房屋'}</button>
         </div>
     `;
@@ -729,10 +728,17 @@ export function initManagedHouseActions(scope) {
     }
 
     contentEl?.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-action]');
+        // 同時接 data-action 跟 data-section-action — 不然 section 編輯/儲存/取消按鈕完全沒反應
+        const btn = e.target.closest('[data-action], [data-section-action]');
         if (!btn) return;
         const building = mockData.buildings.find(b => b.id === currentHouseId);
         if (!building) return;
+        // section 編輯/儲存/取消優先 (按鈕本身沒 data-action)
+        if (btn.hasAttribute('data-section-action')) {
+            const sectionName = btn.closest('[data-section]')?.dataset.section;
+            handleSectionAction(building, sectionName, btn.dataset.sectionAction);
+            return;
+        }
         const action = btn.dataset.action;
         if (action === 'edit-house') showHouseForm(building);
         else if (action === 'toggle-status') {
@@ -752,12 +758,6 @@ export function initManagedHouseActions(scope) {
         // #5: 住房一覽 入住/退租
         else if (action === 'checkin-bed')    checkinBed(building, btn.dataset.bedName);
         else if (action === 'terminate-tenant') terminateTenantContract(btn.dataset.id);
-        // R6.1: 房屋資料 per-section 編輯
-        else if (btn.matches('[data-section-action]')) {
-            const sectionName = btn.closest('[data-section]')?.dataset.section;
-            const sectionAction = btn.dataset.sectionAction;
-            handleSectionAction(building, sectionName, sectionAction);
-        }
         // R5.3 / #6-1: 合約 tab create / view / edit / delete
         else if (action === 'new-owner-contract')  showManagedOwnerContractForm(building);
         else if (action === 'new-tenant-contract') showManagedTenantContractForm(building);

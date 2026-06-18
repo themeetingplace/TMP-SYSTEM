@@ -2104,14 +2104,13 @@ body[data-app-mode="managed"] .topbar-title h1::before {
     font-weight: 600;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 0.4rem;
     background: var(--color-primary-light);
     border-left: 3px solid var(--color-primary);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 .houses-section-title > span:first-child { display: inline-flex; align-items: center; gap: 0.4rem; }
-.section-actions { display: inline-flex; gap: 0.4rem; }
+.section-actions { display: inline-flex; gap: 0.4rem; margin-left: auto; }
 .section-action-btn {
     padding: 0.2rem 0.6rem !important;
     font-size: var(--text-2xs) !important;
