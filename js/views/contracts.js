@@ -319,7 +319,9 @@ export function renderContracts() {
                 <button class="filter-tab" data-filter-value="snoozed">已暫緩 (${enriched.filter(c => c._state === 'snoozed').length})</button>
                 <button class="filter-tab" data-filter-value="renewed">已續約 (${enriched.filter(c => c._state === 'renewed').length})</button>
                 <button class="filter-tab" data-filter-value="terminated">已終止 (${enriched.filter(c => c._state === 'terminated').length})</button>
-                <button class="filter-tab" data-filter-value="platform" data-filter-group="channel">🌐 外部平台 (${enriched.filter(c => c.paymentChannel === 'platform').length})</button>
+                ${getMode() === 'cohousing'
+                    ? `<button class="filter-tab" data-filter-value="platform" data-filter-group="channel">🌐 外部平台 (${enriched.filter(c => c.paymentChannel === 'platform').length})</button>`
+                    : ''}
             </div>
 
             <div class="table-container">
