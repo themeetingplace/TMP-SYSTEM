@@ -607,36 +607,36 @@ select:focus-visible,
     gap: 1rem;
     margin-bottom: 1rem;
 }
+/* 月份切換條 — compact 高度 ~36px (跟 range-picker 同視覺重量) */
 .month-switcher {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1.25rem;
+    padding: 0.35rem 0.6rem;
     gap: 0.5rem;
     margin-bottom: 1rem;
-}
-.month-switcher .btn {
-    padding: 0.35rem 0.7rem;
-    font-size: 0.85rem;
+    background: var(--color-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-sm);
 }
 .month-switcher__label {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 0.125rem;
-}
-.month-switcher__label-eyebrow {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    flex: 1;
+    justify-content: center;
 }
 .month-switcher__label strong {
-    font-size: 1.1rem;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
 }
+.month-switcher__label-eyebrow { display: none; }
 .month-switcher__right {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.3rem;
 }
 
 .report-grand-summary {

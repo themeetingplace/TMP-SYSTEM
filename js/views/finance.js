@@ -240,18 +240,16 @@ export function renderFinance() {
 
     return `
         ${renderFinanceSubTabs('finance')}
-        <!-- 月份切換 -->
-        <div class="month-switcher card">
-            <button class="btn btn-outline" data-month-action="prev">
+        <div class="month-switcher">
+            <button class="btn btn-outline btn-sm" data-month-action="prev">
                 <i class="ph ph-caret-left"></i> 上個月
             </button>
             <div class="month-switcher__label">
-                <span class="month-switcher__label-eyebrow">檢視月份</span>
                 <strong>${formatMonthLabel(financeState.viewMonth)}</strong>
             </div>
             <div class="month-switcher__right">
-                <button class="btn btn-outline" data-month-action="this">本月</button>
-                <button class="btn btn-outline" data-month-action="next">
+                <button class="btn btn-outline btn-sm" data-month-action="this">本月</button>
+                <button class="btn btn-outline btn-sm" data-month-action="next">
                     下個月 <i class="ph ph-caret-right"></i>
                 </button>
             </div>

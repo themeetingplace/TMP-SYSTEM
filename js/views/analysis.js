@@ -152,21 +152,19 @@ export function renderAnalysis() {
 
     return `
         ${renderFinanceSubTabs('analysis')}
-        <!-- 月份切換 + 匯出 -->
-        <div class="month-switcher card" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1.25rem; margin-bottom: 1rem;">
-            <button class="btn btn-outline" data-month-action="prev" style="padding: 0.4rem 0.75rem;">
+        <div class="month-switcher">
+            <button class="btn btn-outline btn-sm" data-month-action="prev">
                 <i class="ph ph-caret-left"></i> 上個月
             </button>
-            <div style="display: flex; flex-direction: column; align-items: center;">
-                <span style="font-size: var(--text-2xs); color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">檢視月份</span>
-                <strong style="font-size: 1.1rem;">${formatMonthLabel(viewMonth)}</strong>
+            <div class="month-switcher__label">
+                <strong>${formatMonthLabel(viewMonth)}</strong>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
-                <button class="btn btn-outline" id="btn-export-analysis-pdf" style="padding: 0.4rem 0.75rem; font-size: var(--text-xs);" title="匯出當月收支分析為 PDF">
+            <div class="month-switcher__right">
+                <button class="btn btn-outline btn-sm" id="btn-export-analysis-pdf" title="匯出當月收支分析為 PDF">
                     <i class="ph ph-file-pdf"></i> 匯出 PDF
                 </button>
-                <button class="btn btn-outline" data-month-action="this" style="padding: 0.4rem 0.75rem; font-size: var(--text-xs);">本月</button>
-                <button class="btn btn-outline" data-month-action="next" style="padding: 0.4rem 0.75rem;">
+                <button class="btn btn-outline btn-sm" data-month-action="this">本月</button>
+                <button class="btn btn-outline btn-sm" data-month-action="next">
                     下個月 <i class="ph ph-caret-right"></i>
                 </button>
             </div>
