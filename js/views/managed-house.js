@@ -1583,6 +1583,30 @@ function showManagedTenantContractForm(building, opts = {}) {
         ],
         values: initialValues,
         submitLabel: isEdit ? '儲存變更' : '建立住客合約',
+        // 即時自動算到期日：start / term 任一改動 → 自動填到期日
+        // 用 data-auto-end 紀錄是否為自動值，用戶手動改過就不再覆寫
+        onFormMount: (form) => {
+            const startInput = form.querySelector('[name="startDate"]');
+            const termInput  = form.querySelector('[name="termMonths"]');
+            const endInput   = form.querySelector('[name="endDate"]');
+            if (!startInput || !termInput || !endInput) return;
+            const recompute = () => {
+                if (endInput.dataset.userEdited === '1' && endInput.value) return;
+                const sd = startInput.value;
+                const tm = parseInt(termInput.value, 10) || 0;
+                if (!sd || !tm) return;
+                const d = new Date(sd);
+                d.setMonth(d.getMonth() + tm);
+                endInput.value = d.toISOString().split('T')[0];
+            };
+            // 初次 mount 也算一次 (新建模式 endDate 為空時)
+            if (!endInput.value) recompute();
+            startInput.addEventListener('change', recompute);
+            startInput.addEventListener('input', recompute);
+            termInput.addEventListener('change', recompute);
+            termInput.addEventListener('input', recompute);
+            endInput.addEventListener('input', () => { endInput.dataset.userEdited = '1'; });
+        },
         onSubmit: (values) => {
             const prop = mockData.properties.find(p => p.name === values.propertyName);
             if (!prop) { showToast('找不到對應床位', 'danger'); return false; }
