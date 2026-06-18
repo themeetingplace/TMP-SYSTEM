@@ -133,10 +133,15 @@ export function renderFinance() {
         const amountSign = inv.direction === 'out' ? '-' : '+';
         const amountColor = inv.direction === 'out' ? 'var(--color-danger)' : 'var(--color-success)';
         const shown = actualAmount(inv);
-        const hasDiscount = inv.discount && inv.discount > 0;
-        const discountCell = hasDiscount
+        // discount > 0 = 折扣 (顯 -$X 紅減)；discount < 0 = 加收 (顯 +$X 黃加)
+        const hasAdjustment = inv.discount != null && Number(inv.discount) !== 0;
+        const isAddOn = Number(inv.discount) < 0;
+        const adjAbs = Math.abs(Number(inv.discount) || 0).toLocaleString();
+        const adjSign = isAddOn ? '+' : '-';
+        const adjColor = isAddOn ? 'var(--color-info)' : 'var(--color-warning)';
+        const discountCell = hasAdjustment
             ? `<div style="display: flex; flex-direction: column; gap: 1px;">
-                   <span style="font-weight: 600; color: var(--color-warning);">-$${inv.discount.toLocaleString()}</span>
+                   <span style="font-weight: 600; color: ${adjColor};">${adjSign}$${adjAbs}</span>
                    ${inv.discountReason ? `<span style="font-size: var(--text-2xs); color: var(--text-muted);">${formatDiscountReason(inv.discountReason)}</span>` : ''}
                </div>`
             : '<span style="color: var(--text-muted); font-size: var(--text-xs);">—</span>';
@@ -161,8 +166,8 @@ export function renderFinance() {
             ? '<span class="status-badge success">收入</span>'
             : '<span class="status-badge danger">支出</span>';
         const heroAmtClass = inv.direction === 'in' ? 'income' : 'expense';
-        const discountVal = hasDiscount
-            ? `-$${inv.discount.toLocaleString()}${inv.discountReason ? ` <span class="c-meta-val-sub">${formatDiscountReason(inv.discountReason)}</span>` : ''}`
+        const discountVal = hasAdjustment
+            ? `<span style="color: ${adjColor};">${adjSign}$${adjAbs}</span>${inv.discountReason ? ` <span class="c-meta-val-sub">${formatDiscountReason(inv.discountReason)}</span>` : ''}`
             : '<span class="c-meta-val-muted">—</span>';
         const paymentVal = inv.paymentMethod || '<span class="c-meta-val-muted">—</span>';
         const noteSection = (inv.note && inv.note.trim())
