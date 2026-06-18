@@ -413,43 +413,43 @@ function showContractForm(contract) {
         title: `編輯合約：${contract.id}`,
         maxWidth: 640,
         fields: [
-            // === 床位 ===
-            { name: '__sep_bed', type: 'section', label: '床位 / 物件', hint: '換床位會自動釋放原床位' },
+            // 1. 床位
+            { name: '__sep_bed', type: 'section', label: '床位' },
             { name: 'propertyName', label: '床位', type: 'select', required: true, span: 2, options: propertyOptions },
 
-            // === 租客資料 (含聯絡方式) ===
-            { name: '__sep_tenant', type: 'section', label: '租客資料', hint: '改電話 / Email / 緊急聯絡人會同步更新租客主檔' },
+            // 2. 租客
+            { name: '__sep_tenant', type: 'section', label: '租客資料' },
             { name: 'tenant', label: '租客姓名', type: 'select', required: true, span: 2, options: tenantOptions, searchable: true },
             { name: 'tenantPhone', label: '電話', type: 'text', value: linkedTenant?.phone || '' },
             { name: 'tenantEmail', label: 'Email', type: 'text', value: linkedTenant?.email || '' },
             { name: 'tenantEmergency', label: '緊急聯絡人', type: 'text', span: 2, value: linkedTenant?.emergencyContact || '', placeholder: '例：王媽媽 0911-222-333' },
 
-            // === 合約期間 ===
+            // 3. 合約期間 (純日期)
             { name: '__sep_contract', type: 'section', label: '合約期間' },
             { name: 'startDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: initialStart },
             { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: contract.termMonths ?? 1 },
-            { name: 'endDate', label: '到期日 (留空自動計算)', type: 'date', span: 2, hint: '依起始日 + 簽約期自動帶' },
-            { name: 'amount', label: '月租金', type: 'number', required: true, hint: '會雙向同步：合約↔房租帳單金額連動 (含 bundle 額外床位也會一起算)' },
-            { name: 'totalDue', label: '應收總額', type: 'number', hint: '月租金 × 合約期 + 加項 − 折扣 (自動計算)' },
+            { name: 'endDate', label: '到期日 (留空自動算)', type: 'date', span: 2 },
 
-            // === 收費方式 (外部平台代收 → 不開帳單) ===
+            // 4. 租金 + 折扣加收 (跟金額相關)
+            { name: '__sep_rent', type: 'section', label: '租金' },
+            { name: 'amount', label: '月租金', type: 'number', required: true },
+            { name: 'totalDue', label: '應收總額', type: 'number' },
+            { name: 'adjustments', type: 'placeholder' },
+            { name: 'discount', type: 'hidden', value: 0 },
+            { name: 'discountReason', type: 'hidden', value: '' },
+
+            // 5. 收費方式
             { name: '__sep_channel', type: 'section', label: '收費方式' },
             { name: 'paymentChannel', label: '收費對象', type: 'select', required: true, span: 2,
               options: [
                   { value: 'self',     label: '建立帳單' },
                   { value: 'platform', label: '外部平台代收' }
               ] },
-            { name: 'platformName', label: '平台名稱', type: 'text', span: 2, placeholder: 'Airbnb / 591 / KKday', hint: '收費對象選「外部平台代收」時填' },
+            { name: 'platformName', label: '平台名稱', type: 'text', span: 2, placeholder: 'Airbnb / 591 / KKday' },
 
-            // === 加減項目 (寫到該合約的房租帳單) — 平台代收沒帳單就不顯示 ===
-            { name: '__sep_adj', type: 'section', label: '折扣 / 加收項目', hint: '會更新對應的房租帳單；沒有可以不填' },
-            { name: 'adjustments', type: 'placeholder' },
-            { name: 'discount', type: 'hidden', value: 0 },
-            { name: 'discountReason', type: 'hidden', value: '' },
-
-            // === 其他 ===
-            { name: '__sep_misc', type: 'section', label: '簽署 / 押金' },
-            { name: 'depositAmount', label: '押金金額', type: 'number', value: contract.depositAmount ?? 0, hint: '預設 0（不收押金）；若有，會顯示在合約 PDF 上' },
+            // 6. 押金 / 狀態
+            { name: '__sep_misc', type: 'section', label: '押金 / 狀態' },
+            { name: 'depositAmount', label: '押金金額', type: 'number', value: contract.depositAmount ?? 0 },
             { name: 'status', label: '簽署狀態', type: 'select', required: true, options: CONTRACT_STATUSES, value: contract.status ?? '待簽署' }
         ],
         values: (() => {
