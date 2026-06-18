@@ -1,4 +1,4 @@
-﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts, bedOccupied } from '../data.js';
+﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, addMonthsISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts, bedOccupied } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
 import { showTenantDetails } from './tenants.js';
@@ -493,13 +493,13 @@ export function showCheckinAssignmentForm(opts = {}) {
         { name: 'tenantEmergency', label: '緊急聯絡人', type: 'text', required: false, placeholder: '例：王媽媽 0911-222-333', span: 2 }
     ];
     // 依入住日期算合約期 dropdown 標籤，例如「1 個月 · 7/15 到期」
+    // 用 calendar month (Date.setMonth) 算，不是 +30/+90 天硬幹，符合「+N 個月」直覺
     function buildTermOptions(startDate) {
         const fmt = (iso) => iso ? iso.slice(5).replace('-', '/') : '?';
-        const end1 = startDate ? addDaysISO(startDate, 30) : '';
-        const end3 = startDate ? addDaysISO(startDate, 90) : '';
         return [
-            { value: '1', label: `1 個月${end1 ? ` · ${fmt(end1)} 到期` : ''}` },
-            { value: '3', label: `3 個月${end3 ? ` · ${fmt(end3)} 到期` : ''}` }
+            { value: '1', label: `1 個月${startDate ? ` · ${fmt(addMonthsISO(startDate, 1))} 到期` : ''}` },
+            { value: '3', label: `3 個月${startDate ? ` · ${fmt(addMonthsISO(startDate, 3))} 到期` : ''}` },
+            { value: '__custom', label: '自訂月數...' }
         ];
     }
 
@@ -507,6 +507,7 @@ export function showCheckinAssignmentForm(opts = {}) {
     const contractFields = [
         { name: 'scheduledDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: todayStr },
         { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(todayStr), value: '1' },
+        { name: 'termMonthsCustom', label: '自訂月數', type: 'number', value: 4, placeholder: '4' },
         { name: 'amount', label: '月租金', type: 'number', required: true, value: preselectBed?.rent || 0, hint: '會自動帶床位設定的租金，可調整' },
         { name: 'status', label: '簽署狀態', type: 'select', required: true, value: '已簽署',
           options: [
@@ -703,11 +704,20 @@ export function showCheckinAssignmentForm(opts = {}) {
             // 入住日期變更 → 重新計算合約期下拉的到期日 (1個月 · 7/15到期 / 3個月 · 9/15到期)
             const dateInput = form.querySelector('[name="scheduledDate"]');
             const termSelectWrap = form.querySelector('.custom-select[data-name="termMonths"]');
+            const termHiddenForUI = form.querySelector('[name="termMonths"]');
+            const termCustomWrap = form.querySelector('[name="termMonthsCustom"]')?.closest('.form-group');
             const updateTermLabels = () => {
                 if (termSelectWrap?.__setOptions) {
                     termSelectWrap.__setOptions(buildTermOptions(dateInput?.value || todayStr));
                 }
             };
+            // 自訂月數欄位 — termMonths !== '__custom' 時隱藏
+            const syncCustomTermVisibility = () => {
+                if (!termCustomWrap) return;
+                termCustomWrap.style.display = termHiddenForUI?.value === '__custom' ? '' : 'none';
+            };
+            syncCustomTermVisibility();
+            termHiddenForUI?.addEventListener('change', syncCustomTermVisibility);
             dateInput?.addEventListener('change', updateTermLabels);
             dateInput?.addEventListener('input', updateTermLabels);
 
@@ -970,7 +980,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             const STEP_MAP = {
                 buildingId: 1, bedId: 1, extraBeds: 1,
                 source: 1, tenantName: 1, tenantPhone: 1, tenantEmail: 1, tenantEmergency: 1,
-                scheduledDate: 2, termMonths: 2, amount: 2, status: 2,
+                scheduledDate: 2, termMonths: 2, termMonthsCustom: 2, amount: 2, status: 2,
                 paymentChannel: 3, platformName: 3,
                 __sep_payment: 3, adjustments: 3, discount: 3, discountReason: 3,
                 totalDue: 3, paidAmount: 3, paymentMethod: 3
@@ -1132,8 +1142,14 @@ export function showCheckinAssignmentForm(opts = {}) {
             if (!inputName) { showToast('請填姓名', 'danger'); return false; }
 
             const startDate = values.scheduledDate;
-            const term = parseInt(values.termMonths, 10) || 1;
-            const endDate = addDaysISO(startDate, term * 30);  // 6/15 + 30 = 7/15
+            // 解析 termMonths：__custom → 走 values.termMonthsCustom；其他正常 parseInt
+            let term;
+            if (values.termMonths === '__custom') {
+                term = parseInt(values.termMonthsCustom, 10) || 1;
+            } else {
+                term = parseInt(values.termMonths, 10) || 1;
+            }
+            const endDate = addMonthsISO(startDate, term);  // 用 calendar month 算
             const amount = parseInt(values.amount, 10) || bed.rent || 0;
 
             const bedOverlaps = findOverlappingBedContracts(bed.name, startDate, endDate);
@@ -1272,9 +1288,11 @@ export function showCheckinAssignmentForm(opts = {}) {
                             __bundleExtraRents: extraBedRentList   // ← 自動累加進首張 invoice
                         }
                     });
+                    // bed.rent 同步合約月租，避免 住房一覽 顯示舊金額
                     store.updateProperty(bed.id, {
                         tenant: tenant.name, status: '已出租',
-                        contractId: contract.id, contractEnd: endDate
+                        contractId: contract.id, contractEnd: endDate,
+                        rent: amount
                     });
                     store.updateTenant(tenant.id, { currentProperty: bed.name, status: '居住中' });
 

@@ -660,6 +660,19 @@ export function addDaysISO(dateStr, days) {
     return d.toISOString().split('T')[0];
 }
 
+// +N 個月 (calendar month) — 月底 clamp (1/31 + 1 月 = 2/28/2029, 不是 3/3)
+export function addMonthsISO(dateStr, months) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    const origDay = d.getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + months);
+    // clamp 到該月最後一天
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(origDay, lastDay));
+    return d.toISOString().split('T')[0];
+}
+
 // 一筆 invoice 的實際金額 (P1-13: 從 finance/analysis/reports 抽出共用)
 // 優先用 paidAmount (實收/實付)，沒有就 fallback 到 amount
 export function invoiceActualAmount(i) {
@@ -677,14 +690,15 @@ export function formatDiscountReason(raw) {
     if (!s.startsWith('[')) return s;  // 舊格式，純文字
     try {
         const items = JSON.parse(s);
-        if (!Array.isArray(items)) return s;
+        if (!Array.isArray(items)) return '';
         return items.map(x => {
             const sign = x.kind === 'add' ? '+' : '−';
             const amt = (x.amount || 0).toLocaleString();
             return `${sign}$${amt} ${x.label || ''}`.trim();
         }).join(' · ');
     } catch {
-        return s;
+        // 壞掉的 JSON (被截斷 / 編碼錯) — 不要把 raw garbage 顯給 user
+        return '';
     }
 }
 
@@ -1151,12 +1165,14 @@ export const store = {
                 .reduce((s, c) => s + (Number(c.amount) || 0), 0);
             const newInvoiceAmount = Math.round((Number(cascadeContract.amount) + extraRentSum) * term);
 
-            mockData.invoices.forEach((inv, idx) => {
-                if (inv.contractId !== cascadeContract.id) return;
-                if (inv.direction !== 'in' || inv.type !== '房租') return;
+            // invoice cascade — 走 store.updateInvoice 確保 persist + sync 事件正確觸發
+            const rentInvoices = mockData.invoices.filter(inv =>
+                inv.contractId === cascadeContract.id && inv.direction === 'in' && inv.type === '房租'
+            );
+            rentInvoices.forEach(inv => {
                 const oldAmt = Number(inv.amount) || 0;
                 if (oldAmt === newInvoiceAmount) return;
-                mockData.invoices[idx] = { ...inv, amount: newInvoiceAmount };
+                this.updateInvoice(inv.id, { amount: newInvoiceAmount });
                 window.dispatchEvent(new CustomEvent('bms:contract-sync-invoice', {
                     detail: {
                         contractId: cascadeContract.id,
@@ -1168,11 +1184,10 @@ export const store = {
                 }));
             });
 
-            // 床位 property.rent 同步 (主合約走 main propertyName, 子合約走自己的)
+            // 床位 property.rent 同步 — 走 store.updateProperty 確保雲端同步
             const property = mockData.properties.find(p => p.name === after.propertyName);
-            if (property) {
-                const pi = mockData.properties.indexOf(property);
-                mockData.properties[pi] = { ...property, rent: after.amount };
+            if (property && property.rent !== after.amount) {
+                this.updateProperty(property.id, { rent: after.amount });
             }
         }
         recalcMetrics();
