@@ -328,18 +328,23 @@ function renderOccupancyTab(building) {
                         <button class="btn btn-outline" data-action="del-room" data-room="${rn}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除整房（包含所有床位）"><i class="ph ph-trash"></i></button>
                     </div>
                 </div>
-                <table class="data-table" style="margin: 0;">
-                    <thead><tr><th style="width: 15%;">床位</th><th style="width: 26%;">租客</th><th style="width: 20%;">合約期間</th><th style="width: 14%;">月租 (inline)</th><th>狀態</th><th style="width: 5%;"></th></tr></thead>
+                <table class="data-table is-compact" style="margin: 0;">
+                    <thead><tr><th style="width: 90px;">床位</th><th>租客</th><th style="width: 150px;">合約期間</th><th style="width: 100px; text-align: right;">月租</th><th style="width: 80px;">狀態</th><th style="width: 200px; text-align: right;">操作</th></tr></thead>
                     <tbody>
                         ${list.map(b => {
                             const c = mockData.contracts.find(x => x.propertyName === b.name && (x.renewalState === 'active' || x.renewalState === 'snoozed'));
+                            // #5: 月租改 readonly 顯示, 加 入住 / 退租 / 刪空床 actions
+                            const actionsHtml = c
+                                ? `<button class="btn btn-outline" data-action="terminate-tenant" data-id="${esc(c.id)}" style="padding: 0.15rem 0.55rem; font-size: var(--text-xs); color: var(--color-danger);" title="退租"><i class="ph ph-door-open"></i> 退租</button>`
+                                : `<button class="btn btn-outline" data-action="checkin-bed" data-bed-name="${esc(b.name)}" style="padding: 0.15rem 0.55rem; font-size: var(--text-xs); color: var(--color-primary);" title="新增入住"><i class="ph ph-user-plus"></i> 入住</button>
+                                   <button class="btn btn-outline" data-action="del-bed" data-bed="${esc(b.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除空床"><i class="ph ph-x"></i></button>`;
                             return `<tr>
                                 <td><strong>R${b.roomNumber}-${b.bedLetter}</strong></td>
                                 <td>${c ? esc(c.tenant) : '<span style="color: var(--text-muted);">空床</span>'}</td>
                                 <td>${c ? `${c.startDate} ~ ${c.endDate}` : '—'}</td>
-                                <td><input type="number" class="inline-edit-input" data-inline-bed="${esc(b.id)}" data-inline-field="rent" value="${b.rent || 0}" style="max-width: 110px; text-align: right;"></td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums;">${b.rent ? '$' + Number(b.rent).toLocaleString() : '<span style="color: var(--text-muted);">—</span>'}</td>
                                 <td>${c ? `<span class="status-badge success">已出租</span>` : `<span class="status-badge muted">空床</span>`}</td>
-                                <td>${c ? '' : `<button class="btn btn-outline" data-action="del-bed" data-bed="${esc(b.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除空床"><i class="ph ph-x"></i></button>`}</td>
+                                <td style="text-align: right;">${actionsHtml}</td>
                             </tr>`;
                         }).join('')}
                     </tbody>
@@ -394,7 +399,7 @@ function renderContractsTab(building) {
         ? `<div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">尚無屋主委託合約</div>`
         : `
             <table class="data-table is-compact">
-                <thead><tr><th style="width: 100px;">合約 ID</th><th>屋主</th><th>期間</th><th style="text-align: right; width: 130px;">委託月租</th><th style="width: 90px;">狀態</th><th style="width: 50px;"></th></tr></thead>
+                <thead><tr><th style="width: 100px;">合約 ID</th><th>屋主</th><th>期間</th><th style="text-align: right; width: 130px;">委託月租</th><th style="width: 90px;">狀態</th><th style="width: 140px; text-align: right;">操作</th></tr></thead>
                 <tbody>
                     ${ownerContracts.map(c => `
                         <tr>
@@ -403,7 +408,11 @@ function renderContractsTab(building) {
                             <td>${c.startDate || ''} ~ ${c.endDate || ''}</td>
                             <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(c.amount || 0).toLocaleString()}</td>
                             <td>${statusBadge(c)}</td>
-                            <td><button class="btn btn-outline" data-action="del-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);"><i class="ph ph-trash"></i></button></td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-outline" data-action="view-managed-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs);" title="檢視"><i class="ph ph-eye"></i></button>
+                                <button class="btn btn-outline" data-action="edit-managed-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs);" title="編輯"><i class="ph ph-pencil"></i></button>
+                                <button class="btn btn-outline" data-action="del-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除"><i class="ph ph-trash"></i></button>
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -414,7 +423,7 @@ function renderContractsTab(building) {
         ? `<div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">尚無住客合約</div>`
         : `
             <table class="data-table is-compact">
-                <thead><tr><th style="width: 100px;">合約 ID</th><th>租客</th><th>床位</th><th>期間</th><th style="text-align: right; width: 110px;">月租</th><th>出租人</th><th style="width: 90px;">狀態</th><th style="width: 50px;"></th></tr></thead>
+                <thead><tr><th style="width: 100px;">合約 ID</th><th>租客</th><th>床位</th><th>期間</th><th style="text-align: right; width: 110px;">月租</th><th>出租人</th><th style="width: 90px;">狀態</th><th style="width: 140px; text-align: right;">操作</th></tr></thead>
                 <tbody>
                     ${tenantContracts.map(c => `
                         <tr>
@@ -425,7 +434,11 @@ function renderContractsTab(building) {
                             <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(c.amount || 0).toLocaleString()}</td>
                             <td style="font-size: var(--text-xs);">${esc(c.lessorName || '我們')}</td>
                             <td>${statusBadge(c)}</td>
-                            <td><button class="btn btn-outline" data-action="del-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);"><i class="ph ph-trash"></i></button></td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-outline" data-action="view-managed-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs);" title="檢視"><i class="ph ph-eye"></i></button>
+                                <button class="btn btn-outline" data-action="edit-managed-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs);" title="編輯"><i class="ph ph-pencil"></i></button>
+                                <button class="btn btn-outline" data-action="del-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除"><i class="ph ph-trash"></i></button>
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -588,6 +601,39 @@ function shiftMonth(ym, delta) {
     const d = new Date(y, m - 1 + delta, 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
+// #5: 從住房一覽床位點「入住」→ 開住客合約 form 並預選床位
+function checkinBed(building, bedName) {
+    showManagedTenantContractForm(building, { preselectBedName: bedName });
+}
+// #5: 退租 — 終止住客合約 + 釋放床位
+function terminateTenantContract(contractId) {
+    const c = mockData.contracts.find(x => x.id === contractId);
+    if (!c) return;
+    openConfirm({
+        title: `退租 ${c.tenant}？`,
+        message: `合約 ${c.id} 將標記為「已終止」，床位釋放為空床。此操作不可復原。`,
+        confirmLabel: '確認退租',
+        danger: true,
+        onConfirm: () => {
+            const today = new Date().toISOString().slice(0, 10);
+            store.updateContract(c.id, {
+                renewalState: 'terminated',
+                terminatedDate: today
+            });
+            // 釋放床位
+            if (c.propertyName) {
+                const prop = mockData.properties.find(p => p.name === c.propertyName);
+                if (prop) {
+                    store.updateProperty(prop.id, {
+                        status: '待租', tenant: null, contractId: null, contractEnd: null
+                    });
+                }
+            }
+            showToast(`已退租：${c.tenant}`, 'success');
+            refreshView();
+        }
+    });
+}
 // #7-2: 單筆結算刪除
 function delSettlement(id) {
     const s = mockData.settlements?.find(x => x.id === id);
@@ -700,15 +746,20 @@ export function initManagedHouseActions(scope) {
         else if (action === 'add-bed')        addBed(building, parseInt(btn.dataset.room, 10));
         else if (action === 'del-room')       delRoom(building, parseInt(btn.dataset.room, 10));
         else if (action === 'del-bed')        delBed(building, btn.dataset.bed);
+        // #5: 住房一覽 入住/退租
+        else if (action === 'checkin-bed')    checkinBed(building, btn.dataset.bedName);
+        else if (action === 'terminate-tenant') terminateTenantContract(btn.dataset.id);
         // R6.1: 房屋資料 per-section 編輯
         else if (btn.matches('[data-section-action]')) {
             const sectionName = btn.closest('[data-section]')?.dataset.section;
             const sectionAction = btn.dataset.sectionAction;
             handleSectionAction(building, sectionName, sectionAction);
         }
-        // R5.3: 合約 tab inline create / delete
+        // R5.3 / #6-1: 合約 tab create / view / edit / delete
         else if (action === 'new-owner-contract')  showManagedOwnerContractForm(building);
         else if (action === 'new-tenant-contract') showManagedTenantContractForm(building);
+        else if (action === 'view-managed-contract') viewManagedContract(btn.dataset.id);
+        else if (action === 'edit-managed-contract') editManagedContract(building, btn.dataset.id);
         else if (action === 'del-contract')   delContract(btn.dataset.id);
         // R5.4: 費用計算 actions
         else if (action === 'save-fee')       saveFeeSettlement(building, scope);
@@ -1316,6 +1367,56 @@ const CONTRACT_STATUSES_OPTS = [
     { value: '已終止', label: '已終止' }
 ];
 
+// #6-1: 檢視 / 編輯 代管合約
+function viewManagedContract(id) {
+    const c = mockData.contracts.find(x => x.id === id);
+    if (!c) return;
+    const owner = c.ownerId ? getOwnerById(c.ownerId) : null;
+    const tenantMaster = c.tenant ? mockData.tenants.find(t => t.name === c.tenant) : null;
+    const typeLabel = c.contractType === 'managed-owner' ? '屋主委託合約 (我們 ← 屋主)' : '住客租賃合約';
+    const rows = [
+        ['合約 ID', c.id],
+        ['類型', typeLabel],
+        ['期間', `${c.startDate || '—'} ~ ${c.endDate || '—'}`],
+        ['月租', `$${(c.amount || 0).toLocaleString()}`],
+        ['押金', c.depositAmount ? `$${c.depositAmount.toLocaleString()}` : '—'],
+        ['狀態', c.status || '—'],
+        ...(c.contractType === 'managed-owner' ? [
+            ['屋主', owner?.name || c.lessorName || '—']
+        ] : [
+            ['租客', c.tenant || '—'],
+            ['租客手機', tenantMaster?.phone || '—'],
+            ['床位', (c.propertyName || '').replace('聚空間 - ', '') || '—'],
+            ['出租人', c.lessorName || '—']
+        ]),
+        ['備註', c.note || '—']
+    ];
+    const html = `
+        <table class="data-table is-compact" style="margin: 0;">
+            <tbody>
+                ${rows.map(([k, v]) => `<tr><td style="width: 30%; color: var(--text-muted);">${k}</td><td>${esc(String(v))}</td></tr>`).join('')}
+            </tbody>
+        </table>
+    `;
+    openConfirm({
+        title: `合約 ${c.id}`,
+        message: html,
+        confirmLabel: '關閉',
+        hideCancel: true,
+        maxWidth: 560
+    });
+}
+
+function editManagedContract(building, id) {
+    const c = mockData.contracts.find(x => x.id === id);
+    if (!c) return;
+    if (c.contractType === 'managed-owner') {
+        showManagedOwnerContractForm(building, { editContract: c });
+    } else {
+        showManagedTenantContractForm(building, { editContract: c });
+    }
+}
+
 function delContract(id) {
     const c = mockData.contracts.find(x => x.id === id);
     if (!c) return;
@@ -1333,53 +1434,71 @@ function delContract(id) {
 }
 
 // 屋主委託合約：我們 (承租方) ← 屋主 (出租方)
-function showManagedOwnerContractForm(building) {
+// opts.editContract: 帶現有合約進去編輯
+function showManagedOwnerContractForm(building, opts = {}) {
+    const { editContract } = opts;
+    const isEdit = !!editContract;
     const owner = building.ownerId ? getOwnerById(building.ownerId) : null;
     if (!owner) {
         showToast('請先在「房屋資料」設定屋主', 'warning', 4000);
         return;
     }
     const today = new Date().toISOString().slice(0, 10);
+    const initialValues = isEdit ? {
+        startDate: editContract.startDate || today,
+        endDate: editContract.endDate || '',
+        amount: editContract.amount || 0,
+        status: editContract.status || '待簽署',
+        note: editContract.note || ''
+    } : {};
     openFormModal({
-        title: `新增屋主委託合約 — ${building.name}`,
+        title: isEdit ? `編輯委託合約 ${editContract.id}` : `新增屋主委託合約 — ${building.name}`,
         maxWidth: 560,
         fields: [
-            { name: '__s1', type: 'section', label: '委託基本資訊', hint: `屋主：${owner.name}（已自動帶入，可至屋主清單修改）` },
+            { name: '__s1', type: 'section', label: '委託基本資訊', hint: `屋主：${owner.name}` },
             { name: 'startDate', label: '委託起始日', type: 'date', required: true, value: building.managedStartDate || today },
             { name: 'endDate',   label: '委託結束日', type: 'date', value: building.managedEndDate || '' },
             { name: 'amount',    label: '委託月租 (我們每月付屋主)', type: 'number', required: true, value: building.monthlyRent || 0 },
             { name: 'status',    label: '簽署狀態', type: 'select', options: CONTRACT_STATUSES_OPTS, value: '待簽署' },
             { name: 'note',      label: '備註', type: 'textarea', span: 2, rows: 3 }
         ],
-        values: {},
-        submitLabel: '建立委託合約',
+        values: initialValues,
+        submitLabel: isEdit ? '儲存變更' : '建立委託合約',
         onSubmit: (values) => {
             const payload = {
                 contractType: 'managed-owner',
                 buildingId: building.id,
                 ownerId: building.ownerId,
                 lessorName: owner.name,
-                tenant: owner.name,           // 給 list 顯示用
+                tenant: owner.name,
                 propertyName: '',
                 startDate: values.startDate,
                 endDate: values.endDate || null,
                 signDate: values.startDate,
                 amount: Number(values.amount) || 0,
                 status: values.status,
-                renewalState: 'active',
                 termMonths: 12,
                 depositAmount: 0,
                 note: values.note || ''
             };
-            const c = store.addContract(payload);
-            showToast(`已建立屋主委託合約 ${c.id}`, 'success');
+            if (isEdit) {
+                store.updateContract(editContract.id, payload);
+                showToast(`已更新合約 ${editContract.id}`, 'success');
+            } else {
+                payload.renewalState = 'active';
+                const c = store.addContract(payload);
+                showToast(`已建立屋主委託合約 ${c.id}`, 'success');
+            }
             refreshView();
         }
     });
 }
 
 // 住客代管合約：住客 ← 出租人（我們 / 屋主名義可選）
-function showManagedTenantContractForm(building) {
+// opts.preselectBedName: 從住房一覽帶入床位 → form 預選
+// opts.editContract: 帶現有合約進去編輯 (#6-1)
+function showManagedTenantContractForm(building, opts = {}) {
+    const { preselectBedName, editContract } = opts;
     const owner = building.ownerId ? getOwnerById(building.ownerId) : null;
     const beds = mockData.properties
         .filter(p => p.buildingId === building.id)
@@ -1390,7 +1509,7 @@ function showManagedTenantContractForm(building) {
     }
     const bedOptions = beds.map(b => ({
         value: b.name,
-        label: `R${b.roomNumber}-${b.bedLetter}${bedOccupied(b.name) ? ' (已出租)' : ''}`
+        label: `R${b.roomNumber}-${b.bedLetter}${bedOccupied(b.name) && b.name !== editContract?.propertyName ? ' (已出租)' : ''}`
     }));
     const today = new Date().toISOString().slice(0, 10);
     const ourName = '聚空間租賃管理顧問有限公司';
@@ -1400,14 +1519,37 @@ function showManagedTenantContractForm(building) {
     ];
     if (owner) lessorOptions.push({ value: owner.name, label: owner.name });
 
+    const isEdit = !!editContract;
+    // prefill: 編輯模式 → 從合約帶；建立模式 → 預選床位 (若有)
+    const initialBed = editContract?.propertyName || preselectBedName || '';
+    const initialTenant = editContract?.tenant || '';
+    const existingTenant = initialTenant ? mockData.tenants.find(t => t.name === initialTenant) : null;
+    const initialPhone = existingTenant?.phone || '';
+    const initialValues = isEdit ? {
+        propertyName: initialBed,
+        tenant: initialTenant,
+        tenantPhone: initialPhone,
+        startDate: editContract.startDate || today,
+        termMonths: editContract.termMonths || 12,
+        endDate: editContract.endDate || '',
+        amount: editContract.amount || 0,
+        depositAmount: editContract.depositAmount || 0,
+        lessorName: editContract.lessorName || ourName,
+        status: editContract.status || '待簽署',
+        note: editContract.note || ''
+    } : {
+        propertyName: initialBed,
+        startDate: today
+    };
+
     openFormModal({
-        title: `新增住客合約 — ${building.name}`,
+        title: isEdit ? `編輯住客合約 ${editContract.id}` : `新增住客合約 — ${building.name}`,
         maxWidth: 600,
         fields: [
             { name: '__s1', type: 'section', label: '床位 + 租客' },
             { name: 'propertyName', label: '床位', type: 'select', required: true, span: 2, options: bedOptions, searchable: true },
             { name: 'tenant',       label: '租客姓名', type: 'text', required: true },
-            { name: 'tenantPhone',  label: '租客手機', type: 'text', placeholder: '0912-345-678' },  // #6-4
+            { name: 'tenantPhone',  label: '租客手機', type: 'text', placeholder: '0912-345-678' },
 
             { name: '__s2', type: 'section', label: '合約期間 + 月租' },
             { name: 'startDate', label: '入住日期', type: 'date', required: true, value: today },
@@ -1424,8 +1566,8 @@ function showManagedTenantContractForm(building) {
             { name: 'status', label: '簽署狀態', type: 'select', options: CONTRACT_STATUSES_OPTS, value: '待簽署' },
             { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
         ],
-        values: {},
-        submitLabel: '建立住客合約',
+        values: initialValues,
+        submitLabel: isEdit ? '儲存變更' : '建立住客合約',
         onSubmit: (values) => {
             const prop = mockData.properties.find(p => p.name === values.propertyName);
             if (!prop) { showToast('找不到對應床位', 'danger'); return false; }
@@ -1452,28 +1594,34 @@ function showManagedTenantContractForm(building) {
                 amount: Number(values.amount) || 0,
                 depositAmount: Number(values.depositAmount) || 0,
                 status: values.status,
-                renewalState: 'active',
                 note: values.note || ''
             };
-            const c = store.addContract(payload);
-            // 同步更新床位狀態（代管模式還是要顯示已出租）
+            let contract;
+            if (isEdit) {
+                contract = store.updateContract(editContract.id, payload);
+                showToast(`已更新合約 ${editContract.id}`, 'success');
+            } else {
+                payload.renewalState = 'active';
+                contract = store.addContract(payload);
+                showToast(`已建立住客合約 ${contract.id}`, 'success');
+            }
+            // 同步床位狀態 (新建 / 編輯換床位 都要)
             store.updateProperty(prop.id, {
                 status: '已出租',
                 tenant: payload.tenant,
-                contractId: c.id,
+                contractId: contract.id,
                 contractEnd: endDate
             });
-            // #6-4: 租客手機 → 寫到 tenants 表 (跟共居用同個 tenant 主檔，方便日後 LINE 推播)
+            // 租客手機 → 寫到 tenants 表
             const phone = (values.tenantPhone || '').trim();
             if (phone) {
-                const existingTenant = mockData.tenants.find(t => t.name === payload.tenant);
-                if (existingTenant) {
-                    if (existingTenant.phone !== phone) store.updateTenant(existingTenant.id, { phone });
+                const t = mockData.tenants.find(t => t.name === payload.tenant);
+                if (t) {
+                    if (t.phone !== phone) store.updateTenant(t.id, { phone });
                 } else {
                     store.addTenant({ name: payload.tenant, phone, currentProperty: prop.name });
                 }
             }
-            showToast(`已建立住客合約 ${c.id}`, 'success');
             refreshView();
         }
     });
