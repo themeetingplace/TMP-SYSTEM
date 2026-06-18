@@ -135,19 +135,49 @@ function getBedContracts(bed) {
         .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
 }
 
-// 渲染「單一合約」的列 — 每份合約獨立一列，床位 label 一律完整顯示
-function renderContractRow(bed, contract, months, today, stripeClass, todayStr) {
+// 把續租鏈 (parentContractId 鎖鏈) 合併成一條 chain
+// 同租客 + 接續日相連 = 顯示為一列；不同租客 = 各自一列
+function buildContractChains(contracts) {
+    const byId = new Map(contracts.map(c => [c.id, c]));
+    const childByParentId = new Map();
+    contracts.forEach(c => {
+        if (c.parentContractId && byId.has(c.parentContractId)) {
+            childByParentId.set(c.parentContractId, c);
+        }
+    });
+    // roots: 沒 parent 或 parent 不在此床位 list (跨床位的不接)
+    const roots = contracts.filter(c => !c.parentContractId || !byId.has(c.parentContractId));
+    return roots.map(root => {
+        const chain = [root];
+        let cur = root;
+        while (childByParentId.has(cur.id)) {
+            const next = childByParentId.get(cur.id);
+            // 不同租客換人 → 不合併 (不該擠在同一列)
+            if (next.tenant !== cur.tenant) break;
+            chain.push(next);
+            cur = next;
+        }
+        return chain;
+    });
+}
+
+// 渲染「續租鏈」的列 — 同租客接續續租合併成一列
+// chain[0] = 原始合約, chain[chain.length-1] = 最新/當前合約 (操作按鈕對應這個)
+function renderContractRow(bed, chain, months, today, stripeClass, todayStr) {
+    const head = chain[0];
+    const latest = chain[chain.length - 1];
+
     const bedLabel = bed.roomNumber && bed.bedLetter ? `R${bed.roomNumber}-${bed.bedLetter}` : bed.name;
     const bedLabelHtml = `<button class="occ-link" data-action="show-bed" data-bed-id="${bed.id}" title="點擊看床位資料">${bedLabel}</button>`;
 
-    const tenantObj = mockData.tenants.find(t => t.name === contract.tenant);
+    const tenantObj = mockData.tenants.find(t => t.name === latest.tenant);
     const tenantInner = tenantObj
-        ? `<button class="occ-link" data-action="show-tenant" data-tenant-id="${tenantObj.id}" title="點擊看租客詳細資料">${contract.tenant}</button>`
-        : contract.tenant;
+        ? `<button class="occ-link" data-action="show-tenant" data-tenant-id="${tenantObj.id}" title="點擊看租客詳細資料">${latest.tenant}</button>`
+        : latest.tenant;
 
-    // 未來合約 (start_date > today) 標記為「預入住」
-    const isFuture = contract.startDate && contract.startDate > todayStr;
-    const isSnoozed = contract.renewalState === 'snoozed';
+    // 未來合約 (start_date > today) — 用 head 判斷 (整鏈起點)
+    const isFuture = head.startDate && head.startDate > todayStr;
+    const isSnoozed = latest.renewalState === 'snoozed';
 
     let tenantCell;
     if (isSnoozed) {
@@ -157,12 +187,16 @@ function renderContractRow(bed, contract, months, today, stripeClass, todayStr) 
     } else {
         tenantCell = `<strong>${tenantInner}</strong>`;
     }
-    // 外部平台代收 → 加個小 badge 標示 (Airbnb / 591 等)，方便 owner 一眼分辨
-    if (contract.paymentChannel === 'platform') {
-        const platformLabel = contract.platformName || '外部平台';
+    // 鏈長 > 1 顯示「續 N」標記，提示這是合併過的多份合約
+    if (chain.length > 1) {
+        tenantCell += ` <span class="occ-chain-badge" title="續租鏈：共 ${chain.length} 份合約合併顯示\n${chain.map(c => `${c.id} ${c.startDate} ~ ${c.endDate}`).join('\n')}">續${chain.length}</span>`;
+    }
+    // 外部平台代收 → 加個小 badge 標示 (Airbnb / 591 等)，看 latest 那筆
+    if (latest.paymentChannel === 'platform') {
+        const platformLabel = latest.platformName || '外部平台';
         tenantCell += ` <span style="display: inline-block; font-size: 0.65rem; padding: 1px 4px; background: var(--color-info-light); color: var(--color-info); border-radius: 3px; vertical-align: middle;" title="外部平台代收，不開帳單">🌐 ${platformLabel}</span>`;
     }
-    // 備註欄：點擊編輯 (helper 透過 CSS pointer-events 鎖掉)；空白也可點新增備註
+    // 備註欄
     const noteContent = tenantObj?.note
         ? `<span class="occ-note-clamp">${tenantObj.note}</span>`
         : `<span class="occ-note-empty">+ 編輯</span>`;
@@ -170,27 +204,29 @@ function renderContractRow(bed, contract, months, today, stripeClass, todayStr) 
         ? `<button class="occ-note-btn" data-action="edit-note" data-tenant-id="${tenantObj.id}" title="${tenantObj.note ? tenantObj.note.replace(/"/g, '&quot;') : '點擊新增備註'}">${noteContent}</button>`
         : (isSnoozed ? `<span style="font-size: var(--text-2xs);">暫緩中</span>` : '');
 
+    // Cell rendering: 逐月找鏈中哪個合約覆蓋這個月，從最新往回找 (新合約優先)
     const cells = months.map(m => {
-        const cell = rentCellFor(contract, m, today);
-        if (!cell.value) return '<td></td>';
-        return `<td class="${cell.className} occ-clickable" data-action="show-contract" data-contract-id="${cell.contractId}" title="${cell.tooltip}">${cell.value}</td>`;
+        for (let i = chain.length - 1; i >= 0; i--) {
+            const cell = rentCellFor(chain[i], m, today);
+            if (cell.value) return `<td class="${cell.className} occ-clickable" data-action="show-contract" data-contract-id="${cell.contractId}" title="${cell.tooltip}">${cell.value}</td>`;
+        }
+        return '<td></td>';
     }).join('');
 
     const rowClass = [stripeClass, isFuture ? 'occ-row-future' : ''].filter(Boolean).join(' ');
 
-    // 操作 cell：待決策 / 已過期 / 租客已透過 LINE 表達意願 → 顯 3 顆續/退/暫按鈕
-    // 其他狀態維持原本「退房 checkbox」入口
-    const hasIntent = ['renew', 'decline', 'inquiry'].includes(contract.renewIntent);
-    const showDecisionButtons = needsDecision(contract, today) || hasIntent;
+    // 決策按鈕看最新那筆 (續租鏈中只有最後一份還在跑)
+    const hasIntent = ['renew', 'decline', 'inquiry'].includes(latest.renewIntent);
+    const showDecisionButtons = needsDecision(latest, today) || hasIntent;
     const actionCell = showDecisionButtons
         ? `
             <div class="occ-decision-btns" title="續租 / 退租 / 暫緩">
-                <button class="occ-action-btn occ-action-renew" data-action="renew-contract" data-contract-id="${contract.id}" title="續租"><i class="ph ph-arrow-clockwise"></i></button>
-                <button class="occ-action-btn occ-action-terminate" data-action="terminate-contract-btn" data-contract-id="${contract.id}" title="退租"><i class="ph ph-door-open"></i></button>
-                <button class="occ-action-btn occ-action-snooze" data-action="snooze-contract" data-contract-id="${contract.id}" title="暫緩"><i class="ph ph-clock-clockwise"></i></button>
+                <button class="occ-action-btn occ-action-renew" data-action="renew-contract" data-contract-id="${latest.id}" title="續租"><i class="ph ph-arrow-clockwise"></i></button>
+                <button class="occ-action-btn occ-action-terminate" data-action="terminate-contract-btn" data-contract-id="${latest.id}" title="退租"><i class="ph ph-door-open"></i></button>
+                <button class="occ-action-btn occ-action-snooze" data-action="snooze-contract" data-contract-id="${latest.id}" title="暫緩"><i class="ph ph-clock-clockwise"></i></button>
             </div>
         `
-        : `<input type="checkbox" class="occ-terminate-check" data-action="terminate-contract" data-contract-id="${contract.id}" title="勾選後啟動退房流程" />`;
+        : `<input type="checkbox" class="occ-terminate-check" data-action="terminate-contract" data-contract-id="${latest.id}" title="勾選後啟動退房流程" />`;
 
     return `
         <tr class="${rowClass}">
@@ -225,8 +261,10 @@ function renderRow(bed, months, today, stripeClass = '') {
     const contracts = getBedContracts(bed);
     if (contracts.length === 0) return renderVacantRow(bed, months, stripeClass);
     const todayStr = today.toISOString().slice(0, 10);
-    return contracts
-        .map(c => renderContractRow(bed, c, months, today, stripeClass, todayStr))
+    // 把續租鏈合併成一條 chain — 每條 chain 渲染一列
+    const chains = buildContractChains(contracts);
+    return chains
+        .map(chain => renderContractRow(bed, chain, months, today, stripeClass, todayStr))
         .join('');
 }
 

@@ -2562,6 +2562,20 @@ select.inline-edit-input { cursor: pointer; }
     font-weight: 500;
 }
 
+/* 續租鏈合併標記 (同租客接續續租 → 多份合約顯示為 1 列) */
+.occ-chain-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 1px 5px;
+    background: var(--color-primary-light);
+    color: var(--color-primary-text);
+    border-radius: var(--radius-full);
+    vertical-align: middle;
+    margin-left: 0.25rem;
+    cursor: help;
+}
+
 /* 合約到期標記 — 沿用收租日的藍色，小字區分用途 */
 .occ-table td.occ-end-marker {
     background: transparent !important;
