@@ -89,7 +89,7 @@ function inlineField(label, value, opts = {}) {
                 </button>
                 <div class="custom-select-panel" hidden>
                     <div class="custom-select-options-wrap">
-                        ${opts2.map(o => `<button type="button" class="custom-select-option ${String(o.value) === v ? 'is-selected' : ''}" data-value="${esc(o.value)}">${esc(o.label)}</button>`).join('')}
+                        ${opts2.map(o => `<button type="button" class="custom-select-option ${String(o.value) === v ? 'is-selected' : ''}" data-value="${esc(o.value)}"><span>${esc(o.label)}</span></button>`).join('')}
                     </div>
                 </div>
             </div>`;
@@ -165,13 +165,13 @@ function renderBuildingDetail(building) {
                 <div class="houses-fields-grid">
                     ${inlineField('月租金 (NT$)', building.monthlyRent, { key: 'monthlyRent', type: 'number', coerce: 'number', placeholder: '45000', disabled: !isRent })}
                     ${inlineField('含稅', building.rentIncludesTax, {
-                        key: 'rentIncludesTax', type: 'select', coerce: 'bool', disabled: !isRent,
-                        options: [{ value: 'true', label: '含稅' }, { value: 'false', label: '不含稅' }]
+                        key: 'rentIncludesTax', type: 'checkbox', coerce: 'bool', disabled: !isRent,
+                        checkboxLabel: '租金已含稅'
                     })}
                     ${inlineField('租金條件', building.rentTerm, { key: 'rentTerm', disabled: !isRent })}
                     ${inlineField('是否報稅', building.taxReported, {
-                        key: 'taxReported', type: 'select', coerce: 'bool', disabled: !isRent,
-                        options: [{ value: 'true', label: '是' }, { value: 'false', label: '否' }]
+                        key: 'taxReported', type: 'checkbox', coerce: 'bool', disabled: !isRent,
+                        checkboxLabel: '已申報'
                     })}
                 </div>
             </div>
