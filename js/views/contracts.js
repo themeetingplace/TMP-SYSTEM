@@ -555,7 +555,6 @@ function showContractForm(contract) {
                         </button>
                     </div>
                     <div id="adj-list"></div>
-                    <small class="form-hint" style="color: var(--text-muted); font-size: var(--text-2xs);">例：季繳優惠 -1000 (折扣) / 能源費 +500 (加收)。沒有可以不填。</small>
                 `;
                 const listEl = adjustPh.querySelector('#adj-list');
                 const addRow = (row) => {
