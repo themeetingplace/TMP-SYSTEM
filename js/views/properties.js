@@ -507,19 +507,16 @@ export function showCheckinAssignmentForm(opts = {}) {
     const contractFields = [
         { name: 'scheduledDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: todayStr },
         { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(todayStr), value: '1' },
-        { name: 'amount', label: '月租金', type: 'number', required: true, value: preselectBed?.rent || 0, span: 2, hint: '會自動帶床位設定的租金，可調整' },
-        // === 收費方式 — 外部平台代收 (Airbnb / 591 / ...) 不開帳單 ===
-        { name: '__sep_channel', type: 'section', label: '收費方式' },
+        { name: 'amount', label: '月租金', type: 'number', required: true, value: preselectBed?.rent || 0, span: 2, hint: '會自動帶床位設定的租金，可調整' }
+    ];
+    // 收款欄位 — 收費對象拉到收款步驟頂端
+    const paymentFields = [
         { name: 'paymentChannel', label: '收費對象', type: 'select', required: true, value: 'self', span: 2,
           options: [
               { value: 'self',     label: '建立帳單' },
               { value: 'platform', label: '外部平台代收' }
           ] },
-        { name: 'platformName', label: '平台名稱', type: 'text', span: 2, placeholder: '例：Airbnb / 591 / KKday', hint: '收費對象選「外部平台代收」時填' }
-    ];
-    // 收款欄位（一律顯示；未填視為未收）
-    // 折扣 / 加收項目改成「自由加減項目」可多筆 (新需求 #1) — 用 placeholder + onFormMount 動態渲染
-    const paymentFields = [
+        { name: 'platformName', label: '平台名稱', type: 'text', span: 2, placeholder: '例：Airbnb / 591 / KKday', hint: '收費對象選「外部平台代收」時填' },
         { name: '__sep_payment', label: '收款記錄', type: 'section', hint: '依實際收款狀況填寫，未填視為未收' },
         { name: 'adjustments', type: 'placeholder' },  // 加減項目子表單
         { name: 'discount', type: 'hidden', value: 0 },           // 自動計算：net (sub − add)
