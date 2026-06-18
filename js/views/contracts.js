@@ -436,8 +436,8 @@ function showContractForm(contract) {
             { name: '__sep_channel', type: 'section', label: '收費方式' },
             { name: 'paymentChannel', label: '收費對象', type: 'select', required: true, span: 2,
               options: [
-                  { value: 'self',     label: '自收 (我們開帳單收款)' },
-                  { value: 'platform', label: '外部平台代收 (Airbnb / 591 / 不開帳單)' }
+                  { value: 'self',     label: '建立帳單' },
+                  { value: 'platform', label: '外部平台代收' }
               ] },
             { name: 'platformName', label: '平台名稱', type: 'text', span: 2, placeholder: 'Airbnb / 591 / KKday', hint: '收費對象選「外部平台代收」時填' },
 
