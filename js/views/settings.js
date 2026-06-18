@@ -981,7 +981,7 @@ function deleteTemplate(buildingId) {
 }
 
 // === 切換 tab + 綁定動作 ===
-let currentTab = 'buildings';
+let currentTab = 'invoiceTypes';  // 2026-06-18: 拿掉 buildings tab，default 改帳單類型
 
 function rebindActions(scope) {
     // 館別
