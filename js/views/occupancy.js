@@ -135,30 +135,48 @@ function getBedContracts(bed) {
         .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
 }
 
-// 把續租鏈 (parentContractId 鎖鏈) 合併成一條 chain
-// 同租客 + 接續日相連 = 顯示為一列；不同租客 = 各自一列
+// 兩個日期差 N 天內 = 視為接續 (xlsx 匯入 / 同日 / +1 天 都算)
+function daysBetween(d1, d2) {
+    if (!d1 || !d2) return Infinity;
+    const a = new Date(d1).getTime();
+    const b = new Date(d2).getTime();
+    return Math.abs(a - b) / 86400000;
+}
+
+// 把續租鏈合併成一條 chain
+// 合併條件 (滿足任一即合併):
+//   1. parentContractId 直接指向上一份 (走 renew 流程建的)
+//   2. 同租客 + 上一份的 endDate ≈ 下一份的 startDate (≤ 1 天) — xlsx 匯入或手動沒設 parent 也能合
+// 不同租客換人 → 一定不合併
 function buildContractChains(contracts) {
     const byId = new Map(contracts.map(c => [c.id, c]));
-    const childByParentId = new Map();
-    contracts.forEach(c => {
-        if (c.parentContractId && byId.has(c.parentContractId)) {
-            childByParentId.set(c.parentContractId, c);
-        }
-    });
-    // roots: 沒 parent 或 parent 不在此床位 list (跨床位的不接)
-    const roots = contracts.filter(c => !c.parentContractId || !byId.has(c.parentContractId));
-    return roots.map(root => {
-        const chain = [root];
-        let cur = root;
-        while (childByParentId.has(cur.id)) {
-            const next = childByParentId.get(cur.id);
-            // 不同租客換人 → 不合併 (不該擠在同一列)
-            if (next.tenant !== cur.tenant) break;
+    // 已成為某條 chain 的 child (避免重複)
+    const consumed = new Set();
+    const chains = [];
+    for (const c of contracts) {
+        if (consumed.has(c.id)) continue;
+        const chain = [c];
+        consumed.add(c.id);
+        // 往後找接續合約
+        let cur = c;
+        while (true) {
+            const next = contracts.find(x => {
+                if (consumed.has(x.id)) return false;
+                if (x.tenant !== cur.tenant) return false;
+                // 條件 1: parent 直連
+                if (x.parentContractId === cur.id) return true;
+                // 條件 2: 日期接續 (差 ≤ 1 天) + 同租客
+                if (cur.endDate && x.startDate && daysBetween(cur.endDate, x.startDate) <= 1) return true;
+                return false;
+            });
+            if (!next) break;
             chain.push(next);
+            consumed.add(next.id);
             cur = next;
         }
-        return chain;
-    });
+        chains.push(chain);
+    }
+    return chains;
 }
 
 // 渲染「續租鏈」的列 — 同租客接續續租合併成一列
