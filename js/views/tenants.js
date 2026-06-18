@@ -339,7 +339,7 @@ export function showTenantNoteEditor(tenantId) {
                 style="width: 100%; min-height: 180px; max-height: 50vh; padding: 0.875rem 1rem;
                        border: 1px solid var(--border-color); border-radius: 8px; resize: vertical;
                        font: 0.9375rem/1.6 'Noto Sans TC', -apple-system, sans-serif; color: var(--text-main);
-                       background: #fffdfb; outline: none; box-sizing: border-box;
+                       background: var(--color-surface); outline: none; box-sizing: border-box;
                        transition: border-color 0.15s, box-shadow 0.15s;">${initialNote.replace(/</g, '&lt;')}</textarea>
         </div>
         <div style="margin-top: 0.5rem; font-size: var(--text-2xs); color: var(--text-muted); display: flex; justify-content: space-between;">

@@ -158,8 +158,8 @@ export function renderFinance() {
             ? `<span class="c-chip"><i class="ph ph-hash"></i> ${inv.contractId}</span>`
             : '';
         const directionBadge = inv.direction === 'in'
-            ? '<span class="badge success">收入</span>'
-            : '<span class="badge danger">支出</span>';
+            ? '<span class="status-badge success">收入</span>'
+            : '<span class="status-badge danger">支出</span>';
         const heroAmtClass = inv.direction === 'in' ? 'income' : 'expense';
         const discountVal = hasDiscount
             ? `-$${inv.discount.toLocaleString()}${inv.discountReason ? ` <span class="c-meta-val-sub">${formatDiscountReason(inv.discountReason)}</span>` : ''}`
@@ -187,9 +187,9 @@ export function renderFinance() {
                 <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${(inv.note || '').replace(/"/g, '&quot;')}"><span style="font-size: var(--text-xs); color: var(--text-muted);">${linkifyNoteContracts(inv.note)}</span></td>
                 <td>
                     <div style="display: flex; gap: 0.4rem;">
-                        <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: var(--text-2xs);" data-action="view" data-id="${inv.id}" title="明細"><i class="ph ph-eye"></i></button>
-                        <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: var(--text-2xs);" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
-                        <button class="btn btn-outline finance-action" style="padding: 0.2rem 0.45rem; font-size: var(--text-2xs); color: var(--color-danger);" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
+                        <button class="btn btn-outline btn-xs btn-icon-only finance-action" data-action="view" data-id="${inv.id}" title="明細"><i class="ph ph-eye"></i></button>
+                        <button class="btn btn-outline btn-xs btn-icon-only finance-action" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
+                        <button class="btn btn-outline btn-xs btn-icon-only btn-danger finance-action" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
                     </div>
                 </td>
             </tr>

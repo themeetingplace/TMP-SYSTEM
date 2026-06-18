@@ -117,7 +117,7 @@ function renderBuildingDetail(building) {
             <div class="houses-section">
                 <h4 class="houses-section-title" style="justify-content: space-between;">
                     <span><i class="ph ph-bed"></i> 房間 / 床位</span>
-                    <button class="btn btn-outline" data-action="manage-rooms" data-building-id="${esc(building.id)}" style="padding: 0.2rem 0.6rem; font-size: var(--text-2xs); text-transform: none; letter-spacing: 0;">
+                    <button class="btn btn-outline btn-xs" data-action="manage-rooms" data-building-id="${esc(building.id)}" style="text-transform: none; letter-spacing: 0;">
                         <i class="ph ph-list-bullets"></i> 管理房間/床位
                     </button>
                 </h4>

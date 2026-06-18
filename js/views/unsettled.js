@@ -98,8 +98,8 @@ export function renderUnsettled() {
             : (inv.contractId ? `合約 ${inv.contractId}` : '整館共用');
         const placeName = inv.propertyName ? inv.propertyName.replace('聚空間 - ', '') : buildingName(inv.buildingId);
         const heroBadge = inv.direction === 'in'
-            ? '<span class="badge danger">應收</span>'
-            : '<span class="badge warn">應付</span>';
+            ? '<span class="status-badge danger">應收</span>'
+            : '<span class="status-badge warning">應付</span>';
         const heroAmtClass = inv.direction === 'in' ? 'expense' : 'expense';  // 都用紅 (應收/應付都是「未到手」)
         const dueChipCls = overdue ? 'c-chip danger' : 'c-chip';
         const dueText = overdue

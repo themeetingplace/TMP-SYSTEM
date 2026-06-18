@@ -28,6 +28,9 @@
     --color-info-hover: #16447f;
     --color-info-light: rgba(30, 86, 163, 0.1);
 
+    /* 第三方品牌色 (LINE 推播 / 綁定相關 UI) */
+    --color-line: #06c755;
+
     /* 報表頁專用 — warm neutral surface + 細邊框 (取代彩色 accent / gradient) */
     --surface-warm: #fafaf7;
     --surface-sunken: #f4f2ed;
@@ -2085,8 +2088,8 @@ body[data-app-mode="managed"] .topbar-title h1::before {
     border-radius: 3px;
 }
 .houses-tab.active .houses-tab-badge {
-    background: rgba(255,255,255,0.25);
-    color: var(--text-inverse);
+    background: var(--color-warning-light);
+    color: var(--color-warning-text);
 }
 
 .houses-detail-header {

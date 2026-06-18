@@ -183,7 +183,7 @@ function showOwnerDetail(owner) {
                 <div style="font-weight: 600;"><i class="ph ph-vault"></i> 屋主目前持有押金 (跨房屋總計)</div>
                 <div style="font-size: 1.15rem; color: var(--color-success); margin-top: 0.25rem;">NT$ ${totalDeposit.toLocaleString()}</div>
             </div>
-            ${owner.note ? `<div style="margin-top: 0.75rem;"><div style="font-weight: 600;">備註</div><div style="white-space: pre-wrap; padding: 0.5rem; background: #fafbfc; border-radius: 4px;">${esc(owner.note)}</div></div>` : ''}
+            ${owner.note ? `<div style="margin-top: 0.75rem;"><div style="font-weight: 600;">備註</div><div style="white-space: pre-wrap; padding: 0.5rem; background: var(--bg-secondary); border-radius: var(--radius-sm);">${esc(owner.note)}</div></div>` : ''}
         </div>
     `;
     openConfirm({

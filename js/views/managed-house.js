@@ -228,7 +228,7 @@ function renderDataTab(building) {
                 </div>
             </div>
         `
-        : `<div style="color: var(--text-muted); font-size: var(--text-sm); padding: 0.5rem 0;">尚未指定屋主 → <button class="btn btn-outline" data-action="set-owner" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);"><i class="ph ph-user-plus"></i> 新增屋主資料</button></div>`;
+        : `<div style="color: var(--text-muted); font-size: var(--text-sm); padding: 0.5rem 0;">尚未指定屋主 → <button class="btn btn-outline btn-sm" data-action="set-owner"><i class="ph ph-user-plus"></i> 新增屋主資料</button></div>`;
 
     return `
         <div class="houses-section" data-section="basic">
@@ -323,8 +323,8 @@ function renderOccupancyTab(building) {
                 <div class="mhouse-room-header" style="display: flex; align-items: center; justify-content: space-between;">
                     <div>R${rn} <span style="color: var(--text-muted); font-weight: normal; font-size: 0.8rem; margin-left: 0.5rem;">${list.length} 床</span></div>
                     <div style="display: flex; gap: 0.4rem;">
-                        <button class="btn btn-outline" data-action="add-bed" data-room="${rn}" style="padding: 0.2rem 0.55rem; font-size: var(--text-xs);"><i class="ph ph-plus"></i> 加床</button>
-                        <button class="btn btn-outline" data-action="del-room" data-room="${rn}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除整房（包含所有床位）"><i class="ph ph-trash"></i></button>
+                        <button class="btn btn-outline btn-xs" data-action="add-bed" data-room="${rn}"><i class="ph ph-plus"></i> 加床</button>
+                        <button class="btn btn-outline btn-xs btn-danger btn-icon-only" data-action="del-room" data-room="${rn}" title="刪除整房（含所有床位）"><i class="ph ph-trash"></i></button>
                     </div>
                 </div>
                 <table class="data-table is-compact" style="margin: 0;">
@@ -334,9 +334,9 @@ function renderOccupancyTab(building) {
                             const c = mockData.contracts.find(x => x.propertyName === b.name && (x.renewalState === 'active' || x.renewalState === 'snoozed'));
                             // #5: 月租改 readonly 顯示, 加 入住 / 退租 / 刪空床 actions
                             const actionsHtml = c
-                                ? `<button class="btn btn-outline" data-action="terminate-tenant" data-id="${esc(c.id)}" style="padding: 0.15rem 0.55rem; font-size: var(--text-xs); color: var(--color-danger);" title="退租"><i class="ph ph-door-open"></i> 退租</button>`
-                                : `<button class="btn btn-outline" data-action="checkin-bed" data-bed-name="${esc(b.name)}" style="padding: 0.15rem 0.55rem; font-size: var(--text-xs); color: var(--color-primary);" title="新增入住"><i class="ph ph-user-plus"></i> 入住</button>
-                                   <button class="btn btn-outline" data-action="del-bed" data-bed="${esc(b.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除空床"><i class="ph ph-x"></i></button>`;
+                                ? `<button class="btn btn-outline btn-xs btn-danger" data-action="terminate-tenant" data-id="${esc(c.id)}" title="退租"><i class="ph ph-door-open"></i> 退租</button>`
+                                : `<button class="btn btn-outline btn-xs" data-action="checkin-bed" data-bed-name="${esc(b.name)}" style="color: var(--color-primary);" title="新增入住"><i class="ph ph-user-plus"></i> 入住</button>
+                                   <button class="btn btn-outline btn-xs btn-danger btn-icon-only" data-action="del-bed" data-bed="${esc(b.id)}" title="刪除空床"><i class="ph ph-x"></i></button>`;
                             return `<tr>
                                 <td><strong>R${b.roomNumber}-${b.bedLetter}</strong></td>
                                 <td>${c ? esc(c.tenant) : '<span style="color: var(--text-muted);">空床</span>'}</td>
@@ -408,9 +408,9 @@ function renderContractsTab(building) {
                             <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(c.amount || 0).toLocaleString()}</td>
                             <td>${statusBadge(c)}</td>
                             <td style="text-align: right;">
-                                <button class="btn btn-outline" data-action="view-managed-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs);" title="檢視"><i class="ph ph-eye"></i></button>
-                                <button class="btn btn-outline" data-action="edit-managed-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs);" title="編輯"><i class="ph ph-pencil"></i></button>
-                                <button class="btn btn-outline" data-action="del-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除"><i class="ph ph-trash"></i></button>
+                                <button class="btn btn-outline btn-xs" data-action="view-managed-contract" data-id="${esc(c.id)}" title="檢視合約"><i class="ph ph-eye"></i></button>
+                                <button class="btn btn-outline btn-xs" data-action="edit-managed-contract" data-id="${esc(c.id)}" title="編輯合約"><i class="ph ph-pencil"></i></button>
+                                <button class="btn btn-outline btn-xs btn-danger" data-action="del-contract" data-id="${esc(c.id)}" title="刪除合約"><i class="ph ph-trash"></i></button>
                             </td>
                         </tr>
                     `).join('')}
@@ -434,9 +434,9 @@ function renderContractsTab(building) {
                             <td style="font-size: var(--text-xs);">${esc(c.lessorName || '我們')}</td>
                             <td>${statusBadge(c)}</td>
                             <td style="text-align: right;">
-                                <button class="btn btn-outline" data-action="view-managed-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs);" title="檢視"><i class="ph ph-eye"></i></button>
-                                <button class="btn btn-outline" data-action="edit-managed-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs);" title="編輯"><i class="ph ph-pencil"></i></button>
-                                <button class="btn btn-outline" data-action="del-contract" data-id="${esc(c.id)}" style="padding: 0.15rem 0.4rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除"><i class="ph ph-trash"></i></button>
+                                <button class="btn btn-outline btn-xs" data-action="view-managed-contract" data-id="${esc(c.id)}" title="檢視合約"><i class="ph ph-eye"></i></button>
+                                <button class="btn btn-outline btn-xs" data-action="edit-managed-contract" data-id="${esc(c.id)}" title="編輯合約"><i class="ph ph-pencil"></i></button>
+                                <button class="btn btn-outline btn-xs btn-danger" data-action="del-contract" data-id="${esc(c.id)}" title="刪除合約"><i class="ph ph-trash"></i></button>
                             </td>
                         </tr>
                     `).join('')}
@@ -448,7 +448,7 @@ function renderContractsTab(building) {
         <div class="houses-section">
             <h4 class="houses-section-title" style="display: flex; justify-content: space-between; align-items: center;">
                 <span><i class="ph ph-handshake"></i> 屋主委託合約 <small style="color: var(--text-muted); font-weight: normal;">(我們 ← 屋主)</small></span>
-                <button class="btn btn-primary" data-action="new-owner-contract" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);"><i class="ph ph-plus"></i> 新增委託合約</button>
+                <button class="btn btn-primary btn-sm" data-action="new-owner-contract"><i class="ph ph-plus"></i> 新增委託合約</button>
             </h4>
             ${ownerTable}
         </div>
@@ -456,7 +456,7 @@ function renderContractsTab(building) {
         <div class="houses-section" style="margin-top: 1.5rem;">
             <h4 class="houses-section-title" style="display: flex; justify-content: space-between; align-items: center;">
                 <span><i class="ph ph-users"></i> 住客租賃合約 <small style="color: var(--text-muted); font-weight: normal;">(住客 ← 出租人)</small></span>
-                <button class="btn btn-primary" data-action="new-tenant-contract" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);"><i class="ph ph-plus"></i> 新增住客合約</button>
+                <button class="btn btn-primary btn-sm" data-action="new-tenant-contract"><i class="ph ph-plus"></i> 新增住客合約</button>
             </h4>
             ${tenantTable}
         </div>
@@ -546,9 +546,9 @@ function renderFeeTab(building) {
                             <td style="text-align: right;">$${(s.ownerReceivable || 0).toLocaleString()}</td>
                             <td><span class="status-badge ${s.status === 'settled' ? 'success' : s.status === 'sent' ? 'info' : 'muted'}">${s.status || 'draft'}</span></td>
                             <td>
-                                <button class="btn btn-outline" data-action="view-settlement" data-id="${s.id}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs);" title="檢視"><i class="ph ph-eye"></i></button>
-                                <button class="btn btn-outline" data-action="load-fee-month" data-month="${s.month}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs);" title="載入此月到上方表單"><i class="ph ph-arrow-up-left"></i></button>
-                                <button class="btn btn-outline" data-action="del-settlement" data-id="${s.id}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除此結算"><i class="ph ph-trash"></i></button>
+                                <button class="btn btn-outline btn-xs btn-icon-only" data-action="view-settlement" data-id="${s.id}" title="檢視結算明細"><i class="ph ph-eye"></i></button>
+                                <button class="btn btn-outline btn-xs btn-icon-only" data-action="load-fee-month" data-month="${s.month}" title="載入此月到上方表單"><i class="ph ph-arrow-up-left"></i></button>
+                                <button class="btn btn-outline btn-xs btn-icon-only btn-danger" data-action="del-settlement" data-id="${s.id}" title="刪除此結算"><i class="ph ph-trash"></i></button>
                             </td>
                         </tr>
                     `).join('')}

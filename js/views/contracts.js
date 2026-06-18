@@ -204,7 +204,7 @@ export function renderContracts() {
             ${isArchived ? '' : `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="download" data-id="${c.id}" title="下載 PDF">
                 <i class="ph ph-download"></i>
             </button>`}
-            ${isArchived ? '' : `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: #06c755;" data-action="send-line" data-id="${c.id}" title="寄/重寄 合約 PDF 給租客的 LINE（連結 24 小時有效，過期再點一次重發新連結）">
+            ${isArchived ? '' : `<button class="btn btn-outline btn-xs contract-action" style="color: var(--color-line);" data-action="send-line" data-id="${c.id}" title="LINE 寄合約 PDF">
                 <i class="ph ph-paper-plane-tilt"></i>
             </button>`}
             ${signedButton}
