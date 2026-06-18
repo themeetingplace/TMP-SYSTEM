@@ -338,7 +338,7 @@ function renderOccupancyTab(building) {
                     </div>
                 </div>
                 <table class="data-table is-compact" style="margin: 0;">
-                    <thead><tr><th style="width: 90px;">床位</th><th>租客</th><th style="width: 150px;">合約期間</th><th style="width: 100px; text-align: right;">月租</th><th style="width: 80px;">狀態</th><th style="width: 200px; text-align: right;">操作</th></tr></thead>
+                    <thead><tr><th style="width: 90px;">床位</th><th>租客</th><th style="width: 200px; white-space: nowrap;">合約期間</th><th style="width: 100px; text-align: right;">月租</th><th style="width: 80px;">狀態</th><th style="width: 180px; text-align: right;">操作</th></tr></thead>
                     <tbody>
                         ${list.map(b => {
                             const c = mockData.contracts.find(x => x.propertyName === b.name && (x.renewalState === 'active' || x.renewalState === 'snoozed'));
@@ -350,7 +350,7 @@ function renderOccupancyTab(building) {
                             return `<tr>
                                 <td><strong>R${b.roomNumber}-${b.bedLetter}</strong></td>
                                 <td>${c ? esc(c.tenant) : '<span style="color: var(--text-muted);">空床</span>'}</td>
-                                <td>${c ? `${c.startDate} ~ ${c.endDate}` : '—'}</td>
+                                <td style="white-space: nowrap; font-variant-numeric: tabular-nums;">${c ? `${c.startDate} ~ ${c.endDate}` : '—'}</td>
                                 <td style="text-align: right; font-variant-numeric: tabular-nums;">${b.rent ? '$' + Number(b.rent).toLocaleString() : '<span style="color: var(--text-muted);">—</span>'}</td>
                                 <td>${c ? `<span class="status-badge success">已出租</span>` : `<span class="status-badge muted">空床</span>`}</td>
                                 <td style="text-align: right;">${actionsHtml}</td>
