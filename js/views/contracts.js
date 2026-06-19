@@ -216,11 +216,26 @@ export function renderContracts() {
         const rowClass = isDecision ? 'is-decision-row' : (isArchived ? 'is-archived-row' : '');
 
         const areaName = extractArea(c.propertyName);
+        // bundle group 標示: 主合約 = 該合約有 child；子合約 = 該合約有 bundleParentContractId
+        const childCount = mockData.contracts.filter(x => x.bundleParentContractId === c.id).length;
+        const isBundleParent = childCount > 0;
+        const isBundleChild = !!c.bundleParentContractId;
+        const bundleBadge = isBundleParent
+            ? `<span class="status-badge info contract-action" data-action="unbundle-group" data-id="${c.id}" style="font-size: var(--text-2xs); margin-left: 0.25rem; cursor: pointer;" title="此為合併收款主合約 (含 ${childCount} 份子合約)，點擊解除綁定">🔗 主 +${childCount}</span>`
+            : (isBundleChild
+                ? `<span class="status-badge info contract-action" data-action="unbundle-self" data-id="${c.id}" style="font-size: var(--text-2xs); margin-left: 0.25rem; cursor: pointer;" title="此合約已併入 ${esc(c.bundleParentContractId)} 收款，點擊解除">🔗 子 → ${esc(c.bundleParentContractId)}</span>`
+                : '');
+        const cbDisabled = isArchived || c.paymentChannel === 'platform';
         return `
-            <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-channel="${esc(c.paymentChannel || 'self')}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
+            <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-channel="${esc(c.paymentChannel || 'self')}" data-tenant="${escapeAttr(c.tenant || '')}" data-building="${esc(mockData.properties.find(p => p.name === c.propertyName)?.buildingId || '')}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
+                <td style="text-align: center;">
+                    ${cbDisabled
+                        ? ''
+                        : `<input type="checkbox" class="contract-bundle-cb" data-id="${esc(c.id)}" aria-label="選取合約 ${esc(c.id)}">`}
+                </td>
                 <td>
                     <div style="display: flex; flex-direction: column;">
-                        <strong style="font-size: var(--text-base);">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: var(--text-2xs); color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}${c.paymentChannel === 'platform' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="外部平台代收，不開帳單">🌐 ${esc(c.platformName || '外部平台')}</span>` : ''}${c.contractType === 'managed-owner' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="代管 — 屋主委託合約">📋 屋主委託</span>` : ''}${c.contractType === 'managed-tenant' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="代管 — 住客租賃合約">🏠 代管租賃</span>` : ''}</strong>
+                        <strong style="font-size: var(--text-base);">${esc(c.id)}${c.parentContractId ? ` <span style="font-size: var(--text-2xs); color: var(--text-muted);">續自 ${esc(c.parentContractId)}</span>` : ''}${c.paymentChannel === 'platform' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="外部平台代收，不開帳單">🌐 ${esc(c.platformName || '外部平台')}</span>` : ''}${c.contractType === 'managed-owner' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="代管 — 屋主委託合約">📋 屋主委託</span>` : ''}${c.contractType === 'managed-tenant' ? ` <span class="status-badge info" style="font-size: var(--text-2xs); margin-left: 0.25rem;" title="代管 — 住客租賃合約">🏠 代管租賃</span>` : ''}${bundleBadge}</strong>
                         <span style="font-size: var(--text-xs); color: var(--text-muted);">${esc(c.propertyName || (c.buildingId ? mockData.buildings.find(b => b.id === c.buildingId)?.name + ' (整棟)' : '') || '')}</span>
                     </div>
                 </td>
@@ -325,8 +340,21 @@ export function renderContracts() {
             </div>
 
             <div class="table-container">
+                <!-- bundle 多選 bulk bar (只在 2+ 選擇時顯示) -->
+                <div id="contracts-bulk-bar" class="contracts-bulk-bar" style="display: none; align-items: center; gap: 0.75rem; padding: 0.55rem 0.85rem; margin-bottom: 0.75rem; background: var(--color-info-bg, #e0f2fe); border: 1px solid var(--color-info, #0369a1); border-radius: 6px; font-size: var(--text-sm);">
+                    <span id="contracts-bulk-count" style="font-weight: 600;">已選 0 份</span>
+                    <span id="contracts-bulk-hint" style="color: var(--text-muted); font-size: var(--text-xs);"></span>
+                    <div style="flex: 1;"></div>
+                    <button class="btn btn-primary" id="btn-bundle-contracts" disabled style="padding: 0.3rem 0.8rem;">
+                        <i class="ph ph-link"></i> 綁定為同一筆收款
+                    </button>
+                    <button class="btn btn-outline" id="btn-bulk-clear" style="padding: 0.3rem 0.6rem;">
+                        清除
+                    </button>
+                </div>
                 <table class="data-table contracts-table">
                     <colgroup>
+                        <col style="width: 36px;">
                         <col style="width: 220px;">
                         <col style="width: 110px;">
                         <col style="width: 110px;">
@@ -336,6 +364,7 @@ export function renderContracts() {
                         <col>
                     </colgroup>
                     <thead><tr>
+                        <th style="text-align: center;"><input type="checkbox" id="contracts-select-all" aria-label="全選" title="全選"></th>
                         <th class="sortable-col" data-sort-col="info" title="點擊排序">合約資訊 ${sortArrow('info', currentSort)}</th>
                         <th class="sortable-col" data-sort-col="tenant" title="點擊排序">租客 ${sortArrow('tenant', currentSort)}</th>
                         <th class="sortable-col" data-sort-col="amount" title="點擊排序">租金 ${sortArrow('amount', currentSort)}</th>
@@ -1171,6 +1200,140 @@ export function initContractActions(scope) {
             if (action === 'renew') confirmRenew(id);
             if (action === 'terminate') confirmTerminate(id);
             if (action === 'snooze') confirmSnooze(id);
+            if (action === 'unbundle-self') confirmUnbundle([id]);
+            if (action === 'unbundle-group') {
+                // 主合約被點 → 解除所有子合約
+                const children = mockData.contracts.filter(x => x.bundleParentContractId === id).map(x => x.id);
+                if (children.length) confirmUnbundle(children);
+            }
         });
+    });
+
+    // === bundle 收款多選 + 綁定 modal ===
+    const bulkBar = scope.querySelector('#contracts-bulk-bar');
+    const bulkCount = scope.querySelector('#contracts-bulk-count');
+    const bulkHint = scope.querySelector('#contracts-bulk-hint');
+    const bundleBtn = scope.querySelector('#btn-bundle-contracts');
+    const selectAllCb = scope.querySelector('#contracts-select-all');
+    const checkboxes = scope.querySelectorAll('.contract-bundle-cb');
+
+    const getSelectedIds = () => Array.from(scope.querySelectorAll('.contract-bundle-cb:checked')).map(cb => cb.dataset.id);
+
+    const updateBulkBar = () => {
+        const ids = getSelectedIds();
+        if (ids.length === 0) {
+            if (bulkBar) bulkBar.style.display = 'none';
+            return;
+        }
+        if (bulkBar) bulkBar.style.display = 'flex';
+        if (bulkCount) bulkCount.textContent = `已選 ${ids.length} 份`;
+        // 驗證: 至少 2 份、同租客、同 building、都不是 platform
+        const selectedRows = ids
+            .map(id => scope.querySelector(`tr[data-row-id="${CSS.escape(id)}"]`))
+            .filter(Boolean);
+        const tenants = new Set(selectedRows.map(tr => tr.dataset.tenant));
+        const buildings = new Set(selectedRows.map(tr => tr.dataset.building));
+        const channels = new Set(selectedRows.map(tr => tr.dataset.channel));
+        let reason = '';
+        let canBundle = true;
+        if (ids.length < 2) { canBundle = false; reason = '需至少選 2 份合約'; }
+        else if (tenants.size > 1) { canBundle = false; reason = '需同租客 (目前選了 ' + tenants.size + ' 位)'; }
+        else if (buildings.size > 1) { canBundle = false; reason = '需同館 (跨館不能綁同筆收款)'; }
+        else if (channels.has('platform')) { canBundle = false; reason = '外部平台合約不能綁定'; }
+        if (bundleBtn) bundleBtn.disabled = !canBundle;
+        if (bulkHint) bulkHint.textContent = canBundle ? '✓ 可綁定 — 選一份為主合約' : `⚠ ${reason}`;
+    };
+
+    checkboxes.forEach(cb => cb.addEventListener('change', () => {
+        // 任一手動點 → unmatch select-all
+        if (selectAllCb) selectAllCb.checked = false;
+        updateBulkBar();
+    }));
+
+    selectAllCb?.addEventListener('change', () => {
+        const checked = selectAllCb.checked;
+        checkboxes.forEach(cb => { cb.checked = checked; });
+        updateBulkBar();
+    });
+
+    scope.querySelector('#btn-bulk-clear')?.addEventListener('click', () => {
+        checkboxes.forEach(cb => { cb.checked = false; });
+        if (selectAllCb) selectAllCb.checked = false;
+        updateBulkBar();
+    });
+
+    bundleBtn?.addEventListener('click', () => {
+        const ids = getSelectedIds();
+        if (ids.length < 2) return;
+        const contracts = ids.map(id => mockData.contracts.find(c => c.id === id)).filter(Boolean);
+        // 選主合約 modal (用 openConfirm 客製內容)
+        const radios = contracts.map((c, idx) => `
+            <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 0.4rem; cursor: pointer;">
+                <input type="radio" name="bundle-primary" value="${esc(c.id)}" ${idx === 0 ? 'checked' : ''}>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600;">${esc(c.id)} <span style="color: var(--text-muted); font-size: var(--text-xs);">${esc(c.propertyName?.replace('聚空間 - ', '') || '')}</span></div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted);">月租 $${(c.amount || 0).toLocaleString()} · ${c.startDate || '—'} ~ ${c.endDate || '—'}</div>
+                </div>
+            </label>
+        `).join('');
+        const total = contracts.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        const term = contracts[0]?.termMonths || 1;
+        openConfirm({
+            title: '綁定為同一筆收款',
+            message: `
+                <div style="font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 0.75rem;">
+                    選一份為「主合約」(保留 invoice、收款記錄)，其餘變子合約 (invoice 併入主合約)
+                </div>
+                <div style="margin-bottom: 0.75rem;">${radios}</div>
+                <div style="padding: 0.6rem; background: var(--bg-tertiary); border-radius: 6px; font-size: var(--text-sm);">
+                    <div>合併後主合約應收 = <strong>$${(total * term).toLocaleString()}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">(月租合計 $${total.toLocaleString()} × ${term} 期)</span></div>
+                    <div style="color: var(--color-warning); font-size: var(--text-xs); margin-top: 0.3rem;">⚠ 子合約原本的 invoice / 收款記錄會被刪除。請確認以主合約 invoice 為準。</div>
+                </div>
+            `,
+            confirmLabel: '確認綁定',
+            onConfirm: () => {
+                const overlay = document.querySelector('.modal-overlay');
+                const selected = overlay?.querySelector('input[name="bundle-primary"]:checked')?.value;
+                if (!selected) {
+                    showToast('請選一份為主合約', 'warning', 3000);
+                    return false;
+                }
+                const childIds = ids.filter(id => id !== selected);
+                const result = store.bundleContracts(selected, childIds);
+                if (!result.ok) {
+                    showToast(`綁定失敗：${result.msg}`, 'danger', 4000);
+                    return false;
+                }
+                showToast(`✅ 已綁定 ${childIds.length + 1} 份合約為同一筆收款`, 'success', 3500);
+                refreshView();
+            }
+        });
+    });
+
+    // 初始 update (給 refresh 後 reattach 用)
+    updateBulkBar();
+}
+
+function confirmUnbundle(childIds) {
+    if (!childIds || !childIds.length) return;
+    const labels = childIds.join('、');
+    openConfirm({
+        title: '解除收款綁定',
+        message: `
+            <div>確定要解除以下合約的收款綁定?</div>
+            <div style="margin: 0.6rem 0; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 6px; font-family: monospace;">${labels}</div>
+            <div style="color: var(--color-warning); font-size: var(--text-xs);">⚠ 將為這些合約重新建立獨立 invoice (paid=0)，主合約 invoice 也會扣除這部份金額。</div>
+        `,
+        confirmLabel: '確認解除',
+        confirmType: 'warning',
+        onConfirm: () => {
+            const result = store.unbundleContracts(childIds);
+            if (!result.ok) {
+                showToast(`解除失敗：${result.msg}`, 'danger', 4000);
+                return false;
+            }
+            showToast(`✅ 已解除 ${childIds.length} 份合約的綁定`, 'success', 3500);
+            refreshView();
+        }
     });
 }

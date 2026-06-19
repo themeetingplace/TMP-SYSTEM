@@ -1197,6 +1197,91 @@ export const store = {
         recalcMetrics();
         return after;
     },
+    // === 綁定多份合約為同一筆收款 group ===
+    // parentId = 主合約 (保留 invoice), childIds = 子合約陣列 (invoice 併入 parent, 自身 invoice 刪掉)
+    // 用於: 同租客同館多床、想一筆收款涵蓋全部
+    bundleContracts(parentId, childIds) {
+        const parent = mockData.contracts.find(c => c.id === parentId);
+        if (!parent) return { ok: false, msg: '找不到主合約' };
+        if (!Array.isArray(childIds) || childIds.length === 0) return { ok: false, msg: '請至少選一份子合約' };
+
+        const children = childIds.map(id => mockData.contracts.find(c => c.id === id)).filter(Boolean);
+        if (children.some(c => c.id === parentId)) return { ok: false, msg: '主合約不能同時是子合約' };
+        if (children.some(c => c.bundleParentContractId && c.bundleParentContractId !== parentId)) {
+            return { ok: false, msg: '有合約已綁在其他 bundle 上, 請先解除' };
+        }
+        // 同租客檢查 (避免誤綁)
+        if (children.some(c => c.tenant !== parent.tenant)) {
+            return { ok: false, msg: '只能綁同租客的合約' };
+        }
+
+        // 1. 子合約設 parent + 移除其 rent invoice (合併到 parent invoice)
+        children.forEach(c => {
+            const ci = mockData.contracts.findIndex(x => x.id === c.id);
+            if (ci < 0) return;
+            mockData.contracts[ci] = { ...mockData.contracts[ci], bundleParentContractId: parentId };
+            // 子合約的 rent invoice 全部刪掉 (parent invoice 已含或即將更新)
+            const childInvoiceIds = mockData.invoices
+                .filter(inv => inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租')
+                .map(inv => inv.id);
+            childInvoiceIds.forEach(id => {
+                mockData.invoices = mockData.invoices.filter(x => x.id !== id);
+                window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'invoices', id } }));
+            });
+        });
+
+        // 2. parent invoice 重算: amount = (parent.amount + sum(children.amount)) * term
+        const term = parent.termMonths || 1;
+        const childRentSum = children.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        const newAmount = Math.round((Number(parent.amount) + childRentSum) * term);
+        const parentInvoices = mockData.invoices.filter(inv =>
+            inv.contractId === parentId && inv.direction === 'in' && inv.type === '房租'
+        );
+        parentInvoices.forEach(inv => {
+            if (Number(inv.amount) !== newAmount) {
+                this.updateInvoice(inv.id, { amount: newAmount });
+            }
+        });
+        // parent 沒 invoice (e.g. 也是 bundle 子) → 給一張新的
+        if (parentInvoices.length === 0) {
+            const newInv = buildContractInvoice(parent, { __bundleExtraRents: children.map(c => Number(c.amount) || 0) });
+            if (newInv) mockData.invoices.push(newInv);
+        }
+        recalcMetrics();
+        return { ok: true, parentId, childIds: children.map(c => c.id), newAmount };
+    },
+    // 解除綁定 — 把 children 移出 bundle, 各自重新建 invoice
+    unbundleContracts(childIds) {
+        const children = childIds.map(id => mockData.contracts.find(c => c.id === id)).filter(Boolean);
+        if (children.length === 0) return { ok: false, msg: '找不到合約' };
+
+        const affectedParents = new Set();
+        children.forEach(c => {
+            if (c.bundleParentContractId) affectedParents.add(c.bundleParentContractId);
+            const ci = mockData.contracts.findIndex(x => x.id === c.id);
+            if (ci < 0) return;
+            mockData.contracts[ci] = { ...mockData.contracts[ci], bundleParentContractId: null };
+            // 為解除的子合約建立獨立 invoice
+            createInvoiceForContract(mockData.contracts[ci], { paidAmount: 0 });
+        });
+
+        // parent invoice 重算: 扣掉解除的 child rent
+        affectedParents.forEach(pId => {
+            const parent = mockData.contracts.find(c => c.id === pId);
+            if (!parent) return;
+            const term = parent.termMonths || 1;
+            const remainingChildren = mockData.contracts.filter(c => c.bundleParentContractId === pId);
+            const childRentSum = remainingChildren.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+            const newAmount = Math.round((Number(parent.amount) + childRentSum) * term);
+            mockData.invoices
+                .filter(inv => inv.contractId === pId && inv.direction === 'in' && inv.type === '房租')
+                .forEach(inv => {
+                    if (Number(inv.amount) !== newAmount) this.updateInvoice(inv.id, { amount: newAmount });
+                });
+        });
+        recalcMetrics();
+        return { ok: true, childIds: children.map(c => c.id) };
+    },
     deleteContract(id) {
         const c = mockData.contracts.find(x => x.id === id);
         if (!c) return;
