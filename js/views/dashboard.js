@@ -503,6 +503,8 @@ window.initDashboardChart = function() {
 // 各館空床狀態：圓餅圖（doughnut）+ 中央數字 + 切換按鈕
 let emptyBedsChart = null;
 
+const VACANCY_PICK_KEY = 'pms-dashboard-vacancy-building';
+
 window.initDashboardInteractions = function() {
     // 切換頁面回來時銷毀舊 chart instance（canvas 已被 re-render 替換）
     if (emptyBedsChart) {
@@ -513,6 +515,14 @@ window.initDashboardInteractions = function() {
     // 圖表也要依 mode 篩 (用 modeFilteredData 取代直接讀 mockData.properties)
     const emptyBedsByProperty = buildEmptyBedsByProperty(modeFilteredData().properties);
     const buttons = document.querySelectorAll('.property-filter-btn');
+    // 還原上次選擇的館 (頁面切換回來也保留)
+    const savedPick = localStorage.getItem(VACANCY_PICK_KEY);
+    if (savedPick && emptyBedsByProperty[savedPick]) {
+        buttons.forEach(b => {
+            const isMatch = b.dataset.property === savedPick;
+            b.classList.toggle('active', isMatch);
+        });
+    }
     const ctx = document.getElementById('emptyBedsChart');
     const centerEl = document.getElementById('empty-beds-center');
     const legendEl = document.getElementById('empty-beds-legend');
@@ -548,8 +558,9 @@ window.initDashboardInteractions = function() {
         }
     }
 
-    // 初始化第一個館的 doughnut chart (3 段: 居住 / 暫緩 / 空床)
-    const firstName = buttons[0]?.dataset.property;
+    // 初始化 doughnut chart — 先看有沒有 saved pick, 沒有就用第一個 button
+    const activeBtn = document.querySelector('.property-filter-btn.active') || buttons[0];
+    const firstName = activeBtn?.dataset.property;
     const firstData = firstName ? emptyBedsByProperty[firstName] : { total: 0, active: 0, snoozed: 0, vacant: 0 };
 
     // 居住 = success / 暫緩 = warning / 空床 = primary
@@ -585,14 +596,19 @@ window.initDashboardInteractions = function() {
         }
     });
 
-    // 按鈕切換
+    // 按鈕切換 (也存 localStorage, 切頁回來會還原)
     buttons.forEach(btn => {
         btn.addEventListener('click', function() {
             buttons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
-            applyData(this.dataset.property);
+            const pick = this.dataset.property;
+            try { localStorage.setItem(VACANCY_PICK_KEY, pick); } catch {}
+            applyData(pick);
         });
     });
+
+    // 首次或還原後立即套用 active 館的資料 (不然只有 HTML 預載 firstProperty 那份)
+    if (firstName) applyData(firstName);
 
     // UIUX #2: 待辦項目「決策 / 查看 / 派工」直接打開該筆 detail modal
     document.querySelectorAll('.todo-action').forEach(btn => {
