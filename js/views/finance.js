@@ -452,6 +452,14 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
                     : (Number(invoice?.amount || 0) - Number(invoice?.discount || 0));
                 paidAmountInput.value = String(initPaid);
             }
+            // 應收總額 — readonly 灰底橘字 (跟入住合約收款步驟一致)
+            if (totalDueInput) {
+                totalDueInput.readOnly = true;
+                totalDueInput.style.backgroundColor = 'var(--bg-tertiary)';
+                totalDueInput.style.cursor = 'not-allowed';
+                totalDueInput.style.fontWeight = '700';
+                totalDueInput.style.color = 'var(--color-primary)';
+            }
 
             if (!isExpense) {
                 // 收入：填了 periodStart 自動帶 periodEnd = +30 天（若 periodEnd 還空著）
