@@ -748,7 +748,14 @@ export function showCheckinAssignmentForm(opts = {}) {
                 discountReasonInput.value = items.length ? JSON.stringify(items) : '';
                 if (totalDueInput && amountInput2 && termHidden) {
                     const rent = Number(amountInput2.value) || 0;
-                    const term = parseInt(termHidden.value, 10) || 1;
+                    // termMonths='__custom' → 讀 termMonthsCustom 的值
+                    let term;
+                    if (termHidden.value === '__custom') {
+                        const customInput = form.querySelector('[name="termMonthsCustom"]');
+                        term = parseInt(customInput?.value, 10) || 1;
+                    } else {
+                        term = parseInt(termHidden.value, 10) || 1;
+                    }
                     totalDueInput.value = Math.max(0, (rent + extraBedRentSum) * term - net);
                 }
             };
@@ -803,7 +810,14 @@ export function showCheckinAssignmentForm(opts = {}) {
             const recalcTotalDue = () => {
                 if (!totalDueInput) return;
                 const rent = Number(amountInput2?.value) || 0;
-                const term = parseInt(termHidden?.value, 10) || 1;
+                // termMonths='__custom' → 讀 termMonthsCustom 的值
+                let term;
+                if (termHidden?.value === '__custom') {
+                    const customInput = form.querySelector('[name="termMonthsCustom"]');
+                    term = parseInt(customInput?.value, 10) || 1;
+                } else {
+                    term = parseInt(termHidden?.value, 10) || 1;
+                }
                 const discount = Number(discountInput?.value) || 0;
                 const total = Math.max(0, (rent + extraBedRentSum) * term - discount);
                 totalDueInput.value = total;
@@ -973,6 +987,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                 amountInput2?.addEventListener('input', recalcTotalDue);
                 // termMonths 是 custom-select，要監聽 hidden input 的 change
                 termHidden?.addEventListener('change', recalcTotalDue);
+                // 自訂月數欄位變動也要重算
+                form.querySelector('[name="termMonthsCustom"]')?.addEventListener('input', recalcTotalDue);
                 recalcTotalDue();  // 初始算一次
             }
 
@@ -1049,6 +1065,12 @@ export function showCheckinAssignmentForm(opts = {}) {
                     if (s === 'all') { el.style.display = ''; return; }
                     el.style.display = String(s) === String(currentStep) ? '' : 'none';
                 });
+                // step 切換後 conditional 欄位重新跑 sync (paymentChannel / termMonths 等)
+                // 不然 platformName / termMonthsCustom 預設會被 display='' 蓋掉變顯示
+                try { syncChannelVisibility?.(); } catch {}
+                try { syncCustomTermVisibility?.(); } catch {}
+                // step 3 重算 totalDue (自訂月數會影響)
+                try { recalcTotalDue?.(); } catch {}
                 // 更新 stepper 樣式
                 stepper.querySelectorAll('.wiz-step').forEach(el => {
                     const s = Number(el.dataset.wizStep);
