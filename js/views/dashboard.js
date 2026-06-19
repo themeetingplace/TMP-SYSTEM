@@ -585,6 +585,7 @@ window.initDashboardInteractions = function() {
             responsive: true,
             maintainAspectRatio: false,
             cutout: '70%',
+            animation: false,  // 關掉動畫避免「this._fn is not a function」race
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -611,8 +612,25 @@ window.initDashboardInteractions = function() {
         });
     });
 
-    // 首次或還原後立即套用 active 館的資料 (不然只有 HTML 預載 firstProperty 那份)
-    if (firstName) applyData(firstName);
+    // 還原 saved pick 後同步 center/legend/gender 文字 (chart 已用 firstData init, 不需再 update)
+    if (firstName && savedPick === firstName) {
+        // 文字部份還是要刷 (HTML 預載的是 emptyBedsByProperty[firstProperty 第一個 key])
+        if (centerEl) centerEl.innerHTML = `
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-primary); line-height: 1;">${firstData.vacant}</div>
+            <div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.25rem;">空床 / 共 ${firstData.total}</div>
+        `;
+        if (legendEl) legendEl.innerHTML = `
+            居住 <strong style="color: var(--color-success);">${firstData.active}</strong> ·
+            ${firstData.snoozed > 0 ? `暫緩 <strong style="color: var(--color-warning);">${firstData.snoozed}</strong> · ` : ''}空床 <strong style="color: var(--color-primary);">${firstData.vacant}</strong>
+        `;
+        const genderEl = document.getElementById('empty-beds-gender');
+        const g = firstData.vacantByGender || { '男': 0, '女': 0, '不限': 0 };
+        if (genderEl) genderEl.innerHTML = `
+            <div class="gender-chip male"><i class="ph-fill ph-person-simple"></i> 男 <strong>${g['男']}</strong></div>
+            <div class="gender-chip female"><i class="ph-fill ph-person-simple"></i> 女 <strong>${g['女']}</strong></div>
+            <div class="gender-chip mixed"><i class="ph-fill ph-users"></i> 不限 <strong>${g['不限']}</strong></div>
+        `;
+    }
 
     // UIUX #2: 待辦項目「決策 / 查看 / 派工」直接打開該筆 detail modal
     document.querySelectorAll('.todo-action').forEach(btn => {
