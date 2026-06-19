@@ -1,4 +1,4 @@
-﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, addMonthsISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts, bedOccupied } from '../data.js';
+﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, addMonthsISO, leaseEndISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts, bedOccupied } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
 import { showTenantDetails } from './tenants.js';
@@ -527,8 +527,8 @@ export function showCheckinAssignmentForm(opts = {}) {
     function buildTermOptions(startDate) {
         const fmt = (iso) => iso ? iso.slice(5).replace('-', '/') : '?';
         return [
-            { value: '1', label: `1 個月${startDate ? ` · ${fmt(addMonthsISO(startDate, 1))} 到期` : ''}` },
-            { value: '3', label: `3 個月${startDate ? ` · ${fmt(addMonthsISO(startDate, 3))} 到期` : ''}` },
+            { value: '1', label: `1 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 1))} 到期` : ''}` },
+            { value: '3', label: `3 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 3))} 到期` : ''}` },
             { value: '__custom', label: '自訂月數...' }
         ];
     }
@@ -1217,7 +1217,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             } else {
                 term = parseInt(values.termMonths, 10) || 1;
             }
-            const endDate = addMonthsISO(startDate, term);  // 用 calendar month 算
+            const endDate = leaseEndISO(startDate, term);  // 該期最後一天 (start + N 月 − 1 天)
             // amount: 尊重用戶輸入 (包含 0)。null/undefined/空字串 才 fallback 床位租金
             const amount = (values.amount != null && values.amount !== '')
                 ? (Number(values.amount) || 0)

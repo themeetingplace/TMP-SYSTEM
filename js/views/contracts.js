@@ -3,7 +3,7 @@
     getContractLifecycle, daysUntilExpiry, needsDecision, contractLifecycleLabel,
     activeContractFor, activeContractOfTenant,
     findOverlappingBedContracts, findOverlappingTenantContracts,
-    getSortedBuildings
+    getSortedBuildings, leaseEndISO
 } from '../data.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
@@ -732,10 +732,8 @@ function showContractForm(contract) {
             }
             let endDate = values.endDate;
             if (!endDate && values.startDate && values.termMonths) {
-                const days = parseInt(values.termMonths, 10) === 3 ? 90 : 30;
-                const d = new Date(values.startDate);
-                d.setDate(d.getDate() + days);  // 6/8 + 30 = 7/8 (離開日)
-                endDate = d.toISOString().split('T')[0];
+                const months = parseInt(values.termMonths, 10) || 1;
+                endDate = leaseEndISO(values.startDate, months);  // 起租 + N 月 − 1 天
             }
 
             // 抽離 tenant 子欄位 + totalDue (顯示用) + adjustments + paidAmount/paymentMethod (寫到 invoice)

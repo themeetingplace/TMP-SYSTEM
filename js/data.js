@@ -673,6 +673,17 @@ export function addMonthsISO(dateStr, months) {
     return d.toISOString().split('T')[0];
 }
 
+// 租期到期日: 起租 + N 月 − 1 天 (該期最後一天)
+// 例: 6/3 起 3 個月 → 9/2 到期 (9/3 是下一期起算日, 不算這期)
+export function leaseEndISO(startDate, months) {
+    if (!startDate) return '';
+    const next = addMonthsISO(startDate, months);
+    if (!next) return '';
+    const d = new Date(next);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+}
+
 // 一筆 invoice 的實際金額 (P1-13: 從 finance/analysis/reports 抽出共用)
 // 優先用 paidAmount (實收/實付)，沒有就 fallback 到 amount
 export function invoiceActualAmount(i) {
