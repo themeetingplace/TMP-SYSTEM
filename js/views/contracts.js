@@ -504,11 +504,25 @@ function showContractForm(contract) {
             let initAdjItems = [];
             try { initAdjItems = rentInv?.discountReason ? JSON.parse(rentInv.discountReason) : []; } catch {}
             const initDiscount = rentInv?.discount ?? 0;
-            // 應收總額: 優先讀真實 invoice.amount (bundle / 已調整過的合約都能正確反映)
-            // 沒 invoice 才 fallback 用 contract.amount × term 估算
-            const initTotalDue = rentInv
-                ? Math.max(0, (Number(rentInv.amount) || 0) - (Number(initDiscount) || 0))
-                : Math.max(0, (Number(contract.amount) || 0) * (contract.termMonths || 1) - (Number(initDiscount) || 0));
+            // bundle 偵測
+            const isBundleParent = mockData.contracts.some(c => c.bundleParentContractId === contract.id);
+            const bundleChildren = isBundleParent
+                ? mockData.contracts.filter(c => c.bundleParentContractId === contract.id)
+                : [];
+            const childRentSum = bundleChildren.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+
+            // 應收總額 init:
+            // - bundle parent: 強制重算 (parent.amount + children rents) × term − discount (避免 invoice 漂移)
+            // - 一般: 讀 rentInv.amount − discount, 沒 invoice fallback contract.amount × term − discount
+            let initTotalDue;
+            if (isBundleParent) {
+                const term = contract.termMonths || 1;
+                initTotalDue = Math.max(0, ((Number(contract.amount) || 0) + childRentSum) * term - (Number(initDiscount) || 0));
+            } else if (rentInv) {
+                initTotalDue = Math.max(0, (Number(rentInv.amount) || 0) - (Number(initDiscount) || 0));
+            } else {
+                initTotalDue = Math.max(0, (Number(contract.amount) || 0) * (contract.termMonths || 1) - (Number(initDiscount) || 0));
+            }
             return {
                 ...contract,
                 paymentChannel: contract.paymentChannel || 'self',
@@ -520,7 +534,10 @@ function showContractForm(contract) {
                 discount: initDiscount,
                 discountReason: initAdjItems.length ? JSON.stringify(initAdjItems) : '',
                 paidAmount: rentInv?.paidAmount ?? 0,
-                paymentMethod: rentInv?.paymentMethod || (mockData.paymentMethods || [])[0]?.name || '匯款'
+                paymentMethod: rentInv?.paymentMethod || (mockData.paymentMethods || [])[0]?.name || '匯款',
+                _isBundleParent: isBundleParent,
+                _childRentSum: childRentSum,
+                _bundleChildIds: bundleChildren.map(c => c.id)
             };
         })(),
         submitLabel: '儲存變更',
@@ -563,8 +580,11 @@ function showContractForm(contract) {
             const totalDueInput = form.querySelector('[name="totalDue"]');
             const discountInput = form.querySelector('[name="discount"]');
             const discountReasonInput = form.querySelector('[name="discountReason"]');
-            // bundle child 合約 → 收款已併入主合約, 鎖住應收/已收/折扣
+            // bundle child / parent 偵測
             const isBundleChild = !!contract.bundleParentContractId;
+            const bundleChildrenLocal = mockData.contracts.filter(c => c.bundleParentContractId === contract.id);
+            const isBundleParent = bundleChildrenLocal.length > 0;
+            const childRentSumLocal = bundleChildrenLocal.reduce((s, c) => s + (Number(c.amount) || 0), 0);
             const refreshTotal = () => {
                 if (!totalDueInput) return;
                 // bundle child 強制 0, 不算公式 (避免覆蓋掉歸零後的 invoice 顯示)
@@ -575,8 +595,25 @@ function showContractForm(contract) {
                 const amt = Number(amountInput?.value) || 0;
                 const t = parseInt(termInput?.value, 10) || 1;
                 const disc = Number(discountInput?.value) || 0;
-                totalDueInput.value = Math.max(0, amt * t - disc);
+                // bundle parent: 應收 = (主月租 + 子月租加總) × 期數 − 折扣
+                const baseAmt = isBundleParent ? amt + childRentSumLocal : amt;
+                totalDueInput.value = Math.max(0, baseAmt * t - disc);
             };
+
+            // bundle parent: 加提示, 列出子合約
+            if (isBundleParent) {
+                const totalWrap = totalDueInput?.closest('.form-group');
+                if (totalWrap && !totalWrap.querySelector('.bundle-parent-hint')) {
+                    const childList = bundleChildrenLocal.map(c =>
+                        `<strong style="font-family: monospace; background: var(--color-success-light); padding: 0.05rem 0.35rem; border-radius: var(--radius-sm); margin: 0 0.15rem;">${c.id}</strong>`
+                    ).join('');
+                    const hint = document.createElement('div');
+                    hint.className = 'bundle-parent-hint';
+                    hint.style.cssText = 'font-size: var(--text-xs); color: var(--color-success); margin-top: 0.4rem; line-height: 1.6;';
+                    hint.innerHTML = `<i class="ph ph-link" style="vertical-align: -2px; margin-right: 0.25rem;"></i>此為合併收款主合約，含 ${bundleChildrenLocal.length} 份子合約 ${childList}（月租合計含子合約共 $${(Number(contract.amount) + childRentSumLocal).toLocaleString()}）。`;
+                    totalWrap.appendChild(hint);
+                }
+            }
 
             // bundle child: 鎖收款欄位 + 加提示
             if (isBundleChild) {
