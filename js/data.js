@@ -684,7 +684,10 @@ export function invoiceActualAmount(i) {
 // 新格式: JSON array [{ kind: 'sub'|'add', label, amount }]
 // 舊格式: 純文字 (e.g. "季繳優惠") — 直接回傳
 // 回傳 string，可塞進 innerHTML (含 HTML escape)
-export function formatDiscountReason(raw) {
+// labelsOnly=true → 只回 label 文字 (e.g. "能源費 · 季繳優惠")
+//                   給已經有獨立 +$X / -$X 顯示欄的地方用 (e.g. finance list)
+//                   避免 +$500 能源費 跟外層 +$500 重複
+export function formatDiscountReason(raw, { labelsOnly = false } = {}) {
     if (!raw) return '';
     const s = String(raw).trim();
     if (!s.startsWith('[')) return s;  // 舊格式，純文字
@@ -692,10 +695,11 @@ export function formatDiscountReason(raw) {
         const items = JSON.parse(s);
         if (!Array.isArray(items)) return '';
         return items.map(x => {
+            if (labelsOnly) return (x.label || '').trim();
             const sign = x.kind === 'add' ? '+' : '−';
             const amt = (x.amount || 0).toLocaleString();
             return `${sign}$${amt} ${x.label || ''}`.trim();
-        }).join(' · ');
+        }).filter(Boolean).join(' · ');
     } catch {
         // 壞掉的 JSON (被截斷 / 編碼錯) — 不要把 raw garbage 顯給 user
         return '';

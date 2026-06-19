@@ -143,7 +143,7 @@ export function renderFinance() {
         const discountCell = hasAdjustment
             ? `<div style="display: flex; flex-direction: column; gap: 1px;">
                    <span style="font-weight: 600; color: ${adjColor};">${adjSign}$${adjAbs}</span>
-                   ${inv.discountReason ? `<span style="font-size: var(--text-2xs); color: var(--text-muted);">${formatDiscountReason(inv.discountReason)}</span>` : ''}
+                   ${inv.discountReason ? `<span style="font-size: var(--text-2xs); color: var(--text-muted);">${formatDiscountReason(inv.discountReason, { labelsOnly: true })}</span>` : ''}
                </div>`
             : '<span style="color: var(--text-muted); font-size: var(--text-xs);">—</span>';
         const methodCell = inv.paymentMethod
@@ -168,7 +168,7 @@ export function renderFinance() {
             : '<span class="status-badge danger">支出</span>';
         const heroAmtClass = inv.direction === 'in' ? 'income' : 'expense';
         const discountVal = hasAdjustment
-            ? `<span style="color: ${adjColor};">${adjSign}$${adjAbs}</span>${inv.discountReason ? ` <span class="c-meta-val-sub">${formatDiscountReason(inv.discountReason)}</span>` : ''}`
+            ? `<span style="color: ${adjColor};">${adjSign}$${adjAbs}</span>${inv.discountReason ? ` <span class="c-meta-val-sub">${formatDiscountReason(inv.discountReason, { labelsOnly: true })}</span>` : ''}`
             : '<span class="c-meta-val-muted">—</span>';
         const paymentVal = inv.paymentMethod || '<span class="c-meta-val-muted">—</span>';
         const noteSection = (inv.note && inv.note.trim())
