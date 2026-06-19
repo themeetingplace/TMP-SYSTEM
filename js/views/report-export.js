@@ -249,7 +249,7 @@ export function buildLandlordReportHtml(building, ym) {
     <section>
         <h2>💸 支出明細</h2>
         <table>
-            <thead><tr><th>類別</th><th style="text-align: right;">金額</th></tr></thead>
+            <thead><tr><th>項目</th><th style="text-align: right;">金額</th></tr></thead>
             <tbody>${expenseRowsHtml}</tbody>
             ${d.expenseTotal > 0 ? `<tfoot><tr><td><strong>合計</strong></td><td style="text-align: right;"><strong>$${fmtMoney(d.expenseTotal)}</strong></td></tr></tfoot>` : ''}
         </table>

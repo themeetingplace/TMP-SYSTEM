@@ -311,7 +311,7 @@ function buildAnalysisReportHtml(range, buildingId = null) {
             <thead>
                 <tr>
                     <th style="width: 40px;">#</th>
-                    <th>類別</th>
+                    <th>項目</th>
                     <th class="right">金額</th>
                     <th class="right">佔比</th>
                     <th class="right">累積</th>

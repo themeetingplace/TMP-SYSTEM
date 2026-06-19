@@ -328,7 +328,7 @@ export function renderFinance() {
                     <thead><tr>
                         ${sortHeader('日期', 'date')}
                         ${sortHeader('館別', 'building')}
-                        ${sortHeader('類別', 'type')}
+                        ${sortHeader('項目', 'type')}
                         ${sortHeader('項目', 'item')}
                         ${sortHeader('實收 / 實付', 'amount', 'right')}
                         <th style="text-align: right;">折扣</th>
@@ -372,7 +372,7 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
     const fields = isExpense
         ? [
             { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions },
-            { name: 'type', label: '類型', type: 'select', required: true, options: typeOptions },
+            { name: 'type', label: '項目', type: 'select', required: true, options: typeOptions },
             { name: 'contractId', label: '對應合約 (可選)', type: 'select', options: contractOptions, hint: '只屬於某合約的支出才需要綁；整館共用支出留空', span: 2, searchable: true, placeholder: '選擇合約或留空...' },
             { name: 'amount', label: '金額', type: 'number', required: true },
             { name: 'paymentMethod', label: '付款方式', type: 'select', options: paymentMethodOptions, value: invoice?.paymentMethod ?? defaultPaymentMethod },
@@ -380,21 +380,22 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
           ]
         : [
+            // 館別 | 物件 | 租客 (一列三段邏輯, 但 2-col 改用 1+1 / span2 排)
             { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions },
-            { name: 'type', label: '類型', type: 'select', required: true, options: typeOptions, value: invoice?.type ?? '房租' },
             { name: 'propertyName', label: '物件', type: 'select', required: true, options: propertyOptions },
-            { name: 'tenant', label: '租客', type: 'select', required: true, options: tenantOptions, searchable: true, placeholder: '輸入姓名或電話搜尋...' },
-            { name: 'amount', label: '租金金額', type: 'number', required: true },
-            // 折扣 / 加收 widget — 跟合約 form 同款
+            { name: 'tenant', label: '租客', type: 'select', required: true, options: tenantOptions, searchable: true, placeholder: '輸入姓名或電話搜尋...', span: 2 },
+            { name: 'periodStart', label: '租期起', type: 'date' },
+            { name: 'periodEnd', label: '租期止', type: 'date' },
+            { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: TODAY },
+            { name: 'type', label: '項目', type: 'select', required: true, options: typeOptions, value: invoice?.type ?? '房租' },
+            { name: 'amount', label: '租金金額', type: 'number', required: true, span: 2 },
+            // 折扣 / 加收 widget
             { name: 'adjustments', type: 'placeholder' },
             { name: 'discount', type: 'hidden', value: invoice?.discount ?? 0 },
             { name: 'discountReason', type: 'hidden', value: invoice?.discountReason ?? '' },
             { name: 'totalDue', label: '應收總額', type: 'number', span: 2, hint: '租金金額 + 加收 − 折扣 (自動計算)' },
-            { name: 'paidAmount', label: '已收金額', type: 'number', hint: '留空或 0 = 未收；全額收訖請填全部金額' },
+            { name: 'paidAmount', label: '已收金額', type: 'number' },
             { name: 'paymentMethod', label: '付款方式', type: 'select', options: paymentMethodOptions, value: invoice?.paymentMethod ?? defaultPaymentMethod },
-            { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: TODAY },
-            { name: 'periodStart', label: '租期起', type: 'date', hint: '此筆房租涵蓋的起始日' },
-            { name: 'periodEnd', label: '租期止', type: 'date', hint: '建議：起 + 30 天' },
             { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
           ];
 
@@ -523,7 +524,7 @@ function showInvoiceDetails(id) {
         { label: '館別', value: buildingName(inv.buildingId) },
         { label: '物件', value: inv.propertyName || '（整館共用）' },
         { label: inv.direction === 'in' ? '租客' : '對應合約', value: inv.direction === 'in' ? (inv.tenant || '—') : (inv.contractId || '—') },
-        { label: '類型', value: inv.type },
+        { label: '項目', value: inv.type },
         { label: '金額', value: `$${(inv.amount || 0).toLocaleString()}` },
         { label: '入帳/付款日', value: inv.paidDate || '—' }
     ];
