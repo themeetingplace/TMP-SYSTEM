@@ -4,6 +4,7 @@ import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { filterMaintenancesByMode, filterPropertiesByMode } from '../utils/modeFilter.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { rowActions, rowActionGroup } from '../utils/rowActions.js';
+import { entityCard } from '../utils/entityCard.js';
 import { emptyState } from '../utils/emptyState.js';
 
 const MAINTENANCE_STATUSES = ['待處理', '進行中', '已完成'];
@@ -26,8 +27,42 @@ export function renderMaintenance() {
         const days = Math.floor((new Date(TODAY) - new Date(m.reportDate)) / 86400000);
         const searchText = [m.id, m.propertyName, m.issue, m.reporter].join(' ').toLowerCase();
 
+        const actionsHtml = rowActionGroup(rowActions([
+            m.status === '待處理' ? { action: 'start', icon: 'ph-play', title: '開始處理', variant: 'primary', className: 'maintenance-action' } : null,
+            m.status === '進行中' ? { action: 'complete', icon: 'ph-check', title: '完成維修', variant: 'success', className: 'maintenance-action' } : null,
+            { action: 'view', icon: 'ph-eye', title: '查看記錄', className: 'maintenance-action' },
+            { action: 'edit', icon: 'ph-pencil', title: '編輯維修', className: 'maintenance-action' },
+            { action: 'delete', icon: 'ph-trash', title: '刪除', variant: 'danger', className: 'maintenance-action' }
+        ], m.id));
+
+        const statusBadge = `<span class="status-badge ${statusClass}">${esc(m.status)}</span>`;
+        const urgency = days >= 7 ? { label: `逾期 ${days} 天`, type: 'danger' }
+            : days >= 3 ? { label: `${days} 天前`, type: 'warning' }
+            : { label: `${days} 天前`, type: 'default' };
+
+        const mobileCardHtml = entityCard({
+            title: esc(m.id),
+            subtitle: esc(m.propertyName || ''),
+            hero: {
+                value: m.cost ? moneyAmount(m.cost) : '',
+                badge: statusBadge
+            },
+            chips: [
+                { icon: 'ph-calendar', label: esc(m.reportDate || '—') },
+                { icon: 'ph-timer', label: urgency.label, type: urgency.type },
+                { icon: 'ph-user', label: esc(m.reporter || '—') }
+            ],
+            meta: [
+                { cap: '問題', val: esc(m.issue || '—') },
+                { cap: '完工日', val: m.status === '已完成' && m.completedDate ? esc(m.completedDate) : '—' }
+            ],
+            actions: actionsHtml
+        });
+
+        const sharedAttrs = `data-row-id="${esc(m.id)}" data-status="${esc(m.status)}" data-search="${escapeAttr(searchText)}"`;
+
         return `
-            <tr data-row-id="${esc(m.id)}" data-status="${esc(m.status)}" data-search="${escapeAttr(searchText)}">
+            <tr ${sharedAttrs} class="row-desktop">
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong style="font-size: var(--text-base);">${esc(m.id)}</strong>
@@ -46,17 +81,12 @@ export function renderMaintenance() {
                         <span style="font-size: var(--text-xs); color: var(--text-muted);">${days} 天前</span>
                     </div>
                 </td>
-                <td><span class="status-badge ${statusClass}">${esc(m.status)}</span></td>
+                <td>${statusBadge}</td>
                 <td>${m.cost ? `<div style="font-weight: 500;">${moneyAmount(m.cost)}</div>` : '<span style="color: var(--text-muted)">--</span>'}</td>
-                <td>
-                    ${rowActionGroup(rowActions([
-                        m.status === '待處理' ? { action: 'start', icon: 'ph-play', title: '開始處理', variant: 'primary', className: 'maintenance-action' } : null,
-                        m.status === '進行中' ? { action: 'complete', icon: 'ph-check', title: '完成維修', variant: 'success', className: 'maintenance-action' } : null,
-                        { action: 'view', icon: 'ph-eye', title: '查看記錄', className: 'maintenance-action' },
-                        { action: 'edit', icon: 'ph-pencil', title: '編輯維修', className: 'maintenance-action' },
-                        { action: 'delete', icon: 'ph-trash', title: '刪除', variant: 'danger', className: 'maintenance-action' }
-                    ], m.id))}
-                </td>
+                <td>${actionsHtml}</td>
+            </tr>
+            <tr ${sharedAttrs} class="row-mobile-card">
+                <td colspan="6">${mobileCardHtml}</td>
             </tr>
         `;
     }).join('');

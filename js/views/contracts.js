@@ -14,6 +14,7 @@ import { filterContractsByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
+import { entityCard } from '../utils/entityCard.js';
 import { emptyState } from '../utils/emptyState.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
@@ -210,8 +211,20 @@ export function renderContracts() {
                 ? `<span class="status-badge info contract-action" data-action="unbundle-self" data-id="${c.id}" style="font-size: var(--text-2xs); margin-left: 0.25rem; cursor: pointer;" title="此合約已併入 ${esc(c.bundleParentContractId)} 收款，點擊解除">🔗 子 → ${esc(c.bundleParentContractId)}</span>`
                 : '');
         const cbDisabled = isArchived || c.paymentChannel === 'platform';
+        const sharedDataAttrs = `data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-channel="${esc(c.paymentChannel || 'self')}" data-tenant="${escapeAttr(c.tenant || '')}" data-building="${esc(mockData.properties.find(p => p.name === c.propertyName)?.buildingId || '')}" data-search="${escapeAttr(searchText)}"`;
+
+        // ===== Mobile card 共用資料 =====
+        const mobileChips = [
+            c.startDate ? { icon: 'ph-calendar-blank', label: `起 ${c.startDate}` } : null,
+            c.endDate ? { icon: 'ph-calendar-check', label: `到 ${c.endDate}`, type: !isArchived && days != null && days < 0 ? 'danger' : (!isArchived && days != null && days <= 14 ? 'warning' : undefined) } : null,
+            c.parentContractId ? { icon: 'ph-link', label: `續自 ${c.parentContractId}` } : null,
+            lifecycle === 'snoozed' && c.snoozeUntil ? { icon: 'ph-pause', label: `${c.snoozeUntil} 再提醒` } : null
+        ].filter(Boolean);
+
+        const mobileActions = rowActionGroup(`${decisionButtons}${standardButtons}`);
+
         return `
-            <tr data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-channel="${esc(c.paymentChannel || 'self')}" data-tenant="${escapeAttr(c.tenant || '')}" data-building="${esc(mockData.properties.find(p => p.name === c.propertyName)?.buildingId || '')}" data-search="${escapeAttr(searchText)}" class="${rowClass}">
+            <tr ${sharedDataAttrs} class="${rowClass} row-desktop">
                 <td style="text-align: center;">
                     ${cbDisabled
                         ? ''
@@ -239,6 +252,25 @@ export function renderContracts() {
                 <td>${lifecycleBadge(lifecycle)}${renewIntentBadge(c)}</td>
                 <td style="text-align: right;">
                     ${rowActionGroup(`${decisionButtons}${standardButtons}`)}
+                </td>
+            </tr>
+            <tr ${sharedDataAttrs} class="${rowClass} row-mobile-card">
+                <td colspan="8">
+                    ${entityCard({
+                        title: `${esc(c.id)}${c.paymentChannel === 'platform' ? ` <span class="status-badge info" style="font-size: var(--text-2xs);">🌐 ${esc(c.platformName || '外部平台')}</span>` : ''}${c.contractType === 'managed-owner' ? ' <span class="status-badge info" style="font-size: var(--text-2xs);">📋 屋主委託</span>' : ''}${c.contractType === 'managed-tenant' ? ' <span class="status-badge info" style="font-size: var(--text-2xs);">🏠 代管租賃</span>' : ''}${bundleBadge}`,
+                        subtitle: esc(c.propertyName || (c.buildingId ? (mockData.buildings.find(b => b.id === c.buildingId)?.name + ' (整棟)') : '') || ''),
+                        hero: {
+                            value: moneyAmount(c.amount || 0),
+                            badge: `${lifecycleBadge(lifecycle)}${renewIntentBadge(c)}`
+                        },
+                        chips: mobileChips,
+                        meta: [
+                            { cap: '租客', val: `<strong>${esc(c.tenant || '—')}</strong>` },
+                            { cap: '合約期', val: c.termMonths === 3 ? '3 個月期' : '1 個月期' }
+                        ],
+                        note: !isArchived && days != null ? daysLabel(days) : '',
+                        actions: mobileActions
+                    })}
                 </td>
             </tr>
         `;

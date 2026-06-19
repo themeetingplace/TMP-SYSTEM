@@ -6,6 +6,7 @@ import { filterPropertiesByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
+import { entityCard } from '../utils/entityCard.js';
 
 const PROPERTY_STATUSES = ['已出租', '待租', '待簽約'];
 const NAME_PREFIX = '聚空間 - ';
@@ -148,8 +149,21 @@ export function renderProperties() {
 
         const searchText = [p.name, p.address, p.tenant || '', p.id, area, bed, p.contractId || ''].join(' ').toLowerCase();
 
+        // mobile card 用 — 房型 / 性別 chip
+        const roomTypeLabel = (p.gender && p.capacity) ? formatRoomType(p.gender, p.capacity) : '';
+        const tenantNameForCard = p.tenant ? esc(p.tenant) : '<span style="color: var(--text-muted)">—</span>';
+        const contractPeriodForCard = p.contractId
+            ? `${p.contractId}${p.contractEnd ? ` · 到期 ${p.contractEnd}` : ''}`
+            : (p.contractEnd ? `到期 ${p.contractEnd}` : '—');
+
+        const actionsHtml =
+            rowAction({ action: 'view', id: p.id, icon: 'ph-eye', title: '查看詳情', className: 'action-btn' }) +
+            rowAction({ action: 'edit', id: p.id, icon: 'ph-pencil', title: '編輯床位', className: 'action-btn' });
+
+        const dataAttrs = `data-row-id="${p.id}" data-status="${effectiveStatus}" data-area="${displayArea}" data-search="${searchText}"`;
+
         return `
-            <tr data-row-id="${p.id}" data-status="${effectiveStatus}" data-area="${displayArea}" data-search="${searchText}">
+            <tr ${dataAttrs} class="row-desktop">
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong style="font-size: var(--text-base);">${displayArea}</strong>
@@ -165,10 +179,28 @@ export function renderProperties() {
                 <td>${tenantCell}</td>
                 <td>${contractCell}</td>
                 <td>
-                    ${rowActionGroup(
-                        rowAction({ action: 'view', id: p.id, icon: 'ph-eye', title: '查看詳情', className: 'action-btn' }) +
-                        rowAction({ action: 'edit', id: p.id, icon: 'ph-pencil', title: '編輯床位', className: 'action-btn' })
-                    )}
+                    ${rowActionGroup(actionsHtml)}
+                </td>
+            </tr>
+            <tr ${dataAttrs} class="row-mobile-card">
+                <td colspan="6">
+                    ${entityCard({
+                        title: displayBed || p.name,
+                        subtitle: displayArea,
+                        hero: {
+                            value: p.rent != null ? moneyAmount(p.rent) : '—',
+                            badge: `<span class="status-badge ${statusClassOf(effectiveStatus)}">${effectiveStatus}</span>`
+                        },
+                        chips: [
+                            roomTypeLabel ? { icon: 'ph-bed', label: roomTypeLabel } : null,
+                            p.gender ? { icon: 'ph-user', label: p.gender } : null
+                        ].filter(Boolean),
+                        meta: [
+                            { cap: '租客', val: tenantNameForCard },
+                            { cap: '合約', val: contractPeriodForCard }
+                        ],
+                        actions: actionsHtml
+                    })}
                 </td>
             </tr>
         `;

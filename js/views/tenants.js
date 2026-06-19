@@ -4,6 +4,7 @@ import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { filterTenantsByMode } from '../utils/modeFilter.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
+import { entityCard } from '../utils/entityCard.js';
 import { emptyState } from '../utils/emptyState.js';
 
 const TENANT_STATUSES = ['居住中', '待入住', '已退租'];
@@ -43,8 +44,29 @@ export function renderTenants() {
 
         const searchText = [t.name, t.phone, t.email, t.currentProperty || '', t.lineDisplayName || ''].join(' ').toLowerCase();
 
+        // 共用 action HTML — 桌機 / mobile 都用
+        const phoneAction = t.phone
+            ? `<a class="btn btn-outline btn-xs btn-icon-only" href="tel:${t.phone.replace(/\D/g,'')}" title="撥打電話" aria-label="撥打電話"><i class="ph ph-phone"></i></a>`
+            : `<button type="button" class="btn btn-outline btn-xs btn-icon-only" disabled title="無電話" aria-label="無電話"><i class="ph ph-phone"></i></button>`;
+        const actionsHtml = rowActionGroup(`
+            ${rowAction({ action: "view", id: t.id, icon: "ph-eye", title: "詳細資料", className: "tenant-action" })}
+            ${rowAction({ action: "edit", id: t.id, icon: "ph-pencil", title: "編輯資料", className: "tenant-action" })}
+            ${phoneAction}
+            ${rowAction({ action: "delete", id: t.id, icon: "ph-trash", title: "刪除", variant: "danger", className: "tenant-action" })}
+        `);
+
+        // shared tr data-attrs — 桌機 + mobile card 都帶, filter 才不會分裂
+        const rowAttrs = `data-row-id="${esc(t.id)}" data-status="${esc(t.status)}" data-line="${lineBound ? 'bound' : 'unbound'}" data-search="${escapeAttr(searchText)}"`;
+
+        // LINE 綁定 chip (mobile card title 旁)
+        const lineChip = lineBound
+            ? `<span class="status-badge success" style="font-size: var(--text-2xs); margin-left: 0.4rem; vertical-align: 1px;"><i class="ph-fill ph-check-circle"></i> LINE</span>`
+            : (t.status === '居住中'
+                ? `<span class="status-badge warning" style="font-size: var(--text-2xs); margin-left: 0.4rem; vertical-align: 1px;"><i class="ph ph-warning"></i> 未綁</span>`
+                : '');
+
         return `
-            <tr data-row-id="${esc(t.id)}" data-status="${esc(t.status)}" data-line="${lineBound ? 'bound' : 'unbound'}" data-search="${escapeAttr(searchText)}">
+            <tr ${rowAttrs} class="row-desktop">
                 <td>
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
                         <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background-color: var(--color-primary); color: var(--text-inverse); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: var(--text-base);">
@@ -65,15 +87,27 @@ export function renderTenants() {
                 </td>
                 <td>${lineCell}</td>
                 <td><div style="font-size: var(--text-base); color: var(--text-main);">${t.emergencyContact ? esc(t.emergencyContact) : '<span style="color: var(--text-muted)">--</span>'}</div></td>
-                <td>
-                    ${rowActionGroup(`
-                        ${rowAction({ action: "view", id: t.id, icon: "ph-eye", title: "詳細資料", className: "tenant-action" })}
-                        ${rowAction({ action: "edit", id: t.id, icon: "ph-pencil", title: "編輯資料", className: "tenant-action" })}
-                        ${t.phone
-                            ? `<a class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" href="tel:${t.phone.replace(/\D/g,'')}" title="撥打電話"><i class="ph ph-phone"></i></a>`
-                            : `<button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); opacity: 0.4; cursor: not-allowed;" disabled title="無電話"><i class="ph ph-phone"></i></button>`}
-                        ${rowAction({ action: "delete", id: t.id, icon: "ph-trash", title: "刪除", variant: "danger", className: "tenant-action" })}
-                    `)}
+                <td>${actionsHtml}</td>
+            </tr>
+            <tr ${rowAttrs} class="row-mobile-card">
+                <td colspan="6">
+                    ${entityCard({
+                        title: `${esc(t.name || '(未命名)')}${lineChip}`,
+                        subtitle: t.phone ? esc(t.phone) : '無電話',
+                        hero: {
+                            value: '',
+                            badge: `<span class="status-badge ${statusClass}" style="font-size: var(--text-2xs);">${esc(statusLabel)}</span>`
+                        },
+                        chips: [
+                            { icon: 'ph-house-line', label: t.currentProperty ? esc(t.currentProperty) : '未指定物件' },
+                            t.source ? { icon: 'ph-tag', label: esc(t.source) } : null
+                        ].filter(Boolean),
+                        meta: [
+                            { cap: 'Email', val: t.email ? esc(t.email) : '—' },
+                            { cap: '緊急聯絡', val: t.emergencyContact ? esc(t.emergencyContact) : '—' }
+                        ],
+                        actions: actionsHtml
+                    })}
                 </td>
             </tr>
         `;

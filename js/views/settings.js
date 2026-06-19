@@ -241,10 +241,10 @@ export function showBuildingRoomsModal(buildingId) {
                         <span style="font-size: var(--text-xs); color: var(--text-muted);">月租總計 <strong style="color: var(--color-success);">$${beds.reduce((s, b) => s + (b.rent || 0), 0).toLocaleString()}</strong></span>
                     </div>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit-room" data-room="${roomNumber}" title="編輯房間（房型/樓層）">
+                        <button type="button" class="btn btn-outline btn-xs btn-icon-only" data-action="edit-room" data-room="${roomNumber}" title="編輯房間（房型/樓層）" aria-label="編輯房間">
                             <i class="ph ph-pencil"></i>
                         </button>
-                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete-room" data-room="${roomNumber}" title="刪除整個房間">
+                        <button type="button" class="btn btn-outline btn-xs btn-icon-only btn-danger" data-action="delete-room" data-room="${roomNumber}" title="刪除整個房間" aria-label="刪除房間">
                             <i class="ph ph-trash"></i>
                         </button>
                     </div>
@@ -638,11 +638,11 @@ function renderSimpleListTab(kind) {
                 <td><strong>${used}</strong> <span style="font-size: var(--text-xs); color: var(--text-muted);">${cfg.usageLabel}</span></td>
                 <td><span style="font-size: var(--text-base); color: var(--text-muted);">${it.note || '—'}</span></td>
                 <td>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline simplelist-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-kind="${kind}" data-id="${it.id}" title="編輯">
+                    <div class="row-action-group">
+                        <button type="button" class="btn btn-outline btn-xs btn-icon-only simplelist-action" data-action="edit" data-kind="${kind}" data-id="${it.id}" title="編輯" aria-label="編輯">
                             <i class="ph ph-pencil"></i>
                         </button>
-                        <button class="btn btn-outline simplelist-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); ${used === 0 ? 'color: var(--color-danger);' : 'opacity: 0.4; cursor: not-allowed;'}" data-action="delete" data-kind="${kind}" data-id="${it.id}" title="${used === 0 ? '刪除' : '已被使用，無法刪除'}">
+                        <button type="button" class="btn btn-outline btn-xs btn-icon-only simplelist-action ${used === 0 ? 'btn-danger' : ''}" ${used > 0 ? 'disabled' : ''} data-action="delete" data-kind="${kind}" data-id="${it.id}" title="${used === 0 ? '刪除' : '已被使用，無法刪除'}" aria-label="刪除">
                             <i class="ph ph-trash"></i>
                         </button>
                     </div>

@@ -21,7 +21,7 @@ import { exportAnalysisReport } from './analysis-export.js';
 import { modeFilteredData } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { GROUP_CUM_BASELINES } from '../constants.js';
-import { moneyAmount, moneyCell as moneyCellDS } from '../utils/moneyDisplay.js';
+import { moneyAmount } from '../utils/moneyDisplay.js';
 import { emptyState } from '../utils/emptyState.js';
 
 // 模組層快取 — 每次 renderReports 開頭 reset，內部 helper 都讀這個避免 14 處 mockData 散落各處
