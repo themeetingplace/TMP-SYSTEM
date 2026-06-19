@@ -7015,25 +7015,39 @@ select.form-input {
 }
 
 /* === row-action-group: 列表 row 操作鈕容器 (取代各 view 手寫 inline-flex) === */
+/* 桌機: nowrap 一行排完, 寬度交給 colgroup 控制 */
+/* 手機: 允許 wrap (row-mobile-card 內空間夠) */
 .row-action-group {
     display: inline-flex;
     gap: 0.35rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
     align-items: center;
 }
+@media (max-width: 768px) {
+    .row-action-group {
+        flex-wrap: wrap;
+    }
+}
 
 /* === btn-icon-only: 統一 row 內小 icon button (取代 6 view 各自 inline padding) === */
+/* 桌機: 緊湊版 ~30×30 給 row 內 inline 用 */
 .btn.btn-icon-only {
     padding: 0.3rem 0.45rem;
     line-height: 1;
+    min-width: 30px;
+    box-sizing: border-box;
 }
 .btn.btn-icon-only > i {
-    font-size: 1rem;
+    font-size: 0.95rem;
 }
 .btn.btn-icon-only.btn-xs {
     padding: 0.25rem 0.4rem;
     font-size: var(--text-xs);
+    min-width: 28px;
+}
+.btn.btn-icon-only.btn-xs > i {
+    font-size: 0.9rem;
 }
 /* xs 變體不顯示 label, 但若 caller 給 label 也保留間距 */
 .btn.btn-icon-only > span {

@@ -504,6 +504,11 @@ function showContractForm(contract) {
             let initAdjItems = [];
             try { initAdjItems = rentInv?.discountReason ? JSON.parse(rentInv.discountReason) : []; } catch {}
             const initDiscount = rentInv?.discount ?? 0;
+            // 應收總額: 優先讀真實 invoice.amount (bundle / 已調整過的合約都能正確反映)
+            // 沒 invoice 才 fallback 用 contract.amount × term 估算
+            const initTotalDue = rentInv
+                ? Math.max(0, (Number(rentInv.amount) || 0) - (Number(initDiscount) || 0))
+                : Math.max(0, (Number(contract.amount) || 0) * (contract.termMonths || 1) - (Number(initDiscount) || 0));
             return {
                 ...contract,
                 paymentChannel: contract.paymentChannel || 'self',
@@ -511,7 +516,7 @@ function showContractForm(contract) {
                 tenantPhone: linkedTenant?.phone || '',
                 tenantEmail: linkedTenant?.email || '',
                 tenantEmergency: linkedTenant?.emergencyContact || '',
-                totalDue: Math.max(0, (Number(contract.amount) || 0) * (contract.termMonths || 1) - (Number(initDiscount) || 0)),
+                totalDue: initTotalDue,
                 discount: initDiscount,
                 discountReason: initAdjItems.length ? JSON.stringify(initAdjItems) : '',
                 paidAmount: rentInv?.paidAmount ?? 0,
@@ -558,13 +563,49 @@ function showContractForm(contract) {
             const totalDueInput = form.querySelector('[name="totalDue"]');
             const discountInput = form.querySelector('[name="discount"]');
             const discountReasonInput = form.querySelector('[name="discountReason"]');
+            // bundle child 合約 → 收款已併入主合約, 鎖住應收/已收/折扣
+            const isBundleChild = !!contract.bundleParentContractId;
             const refreshTotal = () => {
                 if (!totalDueInput) return;
+                // bundle child 強制 0, 不算公式 (避免覆蓋掉歸零後的 invoice 顯示)
+                if (isBundleChild) {
+                    totalDueInput.value = 0;
+                    return;
+                }
                 const amt = Number(amountInput?.value) || 0;
                 const t = parseInt(termInput?.value, 10) || 1;
                 const disc = Number(discountInput?.value) || 0;
                 totalDueInput.value = Math.max(0, amt * t - disc);
             };
+
+            // bundle child: 鎖收款欄位 + 加提示
+            if (isBundleChild) {
+                const paidInput = form.querySelector('[name="paidAmount"]');
+                const adjustPhEl = form.querySelector('#ph-adjustments');
+                [totalDueInput, paidInput].forEach(el => {
+                    if (!el) return;
+                    el.setAttribute('readonly', '');
+                    el.disabled = true;
+                    el.style.background = 'var(--bg-tertiary)';
+                    el.style.cursor = 'not-allowed';
+                    el.value = 0;
+                });
+                if (discountInput) discountInput.value = 0;
+                if (discountReasonInput) discountReasonInput.value = '';
+                if (adjustPhEl) {
+                    adjustPhEl.style.opacity = '0.5';
+                    adjustPhEl.style.pointerEvents = 'none';
+                }
+                // 在 totalDue 欄位下方塞 hint
+                const totalWrap = totalDueInput?.closest('.form-group');
+                if (totalWrap && !totalWrap.querySelector('.bundle-child-hint')) {
+                    const hint = document.createElement('div');
+                    hint.className = 'bundle-child-hint';
+                    hint.style.cssText = 'font-size: var(--text-xs); color: var(--color-info); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.3rem;';
+                    hint.innerHTML = `<i class="ph ph-link"></i> 收款已併入主合約 <strong style="font-family: monospace;">${contract.bundleParentContractId}</strong>，要編輯請從主合約處理或先解除綁定。`;
+                    totalWrap.appendChild(hint);
+                }
+            }
 
             // === 加減項目子表單 (跟新增入住流程同款) ===
             const adjustPh = form.querySelector('#ph-adjustments');

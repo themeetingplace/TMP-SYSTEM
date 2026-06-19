@@ -326,7 +326,7 @@ export function renderFinance() {
                         <col style="width: 96px;">
                         <col style="width: 88px;">
                         <col>
-                        <col style="width: 110px;">
+                        <col style="width: 138px;">
                     </colgroup>
                     <thead><tr>
                         ${sortHeader('日期', 'date')}
