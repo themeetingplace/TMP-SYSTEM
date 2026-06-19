@@ -601,8 +601,8 @@ function showContractForm(contract) {
                 if (totalWrap && !totalWrap.querySelector('.bundle-child-hint')) {
                     const hint = document.createElement('div');
                     hint.className = 'bundle-child-hint';
-                    hint.style.cssText = 'font-size: var(--text-xs); color: var(--color-info); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.3rem;';
-                    hint.innerHTML = `<i class="ph ph-link"></i> 收款已併入主合約 <strong style="font-family: monospace;">${contract.bundleParentContractId}</strong>，要編輯請從主合約處理或先解除綁定。`;
+                    hint.style.cssText = 'font-size: var(--text-xs); color: var(--color-info); margin-top: 0.4rem; line-height: 1.6;';
+                    hint.innerHTML = `<i class="ph ph-link" style="vertical-align: -2px; margin-right: 0.25rem;"></i>收款已併入主合約 <strong style="font-family: monospace; background: var(--color-info-light); padding: 0.05rem 0.35rem; border-radius: var(--radius-sm);">${contract.bundleParentContractId}</strong>，要編輯請從主合約處理或先解除綁定。`;
                     totalWrap.appendChild(hint);
                 }
             }
