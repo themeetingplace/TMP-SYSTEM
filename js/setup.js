@@ -111,6 +111,19 @@ import('./data.js').then(m => {
     window.mockData = m.mockData;
 });
 
+// 合約 endDate 校正 — 舊版用 +30/+90 days 算的合約 endDate 改成 leaseEndISO (start + N 月 − 1 天)
+window.fixContractEndDates = async (apply = false) => {
+    const { store } = await import('./data.js');
+    const result = store.auditContractEndDates({ apply });
+    console.log(`%c[contractEndAudit] ${apply ? 'APPLIED' : 'DRY-RUN'}`, 'color: #a04;', result);
+    console.table(result.affected);
+    if (result.skipped.length) {
+        console.warn('Skipped:');
+        console.table(result.skipped);
+    }
+    return result;
+};
+
 // bundle 重複 invoice 校正 — 舊版多床位合約會在額外床位開重複 invoice
 window.fixBundleInvoices = async (apply = false) => {
     const { store } = await import('./data.js');

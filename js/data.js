@@ -1370,13 +1370,13 @@ export const store = {
         if (oldContract.renewalState !== 'active') return { error: 'already_decided' };
 
         const termMonths = oldContract.termMonths || 1;
-        const days = termMonths === 3 ? 90 : 30;
-        // 跟初次建合約 convention 對齊 (properties.js: endDate = addDaysISO(start, term*30))
-        //   → endDate 視為「下期生效日」(半開區間 [start, end))
-        //   → 新合約 startDate = 舊 endDate (同一天交接，rangesOverlap 已允許)
-        //   → 新合約 endDate   = startDate + days
-        const newStartISO = oldContract.endDate || new Date().toISOString().split('T')[0];
-        const newEndISO = addDaysISO(newStartISO, days);
+        // 續租 convention (新版): endDate 是該期最後一天 (inclusive)
+        //   → 新合約 startDate = 舊 endDate + 1 天 (隔天交接, 不重疊)
+        //   → 新合約 endDate   = leaseEndISO(newStart, termMonths) = 該期最後一天
+        const oldEnd = oldContract.endDate ? new Date(oldContract.endDate) : new Date();
+        oldEnd.setDate(oldEnd.getDate() + 1);
+        const newStartISO = oldEnd.toISOString().split('T')[0];
+        const newEndISO = leaseEndISO(newStartISO, termMonths);
 
         const newContract = {
             id: nextId('C', mockData.contracts),
@@ -1423,6 +1423,61 @@ export const store = {
     //   → 安全修：startDate := parent.endDate (endDate 不變)
     //   其他模式 (使用者手動改過) → skip 不動
     // 同步把 contract 的 invoice (dueDate / periodStart) 一起 shift -1 天
+    // 合約 endDate 校正: 對齊新版 leaseEndISO convention (start + termMonths − 1 天)
+    // dry-run: auditContractEndDates() → 列出舊資料偏差
+    // apply: auditContractEndDates({ apply: true }) → 寫回正確 endDate + 連動 invoice.dueDate/periodEnd + property.contractEnd
+    auditContractEndDates({ apply = false } = {}) {
+        const affected = [];
+        const skipped = [];
+        mockData.contracts.forEach(c => {
+            if (!c.startDate || !c.termMonths) {
+                skipped.push({ contractId: c.id, reason: '缺 startDate 或 termMonths' });
+                return;
+            }
+            const expectedEnd = leaseEndISO(c.startDate, c.termMonths);
+            if (c.endDate === expectedEnd) return;
+            // 推算: +N 天 (舊算法 days = term*30 / term===3?90:30)
+            const oldStyleEnd = addDaysISO(c.startDate, c.termMonths * 30);
+            const drift = c.endDate
+                ? Math.round((new Date(expectedEnd) - new Date(c.endDate)) / 86400000)
+                : null;
+            affected.push({
+                contractId: c.id,
+                tenant: c.tenant,
+                startDate: c.startDate,
+                termMonths: c.termMonths,
+                currentEnd: c.endDate,
+                expectedEnd,
+                oldStyleEnd,
+                driftDays: drift,
+                matchesOldStyle: c.endDate === oldStyleEnd
+            });
+        });
+
+        if (apply) {
+            affected.forEach(a => {
+                const ci = mockData.contracts.findIndex(c => c.id === a.contractId);
+                if (ci < 0) return;
+                mockData.contracts[ci] = { ...mockData.contracts[ci], endDate: a.expectedEnd };
+                // 連動 property.contractEnd
+                const propName = mockData.contracts[ci].propertyName;
+                const pi = mockData.properties.findIndex(p => p.name === propName && p.contractId === a.contractId);
+                if (pi >= 0) {
+                    mockData.properties[pi] = { ...mockData.properties[pi], contractEnd: a.expectedEnd };
+                }
+                // 連動 invoice.periodEnd (該合約所有 rent invoice)
+                mockData.invoices.forEach((inv, ii) => {
+                    if (inv.contractId === a.contractId && inv.direction === 'in' && inv.type === '房租') {
+                        mockData.invoices[ii] = { ...inv, periodEnd: a.expectedEnd };
+                    }
+                });
+            });
+            persist();
+            recalcMetrics();
+        }
+        return { affected, skipped, apply };
+    },
+
     auditRenewalDates({ apply = false } = {}) {
         const affected = [];
         const skipped = [];

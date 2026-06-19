@@ -1,7 +1,7 @@
 ﻿// 總收支表 — 只顯示「已結帳目」的條目清單
 // 各館分析 / 交叉表 → 移到「收支分析」分頁
 // 待結帳款 → 「待結帳款」分頁
-import { mockData, store, invoiceMonth, shiftMonth, currentMonth, formatMonthLabel, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount, formatDiscountReason } from '../data.js';
+import { mockData, store, invoiceMonth, shiftMonth, currentMonth, formatMonthLabel, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount, formatDiscountReason, leaseEndISO } from '../data.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
@@ -539,12 +539,13 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             }
 
             if (!isExpense) {
-                // 收入：填了 periodStart 自動帶 periodEnd = +30 天（若 periodEnd 還空著）
+                // 收入: 填了 periodStart 自動帶 periodEnd = leaseEndISO(start, 1)
+                // (起租 + 1 月 − 1 天, calendar-month-aware, 2 月也對)
                 const psInput = form.querySelector('[name="periodStart"]');
                 const peInput = form.querySelector('[name="periodEnd"]');
                 psInput?.addEventListener('change', () => {
                     if (psInput.value && !peInput.value) {
-                        peInput.value = plusDays(psInput.value, 29);
+                        peInput.value = leaseEndISO(psInput.value, 1);
                     }
                 });
             }
