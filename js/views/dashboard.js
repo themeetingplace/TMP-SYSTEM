@@ -533,7 +533,11 @@ window.initDashboardInteractions = function() {
         const g = data.vacantByGender || { '男': 0, '女': 0, '不限': 0 };
 
         if (emptyBedsChart) {
+            // 強制重設 labels + backgroundColor (避免舊 cache 是 2 色版本還留著, 切館後只有 1 色)
+            const Cnow = getChartColors();
+            emptyBedsChart.data.labels = ['居住', '暫緩', '空床'];
             emptyBedsChart.data.datasets[0].data = [data.active, data.snoozed, data.vacant];
+            emptyBedsChart.data.datasets[0].backgroundColor = [Cnow.income, Cnow.warning, Cnow.primary];
             emptyBedsChart.update();
         }
         if (centerEl) {
