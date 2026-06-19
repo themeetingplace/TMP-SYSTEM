@@ -2,6 +2,7 @@
 // 各館分析 / 交叉表 → 移到「收支分析」分頁
 // 待結帳款 → 「待結帳款」分頁
 import { mockData, store, invoiceMonth, shiftMonth, currentMonth, formatMonthLabel, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount, formatDiscountReason } from '../data.js';
+import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
 import { financeState } from './finance-state.js';
@@ -384,9 +385,10 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'propertyName', label: '物件', type: 'select', required: true, options: propertyOptions },
             { name: 'tenant', label: '租客', type: 'select', required: true, options: tenantOptions, searchable: true, placeholder: '輸入姓名或電話搜尋...' },
             { name: 'amount', label: '應收金額', type: 'number', required: true },
-            // 顯示時翻轉正負號 — 使用者直覺：+加收 / -折扣 (但 DB 存的是 -input，這樣 due = amount - discount 公式不變)
-            { name: 'discount', label: '調整金額', type: 'number', value: -Number(invoice?.discount ?? 0), hint: '+ 加收 (能源費等) ／ − 折扣 (季繳優惠等)' },
-            { name: 'discountReason', label: '調整原因', type: 'text', value: formatDiscountReason(invoice?.discountReason), placeholder: '例：能源費 / 季繳優惠' },
+            // 折扣 / 加收 widget — 跟合約 form 同款
+            { name: 'adjustments', type: 'placeholder' },
+            { name: 'discount', type: 'hidden', value: invoice?.discount ?? 0 },
+            { name: 'discountReason', type: 'hidden', value: invoice?.discountReason ?? '' },
             { name: 'paymentMethod', label: '付款方式', type: 'select', options: paymentMethodOptions, value: invoice?.paymentMethod ?? defaultPaymentMethod },
             { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: TODAY },
             { name: 'periodStart', label: '租期起', type: 'date', hint: '此筆房租涵蓋的起始日' },
@@ -403,6 +405,29 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
         values: invoice ?? {},
         submitLabel: isEdit ? '儲存變更' : '建立',
         onFormMount: (form) => {
+            // 折扣 / 加收 widget — 跟合約 form 同款
+            // 收入: widget net (sub-add) 直接 = invoice.discount (正=折扣, 負=加收)
+            // 支出: 翻轉，正=多付, 負=少付 (對齊原本支出 onSubmit 慣例)
+            const initialReason = invoice?.discountReason || '';
+            // 編輯模式但 discountReason 是純文字 (legacy) → 拿 invoice.discount 自動生一筆預填項
+            let prefillReason = initialReason;
+            if (invoice && Number(invoice.discount) !== 0 && (!initialReason || !initialReason.trim().startsWith('['))) {
+                // income: discount<0=加收, discount>0=折扣 ; expense: discount>0=多付(加), discount<0=少付(折)
+                const d = Number(invoice.discount);
+                const isAddOn = isExpense ? (d > 0) : (d < 0);
+                prefillReason = JSON.stringify([{
+                    kind: isAddOn ? 'add' : 'sub',
+                    label: initialReason || '',
+                    amount: Math.abs(d)
+                }]);
+            }
+            initAdjustmentsWidget({
+                container: form.querySelector('#ph-adjustments'),
+                discountInput: form.querySelector('[name="discount"]'),
+                discountReasonInput: form.querySelector('[name="discountReason"]'),
+                initialReason: prefillReason
+            });
+
             if (!isExpense) {
                 // 收入：填了 periodStart 自動帶 periodEnd = +30 天（若 periodEnd 還空著）
                 const psInput = form.querySelector('[name="periodStart"]');
@@ -415,11 +440,12 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             }
         },
         onSubmit: (values) => {
-            // 使用者輸入 + 加收 / − 折扣 (直覺方向)；DB 儲存翻轉成 「- 加收 / + 折扣」(讓 due = amount - discount 公式不變)
-            const userAdjustment = Number(values.discount) || 0;
-            const discount = isExpense ? userAdjustment : -userAdjustment;
+            // widget 寫進 discount (net = sub - add): 正=折扣, 負=加收
+            // 收入 invoice: discount 直接用 widget 值 (DB 正=折扣 / 負=加收, 跟 due = amount - discount 公式對得起來)
+            // 支出 invoice: 翻轉 (DB 正=多付 / 負=少付)
+            const widgetNet = Number(values.discount) || 0;
+            const discount = isExpense ? -widgetNet : widgetNet;
             const amt = Number(values.amount) || 0;
-            // 總收支表新增 = 已收/已付，paidAmount = 應收 - discount (儲存後的負負得正)
             const paidAmount = amt - discount;
             const payload = {
                 ...values,
