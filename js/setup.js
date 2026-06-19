@@ -83,6 +83,34 @@ window.fixRenewalDates = async (apply = false) => {
     return result;
 };
 
+// console 一鍵綁定: bundleContracts('C017', ['C018', 'C019'])
+window.bundleContracts = async (parentId, childIds) => {
+    const { store } = await import('./data.js');
+    const { refreshView } = await import('./utils/ui.js');
+    const ids = Array.isArray(childIds) ? childIds : [childIds];
+    const result = store.bundleContracts(parentId, ids);
+    console.log('%c[bundle]', 'color: #0a7;', result);
+    if (result.ok) refreshView();
+    return result;
+};
+
+// console 一鍵解綁: unbundleContracts('C018')  或 unbundleContracts(['C018', 'C019'])
+window.unbundleContracts = async (childIds) => {
+    const { store } = await import('./data.js');
+    const { refreshView } = await import('./utils/ui.js');
+    const ids = Array.isArray(childIds) ? childIds : [childIds];
+    const result = store.unbundleContracts(ids);
+    console.log('%c[unbundle]', 'color: #a04;', result);
+    if (result.ok) refreshView();
+    return result;
+};
+
+// 把 store / mockData 掛 window 方便 ad-hoc debug (純 dev, 不影響 prod 行為)
+import('./data.js').then(m => {
+    window.store = m.store;
+    window.mockData = m.mockData;
+});
+
 // bundle 重複 invoice 校正 — 舊版多床位合約會在額外床位開重複 invoice
 window.fixBundleInvoices = async (apply = false) => {
     const { store } = await import('./data.js');
