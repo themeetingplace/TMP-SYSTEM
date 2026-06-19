@@ -1188,7 +1188,10 @@ export function showCheckinAssignmentForm(opts = {}) {
                 term = parseInt(values.termMonths, 10) || 1;
             }
             const endDate = addMonthsISO(startDate, term);  // 用 calendar month 算
-            const amount = parseInt(values.amount, 10) || bed.rent || 0;
+            // amount: 尊重用戶輸入 (包含 0)。null/undefined/空字串 才 fallback 床位租金
+            const amount = (values.amount != null && values.amount !== '')
+                ? (Number(values.amount) || 0)
+                : (bed.rent || 0);
 
             const bedOverlaps = findOverlappingBedContracts(bed.name, startDate, endDate);
             if (bedOverlaps.length > 0) {
