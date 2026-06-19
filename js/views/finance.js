@@ -224,7 +224,7 @@ export function renderFinance() {
                         </div>
                         <div class="c-meta-grid">
                             <div class="c-meta-cell">
-                                <span class="c-meta-cap">折扣</span>
+                                <span class="c-meta-cap">應收調整</span>
                                 <span class="c-meta-val">${discountVal}</span>
                             </div>
                             <div class="c-meta-cell">
@@ -331,7 +331,7 @@ export function renderFinance() {
                         ${sortHeader('項目', 'type')}
                         ${sortHeader('項目', 'item')}
                         ${sortHeader('實收 / 實付', 'amount', 'right')}
-                        <th style="text-align: right;">折扣</th>
+                        <th style="text-align: right;">應收調整</th>
                         <th>付款</th>
                         ${sortHeader('備註', 'note')}
                         <th>操作</th>

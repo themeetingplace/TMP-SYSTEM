@@ -261,7 +261,7 @@ export function buildFinanceReportHtml(ym) {
                 <th class="nowrap">類別</th>
                 <th>項目</th>
                 <th class="right nowrap">實收 / 實付</th>
-                <th class="right nowrap">折扣</th>
+                <th class="right nowrap">應收調整</th>
                 <th class="nowrap">付款</th>
                 <th>備註</th>
             </tr>
