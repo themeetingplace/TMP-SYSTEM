@@ -27,17 +27,14 @@ function buildEmptyBedsByProperty(properties, mode = getMode()) {
         };
     });
 
+    // 反查 buildingId → name 用, 避免靠 extractAreaName regex 抓 (床位名格式有變動風險)
+    const buildingNameById = new Map(sortedBuildings.map(b => [b.id, b.name]));
     properties.forEach(prop => {
-        const areaName = extractAreaName(prop.name);
-        if (!propertiesByArea[areaName]) {
-            propertiesByArea[areaName] = {
-                total: 0,
-                vacant: 0,
-                vacantByGender: { '男': 0, '女': 0, '不限': 0 }
-            };
-        }
+        // 只算 active 館 (sortedBuildings 已 activeOnly 過); 不在白名單的直接 skip
+        const areaName = buildingNameById.get(prop.buildingId);
+        if (!areaName || !propertiesByArea[areaName]) return;
         propertiesByArea[areaName].total++;
-        // 床位有名字 (有 active/snoozed 已開始合約) = 居住; 沒有 = 空
+        // 床位有 active/snoozed 已開始合約 = 居住; 沒有 = 空
         // 不再用 prop.status，因為 status 可能跟實際合約狀況不同步
         if (!bedOccupied(prop.name)) {
             propertiesByArea[areaName].vacant++;
