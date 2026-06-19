@@ -22,28 +22,45 @@ function buildEmptyBedsByProperty(properties, mode = getMode()) {
     sortedBuildings.forEach(b => {
         propertiesByArea[b.name] = {
             total: 0,
-            vacant: 0,
+            active: 0,    // 居住中 (合約期內 + startDate<=today<=endDate)
+            snoozed: 0,   // 暫緩 (有合約但未到入住日 或 過期未決策)
+            vacant: 0,    // 空床 (完全無 active/snoozed 合約)
             vacantByGender: { '男': 0, '女': 0, '不限': 0 }
         };
     });
 
-    // 反查 buildingId → name 用, 避免靠 extractAreaName regex 抓 (床位名格式有變動風險)
+    // 反查 buildingId → name (避免靠床位名 regex)
     const buildingNameById = new Map(sortedBuildings.map(b => [b.id, b.name]));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    // 3-state semantics 對齊住房一覽:
+    //   active (居住):  有 active/snoozed 合約 + startDate <= today <= endDate
+    //   snoozed (暫緩): 有合約但 startDate 未到 OR endDate 已過 (待決策 / 待入住)
+    //   vacant (空床):  完全無 active/snoozed 合約
+    const bedState = (propName) => {
+        const cs = mockData.contracts.filter(c =>
+            c.propertyName === propName &&
+            (c.renewalState === 'active' || c.renewalState === 'snoozed')
+        );
+        if (cs.length === 0) return 'vacant';
+        const hasCurrent = cs.some(c =>
+            c.startDate && c.endDate &&
+            c.startDate <= todayStr && c.endDate >= todayStr
+        );
+        return hasCurrent ? 'active' : 'snoozed';
+    };
     properties.forEach(prop => {
-        // 只算 active 館 (sortedBuildings 已 activeOnly 過); 不在白名單的直接 skip
         const areaName = buildingNameById.get(prop.buildingId);
         if (!areaName || !propertiesByArea[areaName]) return;
-        propertiesByArea[areaName].total++;
-        // 床位有 active/snoozed 已開始合約 = 居住; 沒有 = 空
-        // 不再用 prop.status，因為 status 可能跟實際合約狀況不同步
-        if (!bedOccupied(prop.name)) {
-            propertiesByArea[areaName].vacant++;
+        const area = propertiesByArea[areaName];
+        area.total++;
+        const s = bedState(prop.name);
+        if (s === 'active') area.active++;
+        else if (s === 'snoozed') area.snoozed++;
+        else {
+            area.vacant++;
             const g = prop.gender || '不限';
-            if (propertiesByArea[areaName].vacantByGender[g] !== undefined) {
-                propertiesByArea[areaName].vacantByGender[g]++;
-            } else {
-                propertiesByArea[areaName].vacantByGender['不限']++;
-            }
+            if (area.vacantByGender[g] !== undefined) area.vacantByGender[g]++;
+            else area.vacantByGender['不限']++;
         }
     });
 
@@ -145,8 +162,7 @@ export function renderDashboard() {
     const financeTodos = buildFinanceTodos(invoices);
     const maintenanceTodos = buildMaintenanceTodos(maintenances);
     
-    const selectedPropertyData = emptyBedsByProperty[firstProperty] || { total: 0, vacant: 0 };
-    const occupiedBeds = selectedPropertyData.total - selectedPropertyData.vacant;
+    const selectedPropertyData = emptyBedsByProperty[firstProperty] || { total: 0, active: 0, snoozed: 0, vacant: 0, vacantByGender: { '男': 0, '女': 0, '不限': 0 } };
 
     // === 15 號查帳橫條 ===
     const today = new Date();
@@ -275,7 +291,8 @@ export function renderDashboard() {
                         </div>
                     </div>
                     <div id="empty-beds-legend" style="text-align: center; font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.5rem;">
-                        已出租 <strong style="color: var(--color-success);">${occupiedBeds}</strong> · 空床 <strong style="color: var(--color-primary);">${selectedPropertyData.vacant}</strong>
+                        居住 <strong style="color: var(--color-success);">${selectedPropertyData.active}</strong> ·
+                        ${selectedPropertyData.snoozed > 0 ? `暫緩 <strong style="color: var(--color-warning);">${selectedPropertyData.snoozed}</strong> · ` : ''}空床 <strong style="color: var(--color-primary);">${selectedPropertyData.vacant}</strong>
                     </div>
                     <div id="empty-beds-gender" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; padding-top: 0.75rem; border-top: 1px dashed var(--border-color);">
                         <div class="gender-chip male"><i class="ph-fill ph-person-simple"></i> 男 <strong>${selectedPropertyData.vacantByGender['男']}</strong></div>
@@ -502,12 +519,11 @@ window.initDashboardInteractions = function() {
     if (!ctx) return;
 
     function applyData(propertyName) {
-        const data = emptyBedsByProperty[propertyName] || { total: 0, vacant: 0, vacantByGender: { '男': 0, '女': 0, '不限': 0 } };
-        const rented = data.total - data.vacant;
+        const data = emptyBedsByProperty[propertyName] || { total: 0, active: 0, snoozed: 0, vacant: 0, vacantByGender: { '男': 0, '女': 0, '不限': 0 } };
         const g = data.vacantByGender || { '男': 0, '女': 0, '不限': 0 };
 
         if (emptyBedsChart) {
-            emptyBedsChart.data.datasets[0].data = [rented, data.vacant];
+            emptyBedsChart.data.datasets[0].data = [data.active, data.snoozed, data.vacant];
             emptyBedsChart.update();
         }
         if (centerEl) {
@@ -518,8 +534,8 @@ window.initDashboardInteractions = function() {
         }
         if (legendEl) {
             legendEl.innerHTML = `
-                已出租 <strong style="color: var(--color-success);">${rented}</strong> ·
-                空床 <strong style="color: var(--color-primary);">${data.vacant}</strong>
+                居住 <strong style="color: var(--color-success);">${data.active}</strong> ·
+                ${data.snoozed > 0 ? `暫緩 <strong style="color: var(--color-warning);">${data.snoozed}</strong> · ` : ''}空床 <strong style="color: var(--color-primary);">${data.vacant}</strong>
             `;
         }
         const genderEl = document.getElementById('empty-beds-gender');
@@ -532,20 +548,19 @@ window.initDashboardInteractions = function() {
         }
     }
 
-    // 初始化第一個館的 doughnut chart
+    // 初始化第一個館的 doughnut chart (3 段: 居住 / 暫緩 / 空床)
     const firstName = buttons[0]?.dataset.property;
-    const firstData = firstName ? emptyBedsByProperty[firstName] : { total: 0, vacant: 0 };
-    const firstRented = firstData.total - firstData.vacant;
+    const firstData = firstName ? emptyBedsByProperty[firstName] : { total: 0, active: 0, snoozed: 0, vacant: 0 };
 
-    // 已出租 = success token / 空床 = primary token
+    // 居住 = success / 暫緩 = warning / 空床 = primary
     const C = getChartColors();
     emptyBedsChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['已出租', '空床'],
+            labels: ['居住', '暫緩', '空床'],
             datasets: [{
-                data: [firstRented, firstData.vacant],
-                backgroundColor: [C.income, C.primary],
+                data: [firstData.active, firstData.snoozed, firstData.vacant],
+                backgroundColor: [C.income, C.warning, C.primary],
                 borderColor: C.surface,
                 borderWidth: 2,
                 hoverOffset: 6

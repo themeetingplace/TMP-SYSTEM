@@ -10,6 +10,10 @@ export function getChartColors() {
     return {
         income: read('--chart-income') || '#22946e',
         expense: read('--chart-expense') || '#b13535',
+        warning: read('--color-warning') || '#b8871f',
+        danger: read('--color-danger') || '#b13535',
+        success: read('--color-success') || '#22946e',
+        info: read('--color-info') || '#1e56a3',
         fillIncome: read('--chart-fill-income') || 'rgba(34, 148, 110, 0.10)',
         fillExpense: read('--chart-fill-expense') || 'rgba(177, 53, 53, 0.08)',
         grid: read('--chart-grid') || 'rgba(15, 23, 42, 0.06)',
