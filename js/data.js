@@ -1215,18 +1215,29 @@ export const store = {
             return { ok: false, msg: '只能綁同租客的合約' };
         }
 
-        // 1. 子合約設 parent + 移除其 rent invoice (合併到 parent invoice)
+        // 1. 子合約設 parent + 子 invoice 歸零 (保留紀錄但金額為 0、已結清)
+        // 設計理念：每張合約都應該有自己的 invoice (帳本完整), 但金額轉移到主合約
         children.forEach(c => {
             const ci = mockData.contracts.findIndex(x => x.id === c.id);
             if (ci < 0) return;
-            mockData.contracts[ci] = { ...mockData.contracts[ci], bundleParentContractId: parentId };
-            // 子合約的 rent invoice 全部刪掉 (parent invoice 已含或即將更新)
-            const childInvoiceIds = mockData.invoices
-                .filter(inv => inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租')
-                .map(inv => inv.id);
-            childInvoiceIds.forEach(id => {
-                mockData.invoices = mockData.invoices.filter(x => x.id !== id);
-                window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'invoices', id } }));
+            mockData.contracts[ci] = {
+                ...mockData.contracts[ci],
+                bundleParentContractId: parentId,
+                // 記錄原始 amount, unbundle 時可還原
+                bundleOriginalAmount: mockData.contracts[ci].bundleOriginalAmount ?? mockData.contracts[ci].amount
+            };
+            // 子合約 invoice 歸零 + 標已結清 + 註明併入哪份
+            const childInvoices = mockData.invoices.filter(inv =>
+                inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租'
+            );
+            childInvoices.forEach(inv => {
+                this.updateInvoice(inv.id, {
+                    amount: 0,
+                    discount: 0,
+                    paidAmount: 0,
+                    status: '已繳清',
+                    note: `併入 ${parentId} 收款 (原應收 $${(inv.amount || 0).toLocaleString()})`
+                });
             });
         });
 
@@ -1250,7 +1261,7 @@ export const store = {
         recalcMetrics();
         return { ok: true, parentId, childIds: children.map(c => c.id), newAmount };
     },
-    // 解除綁定 — 把 children 移出 bundle, 各自重新建 invoice
+    // 解除綁定 — 還原 children 的獨立 invoice + parent invoice 扣回
     unbundleContracts(childIds) {
         const children = childIds.map(id => mockData.contracts.find(c => c.id === id)).filter(Boolean);
         if (children.length === 0) return { ok: false, msg: '找不到合約' };
@@ -1260,9 +1271,33 @@ export const store = {
             if (c.bundleParentContractId) affectedParents.add(c.bundleParentContractId);
             const ci = mockData.contracts.findIndex(x => x.id === c.id);
             if (ci < 0) return;
-            mockData.contracts[ci] = { ...mockData.contracts[ci], bundleParentContractId: null };
-            // 為解除的子合約建立獨立 invoice
-            createInvoiceForContract(mockData.contracts[ci], { paidAmount: 0 });
+            const restoreAmount = c.bundleOriginalAmount ?? c.amount;
+            mockData.contracts[ci] = {
+                ...mockData.contracts[ci],
+                bundleParentContractId: null,
+                amount: restoreAmount,
+                bundleOriginalAmount: undefined
+            };
+            // 子合約原本歸零的 invoice → 還原金額
+            const childInvoices = mockData.invoices.filter(inv =>
+                inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租'
+            );
+            const term = mockData.contracts[ci].termMonths || 1;
+            const restoreInvoiceAmount = Math.round(Number(restoreAmount) * term);
+            if (childInvoices.length === 0) {
+                // 萬一 invoice 真的不在 (例如舊版刪除過) → 重新建立
+                createInvoiceForContract(mockData.contracts[ci], { paidAmount: 0 });
+            } else {
+                childInvoices.forEach(inv => {
+                    this.updateInvoice(inv.id, {
+                        amount: restoreInvoiceAmount,
+                        discount: 0,
+                        paidAmount: 0,
+                        status: '欠繳',
+                        note: ''
+                    });
+                });
+            }
         });
 
         // parent invoice 重算: 扣掉解除的 child rent
