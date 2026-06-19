@@ -7,6 +7,8 @@ import { getMode } from '../utils/appMode.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { entityCard } from '../utils/entityCard.js';
+import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
+import { initTermSelector, buildTermOptions as buildTermOptionsUtil } from '../utils/termSelector.js';
 
 const PROPERTY_STATUSES = ['已出租', '待租', '待簽約'];
 const NAME_PREFIX = '聚空間 - ';
@@ -523,15 +525,9 @@ export function showCheckinAssignmentForm(opts = {}) {
         { name: 'tenantEmergency', label: '緊急聯絡人', type: 'text', required: false, placeholder: '例：王媽媽 0911-222-333', span: 2 }
     ];
     // 依入住日期算合約期 dropdown 標籤，例如「1 個月 · 7/15 到期」
-    // 用 calendar month (Date.setMonth) 算，不是 +30/+90 天硬幹，符合「+N 個月」直覺
-    function buildTermOptions(startDate) {
-        const fmt = (iso) => iso ? iso.slice(5).replace('-', '/') : '?';
-        return [
-            { value: '1', label: `1 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 1))} 到期` : ''}` },
-            { value: '3', label: `3 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 3))} 到期` : ''}` },
-            { value: '__custom', label: '自訂月數...' }
-        ];
-    }
+    // 用 calendar month 算 (leaseEndISO = 起租 + N 月 − 1 天)，符合「+N 個月」直覺
+    // 共用 utils/termSelector.js → buildTermOptionsUtil(start, leaseEndISO)
+    const buildTermOptions = (startDate) => buildTermOptionsUtil(startDate, leaseEndISO);
 
     // 合約欄位（共用）
     const contractFields = [
@@ -750,28 +746,20 @@ export function showCheckinAssignmentForm(opts = {}) {
                 });
             }
 
-            // 入住日期變更 → 重新計算合約期下拉的到期日 (1個月 · 7/15到期 / 3個月 · 9/15到期)
-            const dateInput = form.querySelector('[name="scheduledDate"]');
-            const termSelectWrap = form.querySelector('.custom-select[data-name="termMonths"]');
-            const termHiddenForUI = form.querySelector('[name="termMonths"]');
-            const termCustomWrap = form.querySelector('[name="termMonthsCustom"]')?.closest('.form-group');
-            const updateTermLabels = () => {
-                if (termSelectWrap?.__setOptions) {
-                    termSelectWrap.__setOptions(buildTermOptions(dateInput?.value || todayStr));
-                }
-            };
-            // 自訂月數欄位 — termMonths === '__custom' 且當前在 step 2 才顯示
-            // 否則由 wizard step 機制決定 (step 1/3 一律藏)
-            const syncCustomTermVisibility = () => {
-                if (!termCustomWrap) return;
-                const isCustom = termHiddenForUI?.value === '__custom';
-                const onStep2 = (typeof currentStep === 'undefined') ? true : currentStep === 2;
-                termCustomWrap.style.display = (isCustom && onStep2) ? '' : 'none';
-            };
-            syncCustomTermVisibility();
-            termHiddenForUI?.addEventListener('change', syncCustomTermVisibility);
-            dateInput?.addEventListener('change', updateTermLabels);
-            dateInput?.addEventListener('input', updateTermLabels);
+            // 入住日期變更 → 重新算合約期 dropdown 到期日；__custom → 顯示自訂月數欄位
+            // 共用 utils/termSelector.js (跟編輯合約 modal 同源)
+            // isVisible: __custom 月數欄位只在 step 2 顯示，wizard step 切換時 setStep() 會 forward 呼叫 syncCustomTermVisibility
+            const termSelector = initTermSelector({
+                form,
+                leaseEndISO,
+                startName: 'scheduledDate',
+                termName: 'termMonths',
+                customName: 'termMonthsCustom',
+                isVisible: () => (typeof currentStep === 'undefined') ? true : currentStep === 2,
+                onTermChange: () => { try { recalcTotalDue?.(); } catch {} }
+            });
+            // alias — 後面 setStep() 用這個名稱 forward 呼叫
+            const syncCustomTermVisibility = () => termSelector?.syncCustomVisibility();
 
             // 應收總額自動計算 = (月租金 + 額外床位月租加總) × 合約期 - 折扣 + 加項
             const amountInput2 = form.querySelector('[name="amount"]');
@@ -783,7 +771,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             let extraBedRentSum = 0;
 
             // 應收總額計算 — 統一從這支寫入 totalDueInput, 其他地方只觸發呼叫
-            // 必須在 recalcAdjustments 之前宣告 (recalcAdjustments 會 forward call 這個)
+            // initAdjustmentsWidget 的 onChange 會 forward call 這個 (single source of truth for totalDue)
             const recalcTotalDue = () => {
                 if (!totalDueInput) return;
                 const rent = Number(amountInput2?.value) || 0;
@@ -798,68 +786,17 @@ export function showCheckinAssignmentForm(opts = {}) {
                 totalDueInput.value = Math.max(0, (rent + extraBedRentSum) * term - discount);
             };
 
-            // === 加減項目子表單 (新需求 #1) ===
-            // 渲染到 #ph-adjustments；每筆 = { kind: 'sub'|'add', label, amount }
-            // 變動時把「net = sub - add」寫到 discount hidden input、JSON 寫到 discountReason hidden input
-            const adjustPh = form.querySelector('#ph-adjustments');
-            const adjustments = []; // [{ kind, label, amount }]
-            const recalcAdjustments = () => {
-                const items = Array.from(adjustPh.querySelectorAll('.adj-row')).map(row => ({
-                    kind: row.querySelector('[data-adj="kind"]').value,
-                    label: row.querySelector('[data-adj="label"]').value.trim(),
-                    amount: Number(row.querySelector('[data-adj="amount"]').value) || 0
-                })).filter(x => x.amount > 0);
-                let sub = 0, add = 0;
-                items.forEach(x => x.kind === 'sub' ? (sub += x.amount) : (add += x.amount));
-                const net = sub - add;
-                discountInput.value = net;
-                discountReasonInput.value = items.length ? JSON.stringify(items) : '';
-                // totalDue 統一交給 recalcTotalDue 寫 (single source of truth)
-                recalcTotalDue();
-            };
-            const adjRowHtml = (row = { kind: 'sub', label: '', amount: '' }) => `
-                <div class="adj-row" style="display: grid; grid-template-columns: 130px 1fr 120px 32px; gap: 0.5rem; align-items: center; padding: 0.55rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 0.4rem;">
-                    <div class="adj-kind-toggle">
-                        <button type="button" class="adj-kind-btn ${row.kind === 'sub' ? 'is-active' : ''}" data-kind="sub" title="折扣 / 減項">− 折扣</button>
-                        <button type="button" class="adj-kind-btn ${row.kind === 'add' ? 'is-active' : ''}" data-kind="add" title="加收 / 額外費用">+ 加收</button>
-                    </div>
-                    <input type="hidden" data-adj="kind" value="${row.kind || 'sub'}">
-                    <input data-adj="label" type="text" class="form-input" placeholder="說明 (例：季繳優惠 / 能源費)" value="${row.label || ''}" style="font-size: var(--text-sm);">
-                    <input data-adj="amount" type="number" class="form-input" placeholder="金額" value="${row.amount || ''}" style="font-size: var(--text-sm); text-align: right;">
-                    <button type="button" class="adj-del" title="移除這筆" style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: 1rem; padding: 0.2rem;"><i class="ph ph-x"></i></button>
-                </div>
-            `;
-            if (adjustPh) {
-                adjustPh.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <label style="font-weight: 500; font-size: var(--text-base);">折扣 / 加收項目 <small style="color: var(--text-muted); font-weight: 400;">(可多筆)</small></label>
-                        <button type="button" id="adj-add" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">
-                            <i class="ph ph-plus"></i> 新增項目
-                        </button>
-                    </div>
-                    <div id="adj-list"></div>
-                `;
-                const listEl = adjustPh.querySelector('#adj-list');
-                const addRow = (row) => {
-                    const div = document.createElement('div');
-                    div.innerHTML = adjRowHtml(row).trim();
-                    const rowEl = div.firstChild;
-                    listEl.appendChild(rowEl);
-                    rowEl.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recalcAdjustments));
-                    rowEl.querySelector('.adj-del').addEventListener('click', () => { rowEl.remove(); recalcAdjustments(); });
-                    // 分段切換 (折扣 / 加收)
-                    rowEl.querySelectorAll('.adj-kind-btn').forEach(btn => {
-                        btn.addEventListener('click', () => {
-                            const kind = btn.dataset.kind;
-                            rowEl.querySelectorAll('.adj-kind-btn').forEach(b => b.classList.toggle('is-active', b.dataset.kind === kind));
-                            rowEl.querySelector('[data-adj="kind"]').value = kind;
-                            recalcAdjustments();
-                        });
-                    });
-                };
-                adjustPh.querySelector('#adj-add').addEventListener('click', () => addRow());
-                recalcAdjustments();
-            }
+            // === 加減項目子表單 — 收斂到 initAdjustmentsWidget (跟 finance 編輯帳目 / 編輯合約同源) ===
+            // 每筆 = { kind: 'sub'|'add', label, amount }
+            // widget 自動把 net (sub - add) 寫到 discount hidden、JSON 寫到 discountReason hidden
+            // onChange 觸發 recalcTotalDue (totalDue 是 single source of truth)
+            initAdjustmentsWidget({
+                container: form.querySelector('#ph-adjustments'),
+                discountInput,
+                discountReasonInput,
+                initialReason: discountReasonInput?.value || '',
+                onChange: () => recalcTotalDue()
+            });
 
             // === 額外床位 (多床位合約) — 同租客 / 同期間，每張額外床位獨立建合約 ===
             const extraBedsPh = form.querySelector('#ph-extraBeds');
@@ -1029,12 +966,8 @@ export function showCheckinAssignmentForm(opts = {}) {
 
                 amountInput2?.addEventListener('input', recalcTotalDue);
                 amountInput2?.addEventListener('change', recalcTotalDue);  // 程式賦值/blur 也要 catch
-                // termMonths 是 custom-select，要監聽 hidden input 的 change
-                termHidden?.addEventListener('change', recalcTotalDue);
-                // 自訂月數欄位變動也要重算
-                const termCustomInput = form.querySelector('[name="termMonthsCustom"]');
-                termCustomInput?.addEventListener('input', recalcTotalDue);
-                termCustomInput?.addEventListener('change', recalcTotalDue);
+                // termMonths / termMonthsCustom 的變動已由 initTermSelector 的 onTermChange forward 呼叫 recalcTotalDue
+                // → 這裡不再重覆繫結，避免一次變動觸發兩次 recalc
                 recalcTotalDue();  // 初始算一次
             }
 

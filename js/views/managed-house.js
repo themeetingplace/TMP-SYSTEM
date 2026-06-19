@@ -2,7 +2,7 @@
 // route: #m-house/{buildingId}
 // 共居房屋資料在「物件管理 → 房屋資料 tab」，這頁專屬代管 mode
 
-import { mockData, store, bedOccupied, getOwnerById } from '../data.js';
+import { mockData, store, bedOccupied, getOwnerById, leaseEndISO } from '../data.js';
 import { openFormModal, openConfirm, showToast, refreshView, initFlatpickr, initCustomSelects } from '../utils/ui.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 import { showRoomForm } from './settings.js';
@@ -1540,12 +1540,34 @@ function showManagedTenantContractForm(building, opts = {}) {
     const initialTenant = editContract?.tenant || '';
     const existingTenant = initialTenant ? mockData.tenants.find(t => t.name === initialTenant) : null;
     const initialPhone = existingTenant?.phone || '';
+    // termMonths 不是 1 或 3 → 視為自訂; 帶入 __custom + termMonthsCustom 顯示 (對齊 contracts.js / properties.js)
+    const ctermNum = Number(editContract?.termMonths) || 12;
+    const isCustomTerm = ctermNum !== 1 && ctermNum !== 3;
+    const initialTerm = isEdit
+        ? (isCustomTerm ? '__custom' : String(ctermNum))
+        : '__custom';
+    const initialTermCustom = isEdit
+        ? (isCustomTerm ? ctermNum : '')
+        : 12;
+
+    // buildTermOptions: select 顯示「N 個月 · M/D 到期」 (對齊 contracts.js)
+    function buildTermOptions(startDate) {
+        const fmt = (iso) => iso ? iso.slice(5).replace('-', '/') : '?';
+        return [
+            { value: '1', label: `1 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 1))} 到期` : ''}` },
+            { value: '3', label: `3 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 3))} 到期` : ''}` },
+            { value: '__custom', label: '自訂月數...' }
+        ];
+    }
+
+    const initialStart = (isEdit ? editContract.startDate : '') || today;
     const initialValues = isEdit ? {
         propertyName: initialBed,
         tenant: initialTenant,
         tenantPhone: initialPhone,
-        startDate: editContract.startDate || today,
-        termMonths: editContract.termMonths || 12,
+        startDate: initialStart,
+        termMonths: initialTerm,
+        termMonthsCustom: initialTermCustom,
         endDate: editContract.endDate || '',
         amount: editContract.amount || 0,
         depositAmount: editContract.depositAmount || 0,
@@ -1554,7 +1576,9 @@ function showManagedTenantContractForm(building, opts = {}) {
         note: editContract.note || ''
     } : {
         propertyName: initialBed,
-        startDate: today
+        startDate: today,
+        termMonths: initialTerm,
+        termMonthsCustom: initialTermCustom
     };
 
     openFormModal({
@@ -1568,7 +1592,8 @@ function showManagedTenantContractForm(building, opts = {}) {
 
             { name: '__s2', type: 'section', label: '合約期間 + 月租' },
             { name: 'startDate', label: '入住日期', type: 'date', required: true, value: today },
-            { name: 'termMonths', label: '合約期 (月)', type: 'number', value: 12 },
+            { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: initialTerm },
+            { name: 'termMonthsCustom', label: '自訂月數', type: 'number', value: initialTermCustom, placeholder: '例: 12' },
             { name: 'endDate', label: '到期日 (留空自動算)', type: 'date', span: 2 },
             { name: 'amount', label: '月租金', type: 'number', required: true },
             { name: 'depositAmount', label: '押金', type: 'number', value: 0 },
@@ -1584,38 +1609,71 @@ function showManagedTenantContractForm(building, opts = {}) {
         values: initialValues,
         submitLabel: isEdit ? '儲存變更' : '建立住客合約',
         // 即時自動算到期日：start / term 任一改動 → 自動填到期日
-        // 用 data-auto-end 紀錄是否為自動值，用戶手動改過就不再覆寫
+        // 用 leaseEndISO (起租 + N 月 − 1 天) 演算，跟 contracts.js / properties.js 統一
         onFormMount: (form) => {
             const startInput = form.querySelector('[name="startDate"]');
             const termInput  = form.querySelector('[name="termMonths"]');
+            const termWrap   = form.querySelector('.custom-select[data-name="termMonths"]');
             const endInput   = form.querySelector('[name="endDate"]');
+            const termCustomInput = form.querySelector('[name="termMonthsCustom"]');
+            const termCustomWrap  = termCustomInput?.closest('.form-group');
             if (!startInput || !termInput || !endInput) return;
+
+            // 自訂月數欄位 — termMonths === '__custom' 才顯示 (對齊 contracts.js)
+            const syncCustomTermVisibility = () => {
+                if (!termCustomWrap) return;
+                termCustomWrap.style.display = termInput.value === '__custom' ? '' : 'none';
+            };
+            syncCustomTermVisibility();
+            termInput.addEventListener('change', syncCustomTermVisibility);
+
+            // 當前生效月數 (含 __custom)
+            const getEffectiveTerm = () => {
+                if (termInput.value === '__custom') {
+                    return parseInt(termCustomInput?.value, 10) || 0;
+                }
+                return parseInt(termInput.value, 10) || 0;
+            };
+
             const recompute = () => {
                 if (endInput.dataset.userEdited === '1' && endInput.value) return;
                 const sd = startInput.value;
-                const tm = parseInt(termInput.value, 10) || 0;
+                const tm = getEffectiveTerm();
                 if (!sd || !tm) return;
-                const d = new Date(sd);
-                d.setMonth(d.getMonth() + tm);
-                endInput.value = d.toISOString().split('T')[0];
+                endInput.value = leaseEndISO(sd, tm);
             };
+
+            const refresh = () => {
+                if (termWrap?.__setOptions) termWrap.__setOptions(buildTermOptions(startInput.value));
+                recompute();
+            };
+
             // 初次 mount 也算一次 (新建模式 endDate 為空時)
             if (!endInput.value) recompute();
-            startInput.addEventListener('change', recompute);
-            startInput.addEventListener('input', recompute);
+            startInput.addEventListener('change', refresh);
+            startInput.addEventListener('input', refresh);
             termInput.addEventListener('change', recompute);
-            termInput.addEventListener('input', recompute);
+            termCustomInput?.addEventListener('input', recompute);
+            termCustomInput?.addEventListener('change', recompute);
             endInput.addEventListener('input', () => { endInput.dataset.userEdited = '1'; });
         },
         onSubmit: (values) => {
             const prop = mockData.properties.find(p => p.name === values.propertyName);
             if (!prop) { showToast('找不到對應床位', 'danger'); return false; }
+            // termMonths: __custom → 讀 termMonthsCustom 整數；其他 parseInt termMonths (對齊 contracts.js)
+            let termMonths;
+            if (values.termMonths === '__custom') {
+                termMonths = parseInt(values.termMonthsCustom, 10);
+                if (!termMonths || termMonths < 1) {
+                    showToast('自訂月數請填 ≥ 1 的整數', 'danger');
+                    return false;
+                }
+            } else {
+                termMonths = parseInt(values.termMonths, 10) || 12;
+            }
             let endDate = values.endDate || null;
-            if (!endDate && values.startDate && values.termMonths) {
-                const d = new Date(values.startDate);
-                d.setMonth(d.getMonth() + (parseInt(values.termMonths, 10) || 12));
-                d.setDate(d.getDate());
-                endDate = d.toISOString().split('T')[0];
+            if (!endDate && values.startDate && termMonths) {
+                endDate = leaseEndISO(values.startDate, termMonths);  // 起租 + N 月 − 1 天
             }
             const lessorName = (values.lessorNameCustom || '').trim() || values.lessorName || ourName;
             const payload = {
@@ -1629,7 +1687,7 @@ function showManagedTenantContractForm(building, opts = {}) {
                 startDate: values.startDate,
                 signDate: values.startDate,
                 endDate,
-                termMonths: parseInt(values.termMonths, 10) || 12,
+                termMonths,
                 amount: Number(values.amount) || 0,
                 depositAmount: Number(values.depositAmount) || 0,
                 status: values.status,

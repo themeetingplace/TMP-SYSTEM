@@ -16,6 +16,7 @@ import { moneyAmount } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { entityCard } from '../utils/entityCard.js';
 import { emptyState } from '../utils/emptyState.js';
+import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
@@ -677,67 +678,16 @@ function showContractForm(contract) {
                 }
             }
 
-            // === 加減項目子表單 (跟新增入住流程同款) ===
+            // === 加減項目子表單 — 跟 finance.js / unsettled.js 同款 util (寫 JSON 進 discountReason) ===
             const adjustPh = form.querySelector('#ph-adjustments');
-            const recalcAdjustments = () => {
-                if (!adjustPh) return;
-                const items = Array.from(adjustPh.querySelectorAll('.adj-row')).map(row => ({
-                    kind: row.querySelector('[data-adj="kind"]').value,
-                    label: row.querySelector('[data-adj="label"]').value.trim(),
-                    amount: Number(row.querySelector('[data-adj="amount"]').value) || 0
-                })).filter(x => x.amount > 0);
-                let sub = 0, add = 0;
-                items.forEach(x => x.kind === 'sub' ? (sub += x.amount) : (add += x.amount));
-                const net = sub - add;
-                if (discountInput) discountInput.value = net;
-                if (discountReasonInput) discountReasonInput.value = items.length ? JSON.stringify(items) : '';
-                refreshTotal();
-            };
-            const adjRowHtml = (row = { kind: 'sub', label: '', amount: '' }) => `
-                <div class="adj-row" style="display: grid; grid-template-columns: 130px 1fr 120px 32px; gap: 0.5rem; align-items: center; padding: 0.55rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 0.4rem;">
-                    <div class="adj-kind-toggle">
-                        <button type="button" class="adj-kind-btn ${row.kind === 'sub' ? 'is-active' : ''}" data-kind="sub" title="折扣 / 減項">− 折扣</button>
-                        <button type="button" class="adj-kind-btn ${row.kind === 'add' ? 'is-active' : ''}" data-kind="add" title="加收 / 額外費用">+ 加收</button>
-                    </div>
-                    <input type="hidden" data-adj="kind" value="${row.kind || 'sub'}">
-                    <input data-adj="label" type="text" class="form-input" placeholder="說明 (例：季繳優惠 / 能源費)" value="${row.label || ''}" style="font-size: var(--text-sm);">
-                    <input data-adj="amount" type="number" class="form-input" placeholder="金額" value="${row.amount || ''}" style="font-size: var(--text-sm); text-align: right;">
-                    <button type="button" class="adj-del" title="移除這筆" style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: 1rem; padding: 0.2rem;"><i class="ph ph-x"></i></button>
-                </div>
-            `;
             if (adjustPh) {
-                adjustPh.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <label style="font-weight: 500; font-size: var(--text-base);">折扣 / 加收項目 <small style="color: var(--text-muted); font-weight: 400;">(可多筆)</small></label>
-                        <button type="button" id="adj-add" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">
-                            <i class="ph ph-plus"></i> 新增項目
-                        </button>
-                    </div>
-                    <div id="adj-list"></div>
-                `;
-                const listEl = adjustPh.querySelector('#adj-list');
-                const addRow = (row) => {
-                    const div = document.createElement('div');
-                    div.innerHTML = adjRowHtml(row).trim();
-                    const rowEl = div.firstChild;
-                    listEl.appendChild(rowEl);
-                    rowEl.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recalcAdjustments));
-                    rowEl.querySelector('.adj-del').addEventListener('click', () => { rowEl.remove(); recalcAdjustments(); });
-                    rowEl.querySelectorAll('.adj-kind-btn').forEach(btn => {
-                        btn.addEventListener('click', () => {
-                            const kind = btn.dataset.kind;
-                            rowEl.querySelectorAll('.adj-kind-btn').forEach(b => b.classList.toggle('is-active', b.dataset.kind === kind));
-                            rowEl.querySelector('[data-adj="kind"]').value = kind;
-                            recalcAdjustments();
-                        });
-                    });
-                };
-                adjustPh.querySelector('#adj-add').addEventListener('click', () => addRow());
-                // Prefill 既有 adjustments
-                let prefillItems = [];
-                try { prefillItems = discountReasonInput?.value ? JSON.parse(discountReasonInput.value) : []; } catch {}
-                prefillItems.forEach(it => addRow(it));
-                recalcAdjustments();
+                initAdjustmentsWidget({
+                    container: adjustPh,
+                    discountInput,
+                    discountReasonInput,
+                    initialReason: discountReasonInput?.value || '',
+                    onChange: () => refreshTotal()
+                });
             }
             // 自訂月數欄位 — termMonths === '__custom' 才顯示
             const termCustomInput = form.querySelector('[name="termMonthsCustom"]');

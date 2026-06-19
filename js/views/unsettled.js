@@ -459,7 +459,21 @@ function showUnsettledForm(invoice = null) {
     const direction = invoice?.direction || 'in';
 
     const buildingOptions = getSortedBuildings({ activeOnly: true }).map(b => ({ value: b.id, label: b.name }));
-    const propertyOptions = mockData.properties.map(p => ({ value: p.name, label: p.name.replace('聚空間 - ', '') }));
+    // 床位 options builder: 依 buildingId filter (跟 contracts.js showContractForm 同款 pattern)
+    const buildPropertyOptions = (buildingId) => mockData.properties
+        .filter(p => buildingId ? p.buildingId === buildingId : true)
+        .slice()
+        .sort((a, b) => {
+            const ra = Number(a.roomNumber ?? 999), rb = Number(b.roomNumber ?? 999);
+            if (ra !== rb) return ra - rb;
+            return (a.bedLetter || '').localeCompare(b.bedLetter || '');
+        })
+        .map(p => ({ value: p.name, label: p.name.replace('聚空間 - ', '') }));
+    // 編輯時依現有 propertyName 反查 buildingId 作為初始 filter; 新增時不預設, 顯示全部
+    const initialBuildingId = invoice?.propertyName
+        ? (mockData.properties.find(p => p.name === invoice.propertyName)?.buildingId || '')
+        : '';
+    const propertyOptions = buildPropertyOptions(initialBuildingId);
     const tenantOptions = mockData.tenants.map(t => t.name);
     const contractOptions = mockData.contracts.map(c => ({
         value: c.id,
@@ -498,7 +512,7 @@ function showUnsettledForm(invoice = null) {
         title: isEdit ? `編輯待結：${invoice.id}` : '新增租客應收帳款',
         maxWidth: 700,
         fields,
-        values: invoice ?? {},
+        values: invoice ? { ...invoice, buildingId: invoice.buildingId || initialBuildingId } : {},
         submitLabel: isEdit ? '儲存變更' : '建立',
         onFormMount: (form) => {
             // 折扣 / 加收 widget — 跟合約 / 編輯收入同款
@@ -539,43 +553,23 @@ function showUnsettledForm(invoice = null) {
                 totalDueInputUS.style.color = 'var(--color-primary)';
             }
 
-            // 選定館別後，物件下拉只顯示該館的床位
-            const bldSel = form.querySelector('[name="buildingId"]');
-            const propSelWrap = form.querySelector('[name="propertyName"]')?.closest('.custom-select');
-            if (!bldSel || !propSelWrap) return;
-
-            function applyPropertyFilter() {
-                const bId = bldSel.value;
-                const bName = bId ? mockData.buildings.find(b => b.id === bId)?.name : null;
-                const propHidden = propSelWrap.querySelector('input[type="hidden"]');
-                const propValueEl = propSelWrap.querySelector('.custom-select-value');
-                // panel 可能 portal 到 body 也可能在原位
-                const panel = propSelWrap.querySelector('.custom-select-panel')
-                    || document.querySelector(`.custom-select-panel[data-cs-panel-id="${propSelWrap.dataset.csPanelId}"]`);
-
-                const options = panel ? panel.querySelectorAll('.custom-select-option') : [];
-                let visibleCount = 0;
-                options.forEach(opt => {
-                    const val = opt.dataset.value || '';
-                    const isPlaceholder = val === '';
-                    // name 結構: "聚空間 - 松山館 R1-A"，含 bName 就 match
-                    const match = isPlaceholder || !bName || val.includes(bName);
-                    opt.style.display = match ? '' : 'none';
-                    if (match && !isPlaceholder) visibleCount++;
-                });
-                // 若目前選定的物件 不屬於這個館 → 清掉
-                if (propHidden && propHidden.value && bName && !propHidden.value.includes(bName)) {
-                    propHidden.value = '';
-                    if (propValueEl) {
-                        propValueEl.textContent = '請選擇...';
-                        propValueEl.classList.add('placeholder');
+            // 館別變更 → 重 build 物件下拉 (跟 contracts.js showContractForm 同款 pattern)
+            const buildingHidden = form.querySelector('[name="buildingId"]');
+            const propertyWrap = form.querySelector('.custom-select[data-name="propertyName"]');
+            const propertyHidden = form.querySelector('[name="propertyName"]');
+            buildingHidden?.addEventListener('change', () => {
+                const bid = buildingHidden.value;
+                if (propertyWrap?.__setOptions) {
+                    const newOpts = buildPropertyOptions(bid);
+                    propertyWrap.__setOptions(newOpts);
+                    // 換館後若原本床位不屬於這個館, 清空 (避免送出時帶錯)
+                    if (propertyHidden && propertyHidden.value && !newOpts.find(o => o.value === propertyHidden.value)) {
+                        propertyHidden.value = '';
+                        const trigger = propertyWrap.querySelector('.custom-select-trigger');
+                        if (trigger) trigger.textContent = '請選擇...';
                     }
                 }
-            }
-
-            bldSel.addEventListener('change', applyPropertyFilter);
-            // 初始也跑一次 (編輯時可能已預選館別)
-            applyPropertyFilter();
+            });
         },
         onSubmit: (values) => {
             const { totalDue: _td, ...cleanValues } = values;

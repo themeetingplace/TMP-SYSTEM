@@ -2,6 +2,7 @@
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { filterMaintenancesByMode, filterPropertiesByMode } from '../utils/modeFilter.js';
+import { getMode } from '../utils/appMode.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { rowActions, rowActionGroup } from '../utils/rowActions.js';
 import { entityCard } from '../utils/entityCard.js';
@@ -148,12 +149,33 @@ export function renderMaintenance() {
 
 function showMaintenanceForm(item = null) {
     const isEdit = !!item;
-    const propertyOptions = filterPropertiesByMode(mockData.properties).map(p => ({ value: p.name, label: p.name.replace('聚空間 - ', '') }));
+    // 館別 + 物件 cascade (對齊 contracts.js / checkin / unsettled)
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const modeBuildingIds = new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === targetMode).map(b => b.id));
+    const buildingOptions = mockData.buildings
+        .filter(b => (b.mode || 'cohousing') === targetMode)
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(b => ({ value: b.id, label: b.name }));
+    // 初始 buildingId: 編輯時優先讀 item.buildingId, 沒有則從 propertyName 反查
+    const currentProperty = item?.propertyName ? mockData.properties.find(p => p.name === item.propertyName) : null;
+    const initialBuildingId = item?.buildingId || currentProperty?.buildingId || buildingOptions[0]?.value || '';
+    // 物件 options builder: 依 buildingId filter (沒選館則用整個 mode)
+    const buildPropertyOptions = (buildingId) => mockData.properties
+        .filter(p => buildingId ? p.buildingId === buildingId : modeBuildingIds.has(p.buildingId))
+        .slice()
+        .sort((a, b) => {
+            const ra = Number(a.roomNumber ?? 999), rb = Number(b.roomNumber ?? 999);
+            if (ra !== rb) return ra - rb;
+            return (a.bedLetter || '').localeCompare(b.bedLetter || '');
+        })
+        .map(p => ({ value: p.name, label: p.name.replace('聚空間 - ', '') }));
+    const propertyOptions = buildPropertyOptions(initialBuildingId);
 
     openFormModal({
         title: isEdit ? `編輯維修：${item.id}` : '新增報修',
         maxWidth: 700,
         fields: [
+            { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions, value: initialBuildingId },
             { name: 'propertyName', label: '物件', type: 'select', required: true, options: propertyOptions },
             { name: 'reporter', label: '回報人', type: 'text', required: true, placeholder: '例：王大明' },
             { name: 'reportDate', label: '回報日期', type: 'date', required: true, value: item?.reportDate ?? TODAY },
@@ -161,9 +183,30 @@ function showMaintenanceForm(item = null) {
             { name: 'issue', label: '問題描述', type: 'textarea', required: true, span: 2, placeholder: '例：冷氣不冷，會滴水' },
             { name: 'cost', label: '維修費用', type: 'number', span: 2, hint: '完成後可填入' }
         ],
-        values: item ?? {},
+        values: { ...(item ?? {}), buildingId: initialBuildingId },
         submitLabel: isEdit ? '儲存變更' : '建立',
+        onFormMount: (form) => {
+            // 館別變更 → 重 build 物件下拉 (filter 該館床位)
+            const buildingHidden = form.querySelector('[name="buildingId"]');
+            const propertyWrap = form.querySelector('.custom-select[data-name="propertyName"]');
+            const propertyHidden = form.querySelector('[name="propertyName"]');
+            buildingHidden?.addEventListener('change', () => {
+                const bid = buildingHidden.value;
+                if (propertyWrap?.__setOptions) {
+                    propertyWrap.__setOptions(buildPropertyOptions(bid));
+                    const newOpts = buildPropertyOptions(bid);
+                    if (propertyHidden && !newOpts.find(o => o.value === propertyHidden.value)) {
+                        propertyHidden.value = '';
+                        const trigger = propertyWrap.querySelector('.custom-select-trigger');
+                        if (trigger) trigger.textContent = '請選擇...';
+                    }
+                }
+            });
+        },
         onSubmit: (values) => {
+            // 確保 buildingId 跟 propertyName 對齊 (avoid 漂移): 以 propertyName 反查為準
+            const prop = mockData.properties.find(p => p.name === values.propertyName);
+            if (prop?.buildingId) values.buildingId = prop.buildingId;
             if (isEdit) {
                 store.updateMaintenance(item.id, values);
                 showToast('已更新維修單', 'success');
