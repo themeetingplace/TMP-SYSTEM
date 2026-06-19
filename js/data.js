@@ -673,15 +673,12 @@ export function addMonthsISO(dateStr, months) {
     return d.toISOString().split('T')[0];
 }
 
-// 租期到期日: 起租 + N 月 − 1 天 (該期最後一天)
-// 例: 6/3 起 3 個月 → 9/2 到期 (9/3 是下一期起算日, 不算這期)
+// 租期到期日: 起租 + N 個月 (calendar month, 不減 1 天)
+// 例: 6/20 起 1 個月 → 7/20 到期 / 6/3 起 3 個月 → 9/3 到期
+// (用戶慣例: 到期日就是「+N 個月」的同號日, clamp 到該月最後一天 (e.g. 1/31 + 1 月 → 2/28))
 export function leaseEndISO(startDate, months) {
     if (!startDate) return '';
-    const next = addMonthsISO(startDate, months);
-    if (!next) return '';
-    const d = new Date(next);
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
+    return addMonthsISO(startDate, months);
 }
 
 // 一筆 invoice 的實際金額 (P1-13: 從 finance/analysis/reports 抽出共用)
@@ -1370,12 +1367,10 @@ export const store = {
         if (oldContract.renewalState !== 'active') return { error: 'already_decided' };
 
         const termMonths = oldContract.termMonths || 1;
-        // 續租 convention (新版): endDate 是該期最後一天 (inclusive)
-        //   → 新合約 startDate = 舊 endDate + 1 天 (隔天交接, 不重疊)
-        //   → 新合約 endDate   = leaseEndISO(newStart, termMonths) = 該期最後一天
-        const oldEnd = oldContract.endDate ? new Date(oldContract.endDate) : new Date();
-        oldEnd.setDate(oldEnd.getDate() + 1);
-        const newStartISO = oldEnd.toISOString().split('T')[0];
+        // 續租 convention: endDate = 下期起算日 (calendar +N 月, 不 −1)
+        //   → 新合約 startDate = 舊 endDate (同一天交接)
+        //   → 新合約 endDate   = leaseEndISO(newStart, termMonths) = newStart + N 月
+        const newStartISO = oldContract.endDate || new Date().toISOString().split('T')[0];
         const newEndISO = leaseEndISO(newStartISO, termMonths);
 
         const newContract = {

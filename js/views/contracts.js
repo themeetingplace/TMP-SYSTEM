@@ -1070,10 +1070,9 @@ async function sendContractToLine(id) {
 export function confirmRenew(id) {
     const c = mockData.contracts.find(x => x.id === id);
     if (!c) return;
-    // 續租: 新合約起 = 舊到期 + 1 天; 新合約止 = leaseEndISO(新起, 同期數)
-    const newStart = new Date(c.endDate);
-    newStart.setDate(newStart.getDate() + 1);
-    const newStartStr = newStart.toISOString().split('T')[0];
+    // 續租: 新合約起 = 舊到期日 (同一天交接, endDate=下期起算日 convention)
+    //       新合約止 = leaseEndISO(新起, 同期數) = 新起 + N 月
+    const newStartStr = c.endDate;
     const newEndStr = leaseEndISO(newStartStr, c.termMonths || 1);
 
     openConfirm({
