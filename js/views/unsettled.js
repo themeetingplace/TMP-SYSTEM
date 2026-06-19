@@ -1,11 +1,12 @@
 ﻿// 待結帳款頁
 // 集中追蹤所有「欠繳 / 未付」帳款
 // 階段 2 新增：末 5 碼核對 / 批次結帳 / 一鍵產生本月帳單
-import { mockData, store, isUnsettled, ensureContractInvoices, previewContractInvoices, getSortedBuildings, deriveInvoiceStatus } from '../data.js';
+import { mockData, store, isUnsettled, ensureContractInvoices, previewContractInvoices, getSortedBuildings, deriveInvoiceStatus, formatDiscountReason } from '../data.js';
 import { openFormModal, openConfirm, showToast, refreshView } from '../utils/ui.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { escapeHtml } from '../utils/escape.js';
 import { filterInvoicesByMode } from '../utils/modeFilter.js';
+import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 
 // 類別 → type-chip class (語意色 — 跟 finance.js 同套)
 // 房租 (in) vs 租金 (out) 用 direction 分色
@@ -112,7 +113,12 @@ export function renderUnsettled() {
             ? `<span class="c-chip success"><i class="ph ph-check"></i> 已收 $${paid.toLocaleString()}</span>`
             : '';
         const discountChip = inv.discount
-            ? `<span class="c-chip warn"><i class="ph ph-tag"></i> 折 $${inv.discount.toLocaleString()}</span>`
+            ? (() => {
+                const isAddOn = Number(inv.discount) < 0;
+                const sign = isAddOn ? '+' : '-';
+                const abs = Math.abs(Number(inv.discount) || 0).toLocaleString();
+                return `<span class="c-chip ${isAddOn ? 'info' : 'warn'}"><i class="ph ph-tag"></i> ${sign}$${abs}</span>`;
+              })()
             : '';
         const primaryBtn = (inv.bankLast5 && !inv.bankVerified)
             ? `<button class="btn-primary unsettled-action" data-action="verify" data-id="${inv.id}">
@@ -135,9 +141,14 @@ export function renderUnsettled() {
                 <td>${target}</td>
                 <td>
                     <div style="font-weight: 600; color: ${amountColor};">${amountSign}$${balance.toLocaleString()}</div>
-                    ${isPartial
-                        ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">已收 $${paid.toLocaleString()} / 應收 $${due.toLocaleString()}${inv.discount ? ` (折 $${inv.discount.toLocaleString()})` : ''}</div>`
-                        : (inv.discount ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">應收 $${due.toLocaleString()} (折 $${inv.discount.toLocaleString()})</div>` : '')
+                    ${(() => {
+                        const adj = Number(inv.discount || 0);
+                        const adjLabel = adj === 0 ? '' : `${adj > 0 ? '−' : '+'}$${Math.abs(adj).toLocaleString()}`;
+                        if (isPartial) {
+                            return `<div style="font-size: var(--text-2xs); color: var(--text-muted);">已收 $${paid.toLocaleString()} / 應收 $${due.toLocaleString()}${adjLabel ? ` (調 ${adjLabel})` : ''}</div>`;
+                        }
+                        return adj !== 0 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">應收 $${due.toLocaleString()} (調 ${adjLabel})</div>` : '';
+                    })()
                     }
                 </td>
                 <td>
@@ -477,16 +488,22 @@ function showUnsettledForm(invoice = null) {
     const defaultPaymentMethod = paymentMethodOptions[0]?.value || '匯款';
 
     // 此頁只處理「向租客收的應收」，固定 direction='in'，公司支出不在這裡建
+    // 排版對齊 finance.js 編輯收入 modal
     const fields = [
         { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions },
-        { name: 'type', label: '類型', type: 'select', required: true, options: typeOptions },
-        { name: 'amount', label: '應收金額', type: 'number', required: true },
-        { name: 'dueDate', label: '應結日', type: 'date', required: true, value: TODAY },
         { name: 'propertyName', label: '物件', type: 'select', required: true, options: propertyOptions },
-        { name: 'tenant', label: '租客', type: 'select', required: true, options: tenantOptions, searchable: true, placeholder: '輸入姓名搜尋...' },
-        { name: '__sep_pay', label: '收款記錄', type: 'section', hint: '預設未收款；若已部分入帳請填寫' },
-        { name: 'discount', label: '折扣金額', type: 'number', value: invoice?.discount ?? 0 },
-        { name: 'discountReason', label: '折扣原因', type: 'text', value: invoice?.discountReason ?? '', placeholder: '例：季繳優惠' },
+        { name: 'tenant', label: '租客', type: 'select', required: true, options: tenantOptions, searchable: true, placeholder: '輸入姓名搜尋...', span: 2 },
+        { name: 'periodStart', label: '租期起', type: 'date' },
+        { name: 'periodEnd', label: '租期止', type: 'date' },
+        { name: '__sep_payment', type: 'section', label: '' },
+        { name: 'dueDate', label: '應結日', type: 'date', required: true, value: TODAY },
+        { name: 'type', label: '項目', type: 'select', required: true, options: typeOptions },
+        { name: 'amount', label: '租金金額', type: 'number', required: true, span: 2 },
+        // 折扣 / 加收 widget — 跟合約 form 同款
+        { name: 'adjustments', type: 'placeholder' },
+        { name: 'discount', type: 'hidden', value: invoice?.discount ?? 0 },
+        { name: 'discountReason', type: 'hidden', value: invoice?.discountReason ?? '' },
+        { name: 'totalDue', label: '應收總額', type: 'number', span: 2, hint: '租金金額 + 加收 − 折扣 (自動計算)' },
         { name: 'paidAmount', label: '已收金額', type: 'number', value: invoice?.paidAmount ?? 0 },
         { name: 'paymentMethod', label: '付款方式', type: 'select', options: paymentMethodOptions, value: invoice?.paymentMethod ?? defaultPaymentMethod },
         { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
@@ -499,6 +516,44 @@ function showUnsettledForm(invoice = null) {
         values: invoice ?? {},
         submitLabel: isEdit ? '儲存變更' : '建立',
         onFormMount: (form) => {
+            // 折扣 / 加收 widget — 跟合約 / 編輯收入同款
+            const initialReason = invoice?.discountReason || '';
+            let prefillReason = initialReason;
+            if (invoice && Number(invoice.discount) !== 0 && (!initialReason || !initialReason.trim().startsWith('['))) {
+                const d = Number(invoice.discount);
+                prefillReason = JSON.stringify([{
+                    kind: d < 0 ? 'add' : 'sub',  // income: <0=加收, >0=折扣
+                    label: initialReason || '',
+                    amount: Math.abs(d)
+                }]);
+            }
+            const amountInputUS = form.querySelector('[name="amount"]');
+            const totalDueInputUS = form.querySelector('[name="totalDue"]');
+            const recomputeUS = (net) => {
+                if (!totalDueInputUS) return;
+                const amt = Number(amountInputUS?.value) || 0;
+                totalDueInputUS.value = String(amt - (net || 0));
+            };
+            initAdjustmentsWidget({
+                container: form.querySelector('#ph-adjustments'),
+                discountInput: form.querySelector('[name="discount"]'),
+                discountReasonInput: form.querySelector('[name="discountReason"]'),
+                initialReason: prefillReason,
+                onChange: (net) => recomputeUS(net)
+            });
+            amountInputUS?.addEventListener('input', () => {
+                const widgetNet = Number(form.querySelector('[name="discount"]')?.value) || 0;
+                recomputeUS(widgetNet);
+            });
+            // 應收總額 readonly 灰底橘字
+            if (totalDueInputUS) {
+                totalDueInputUS.readOnly = true;
+                totalDueInputUS.style.backgroundColor = 'var(--bg-tertiary)';
+                totalDueInputUS.style.cursor = 'not-allowed';
+                totalDueInputUS.style.fontWeight = '700';
+                totalDueInputUS.style.color = 'var(--color-primary)';
+            }
+
             // 選定館別後，物件下拉只顯示該館的床位
             const bldSel = form.querySelector('[name="buildingId"]');
             const propSelWrap = form.querySelector('[name="propertyName"]')?.closest('.custom-select');
@@ -538,11 +593,11 @@ function showUnsettledForm(invoice = null) {
             applyPropertyFilter();
         },
         onSubmit: (values) => {
+            const { totalDue: _td, ...cleanValues } = values;
             const discount = Number(values.discount) || 0;
             const paidAmount = Number(values.paidAmount) || 0;
-            const due = (Number(values.amount) || 0) - discount;
             const draft = {
-                ...values,
+                ...cleanValues,
                 direction: 'in',
                 discount,
                 paidAmount,
