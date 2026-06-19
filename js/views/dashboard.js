@@ -88,9 +88,11 @@ function buildFinanceTodos(invoices) {
         .map(inv => {
             const isIn = inv.direction === 'in';
             const sign = isIn ? '' : '-';
+            const area = extractAreaName(inv.propertyName || '');
+            // 收入 (in): 顯示「館別 / 租客 / 類別」; 支出 (out): 顯示「館別 / 合約ID 或 整館 / 類別」
             const target = isIn
-                ? extractAreaName(inv.propertyName || '')
-                : (inv.contractId || extractAreaName(inv.propertyName || '整館'));
+                ? `${area}${inv.tenant ? ` / ${inv.tenant}` : ''}`
+                : `${area}${inv.contractId ? ` / ${inv.contractId}` : (inv.propertyName ? '' : ' / 整館')}`;
             return {
                 status: 'danger',
                 label: isIn ? '欠繳' : '未付',
