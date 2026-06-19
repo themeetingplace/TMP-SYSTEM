@@ -389,6 +389,8 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'adjustments', type: 'placeholder' },
             { name: 'discount', type: 'hidden', value: invoice?.discount ?? 0 },
             { name: 'discountReason', type: 'hidden', value: invoice?.discountReason ?? '' },
+            { name: 'totalDue', label: '實際應收', type: 'number', span: 2, hint: '應收金額 + 加收 − 折扣 (自動計算)' },
+            { name: 'paidAmount', label: '已收金額', type: 'number', hint: '留空或 0 = 未收；全額收訖請填全部金額' },
             { name: 'paymentMethod', label: '付款方式', type: 'select', options: paymentMethodOptions, value: invoice?.paymentMethod ?? defaultPaymentMethod },
             { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: TODAY },
             { name: 'periodStart', label: '租期起', type: 'date', hint: '此筆房租涵蓋的起始日' },
@@ -421,12 +423,35 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
                     amount: Math.abs(d)
                 }]);
             }
+            // amount + widget → 即時算 totalDue (實際應收)
+            const amountInput = form.querySelector('[name="amount"]');
+            const totalDueInput = form.querySelector('[name="totalDue"]');
+            const paidAmountInput = form.querySelector('[name="paidAmount"]');
+            const recomputeTotalDue = (widgetNet) => {
+                if (!totalDueInput) return;
+                const amt = Number(amountInput?.value) || 0;
+                // widget net 正 = 折扣 / 負 = 加收 → 實際應收 = amount - net
+                const due = amt - (widgetNet || 0);
+                totalDueInput.value = String(due);
+            };
             initAdjustmentsWidget({
                 container: form.querySelector('#ph-adjustments'),
                 discountInput: form.querySelector('[name="discount"]'),
                 discountReasonInput: form.querySelector('[name="discountReason"]'),
-                initialReason: prefillReason
+                initialReason: prefillReason,
+                onChange: (net) => recomputeTotalDue(net)
             });
+            amountInput?.addEventListener('input', () => {
+                const widgetNet = Number(form.querySelector('[name="discount"]')?.value) || 0;
+                recomputeTotalDue(widgetNet);
+            });
+            // 初始值: 用 invoice 既有 paidAmount, 沒有則填 amount - discount (預設全收)
+            if (paidAmountInput && !paidAmountInput.value) {
+                const initPaid = invoice?.paidAmount != null
+                    ? invoice.paidAmount
+                    : (Number(invoice?.amount || 0) - Number(invoice?.discount || 0));
+                paidAmountInput.value = String(initPaid);
+            }
 
             if (!isExpense) {
                 // 收入：填了 periodStart 自動帶 periodEnd = +30 天（若 periodEnd 還空著）
@@ -446,11 +471,24 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             const widgetNet = Number(values.discount) || 0;
             const discount = isExpense ? -widgetNet : widgetNet;
             const amt = Number(values.amount) || 0;
-            const paidAmount = amt - discount;
+            // 已收金額: user 明確填了用該值 / 沒填則預設全收 (amt - discount)
+            const paidAmount = (values.paidAmount != null && values.paidAmount !== '')
+                ? Number(values.paidAmount)
+                : (amt - discount);
+            // 拋掉 totalDue (顯示用, 非 DB 欄位)
+            const { totalDue: _td, ...cleanValues } = values;
+            // 自動 derive status: 已收 >= 應收 → 已繳清, paidAmount > 0 → 部分繳款, 否則 欠繳/未付
+            const due = amt - discount;
+            let status;
+            if (isExpense) {
+                status = paidAmount >= due ? '已付' : (paidAmount > 0 ? '部分支付' : '未付');
+            } else {
+                status = paidAmount >= due ? '已繳清' : (paidAmount > 0 ? '部分繳款' : '欠繳');
+            }
             const payload = {
-                ...values,
+                ...cleanValues,
                 direction,
-                status: isExpense ? '已付' : '已繳清',
+                status,
                 dueDate: values.paidDate,
                 discount,
                 paidAmount,
