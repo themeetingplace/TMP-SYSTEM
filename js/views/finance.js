@@ -360,7 +360,19 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
     const isExpense = direction === 'out';
 
     const buildingOptions = getSortedBuildings({ activeOnly: true }).map(b => ({ value: b.id, label: b.name }));
-    const propertyOptions = mockData.properties.map(p => ({ value: p.name, label: p.name.replace('聚空間 - ', '') }));
+    // 物件下拉依館 filter (對齊 contracts 編輯模式)
+    const buildPropertyOptions = (buildingId) => mockData.properties
+        .filter(p => buildingId ? p.buildingId === buildingId : true)
+        .slice()
+        .sort((a, b) => {
+            const ra = Number(a.roomNumber ?? 999), rb = Number(b.roomNumber ?? 999);
+            if (ra !== rb) return ra - rb;
+            return (a.bedLetter || '').localeCompare(b.bedLetter || '');
+        })
+        .map(p => ({ value: p.name, label: p.name.replace('聚空間 - ', '') }));
+    // 編輯時用該 invoice 的 buildingId 預先 filter; 新增時用第一個館
+    const initialBuildingId = invoice?.buildingId || buildingOptions[0]?.value || '';
+    const propertyOptions = buildPropertyOptions(initialBuildingId);
     const tenantOptions = mockData.tenants.map(t => t.name);
     const contractOptions = mockData.contracts.map(c => ({
         value: c.id,
@@ -412,6 +424,23 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
         values: invoice ?? {},
         submitLabel: isEdit ? '儲存變更' : '建立',
         onFormMount: (form) => {
+            // 館別變更 → 物件下拉重新依館 filter (對齊 contracts 編輯)
+            const buildingHidden = form.querySelector('[name="buildingId"]');
+            const propertyWrap = form.querySelector('.custom-select[data-name="propertyName"]');
+            const propertyHidden = form.querySelector('[name="propertyName"]');
+            buildingHidden?.addEventListener('change', () => {
+                const bid = buildingHidden.value;
+                if (propertyWrap?.__setOptions) {
+                    const newOpts = buildPropertyOptions(bid);
+                    propertyWrap.__setOptions(newOpts);
+                    if (propertyHidden && !newOpts.find(o => o.value === propertyHidden.value)) {
+                        propertyHidden.value = '';
+                        const trigger = propertyWrap.querySelector('.custom-select-trigger');
+                        if (trigger) trigger.textContent = '請選擇...';
+                    }
+                }
+            });
+
             // 折扣 / 加收 widget — 跟合約 form 同款
             // 收入: widget net (sub-add) 直接 = invoice.discount (正=折扣, 負=加收)
             // 支出: 翻轉，正=多付, 負=少付 (對齊原本支出 onSubmit 慣例)
