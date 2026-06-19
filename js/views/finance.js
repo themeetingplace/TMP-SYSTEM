@@ -386,6 +386,7 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'tenant', label: '租客', type: 'select', required: true, options: tenantOptions, searchable: true, placeholder: '輸入姓名或電話搜尋...', span: 2 },
             { name: 'periodStart', label: '租期起', type: 'date' },
             { name: 'periodEnd', label: '租期止', type: 'date' },
+            { name: '__sep_payment', type: 'section', label: '' },
             { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: TODAY },
             { name: 'type', label: '項目', type: 'select', required: true, options: typeOptions, value: invoice?.type ?? '房租' },
             { name: 'amount', label: '租金金額', type: 'number', required: true, span: 2 },
