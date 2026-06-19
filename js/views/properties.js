@@ -700,7 +700,11 @@ export function showCheckinAssignmentForm(opts = {}) {
             const amountInput = form.querySelector('[name="amount"]');
             bedHidden?.addEventListener('change', () => {
                 const b = mockData.properties.find(p => p.id === bedHidden.value);
-                if (b?.rent != null && amountInput) amountInput.value = b.rent;
+                if (b?.rent != null && amountInput) {
+                    amountInput.value = b.rent;
+                    // 直接賦值不會 fire input event → 手動觸發, 讓 recalcTotalDue 跟著動
+                    amountInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
             });
 
             // 館別變更 → 換床位選項 (非 preselect 才需要)
@@ -748,6 +752,22 @@ export function showCheckinAssignmentForm(opts = {}) {
             // 額外床位的月租加總 — 在下方額外床位區塊更新；先宣告避免 TDZ
             let extraBedRentSum = 0;
 
+            // 應收總額計算 — 統一從這支寫入 totalDueInput, 其他地方只觸發呼叫
+            // 必須在 recalcAdjustments 之前宣告 (recalcAdjustments 會 forward call 這個)
+            const recalcTotalDue = () => {
+                if (!totalDueInput) return;
+                const rent = Number(amountInput2?.value) || 0;
+                let term;
+                if (termHidden?.value === '__custom') {
+                    const customInput = form.querySelector('[name="termMonthsCustom"]');
+                    term = parseInt(customInput?.value, 10) || 1;
+                } else {
+                    term = parseInt(termHidden?.value, 10) || 1;
+                }
+                const discount = Number(discountInput?.value) || 0;
+                totalDueInput.value = Math.max(0, (rent + extraBedRentSum) * term - discount);
+            };
+
             // === 加減項目子表單 (新需求 #1) ===
             // 渲染到 #ph-adjustments；每筆 = { kind: 'sub'|'add', label, amount }
             // 變動時把「net = sub - add」寫到 discount hidden input、JSON 寫到 discountReason hidden input
@@ -761,21 +781,11 @@ export function showCheckinAssignmentForm(opts = {}) {
                 })).filter(x => x.amount > 0);
                 let sub = 0, add = 0;
                 items.forEach(x => x.kind === 'sub' ? (sub += x.amount) : (add += x.amount));
-                const net = sub - add;  // discount = net (正數扣，負數加)
+                const net = sub - add;
                 discountInput.value = net;
                 discountReasonInput.value = items.length ? JSON.stringify(items) : '';
-                if (totalDueInput && amountInput2 && termHidden) {
-                    const rent = Number(amountInput2.value) || 0;
-                    // termMonths='__custom' → 讀 termMonthsCustom 的值
-                    let term;
-                    if (termHidden.value === '__custom') {
-                        const customInput = form.querySelector('[name="termMonthsCustom"]');
-                        term = parseInt(customInput?.value, 10) || 1;
-                    } else {
-                        term = parseInt(termHidden.value, 10) || 1;
-                    }
-                    totalDueInput.value = Math.max(0, (rent + extraBedRentSum) * term - net);
-                }
+                // totalDue 統一交給 recalcTotalDue 寫 (single source of truth)
+                recalcTotalDue();
             };
             const adjRowHtml = (row = { kind: 'sub', label: '', amount: '' }) => `
                 <div class="adj-row" style="display: grid; grid-template-columns: 130px 1fr 120px 32px; gap: 0.5rem; align-items: center; padding: 0.55rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 0.4rem;">
@@ -824,22 +834,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             // === 額外床位 (多床位合約) — 同租客 / 同期間，每張額外床位獨立建合約 ===
             const extraBedsPh = form.querySelector('#ph-extraBeds');
             const extraBedIdsInput = form.querySelector('input[name="extraBedIds"]');
-
-            const recalcTotalDue = () => {
-                if (!totalDueInput) return;
-                const rent = Number(amountInput2?.value) || 0;
-                // termMonths='__custom' → 讀 termMonthsCustom 的值
-                let term;
-                if (termHidden?.value === '__custom') {
-                    const customInput = form.querySelector('[name="termMonthsCustom"]');
-                    term = parseInt(customInput?.value, 10) || 1;
-                } else {
-                    term = parseInt(termHidden?.value, 10) || 1;
-                }
-                const discount = Number(discountInput?.value) || 0;
-                const total = Math.max(0, (rent + extraBedRentSum) * term - discount);
-                totalDueInput.value = total;
-            };
+            // (recalcTotalDue 已在上方宣告)
 
             if (extraBedsPh && extraBedIdsInput) {
                 const getCurrentBuildingId = () => {
@@ -1003,10 +998,13 @@ export function showCheckinAssignmentForm(opts = {}) {
                 totalDueInput.style.color = 'var(--color-primary)';
 
                 amountInput2?.addEventListener('input', recalcTotalDue);
+                amountInput2?.addEventListener('change', recalcTotalDue);  // 程式賦值/blur 也要 catch
                 // termMonths 是 custom-select，要監聽 hidden input 的 change
                 termHidden?.addEventListener('change', recalcTotalDue);
                 // 自訂月數欄位變動也要重算
-                form.querySelector('[name="termMonthsCustom"]')?.addEventListener('input', recalcTotalDue);
+                const termCustomInput = form.querySelector('[name="termMonthsCustom"]');
+                termCustomInput?.addEventListener('input', recalcTotalDue);
+                termCustomInput?.addEventListener('change', recalcTotalDue);
                 recalcTotalDue();  // 初始算一次
             }
 
