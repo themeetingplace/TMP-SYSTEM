@@ -126,10 +126,10 @@ export function renderUnsettled() {
                   <i class="ph ph-check"></i> 結帳
                </button>`;
 
+        const remaining = Math.max(0, due - paid);
         return `
             <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="row-desktop ${overdue ? 'is-overdue-row' : ''} ${inv.bankLast5 && !inv.bankVerified ? 'is-await-verify-row' : ''}">
                 <td><input type="checkbox" class="row-check" data-id="${inv.id}"></td>
-                <td>${dirBadge}</td>
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong style="font-size: var(--text-base);">${inv.id}</strong>
@@ -137,9 +137,15 @@ export function renderUnsettled() {
                     </div>
                 </td>
                 <td>${target}</td>
-                <td>
-                    ${moneyCell({ amount: due, paid, direction: inv.direction, showStatus: false, showRemaining: true })}
+                <td style="text-align: right;">
+                    <div style="font-weight: 700; font-size: var(--text-base);">$${due.toLocaleString()}</div>
                     ${inv.discount ? `<div style="margin-top: 0.2rem;">${adjustmentBadge(inv.discount)}</div>` : ''}
+                </td>
+                <td style="text-align: right;">
+                    ${paid > 0
+                        ? `<div style="font-weight: 700; color: var(--color-success); font-size: var(--text-base);">$${paid.toLocaleString()}</div>
+                           ${remaining > 0 ? `<div style="font-size: var(--text-xs); color: var(--color-danger); margin-top: 0.15rem; font-weight: 600;">差 $${remaining.toLocaleString()}</div>` : ''}`
+                        : `<span style="color: var(--text-muted);">未收</span>`}
                 </td>
                 <td>
                     <div style="display: flex; flex-direction: column;">
@@ -266,17 +272,17 @@ export function renderUnsettled() {
                 <table class="data-table cards-with-hero" style="table-layout: fixed;">
                     <colgroup>
                         <col style="width: 36px;">
-                        <col style="width: 7%;">
                         <col style="width: 14%;">
                         <col style="width: 22%;">
-                        <col style="width: 14%;">
-                        <col style="width: 12%;">
+                        <col style="width: 11%;">
+                        <col style="width: 11%;">
+                        <col style="width: 11%;">
                         <col style="width: 9%;">
                         <col style="width: 22%;">
                     </colgroup>
                     <thead><tr>
                         <th><input type="checkbox" id="check-all"></th>
-                        <th>方向</th><th>帳單</th><th>對象</th><th>金額</th><th>應結日</th><th>銀行末 5 碼</th><th>操作</th>
+                        <th>帳單</th><th>對象</th><th style="text-align: right;">應收金額</th><th style="text-align: right;">已收金額</th><th>應結日</th><th>銀行末 5 碼</th><th>操作</th>
                     </tr></thead>
                     <tbody>${tableRows || emptyState({ mode: 'table-row', colspan: 8, icon: 'ph-check-circle', title: '所有帳款都已結清', hint: '目前沒有待結款項' })}</tbody>
                 </table>
