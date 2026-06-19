@@ -591,10 +591,21 @@ export function showCheckinAssignmentForm(opts = {}) {
             function syncChannelVisibility() {
                 const v = channelInput?.value || 'self';
                 const isPlatform = v === 'platform';
-                if (platformNameWrap) platformNameWrap.style.display = isPlatform ? '' : 'none';
-                // 平台代收 → 完全隱藏收款區
+                // platformName: 平台模式才顯示 (但只在 step 3 才允許顯示，避免 step 1/2 漏出來)
+                if (platformNameWrap) {
+                    const onStep3 = (typeof currentStep === 'undefined') ? true : currentStep === 3;
+                    platformNameWrap.style.display = (isPlatform && onStep3) ? '' : 'none';
+                }
+                // 收款區: 平台模式隱藏 / 自收模式由 step 機制控制 (不主動 set display='' 蓋掉)
                 [adjustWrap, totalDueWrap, paidAmountWrap, paymentMethodWrap].forEach(el => {
-                    if (el) el.style.display = isPlatform ? 'none' : '';
+                    if (!el) return;
+                    if (isPlatform) {
+                        el.style.display = 'none';
+                    } else {
+                        // self mode: 還原給 step 機制決定 — 只在 step 3 時顯示
+                        const onStep3 = (typeof currentStep === 'undefined') ? false : currentStep === 3;
+                        el.style.display = onStep3 ? '' : 'none';
+                    }
                 });
             }
             syncChannelVisibility();
@@ -711,10 +722,13 @@ export function showCheckinAssignmentForm(opts = {}) {
                     termSelectWrap.__setOptions(buildTermOptions(dateInput?.value || todayStr));
                 }
             };
-            // 自訂月數欄位 — termMonths !== '__custom' 時隱藏
+            // 自訂月數欄位 — termMonths === '__custom' 且當前在 step 2 才顯示
+            // 否則由 wizard step 機制決定 (step 1/3 一律藏)
             const syncCustomTermVisibility = () => {
                 if (!termCustomWrap) return;
-                termCustomWrap.style.display = termHiddenForUI?.value === '__custom' ? '' : 'none';
+                const isCustom = termHiddenForUI?.value === '__custom';
+                const onStep2 = (typeof currentStep === 'undefined') ? true : currentStep === 2;
+                termCustomWrap.style.display = (isCustom && onStep2) ? '' : 'none';
             };
             syncCustomTermVisibility();
             termHiddenForUI?.addEventListener('change', syncCustomTermVisibility);
