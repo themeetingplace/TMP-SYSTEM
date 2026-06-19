@@ -561,6 +561,10 @@ export function showCheckinAssignmentForm(opts = {}) {
         },
         submitLabel: '下一步：確認資料',
         onFormMount: (form) => {
+            // wizard step 狀態 — 必須早早宣告，給後面 conditional sync 函式 (syncChannelVisibility / syncCustomTermVisibility) 從 closure 抓
+            // 不能等到 line ~1073 才宣告，那時 TDZ 會讓初始 sync 的 currentStep access 報錯
+            let currentStep = 1;
+
             // 合約編號當 modal subtitle (放在標題下方，不擠到表單區域)
             const overlay = form.closest('.modal-overlay');
             const headerEl = overlay?.querySelector('.modal-header h3');
@@ -1070,7 +1074,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                 footer.insertBefore(nextBtn, originalSubmit);
             }
 
-            let currentStep = 1;
+            // currentStep 已在 onFormMount 開頭宣告 (給 conditional sync 用)
             const TOTAL_STEPS = STEP_LABELS.length;
             const setStep = (n) => {
                 currentStep = Math.max(1, Math.min(TOTAL_STEPS, n));
