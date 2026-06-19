@@ -673,12 +673,13 @@ export function addMonthsISO(dateStr, months) {
     return d.toISOString().split('T')[0];
 }
 
-// 租期到期日: 起租 + N 個月 (calendar month, 不減 1 天)
-// 例: 6/20 起 1 個月 → 7/20 到期 / 6/3 起 3 個月 → 9/3 到期
-// (用戶慣例: 到期日就是「+N 個月」的同號日, clamp 到該月最後一天 (e.g. 1/31 + 1 月 → 2/28))
+// 租期到期日: 1 個月 = 嚴格 30 天 (用戶慣例)
+// 1 月 = 30 天, 2 月 = 60 天, 3 月 = 90 天
+// 例: 6/20 + 1 月 → 7/20 / 4/9 + 3 月 → 7/8 / 6/3 + 3 月 → 9/1 / 1/31 + 1 月 → 3/2
 export function leaseEndISO(startDate, months) {
     if (!startDate) return '';
-    return addMonthsISO(startDate, months);
+    const days = (Number(months) || 0) * 30;
+    return addDaysISO(startDate, days);
 }
 
 // 一筆 invoice 的實際金額 (P1-13: 從 finance/analysis/reports 抽出共用)
