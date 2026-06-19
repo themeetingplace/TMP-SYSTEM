@@ -138,7 +138,7 @@ export function renderUnsettled() {
                 </td>
                 <td>${target}</td>
                 <td>
-                    ${moneyCell({ amount: due, paid, direction: inv.direction, showStatus: false })}
+                    ${moneyCell({ amount: due, paid, direction: inv.direction, showStatus: false, showRemaining: true })}
                     ${inv.discount ? `<div style="margin-top: 0.2rem;">${adjustmentBadge(inv.discount)}</div>` : ''}
                 </td>
                 <td>
@@ -570,6 +570,43 @@ function showUnsettledForm(invoice = null) {
                     }
                 }
             });
+
+            // === bundle 子合約偵測：此 invoice 對應的合約若是 bundle child, 鎖收款欄位 + 加提示 ===
+            // (參考 contracts.js showContractForm bundle child 寫法)
+            const linkedContract = mockData.contracts.find(c => c.id === invoice?.contractId);
+            const isBundleChildInv = !!linkedContract?.bundleParentContractId;
+            if (isBundleChildInv) {
+                const parentId = linkedContract.bundleParentContractId;
+                const discountInputUS = form.querySelector('[name="discount"]');
+                const discountReasonInputUS = form.querySelector('[name="discountReason"]');
+                const paidInputUS = form.querySelector('[name="paidAmount"]');
+                const adjustPhEl = form.querySelector('#ph-adjustments');
+                // amount / paidAmount / discount / totalDue 全部鎖
+                [amountInputUS, paidInputUS, totalDueInputUS, discountInputUS].forEach(el => {
+                    if (!el) return;
+                    el.setAttribute('readonly', '');
+                    el.disabled = true;
+                    el.style.background = 'var(--bg-tertiary)';
+                    el.style.cursor = 'not-allowed';
+                });
+                if (adjustPhEl) {
+                    adjustPhEl.style.opacity = '0.5';
+                    adjustPhEl.style.pointerEvents = 'none';
+                }
+                // 顯眼提示 (放在 form 最上方) — 點主合約 ID 可跳轉
+                if (!form.querySelector('.bundle-child-inv-hint')) {
+                    const hint = document.createElement('div');
+                    hint.className = 'bundle-child-inv-hint';
+                    hint.style.cssText = 'padding: 0.6rem 0.8rem; background: var(--color-info-light); border-left: 3px solid var(--color-info); border-radius: var(--radius-sm); margin-bottom: 0.9rem; font-size: var(--text-sm); line-height: 1.7; color: var(--text-main);';
+                    hint.innerHTML = `<i class="ph ph-link" style="vertical-align: -2px; margin-right: 0.3rem; color: var(--color-info);"></i>此 invoice 屬於 bundle 子合約 <strong style="font-family: monospace; background: var(--bg-tertiary); padding: 0.05rem 0.35rem; border-radius: var(--radius-sm);">${escapeHtml(invoice.contractId)}</strong>，收款請編輯主合約 <button type="button" class="bundle-jump-parent" data-pid="${escapeHtml(parentId)}" style="font-family: monospace; background: var(--color-info-light); border: 1px solid var(--color-info); color: var(--color-info); padding: 0.05rem 0.45rem; border-radius: var(--radius-sm); cursor: pointer; font-weight: 700;">${escapeHtml(parentId)}</button> 的 invoice。`;
+                    form.prepend(hint);
+                    // 點主合約 ID → 跳合約 detail
+                    hint.querySelector('.bundle-jump-parent')?.addEventListener('click', (e) => {
+                        const pid = e.currentTarget.dataset.pid;
+                        if (pid && window.openEntity) window.openEntity('contract', pid);
+                    });
+                }
+            }
         },
         onSubmit: (values) => {
             const { totalDue: _td, ...cleanValues } = values;

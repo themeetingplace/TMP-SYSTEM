@@ -78,24 +78,30 @@ function colorVar(name) {
 }
 
 /**
- * 收/支帳目儲存格 — 顯示「已收 / 應收」雙行 + 狀態 chip
+ * 收/支帳目儲存格 — 顯示「已收 / 應收」雙行 + 狀態 chip + 可選「待結 $X」醒目標
  * @param {object} opts
  *   amount: 應收金額 (number)
  *   paid: 已收金額 (number, optional, default 0)
  *   direction: 'in' (收) | 'out' (支) | null
  *   showStatus: bool (預設 true) — 是否帶狀態 chip
+ *   showRemaining: bool (預設 false) — 未結清時加「待結 $X」醒目標 (給房租查帳/欠款表用)
  *   compact: bool (預設 false) — 緊湊單行
  * @returns {string} HTML
  */
-export function moneyCell({ amount, paid = 0, direction = 'in', showStatus = true, compact = false } = {}) {
+export function moneyCell({ amount, paid = 0, direction = 'in', showStatus = true, showRemaining = false, compact = false } = {}) {
     const due = Number(amount) || 0;
     const got = Number(paid) || 0;
     const sign = direction === 'out' ? 'out' : 'in';
     const status = derivePayStatus(due, got);
     const statusChip = showStatus ? paymentStatusBadge(status) : '';
+    const remaining = due - got;
+    // 「待結 $X」醒目標 — 應收尚未結清時顯示
+    const remainingChip = (showRemaining && remaining > 0)
+        ? `<div style="margin-top: 0.25rem;"><span class="status-badge danger" style="font-size: var(--text-2xs); font-weight: 700;"><i class="ph-fill ph-warning-circle"></i> 待結 $${fmt(remaining)}</span></div>`
+        : '';
 
     if (compact) {
-        return `<span style="font-weight: 600;">${moneyAmount(due, { sign })}</span> ${statusChip}`;
+        return `<span style="font-weight: 600;">${moneyAmount(due, { sign })}</span> ${statusChip} ${remainingChip}`;
     }
     if (got >= due && due > 0) {
         return `
@@ -106,6 +112,7 @@ export function moneyCell({ amount, paid = 0, direction = 'in', showStatus = tru
     return `
         <div style="font-weight: 700;">${moneyAmount(got, { sign })}</div>
         <div style="font-size: var(--text-xs); color: var(--text-muted);">應收 $${fmt(due)}</div>
+        ${remainingChip}
         ${statusChip ? `<div style="margin-top: 0.2rem;">${statusChip}</div>` : ''}
     `;
 }

@@ -17,6 +17,7 @@ import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { entityCard } from '../utils/entityCard.js';
 import { emptyState } from '../utils/emptyState.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
+import { buildTermOptions as buildTermOptionsUtil, initTermSelector } from '../utils/termSelector.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
@@ -444,14 +445,8 @@ function showContractForm(contract) {
     // 拉現任租客主檔，prefill phone/email/緊急聯絡人 (跟建立流程對齊)
     const linkedTenant = mockData.tenants.find(t => t.name === contract.tenant) || null;
 
-    function buildTermOptions(startDate) {
-        const fmt = (iso) => iso ? iso.slice(5).replace('-', '/') : '?';
-        return [
-            { value: '1', label: `1 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 1))} 到期` : ''}` },
-            { value: '3', label: `3 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 3))} 到期` : ''}` },
-            { value: '__custom', label: '自訂月數...' }
-        ];
-    }
+    // 共用 utils/termSelector.js → buildTermOptionsUtil(start, leaseEndISO)
+    const buildTermOptions = (startDate) => buildTermOptionsUtil(startDate, leaseEndISO);
     const initialStart = contract.startDate ?? TODAY;
     // termMonths 不是 1 或 3 → 視為自訂; 帶入 __custom + termMonthsCustom 顯示
     const ctermNum = Number(contract.termMonths) || 1;
@@ -601,7 +596,6 @@ function showContractForm(contract) {
             // 起始日變更時：(1) 重算簽約期下拉的到期日標籤  (2) 若 endDate 空著自動填
             const startInput = form.querySelector('[name="startDate"]');
             const endInput = form.querySelector('[name="endDate"]');
-            const termWrap = form.querySelector('.custom-select[data-name="termMonths"]');
             const amountInput = form.querySelector('[name="amount"]');
             const termInput = form.querySelector('[name="termMonths"]');
             const totalDueInput = form.querySelector('[name="totalDue"]');
@@ -689,26 +683,20 @@ function showContractForm(contract) {
                     onChange: () => refreshTotal()
                 });
             }
-            // 自訂月數欄位 — termMonths === '__custom' 才顯示
-            const termCustomInput = form.querySelector('[name="termMonthsCustom"]');
-            const termCustomWrap = termCustomInput?.closest('.form-group');
-            const syncCustomTermVisibility = () => {
-                if (!termCustomWrap) return;
-                termCustomWrap.style.display = termInput?.value === '__custom' ? '' : 'none';
-            };
-            syncCustomTermVisibility();
-            termInput?.addEventListener('change', syncCustomTermVisibility);
+            // 自訂月數欄位顯隱 + termMonths/termMonthsCustom 變動 → refreshTotal
+            // 共用 utils/termSelector.js (跟 properties.js 新增入住 wizard 同源)
+            const termSelector = initTermSelector({
+                form,
+                leaseEndISO,
+                startName: 'startDate',
+                termName: 'termMonths',
+                customName: 'termMonthsCustom',
+                onTermChange: refreshTotal
+            });
+            const getEffectiveTerm = () => termSelector?.getEffectiveTerm() ?? 1;
 
-            // 取得當前生效的月數 (含 __custom)
-            const getEffectiveTerm = () => {
-                if (termInput?.value === '__custom') {
-                    return parseInt(termCustomInput?.value, 10) || 1;
-                }
-                return parseInt(termInput?.value, 10) || 1;
-            };
-
+            // refresh: startDate 變動 → 重算 dropdown label (termSelector 已處理) + endInput 空著自動填 + refreshTotal
             const refresh = () => {
-                if (termWrap?.__setOptions) termWrap.__setOptions(buildTermOptions(startInput.value));
                 if (!endInput.value && startInput.value) {
                     const term = getEffectiveTerm();
                     if (term) endInput.value = leaseEndISO(startInput.value, term);
@@ -718,8 +706,6 @@ function showContractForm(contract) {
             startInput.addEventListener('change', refresh);
             startInput.addEventListener('input', refresh);
             amountInput?.addEventListener('input', refreshTotal);
-            termInput?.addEventListener('change', refreshTotal);
-            termCustomInput?.addEventListener('input', refreshTotal);
         },
         onSubmit: (values) => {
             const property = mockData.properties.find(p => p.name === values.propertyName);

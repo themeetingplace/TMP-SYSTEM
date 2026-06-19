@@ -424,6 +424,49 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
         values: invoice ?? {},
         submitLabel: isEdit ? '儲存變更' : '建立',
         onFormMount: (form) => {
+            // === bundle 子合約偵測 — readonly + hint ===
+            // 若 invoice.contractId 對應的合約有 bundleParentContractId, 則該 invoice 為子合約 invoice,
+            // 收款金額應在主合約 invoice 上編輯 (避免雙重記帳)
+            const _bundleContract = mockData.contracts.find(c => c.id === invoice?.contractId);
+            const isBundleChildInv = !!_bundleContract?.bundleParentContractId;
+            if (isBundleChildInv) {
+                const parentId = _bundleContract.bundleParentContractId;
+                const childId = _bundleContract.id;
+                // 鎖金額相關欄位 (readonly + 灰底 + 禁止 cursor)
+                ['amount', 'paidAmount', 'discount'].forEach(name => {
+                    const el = form.querySelector(`[name="${name}"]`);
+                    if (!el) return;
+                    el.readOnly = true;
+                    el.disabled = true;
+                    el.style.backgroundColor = 'var(--bg-tertiary)';
+                    el.style.cursor = 'not-allowed';
+                    el.style.opacity = '0.7';
+                });
+                // 也鎖加減項目 widget (避免改 widget 反寫 discount)
+                const _adjustPh = form.querySelector('#ph-adjustments');
+                if (_adjustPh) {
+                    _adjustPh.style.opacity = '0.5';
+                    _adjustPh.style.pointerEvents = 'none';
+                }
+                // 表單最上方塞顯眼 hint (含主合約 ID 可點)
+                const hint = document.createElement('div');
+                hint.className = 'bundle-child-invoice-hint';
+                hint.style.cssText = 'background: var(--color-info-light); border-left: 3px solid var(--color-info); padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: var(--radius-sm); font-size: var(--text-sm); line-height: 1.6; color: var(--text-primary);';
+                hint.innerHTML = `<i class="ph ph-link" style="vertical-align: -2px; margin-right: 0.35rem; color: var(--color-info);"></i>此 invoice 屬於 bundle 子合約 <strong style="font-family: monospace;">${childId}</strong>，收款請編輯主合約 <button type="button" class="bundle-parent-jump" data-pid="${parentId}" style="background: var(--color-info); border: none; color: white; font-family: monospace; padding: 0.1rem 0.45rem; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); font-weight: 600;" title="跳到主合約 ${parentId}">${parentId}</button> 的 invoice。`;
+                form.prepend(hint);
+                // 點主合約 ID → 關掉 modal + 跳合約頁打開該合約 detail
+                hint.querySelector('.bundle-parent-jump')?.addEventListener('click', () => {
+                    const pid = parentId;
+                    // 關掉所有 modal (對齊 closeAllModals 行為)
+                    document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
+                    if (typeof window.openEntity === 'function') {
+                        window.openEntity('contract', pid);
+                    } else {
+                        window.location.hash = 'contracts';
+                    }
+                });
+            }
+
             // 館別變更 → 物件下拉重新依館 filter (對齊 contracts 編輯)
             const buildingHidden = form.querySelector('[name="buildingId"]');
             const propertyWrap = form.querySelector('.custom-select[data-name="propertyName"]');
