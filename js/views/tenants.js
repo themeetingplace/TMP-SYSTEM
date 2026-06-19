@@ -152,8 +152,8 @@ export function renderTenants() {
 function showTenantForm(tenant = null) {
     const isEdit = !!tenant;
     const propertyOptions = [
-        '',
-        ...mockData.properties.map(p => p.name)
+        { value: '', label: '— 無 —' },
+        ...mockData.properties.map(p => ({ value: p.name, label: p.name.replace('聚空間 - ', '') }))
     ];
     const sourceOptions = (mockData.tenantSources || []).map(s => ({ value: s.name, label: s.name }));
     const defaultSource = sourceOptions[0]?.value || '';

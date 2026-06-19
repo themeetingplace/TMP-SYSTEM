@@ -463,7 +463,7 @@ function showUnsettledForm(invoice = null) {
     const direction = invoice?.direction || 'in';
 
     const buildingOptions = getSortedBuildings({ activeOnly: true }).map(b => ({ value: b.id, label: b.name }));
-    const propertyOptions = mockData.properties.map(p => p.name);
+    const propertyOptions = mockData.properties.map(p => ({ value: p.name, label: p.name.replace('聚空間 - ', '') }));
     const tenantOptions = mockData.tenants.map(t => t.name);
     const contractOptions = mockData.contracts.map(c => ({
         value: c.id,

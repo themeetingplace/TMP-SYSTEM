@@ -129,7 +129,7 @@ export function renderMaintenance() {
 
 function showMaintenanceForm(item = null) {
     const isEdit = !!item;
-    const propertyOptions = filterPropertiesByMode(mockData.properties).map(p => p.name);
+    const propertyOptions = filterPropertiesByMode(mockData.properties).map(p => ({ value: p.name, label: p.name.replace('聚空間 - ', '') }));
 
     openFormModal({
         title: isEdit ? `編輯維修：${item.id}` : '新增報修',

@@ -1495,6 +1495,16 @@ export const store = {
             mockData.invoices[i] = { ...before, ...patch };
             const after = mockData.invoices[i];
 
+            // amount / discount / paidAmount 任一改 → 自動 derive status
+            // 之前漏這段，cascade 改 amount 後 status 還停在「已繳清」變謊話
+            // patch 已明確設 status 就尊重 (避免 cascade 跟 user 雙寫衝突)
+            if (!('status' in patch) && ('amount' in patch || 'discount' in patch || 'paidAmount' in patch)) {
+                const newStatus = deriveInvoiceStatus(after);
+                if (newStatus && newStatus !== after.status) {
+                    mockData.invoices[i] = { ...after, status: newStatus };
+                }
+            }
+
             // 改帳單金額 → 合約月租同步反推
             // 只處理：房租 invoice + 有 contractId + amount 真的變了
             // 反推: contract.amount = (新 invoice.amount - bundle 額外床位月租 × term) / term
