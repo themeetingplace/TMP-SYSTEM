@@ -2,6 +2,9 @@
 import { openFormModal, openConfirm, openDetailModal, openModal, showToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { filterTenantsByMode } from '../utils/modeFilter.js';
+import { moneyAmount } from '../utils/moneyDisplay.js';
+import { rowAction, rowActionGroup } from '../utils/rowActions.js';
+import { emptyState } from '../utils/emptyState.js';
 
 const TENANT_STATUSES = ['居住中', '待入住', '已退租'];
 
@@ -63,20 +66,14 @@ export function renderTenants() {
                 <td>${lineCell}</td>
                 <td><div style="font-size: var(--text-base); color: var(--text-main);">${t.emergencyContact ? esc(t.emergencyContact) : '<span style="color: var(--text-muted)">--</span>'}</div></td>
                 <td>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline tenant-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="view" data-id="${t.id}" title="詳細資料">
-                            <i class="ph ph-eye"></i>
-                        </button>
-                        <button class="btn btn-outline tenant-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${t.id}" title="編輯資料">
-                            <i class="ph ph-pencil"></i>
-                        </button>
+                    ${rowActionGroup(`
+                        ${rowAction({ action: "view", id: t.id, icon: "ph-eye", title: "詳細資料", className: "tenant-action" })}
+                        ${rowAction({ action: "edit", id: t.id, icon: "ph-pencil", title: "編輯資料", className: "tenant-action" })}
                         ${t.phone
                             ? `<a class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" href="tel:${t.phone.replace(/\D/g,'')}" title="撥打電話"><i class="ph ph-phone"></i></a>`
                             : `<button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); opacity: 0.4; cursor: not-allowed;" disabled title="無電話"><i class="ph ph-phone"></i></button>`}
-                        <button class="btn btn-outline tenant-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete" data-id="${t.id}" title="刪除">
-                            <i class="ph ph-trash"></i>
-                        </button>
-                    </div>
+                        ${rowAction({ action: "delete", id: t.id, icon: "ph-trash", title: "刪除", variant: "danger", className: "tenant-action" })}
+                    `)}
                 </td>
             </tr>
         `;
@@ -219,16 +216,16 @@ export function showTenantDetails(id) {
     };
 
     const historyRows = allContracts.length === 0
-        ? `<tr><td colspan="5" style="text-align: center; padding: 1.25rem; color: var(--text-muted); font-size: var(--text-sm);">尚無入住紀錄</td></tr>`
+        ? emptyState({ mode: "table-row", colspan: 5, icon: "ph-file-text", title: "尚無入住紀錄", hint: "此租客目前沒有任何合約紀錄" })
         : allContracts.map(c => {
             const s = stateLabel(c);
             const sus = isAmountSuspect(c);
             const amountCell = sus.suspect
                 ? `<td style="text-align: right; font-weight: 500; font-style: italic; color: var(--text-muted);" title="⚠ ${sus.reason}（歷史資料，僅供參考）">
-                       $${(c.amount || 0).toLocaleString()}
+                       ${moneyAmount(c.amount || 0)}
                        <i class="ph ph-warning-circle" style="color: var(--color-warning, #b8871f); margin-left: 0.25rem; font-size: 0.9em; vertical-align: -1px;"></i>
                    </td>`
-                : `<td style="text-align: right; font-weight: 600;">$${(c.amount || 0).toLocaleString()}</td>`;
+                : `<td style="text-align: right; font-weight: 600;">${moneyAmount(c.amount || 0)}</td>`;
             return `
                 <tr>
                     <td style="font-family: monospace; font-size: var(--text-xs);">${c.id}</td>

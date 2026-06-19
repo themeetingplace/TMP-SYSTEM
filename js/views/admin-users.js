@@ -9,6 +9,8 @@ import { supabase } from '../supabase.js';
 import { getSession } from '../auth.js';
 import { openFormModal, openConfirm, showToast } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
+import { rowAction, rowActionGroup } from '../utils/rowActions.js';
+import { emptyState } from '../utils/emptyState.js';
 
 let cachedAdmins = [];
 let currentEmail = null;
@@ -34,9 +36,9 @@ function roleBadge(role) {
         return `<span class="status-badge info" title="小幫手 — 只能檢視 物件/住房/租客"><i class="ph-fill ph-hand-heart" aria-hidden="true"></i> 小幫手</span>`;
     }
     if (role === 'viewer') {
-        return `<span class="status-badge" style="background: var(--bg-tertiary); color: var(--text-muted);"><i class="ph-fill ph-eye" aria-hidden="true"></i> Viewer</span>`;
+        return `<span class="status-badge muted"><i class="ph-fill ph-eye" aria-hidden="true"></i> Viewer</span>`;
     }
-    return `<span class="status-badge" style="background: var(--bg-secondary);"><i class="ph-fill ph-wrench" aria-hidden="true"></i> Admin</span>`;
+    return `<span class="status-badge neutral"><i class="ph-fill ph-wrench" aria-hidden="true"></i> Admin</span>`;
 }
 
 function formatDate(iso) {
@@ -47,7 +49,7 @@ function formatDate(iso) {
 
 function rowsHtml(admins) {
     if (!admins.length) {
-        return `<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">尚無管理員</td></tr>`;
+        return emptyState({ mode: 'table-row', colspan: 5, icon: 'ph-user-gear', title: '尚無管理員', hint: '點右上「新增管理員」加入第一個帳號' });
     }
     return admins.map(a => {
         const isSelf = a.email === currentEmail;
@@ -56,16 +58,17 @@ function rowsHtml(admins) {
             <tr data-email="${escapeAttr(a.email)}">
                 <td>
                     <strong>${esc(a.email)}</strong>
-                    ${isSelf ? '<span class="status-badge" style="margin-left: 0.5rem; background: var(--bg-secondary); font-size: var(--text-2xs);">你</span>' : ''}
+                    ${isSelf ? '<span class="status-badge neutral" style="margin-left: 0.5rem; font-size: var(--text-2xs);">你</span>' : ''}
                 </td>
                 <td>${a.display_name ? esc(a.display_name) : '<span style="color: var(--text-muted);">—</span>'}</td>
                 <td>${roleBadge(a.role)}</td>
                 <td style="color: var(--text-muted); font-size: var(--text-xs);">${esc(formatDate(a.created_at))}</td>
                 <td style="text-align: right;">
                     ${canDelete
-                        ? `<button class="btn btn-outline admin-delete-btn" data-email="${escapeAttr(a.email)}" data-name="${escapeAttr(a.display_name || a.email)}" title="移除此帳號" style="color: var(--color-danger); padding: 0.25rem 0.6rem;">
-                              <i class="ph ph-trash"></i> 移除
-                           </button>`
+                        ? rowActionGroup(
+                            rowAction({ action: 'delete', id: a.email, icon: 'ph-trash', title: '移除此帳號', variant: 'danger', className: 'admin-delete-btn' })
+                                .replace('<button ', `<button data-email="${escapeAttr(a.email)}" data-name="${escapeAttr(a.display_name || a.email)}" `)
+                          )
                         : '<span style="color: var(--text-muted); font-size: var(--text-xs);">不能移除自己</span>'
                     }
                 </td>
@@ -111,7 +114,7 @@ export function renderAdminUsers() {
                         </tr>
                     </thead>
                     <tbody id="admin-users-tbody">
-                        <tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">載入中...</td></tr>
+                        ${emptyState({ mode: 'table-row', colspan: 5, icon: 'ph-circle-notch', title: '載入中...' })}
                     </tbody>
                 </table>
             </div>

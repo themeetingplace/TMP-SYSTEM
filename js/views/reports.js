@@ -21,6 +21,8 @@ import { exportAnalysisReport } from './analysis-export.js';
 import { modeFilteredData } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { GROUP_CUM_BASELINES } from '../constants.js';
+import { moneyAmount, moneyCell as moneyCellDS } from '../utils/moneyDisplay.js';
+import { emptyState } from '../utils/emptyState.js';
 
 // 模組層快取 — 每次 renderReports 開頭 reset，內部 helper 都讀這個避免 14 處 mockData 散落各處
 let _modeData = null;
@@ -151,7 +153,7 @@ function computeMonthlyTrend(range, buildingId = null) {
 // 各館 應收 vs 已收 stacked bar (取代 donut — 顯示現金流缺口)
 function renderReceivableStackedBars(items) {
     if (items.length === 0 || items.every(it => it.receivable === 0)) {
-        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">區間內無應收資料</div>`;
+        return emptyState({ mode: 'block', icon: 'ph-coin', title: '區間內無應收資料', hint: '調整上方區間試試' });
     }
     const maxReceivable = Math.max(...items.map(it => it.receivable), 1);
     return `
@@ -170,9 +172,9 @@ function renderReceivableStackedBars(items) {
                             <div class="stacked-bar-paid" style="width: ${paidPct}%;"></div>
                         </div>
                         <div class="stacked-bar-vals">
-                            <span class="sb-val-paid">已收 $${it.paid.toLocaleString()}</span>
-                            ${it.outstanding > 0 ? `<span class="sb-val-out">待收 $${it.outstanding.toLocaleString()}</span>` : ''}
-                            <span class="sb-val-total">/ 應收 $${it.receivable.toLocaleString()}</span>
+                            <span class="sb-val-paid">已收 ${moneyAmount(it.paid)}</span>
+                            ${it.outstanding > 0 ? `<span class="sb-val-out">待收 ${moneyAmount(it.outstanding)}</span>` : ''}
+                            <span class="sb-val-total">/ 應收 ${moneyAmount(it.receivable)}</span>
                         </div>
                     </div>
                 `;
@@ -283,13 +285,13 @@ function renderOverviewTab() {
         <div class="stat-tile-grid">
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-trend-up"></i> NOI 淨營運收入</div>
-                <div class="stat-tile-value" style="color: ${k.noi >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">$${k.noi.toLocaleString()}</div>
-                <div class="stat-tile-sub">已收 $${k.paidTotal.toLocaleString()} − 已付 $${k.expenseTotal.toLocaleString()}</div>
+                <div class="stat-tile-value" style="color: ${k.noi >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${moneyAmount(k.noi)}</div>
+                <div class="stat-tile-sub">已收 ${moneyAmount(k.paidTotal)} − 已付 ${moneyAmount(k.expenseTotal)}</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-percent"></i> 收款率 <span style="margin-left: auto; font-size: 0.85em;">${collection.light}</span></div>
                 <div class="stat-tile-value" style="color: ${collection.color};">${(k.collectionRate * 100).toFixed(1)}%</div>
-                <div class="stat-tile-sub">待收 $${k.outstanding.toLocaleString()} · 目標 ≥ 95%</div>
+                <div class="stat-tile-sub">待收 ${moneyAmount(k.outstanding)} · 目標 ≥ 95%</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率 <span style="margin-left: auto; font-size: 0.85em;">${occupancy.light}</span></div>
@@ -733,7 +735,7 @@ const PIE_PALETTE = ['#ff8859', '#3f7c8a', '#d4a574', '#7a9a6a', '#b67d7d', '#9c
 
 function renderExpensePie(items) {
     if (items.length === 0 || items.every(it => it.amount === 0)) {
-        return `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">區間內無支出資料</div>`;
+        return emptyState({ mode: 'block', icon: 'ph-coin', title: '區間內無支出資料', hint: '調整上方區間試試' });
     }
     const id = `report-chart-${++_chartCounter}`;
     const colors = items.map((_, i) => PIE_PALETTE[i % PIE_PALETTE.length]);
@@ -776,7 +778,7 @@ function renderExpensePie(items) {
             <span class="pie-legend-dot" style="background: ${colors[idx]};"></span>
             <div class="pie-legend-body">
                 <span class="pie-legend-label">${it.type}</span>
-                <span class="pie-legend-meta">${(it.pct * 100).toFixed(0)}% · $${it.amount.toLocaleString()}</span>
+                <span class="pie-legend-meta">${(it.pct * 100).toFixed(0)}% · ${moneyAmount(it.amount)}</span>
             </div>
         </div>
     `).join('');
@@ -859,17 +861,17 @@ function renderManagedAnalysis() {
         <div class="stat-tile-grid">
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-hand-coins"></i> 屋主應收總額</div>
-                <div class="stat-tile-value">$${ownerReceivableTotal.toLocaleString()}</div>
+                <div class="stat-tile-value">${moneyAmount(ownerReceivableTotal)}</div>
                 <div class="stat-tile-sub">本期 ${settlements.length} 張月結算</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-coin"></i> 代管費收入 (我們)</div>
-                <div class="stat-tile-value" style="color: var(--color-primary-text);">$${mgmtFeeTotal.toLocaleString()}</div>
+                <div class="stat-tile-value" style="color: var(--color-primary-text);">${moneyAmount(mgmtFeeTotal)}</div>
                 <div class="stat-tile-sub">我們的抽成 / 服務費</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-vault"></i> 屋主持有押金</div>
-                <div class="stat-tile-value">$${holdingDepositTotal.toLocaleString()}</div>
+                <div class="stat-tile-value">${moneyAmount(holdingDepositTotal)}</div>
                 <div class="stat-tile-sub">已移交給屋主保管的押金總額</div>
             </div>
             <div class="stat-tile">
@@ -882,7 +884,7 @@ function renderManagedAnalysis() {
         <div class="report-chart-card">
             <div class="report-chart-title"><i class="ph ph-user-circle"></i> 各屋主結算 (本期)</div>
             ${ownerRows.length === 0
-                ? `<div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">本期尚無屋主結算紀錄</div>`
+                ? emptyState({ mode: 'block', icon: 'ph-user-circle', title: '本期尚無屋主結算紀錄', hint: '至各代管房屋的「費用計算」tab 產生' })
                 : `<table class="data-table is-compact">
                     <thead><tr><th>屋主</th><th style="text-align: right; width: 100px;">結算次數</th><th style="text-align: right; width: 160px;">屋主應收</th><th style="text-align: right; width: 160px;">代管費</th></tr></thead>
                     <tbody>
@@ -890,8 +892,8 @@ function renderManagedAnalysis() {
                             <tr>
                                 <td><strong>${esc(r.owner.name)}</strong></td>
                                 <td style="text-align: right;">${r.count}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;">$${r.receivable.toLocaleString()}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--color-primary-text);">$${r.mgmtFee.toLocaleString()}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;">${moneyAmount(r.receivable)}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; color: var(--color-primary-text);">${moneyAmount(r.mgmtFee)}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -902,7 +904,7 @@ function renderManagedAnalysis() {
         <div class="report-chart-card">
             <div class="report-chart-title"><i class="ph ph-receipt"></i> 本期月結算清單</div>
             ${settlements.length === 0
-                ? `<div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">本期尚無月結算紀錄 — 至各代管房屋的「費用計算」tab 產生</div>`
+                ? emptyState({ mode: 'block', icon: 'ph-receipt', title: '本期尚無月結算紀錄', hint: '至各代管房屋的「費用計算」tab 產生' })
                 : `<table class="data-table is-compact">
                     <thead><tr><th>結算月</th><th>房屋</th><th>屋主</th><th style="text-align: right;">屋主應收</th><th style="text-align: right;">本月新收押</th><th style="text-align: right;">移交押金</th><th>狀態</th></tr></thead>
                     <tbody>
@@ -913,9 +915,9 @@ function renderManagedAnalysis() {
                                 <td><strong>${esc(s.month)}</strong></td>
                                 <td>${esc(b?.name || '—')}</td>
                                 <td>${esc(o?.name || '—')}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;">$${(s.ownerReceivable || 0).toLocaleString()}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(s.depositCollectedThisMonth || 0).toLocaleString()}</td>
-                                <td style="text-align: right; font-variant-numeric: tabular-nums;">$${(s.depositTransferredThisMonth || 0).toLocaleString()}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;">${moneyAmount(s.ownerReceivable || 0)}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums;">${moneyAmount(s.depositCollectedThisMonth || 0)}</td>
+                                <td style="text-align: right; font-variant-numeric: tabular-nums;">${moneyAmount(s.depositTransferredThisMonth || 0)}</td>
                                 <td><span class="status-badge ${s.status === 'settled' ? 'success' : s.status === 'sent' ? 'info' : 'muted'}">${s.status || 'draft'}</span></td>
                             </tr>`;
                         }).join('')}
@@ -941,8 +943,8 @@ function renderFinancialKpiTiles(agg) {
         <div class="stat-tile-grid">
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-trend-up"></i> NOI 淨營運收入</div>
-                <div class="stat-tile-value" style="color: ${agg.noi >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">$${agg.noi.toLocaleString()}</div>
-                <div class="stat-tile-sub">收 $${agg.inAll.toLocaleString()} − 付 $${agg.outAll.toLocaleString()}</div>
+                <div class="stat-tile-value" style="color: ${agg.noi >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${moneyAmount(agg.noi)}</div>
+                <div class="stat-tile-sub">收 ${moneyAmount(agg.inAll)} − 付 ${moneyAmount(agg.outAll)}</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-chart-pie-slice"></i> 毛利率</div>
@@ -972,7 +974,7 @@ function renderLandlordWarning(agg) {
         return `
             <div class="report-info-card">
                 <i class="ph ph-info report-info-icon-inline"></i>
-                <span>租金 <strong>$${agg.landlordRent.toLocaleString()}</strong> · type: ${agg.detectedTypes.map(t => `<span class="report-info-type">${t}</span>`).join('')}</span>
+                <span>租金 <strong>${moneyAmount(agg.landlordRent)}</strong> · type: ${agg.detectedTypes.map(t => `<span class="report-info-type">${t}</span>`).join('')}</span>
             </div>
         `;
     }
@@ -1043,7 +1045,7 @@ function renderSingleBuildingAnalysis(buildingId) {
                     return `
                         <div class="expense-bucket-tile ${v === 0 ? 'is-empty' : ''}">
                             <div class="expense-bucket-label">${b.label}</div>
-                            <div class="expense-bucket-value">${v === 0 ? '—' : '$' + v.toLocaleString()}</div>
+                            <div class="expense-bucket-value">${v === 0 ? '—' : moneyAmount(v)}</div>
                         </div>
                     `;
                 }).join('')}
@@ -1051,15 +1053,15 @@ function renderSingleBuildingAnalysis(buildingId) {
             <div class="expense-subtotal-list">
                 <div class="expense-subtotal-row">
                     <span class="label">支出合計</span>
-                    <span class="value">$${bucketSubtotal(buckets).toLocaleString()}</span>
+                    <span class="value">${moneyAmount(bucketSubtotal(buckets))}</span>
                 </div>
                 <div class="expense-subtotal-row">
                     <span class="label">紅利發放</span>
-                    <span class="value">${buckets.bonus === 0 ? '—' : '$' + buckets.bonus.toLocaleString()}</span>
+                    <span class="value">${buckets.bonus === 0 ? '—' : moneyAmount(buckets.bonus)}</span>
                 </div>
                 <div class="expense-subtotal-row is-total">
                     <span class="label">總合計</span>
-                    <span class="value">$${bucketGrandTotal(buckets).toLocaleString()}</span>
+                    <span class="value">${moneyAmount(bucketGrandTotal(buckets))}</span>
                 </div>
             </div>
         </div>
@@ -1161,9 +1163,9 @@ function renderGroupCumulativeBar() {
         const deltaSign = c.delta >= 0 ? '+' : '−';
         const deltaColor = c.delta >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
         return `
-            <span class="cum-chip" title="${key} 累金 = baseline $${c.baseline.toLocaleString()} (${GROUP_CUM_BASELINES.asOf}) + 結餘 − 紅利">
+            <span class="cum-chip" title="${key} 累金 = baseline ${moneyAmount(c.baseline)} (${GROUP_CUM_BASELINES.asOf}) + 結餘 − 紅利">
                 <span class="cum-chip-label">${key} 累金</span>
-                <span class="cum-chip-value">$${c.amount.toLocaleString()}</span>
+                <span class="cum-chip-value">${moneyAmount(c.amount)}</span>
                 ${c.delta !== 0 ? `<span class="cum-chip-delta" style="color: ${deltaColor};">${deltaSign}$${Math.abs(c.delta).toLocaleString()}</span>` : ''}
             </span>
         `;
@@ -1193,7 +1195,7 @@ function invoicesForUnit(unit, invoices) {
 // 金額 cell — 0 顯示空白，跟 excel 一致
 function moneyCell(v, opts = {}) {
     const v0 = Number(v) || 0;
-    const txt = v0 === 0 ? '' : `$${v0.toLocaleString()}`;
+    const txt = v0 === 0 ? '' : moneyAmount(v0);
     const w = opts.bold ? 'font-weight: 700;' : '';
     const c = opts.color ? `color: ${opts.color};` : '';
     return `<td style="text-align: right; font-variant-numeric: tabular-nums; ${w}${c}">${txt}</td>`;

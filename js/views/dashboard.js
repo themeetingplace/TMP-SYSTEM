@@ -1,5 +1,6 @@
 ﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings, bedOccupied } from '../data.js';
 import { emptyState } from '../utils/emptyState.js';
+import { moneyAmount } from '../utils/moneyDisplay.js';
 import { getChartColors } from '../utils/chartTheme.js';
 import { modeFilteredData } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
@@ -236,7 +237,7 @@ export function renderDashboard() {
                         <i class="ph ph-currency-circle-dollar"></i>
                     </div>
                 </div>
-                <div class="metric-value">$${metrics.monthlyIncome.toLocaleString()}</div>
+                <div class="metric-value">${moneyAmount(metrics.monthlyIncome, { sign: 'in' })}</div>
                 <div class="metric-subtext">${metrics.monthlyIncome === 0 ? '尚無本月入帳' : '本月已入帳房租'}</div>
             </a>
         </div>

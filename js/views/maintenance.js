@@ -2,6 +2,9 @@
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { filterMaintenancesByMode, filterPropertiesByMode } from '../utils/modeFilter.js';
+import { moneyAmount } from '../utils/moneyDisplay.js';
+import { rowActions, rowActionGroup } from '../utils/rowActions.js';
+import { emptyState } from '../utils/emptyState.js';
 
 const MAINTENANCE_STATUSES = ['待處理', '進行中', '已完成'];
 const TODAY = new Date().toISOString().split('T')[0];
@@ -44,29 +47,15 @@ export function renderMaintenance() {
                     </div>
                 </td>
                 <td><span class="status-badge ${statusClass}">${esc(m.status)}</span></td>
-                <td>${m.cost ? `<div style="font-weight: 500;">$${m.cost.toLocaleString()}</div>` : '<span style="color: var(--text-muted)">--</span>'}</td>
+                <td>${m.cost ? `<div style="font-weight: 500;">${moneyAmount(m.cost)}</div>` : '<span style="color: var(--text-muted)">--</span>'}</td>
                 <td>
-                    <div style="display: flex; gap: 0.5rem;">
-                        ${m.status === '待處理' ? `
-                            <button class="btn btn-primary maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="start" data-id="${m.id}" title="開始處理">
-                                <i class="ph ph-play"></i>
-                            </button>
-                        ` : ''}
-                        ${m.status === '進行中' ? `
-                            <button class="btn btn-success maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="complete" data-id="${m.id}" title="完成維修">
-                                <i class="ph ph-check"></i>
-                            </button>
-                        ` : ''}
-                        <button class="btn btn-outline maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="view" data-id="${m.id}" title="查看記錄">
-                            <i class="ph ph-eye"></i>
-                        </button>
-                        <button class="btn btn-outline maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${m.id}" title="編輯維修">
-                            <i class="ph ph-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline maintenance-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete" data-id="${m.id}" title="刪除">
-                            <i class="ph ph-trash"></i>
-                        </button>
-                    </div>
+                    ${rowActionGroup(rowActions([
+                        m.status === '待處理' ? { action: 'start', icon: 'ph-play', title: '開始處理', variant: 'primary', className: 'maintenance-action' } : null,
+                        m.status === '進行中' ? { action: 'complete', icon: 'ph-check', title: '完成維修', variant: 'success', className: 'maintenance-action' } : null,
+                        { action: 'view', icon: 'ph-eye', title: '查看記錄', className: 'maintenance-action' },
+                        { action: 'edit', icon: 'ph-pencil', title: '編輯維修', className: 'maintenance-action' },
+                        { action: 'delete', icon: 'ph-trash', title: '刪除', variant: 'danger', className: 'maintenance-action' }
+                    ], m.id))}
                 </td>
             </tr>
         `;
@@ -112,7 +101,7 @@ export function renderMaintenance() {
                         <col style="width: 15%;">
                     </colgroup>
                     <thead><tr><th>工單資訊</th><th>報修內容</th><th>回報時間</th><th>狀態</th><th>維修費用</th><th>操作</th></tr></thead>
-                    <tbody>${tableRows}</tbody>
+                    <tbody>${tableRows || emptyState({ mode: 'table-row', colspan: 6, icon: 'ph-wrench', title: '尚無維修單', hint: '點右上「新增報修」建立第一筆工單' })}</tbody>
                 </table>
             </div>
 
@@ -168,7 +157,7 @@ export function showMaintenanceDetails(id) {
             { label: '狀態', value: `<span class="status-badge ${statusClass}">${m.status}</span>` },
             { label: '回報人', value: m.reporter },
             { label: '回報日期', value: m.reportDate },
-            { label: '維修費用', value: m.cost ? `$${m.cost.toLocaleString()}` : '尚未產生' }
+            { label: '維修費用', value: m.cost ? moneyAmount(m.cost) : '尚未產生' }
         ],
         extraHtml: `
             <div style="margin-top: 1.5rem;">

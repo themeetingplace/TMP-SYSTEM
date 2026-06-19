@@ -7,6 +7,9 @@ import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { escapeHtml } from '../utils/escape.js';
 import { filterInvoicesByMode } from '../utils/modeFilter.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
+import { moneyAmount, moneyCell, adjustmentBadge } from '../utils/moneyDisplay.js';
+import { rowAction, rowActionGroup } from '../utils/rowActions.js';
+import { emptyState } from '../utils/emptyState.js';
 
 // 類別 → type-chip class (語意色 — 跟 finance.js 同套)
 // 房租 (in) vs 租金 (out) 用 direction 分色
@@ -110,15 +113,10 @@ export function renderUnsettled() {
             ? `<span class="c-chip ${inv.bankVerified ? 'success' : 'warn'}"><i class="ph ${inv.bankVerified ? 'ph-shield-check' : 'ph-shield-warning'}"></i> 末5碼 ${inv.bankLast5}${!inv.bankVerified ? ' · 待核' : ''}</span>`
             : '';
         const partialChip = isPartial
-            ? `<span class="c-chip success"><i class="ph ph-check"></i> 已收 $${paid.toLocaleString()}</span>`
+            ? `<span class="c-chip success"><i class="ph ph-check"></i> 已收 ${moneyAmount(paid)}</span>`
             : '';
         const discountChip = inv.discount
-            ? (() => {
-                const isAddOn = Number(inv.discount) < 0;
-                const sign = isAddOn ? '+' : '-';
-                const abs = Math.abs(Number(inv.discount) || 0).toLocaleString();
-                return `<span class="c-chip ${isAddOn ? 'info' : 'warn'}"><i class="ph ph-tag"></i> ${sign}$${abs}</span>`;
-              })()
+            ? `<span class="c-chip ${Number(inv.discount) < 0 ? 'info' : 'warn'}"><i class="ph ph-tag"></i> ${adjustmentBadge(inv.discount, { showLabel: false })}</span>`
             : '';
         const primaryBtn = (inv.bankLast5 && !inv.bankVerified)
             ? `<button class="btn-primary unsettled-action" data-action="verify" data-id="${inv.id}">
@@ -140,16 +138,8 @@ export function renderUnsettled() {
                 </td>
                 <td>${target}</td>
                 <td>
-                    <div style="font-weight: 600; color: ${amountColor};">${amountSign}$${balance.toLocaleString()}</div>
-                    ${(() => {
-                        const adj = Number(inv.discount || 0);
-                        const adjLabel = adj === 0 ? '' : `${adj > 0 ? '−' : '+'}$${Math.abs(adj).toLocaleString()}`;
-                        if (isPartial) {
-                            return `<div style="font-size: var(--text-2xs); color: var(--text-muted);">已收 $${paid.toLocaleString()} / 應收 $${due.toLocaleString()}${adjLabel ? ` (調 ${adjLabel})` : ''}</div>`;
-                        }
-                        return adj !== 0 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">應收 $${due.toLocaleString()} (調 ${adjLabel})</div>` : '';
-                    })()
-                    }
+                    ${moneyCell({ amount: due, paid, direction: inv.direction, showStatus: false })}
+                    ${inv.discount ? `<div style="margin-top: 0.2rem;">${adjustmentBadge(inv.discount)}</div>` : ''}
                 </td>
                 <td>
                     <div style="display: flex; flex-direction: column;">
@@ -159,20 +149,15 @@ export function renderUnsettled() {
                 </td>
                 <td>${bankBadge}</td>
                 <td>
-                    <div style="display: flex; gap: 0.35rem; flex-wrap: nowrap; justify-content: flex-start;">
-                        ${inv.bankLast5 && !inv.bankVerified ? `
-                            <button class="btn btn-success unsettled-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);" data-action="verify" data-id="${inv.id}" title="核對銀行末 5 碼後結帳">
-                                <i class="ph ph-shield-check"></i> 核對結帳
-                            </button>
-                        ` : `
-                            <button class="btn btn-success unsettled-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);" data-action="settle" data-id="${inv.id}" title="標記為${inv.direction === 'in' ? '已收' : '已付'}">
-                                <i class="ph ph-check"></i> 結帳
-                            </button>
-                        `}
-                        <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="remind" data-id="${inv.id}" title="${inv.direction === 'in' ? '催繳' : '記錄通知'}"><i class="ph ph-bell"></i></button>
-                        <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
-                        <button class="btn btn-outline unsettled-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
-                    </div>
+                    ${rowActionGroup(
+                        (inv.bankLast5 && !inv.bankVerified
+                            ? rowAction({ action: 'verify', id: inv.id, icon: 'ph-shield-check', title: '核對銀行末 5 碼後結帳', label: '核對結帳', variant: 'success', className: 'unsettled-action' })
+                            : rowAction({ action: 'settle', id: inv.id, icon: 'ph-check', title: `標記為${inv.direction === 'in' ? '已收' : '已付'}`, label: '結帳', variant: 'success', className: 'unsettled-action' })
+                        )
+                        + rowAction({ action: 'remind', id: inv.id, icon: 'ph-bell', title: inv.direction === 'in' ? '催繳' : '記錄通知', className: 'unsettled-action' })
+                        + rowAction({ action: 'edit', id: inv.id, icon: 'ph-pencil', title: '編輯', className: 'unsettled-action' })
+                        + rowAction({ action: 'delete', id: inv.id, icon: 'ph-trash', title: '刪除', variant: 'danger', className: 'unsettled-action' })
+                    )}
                 </td>
             </tr>
             <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="row-mobile-card ${overdue ? 'is-overdue-row' : ''}">
@@ -293,7 +278,7 @@ export function renderUnsettled() {
                         <th><input type="checkbox" id="check-all"></th>
                         <th>方向</th><th>帳單</th><th>對象</th><th>金額</th><th>應結日</th><th>銀行末 5 碼</th><th>操作</th>
                     </tr></thead>
-                    <tbody>${tableRows || `<tr><td colspan="8" style="text-align: center; padding: 3rem; color: var(--text-muted);"><i class="ph ph-check-circle" style="font-size: 2rem; display: block; margin-bottom: 0.5rem; color: var(--color-success);"></i>所有帳款都已結清 🎉</td></tr>`}</tbody>
+                    <tbody>${tableRows || emptyState({ mode: 'table-row', colspan: 8, icon: 'ph-check-circle', title: '所有帳款都已結清', hint: '目前沒有待結款項' })}</tbody>
                 </table>
             </div>
 

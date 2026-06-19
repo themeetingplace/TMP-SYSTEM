@@ -10,6 +10,9 @@ import { exportFinanceReport } from './finance-export.js';
 import { escapeHtml } from '../utils/escape.js';
 import { filterInvoicesByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
+import { moneyAmount, adjustmentBadge } from '../utils/moneyDisplay.js';
+import { rowAction, rowActionGroup } from '../utils/rowActions.js';
+import { emptyState } from '../utils/emptyState.js';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -141,8 +144,8 @@ export function renderFinance() {
         const adjSign = isAddOn ? '+' : '-';
         const adjColor = isAddOn ? 'var(--color-info)' : 'var(--color-warning)';
         const discountCell = hasAdjustment
-            ? `<div style="display: flex; flex-direction: column; gap: 1px;">
-                   <span style="font-weight: 600; color: ${adjColor};">${adjSign}$${adjAbs}</span>
+            ? `<div style="display: flex; flex-direction: column; gap: 1px; align-items: flex-end;">
+                   ${adjustmentBadge(inv.discount)}
                    ${inv.discountReason ? `<span style="font-size: var(--text-2xs); color: var(--text-muted);">${formatDiscountReason(inv.discountReason, { labelsOnly: true })}</span>` : ''}
                </div>`
             : '<span style="color: var(--text-muted); font-size: var(--text-xs);">—</span>';
@@ -168,7 +171,7 @@ export function renderFinance() {
             : '<span class="status-badge danger">支出</span>';
         const heroAmtClass = inv.direction === 'in' ? 'income' : 'expense';
         const discountVal = hasAdjustment
-            ? `<span style="color: ${adjColor};">${adjSign}$${adjAbs}</span>${inv.discountReason ? ` <span class="c-meta-val-sub">${formatDiscountReason(inv.discountReason, { labelsOnly: true })}</span>` : ''}`
+            ? `${adjustmentBadge(inv.discount)}${inv.discountReason ? ` <span class="c-meta-val-sub">${formatDiscountReason(inv.discountReason, { labelsOnly: true })}</span>` : ''}`
             : '<span class="c-meta-val-muted">—</span>';
         const paymentVal = inv.paymentMethod || '<span class="c-meta-val-muted">—</span>';
         const noteSection = (inv.note && inv.note.trim())
@@ -185,18 +188,18 @@ export function renderFinance() {
                 <td><span class="status-badge info" style="font-size: var(--text-2xs);">${inv.type}</span></td>
                 <td>${itemText}${periodText || propertyText}</td>
                 <td style="text-align: right;">
-                    <div style="font-weight: 700; color: ${amountColor};">${amountSign}$${shown.toLocaleString()}</div>
-                    ${hasAdjustment ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">原價 $${(inv.amount || 0).toLocaleString()}</div>` : ''}
+                    <div style="font-weight: 700;">${moneyAmount(shown, { sign: inv.direction === 'out' ? 'out' : 'in' })}</div>
+                    ${hasAdjustment ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">原價 ${moneyAmount(inv.amount || 0)}</div>` : ''}
                 </td>
                 <td style="text-align: right;">${discountCell}</td>
                 <td>${methodCell}</td>
                 <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${(inv.note || '').replace(/"/g, '&quot;')}"><span style="font-size: var(--text-xs); color: var(--text-muted);">${linkifyNoteContracts(inv.note)}</span></td>
                 <td>
-                    <div style="display: flex; gap: 0.4rem;">
-                        <button class="btn btn-outline btn-xs btn-icon-only finance-action" data-action="view" data-id="${inv.id}" title="明細"><i class="ph ph-eye"></i></button>
-                        <button class="btn btn-outline btn-xs btn-icon-only finance-action" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
-                        <button class="btn btn-outline btn-xs btn-icon-only btn-danger finance-action" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
-                    </div>
+                    ${rowActionGroup([
+                        rowAction({ action: 'view', id: inv.id, icon: 'ph-eye', title: '明細', className: 'finance-action' }),
+                        rowAction({ action: 'edit', id: inv.id, icon: 'ph-pencil', title: '編輯', className: 'finance-action' }),
+                        rowAction({ action: 'delete', id: inv.id, icon: 'ph-trash', title: '刪除', className: 'finance-action', variant: 'danger' })
+                    ].join(''))}
                 </td>
             </tr>
             <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-area="${areaAttr}" data-search="${searchText}" class="finance-row row-mobile-card ${inv.direction === 'in' ? 'finance-row-in' : 'finance-row-out'}">
@@ -212,7 +215,7 @@ export function renderFinance() {
                                 </div>
                             </div>
                             <div class="c-hero-side">
-                                <div class="c-hero-amt ${heroAmtClass}">${amountSign}$${shown.toLocaleString()}</div>
+                                <div class="c-hero-amt ${heroAmtClass}">${moneyAmount(shown, { sign: inv.direction === 'out' ? 'out' : 'in' })}</div>
                                 ${directionBadge}
                             </div>
                         </div>
@@ -336,7 +339,7 @@ export function renderFinance() {
                         ${sortHeader('備註', 'note')}
                         <th>操作</th>
                     </tr></thead>
-                    <tbody>${tableRows || `<tr><td colspan="9" style="text-align: center; padding: 3rem; color: var(--text-muted);"><i class="ph ph-receipt-x" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i>${formatMonthLabel(financeState.viewMonth)} 尚無已結帳目<br><span style="font-size: var(--text-xs);">未結租金請至「房租查帳」頁追蹤</span></td></tr>`}</tbody>
+                    <tbody>${tableRows || emptyState({ mode: 'table-row', colspan: 9, icon: 'ph-coin', title: `${formatMonthLabel(financeState.viewMonth)} 尚無已結帳目`, hint: '未結租金請至「房租查帳」頁追蹤' })}</tbody>
                 </table>
             </div>
 

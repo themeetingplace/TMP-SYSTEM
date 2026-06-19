@@ -4,6 +4,8 @@ import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, 
 import { showTenantDetails } from './tenants.js';
 import { filterPropertiesByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
+import { moneyAmount } from '../utils/moneyDisplay.js';
+import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 
 const PROPERTY_STATUSES = ['已出租', '待租', '待簽約'];
 const NAME_PREFIX = '聚空間 - ';
@@ -157,20 +159,16 @@ export function renderProperties() {
                 </td>
                 <td><span class="status-badge ${statusClassOf(effectiveStatus)}">${effectiveStatus}</span></td>
                 <td>
-                    <div style="font-size: var(--text-base); font-weight: 500;">${p.rent != null ? '$' + p.rent.toLocaleString() : '<span style="color: var(--text-muted)">—</span>'}</div>
+                    <div style="font-size: var(--text-base); font-weight: 500;">${p.rent != null ? moneyAmount(p.rent) : '<span style="color: var(--text-muted)">—</span>'}</div>
                     <div style="font-size: var(--text-xs); color: var(--text-muted);">每月租金</div>
                 </td>
                 <td>${tenantCell}</td>
                 <td>${contractCell}</td>
                 <td>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline action-btn" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="view" data-property-id="${p.id}" title="查看詳情">
-                            <i class="ph ph-eye"></i>
-                        </button>
-                        <button class="btn btn-outline action-btn" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-property-id="${p.id}" title="編輯床位">
-                            <i class="ph ph-pencil"></i>
-                        </button>
-                    </div>
+                    ${rowActionGroup(
+                        rowAction({ action: 'view', id: p.id, icon: 'ph-eye', title: '查看詳情', className: 'action-btn' }) +
+                        rowAction({ action: 'edit', id: p.id, icon: 'ph-pencil', title: '編輯床位', className: 'action-btn' })
+                    )}
                 </td>
             </tr>
         `;
@@ -415,7 +413,7 @@ export function showPropertyDetails(propertyId) {
             { label: '房型', value: roomTypeDisplay },
             { label: '地址', value: p.address },
             { label: '狀態', value: `<span class="status-badge ${statusClass}">${p.status}</span>` },
-            { label: '租金', value: p.rent != null ? `$${p.rent.toLocaleString()} / 月` : '未設定' },
+            { label: '租金', value: p.rent != null ? `${moneyAmount(p.rent)} / 月` : '未設定' },
             { label: '目前租客', value: tenantValue },
             { label: '合約編號', value: p.contractId || '無' },
             { label: '合約到期日', value: p.contractEnd || '無' }
@@ -1230,14 +1228,14 @@ export function showCheckinAssignmentForm(opts = {}) {
                 ? adjItems.map(x => {
                     const sign = x.kind === 'add' ? '+' : '-';
                     const color = x.kind === 'add' ? 'var(--color-info)' : 'var(--color-warning)';
-                    return `<div style="font-size: var(--text-xs); color: ${color}; padding-left: 0.5rem;">${sign} $${x.amount.toLocaleString()} ${x.label || '(無說明)'}</div>`;
+                    return `<div style="font-size: var(--text-xs); color: ${color}; padding-left: 0.5rem;">${sign} ${moneyAmount(x.amount)} ${x.label || '(無說明)'}</div>`;
                 }).join('')
                 : '';
             const bedSummary = extraBeds.length === 0
-                ? `${(bed.name || '').replace('聚空間 - ', '')} · 月租 $${(bed.rent || 0).toLocaleString()}`
-                : `<div><strong>主床位：</strong>${(bed.name || '').replace('聚空間 - ', '')} · $${(bed.rent || 0).toLocaleString()}/月</div>` +
-                  extraBeds.map(b => `<div style="color: var(--text-secondary); font-size: var(--text-sm); padding-left: 0.5rem; margin-top: 0.2rem;"><i class="ph ph-stack-plus" style="font-size: 0.85em;"></i> 額外：${(b.name || '').replace('聚空間 - ', '')} · $${(b.rent || 0).toLocaleString()}/月</div>`).join('') +
-                  `<div style="color: var(--text-muted); font-size: var(--text-xs); margin-top: 0.25rem;">共 ${extraBeds.length + 1} 張床位 · 合計月租 $${(amount + extraBedRentTotal).toLocaleString()}</div>`;
+                ? `${(bed.name || '').replace('聚空間 - ', '')} · 月租 ${moneyAmount(bed.rent || 0)}`
+                : `<div><strong>主床位：</strong>${(bed.name || '').replace('聚空間 - ', '')} · ${moneyAmount(bed.rent || 0)}/月</div>` +
+                  extraBeds.map(b => `<div style="color: var(--text-secondary); font-size: var(--text-sm); padding-left: 0.5rem; margin-top: 0.2rem;"><i class="ph ph-stack-plus" style="font-size: 0.85em;"></i> 額外：${(b.name || '').replace('聚空間 - ', '')} · ${moneyAmount(b.rent || 0)}/月</div>`).join('') +
+                  `<div style="color: var(--text-muted); font-size: var(--text-xs); margin-top: 0.25rem;">共 ${extraBeds.length + 1} 張床位 · 合計月租 ${moneyAmount(amount + extraBedRentTotal)}</div>`;
             const contractIdLabel = extraBeds.length === 0
                 ? `<strong style="font-family: monospace;">${predictedContractId}</strong>`
                 : `<strong style="font-family: monospace;">${predictedContractId}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">+ 額外 ${extraBeds.length} 份</span>`;
@@ -1252,9 +1250,9 @@ export function showCheckinAssignmentForm(opts = {}) {
                 ['入住日', startDate],
                 ['到期日', endDate],
                 ['合約期', term === 3 ? '3 個月（季繳）' : '1 個月'],
-                ['月租金', `$${(amount + extraBedRentTotal).toLocaleString()}${extraBeds.length ? ` <span style="color: var(--text-muted); font-size: var(--text-xs);">(主 $${amount.toLocaleString()} + 額外 $${extraBedRentTotal.toLocaleString()})</span>` : ''}`],
-                ['應收總額', `<div><strong>$${due.toLocaleString()}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">(月租 × ${term} = $${((amount + extraBedRentTotal) * term).toLocaleString()})</span></div>${adjustmentLines}`],
-                ['已收金額', `$${paidAmount.toLocaleString()}${paidAmount >= due ? ' <span style="color: var(--color-success);">✅ 已收訖</span>' : paidAmount > 0 ? ` <span style="color: var(--color-warning);">部分繳款 (餘 $${(due - paidAmount).toLocaleString()})</span>` : ' <span style="color: var(--color-danger);">❌ 未繳</span>'}`],
+                ['月租金', `${moneyAmount(amount + extraBedRentTotal)}${extraBeds.length ? ` <span style="color: var(--text-muted); font-size: var(--text-xs);">(主 ${moneyAmount(amount)} + 額外 ${moneyAmount(extraBedRentTotal)})</span>` : ''}`],
+                ['應收總額', `<div><strong>${moneyAmount(due)}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">(月租 × ${term} = ${moneyAmount((amount + extraBedRentTotal) * term)})</span></div>${adjustmentLines}`],
+                ['已收金額', `${moneyAmount(paidAmount)}${paidAmount >= due ? ' <span style="color: var(--color-success);">✅ 已收訖</span>' : paidAmount > 0 ? ` <span style="color: var(--color-warning);">部分繳款 (餘 ${moneyAmount(due - paidAmount)})</span>` : ' <span style="color: var(--color-danger);">❌ 未繳</span>'}`],
                 ['付款方式', values.paymentMethod || '匯款']
             ];
             const reviewHtml = `
@@ -1448,7 +1446,7 @@ function initPropertyActions(scope = document) {
     scope.querySelectorAll('.action-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const action = e.currentTarget.dataset.action;
-            const id = e.currentTarget.dataset.propertyId;
+            const id = e.currentTarget.dataset.id;
             const property = mockData.properties.find(p => p.id === id);
             if (!property) return;
             switch (action) {

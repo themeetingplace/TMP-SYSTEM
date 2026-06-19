@@ -4,6 +4,8 @@ import { showPropertyForm } from './properties.js';
 import { fileToBase64, fillContractPdf, downloadPdfBytes, previewPdfBytes, listPdfFields, formatRentalPeriod } from '../utils/pdfGen.js';
 import { downloadBackup, getLastBackupAt } from '../backup.js';
 import { getMode } from '../utils/appMode.js';
+import { rowAction, rowActionGroup } from '../utils/rowActions.js';
+import { emptyState } from '../utils/emptyState.js';
 
 const GENDER_OPTIONS = ['男', '女', '不限'];
 const STATUS_OPTIONS = [
@@ -70,17 +72,11 @@ function renderBuildingsTab() {
                     <span class="status-badge ${isActive ? 'success' : 'info'}">${isActive ? '啟用中' : '已停用'}</span>
                 </td>
                 <td>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline building-action" style="padding: 0.25rem 0.75rem; font-size: var(--text-xs);" data-action="manage" data-id="${b.id}" title="管理房間與床位">
-                            <i class="ph ph-list-bullets"></i> 房間/床位
-                        </button>
-                        <button class="btn btn-outline building-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${b.id}" title="編輯館別">
-                            <i class="ph ph-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline building-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="toggle" data-id="${b.id}" title="${isActive ? '停用' : '啟用'}">
-                            <i class="ph ${isActive ? 'ph-pause' : 'ph-play'}"></i>
-                        </button>
-                    </div>
+                    ${rowActionGroup(
+                        rowAction({ action: 'manage', id: b.id, icon: 'ph-list-bullets', title: '管理房間與床位', label: '房間/床位', className: 'building-action' }) +
+                        rowAction({ action: 'edit', id: b.id, icon: 'ph-pencil', title: '編輯館別', className: 'building-action' }) +
+                        rowAction({ action: 'toggle', id: b.id, icon: isActive ? 'ph-pause' : 'ph-play', title: isActive ? '停用' : '啟用', className: 'building-action' })
+                    )}
                 </td>
             </tr>
         `;
@@ -103,7 +99,7 @@ function renderBuildingsTab() {
                             <th>館別</th><th>預設地址</th><th>房間數</th><th>床位數</th><th>已租 / 空床</th><th>狀態</th><th>操作</th>
                         </tr>
                     </thead>
-                    <tbody>${rows || `<tr><td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-muted);">尚無館別資料</td></tr>`}</tbody>
+                    <tbody>${rows || emptyState({ mode: 'table-row', colspan: 7, icon: 'ph-house-line', title: '尚無館別資料', hint: '點右上「新增館別」開始建立' })}</tbody>
                 </table>
             </div>
         </div>
@@ -222,11 +218,7 @@ export function showBuildingRoomsModal(buildingId) {
                 </button>
             </div>
             ${roomNumbers.length === 0
-                ? `<div class="rooms-empty">
-                        <i class="ph ph-bed" style="font-size: 2.5rem; color: var(--text-muted);"></i>
-                        <p style="margin: 0.75rem 0 0.25rem; font-weight: 600;">此館別尚無房間</p>
-                        <p style="margin: 0; font-size: var(--text-xs); color: var(--text-muted);">點選右上角「新增房間」開始建立</p>
-                   </div>`
+                ? emptyState({ mode: 'block', icon: 'ph-house-line', title: '此館別尚無房間', hint: '點選右上角「新增房間」開始建立' })
                 : roomNumbers.map(rn => renderRoom(rn, rooms[rn])).join('')}
         `;
     }
@@ -277,14 +269,10 @@ export function showBuildingRoomsModal(buildingId) {
                     <span style="font-weight: 600; color: var(--color-success);">$${(bed.rent || 0).toLocaleString()}</span>
                     <span style="font-size: var(--text-2xs); color: var(--text-muted);">/月</span>
                 </div>
-                <div style="display: flex; gap: 0.25rem;">
-                    <button class="btn btn-outline" style="padding: 0.2rem 0.4rem; font-size: var(--text-2xs);" data-action="edit-bed" data-id="${bed.id}" title="編輯床位">
-                        <i class="ph ph-pencil"></i>
-                    </button>
-                    <button class="btn btn-outline" style="padding: 0.2rem 0.4rem; font-size: var(--text-2xs); color: var(--color-danger);" data-action="delete-bed" data-id="${bed.id}" title="刪除床位">
-                        <i class="ph ph-trash"></i>
-                    </button>
-                </div>
+                ${rowActionGroup(
+                    rowAction({ action: 'edit-bed', id: bed.id, icon: 'ph-pencil', title: '編輯床位' }) +
+                    rowAction({ action: 'delete-bed', id: bed.id, icon: 'ph-trash', title: '刪除床位', variant: 'danger' })
+                )}
             </div>
         `;
     }
@@ -531,14 +519,10 @@ function renderInvoiceTypesTab() {
                 <td><strong>${used}</strong> <span style="font-size: var(--text-xs); color: var(--text-muted);">張帳單使用</span></td>
                 <td><span style="font-size: var(--text-base); color: var(--text-muted);">${it.note || '—'}</span></td>
                 <td>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline invoicetype-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${it.id}" title="編輯類型">
-                            <i class="ph ph-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline invoicetype-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); ${used === 0 ? 'color: var(--color-danger);' : 'opacity: 0.4; cursor: not-allowed;'}" data-action="delete" data-id="${it.id}" title="${used === 0 ? '刪除' : '已被使用，無法刪除'}">
-                            <i class="ph ph-trash"></i>
-                        </button>
-                    </div>
+                    ${rowActionGroup(
+                        rowAction({ action: 'edit', id: it.id, icon: 'ph-pencil', title: '編輯類型', className: 'invoicetype-action' }) +
+                        rowAction({ action: 'delete', id: it.id, icon: 'ph-trash', title: used === 0 ? '刪除' : '已被使用，無法刪除', variant: used === 0 ? 'danger' : 'default', className: 'invoicetype-action', disabled: used > 0 })
+                    )}
                 </td>
             </tr>
         `;
@@ -557,7 +541,7 @@ function renderInvoiceTypesTab() {
             <div class="table-container">
                 <table class="data-table">
                     <thead><tr><th>類型名稱</th><th>使用中</th><th>備註</th><th>操作</th></tr></thead>
-                    <tbody>${rows || `<tr><td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-muted);">尚無類型資料</td></tr>`}</tbody>
+                    <tbody>${rows || emptyState({ mode: 'table-row', colspan: 4, icon: 'ph-receipt', title: '尚無類型資料', hint: '點右上「新增類型」開始建立' })}</tbody>
                 </table>
             </div>
         </div>
@@ -681,7 +665,7 @@ function renderSimpleListTab(kind) {
             <div class="table-container">
                 <table class="data-table">
                     <thead><tr><th>名稱</th><th>使用中</th><th>備註</th><th>操作</th></tr></thead>
-                    <tbody>${rows || `<tr><td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-muted);">尚無資料</td></tr>`}</tbody>
+                    <tbody>${rows || emptyState({ mode: 'table-row', colspan: 4, icon: cfg.icon, title: `尚無${cfg.title}資料`, hint: `點右上「新增${cfg.title}」開始建立` })}</tbody>
                 </table>
             </div>
         </div>
@@ -839,7 +823,7 @@ function renderContractTemplatesTab() {
                             <th>操作</th>
                         </tr>
                     </thead>
-                    <tbody>${rows || `<tr><td colspan="3" style="text-align: center; padding: 3rem; color: var(--text-muted);">尚無啟用中館別</td></tr>`}</tbody>
+                    <tbody>${rows || emptyState({ mode: 'table-row', colspan: 3, icon: 'ph-file-text', title: '尚無啟用中館別', hint: '請先到館別管理啟用館別' })}</tbody>
                 </table>
             </div>
         </div>

@@ -12,6 +12,9 @@ import { showCheckinAssignmentForm } from './properties.js';
 import { pushToTenant, uploadPdfToStorage, resolveSignedPdfUrl, triggerRenewalPoll } from '../utils/line.js';
 import { filterContractsByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
+import { moneyAmount } from '../utils/moneyDisplay.js';
+import { rowAction, rowActionGroup } from '../utils/rowActions.js';
+import { emptyState } from '../utils/emptyState.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
@@ -176,42 +179,23 @@ export function renderContracts() {
         const days = c._daysLeft;
 
         // 操作按鈕：未決策的合約優先顯示決策按鈕
-        const decisionButtons = isDecision ? `
-            <button class="btn btn-success contract-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);" data-action="renew" data-id="${c.id}" title="續租">
-                <i class="ph ph-arrow-clockwise"></i> 續租
-            </button>
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="terminate" data-id="${c.id}" title="退租">
-                <i class="ph ph-door-open"></i>
-            </button>
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="snooze" data-id="${c.id}" title="暫緩">
-                <i class="ph ph-clock-clockwise"></i>
-            </button>
-        ` : '';
-
-        const signedButton = c.signedFileUrl
-            ? `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-success); border-color: var(--color-success);" data-action="view-signed" data-id="${c.id}" title="租客已回傳簽署檔，點此檢視">
-                   <i class="ph-fill ph-check-square"></i>
-               </button>`
+        const decisionButtons = isDecision
+            ? rowAction({ action: 'renew', id: c.id, icon: 'ph-arrow-clockwise', title: '續租', label: '續租', variant: 'success', className: 'contract-action' })
+              + rowAction({ action: 'terminate', id: c.id, icon: 'ph-door-open', title: '退租', variant: 'danger', className: 'contract-action' })
+              + rowAction({ action: 'snooze', id: c.id, icon: 'ph-clock-clockwise', title: '暫緩', className: 'contract-action' })
             : '';
 
-        const standardButtons = `
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="view" data-id="${c.id}" title="檢視合約">
-                <i class="ph ph-eye"></i>
-            </button>
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="edit" data-id="${c.id}" title="編輯合約">
-                <i class="ph ph-pencil"></i>
-            </button>
-            ${isArchived ? '' : `<button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);" data-action="download" data-id="${c.id}" title="下載 PDF">
-                <i class="ph ph-download"></i>
-            </button>`}
-            ${isArchived ? '' : `<button class="btn btn-outline btn-xs contract-action" style="color: var(--color-line);" data-action="send-line" data-id="${c.id}" title="LINE 寄合約 PDF">
-                <i class="ph ph-paper-plane-tilt"></i>
-            </button>`}
-            ${signedButton}
-            <button class="btn btn-outline contract-action" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" data-action="delete" data-id="${c.id}" title="刪除">
-                <i class="ph ph-trash"></i>
-            </button>
-        `;
+        const signedButton = c.signedFileUrl
+            ? rowAction({ action: 'view-signed', id: c.id, icon: 'ph-check-square', title: '租客已回傳簽署檔，點此檢視', variant: 'success', className: 'contract-action' })
+            : '';
+
+        const standardButtons =
+            rowAction({ action: 'view', id: c.id, icon: 'ph-eye', title: '檢視合約', className: 'contract-action' })
+            + rowAction({ action: 'edit', id: c.id, icon: 'ph-pencil', title: '編輯合約', className: 'contract-action' })
+            + (isArchived ? '' : rowAction({ action: 'download', id: c.id, icon: 'ph-download', title: '下載 PDF', className: 'contract-action' }))
+            + (isArchived ? '' : rowAction({ action: 'send-line', id: c.id, icon: 'ph-paper-plane-tilt', title: 'LINE 寄合約 PDF', className: 'contract-action' }))
+            + signedButton
+            + rowAction({ action: 'delete', id: c.id, icon: 'ph-trash', title: '刪除', variant: 'danger', className: 'contract-action' });
 
         const rowClass = isDecision ? 'is-decision-row' : (isArchived ? 'is-archived-row' : '');
 
@@ -241,7 +225,7 @@ export function renderContracts() {
                 </td>
                 <td><strong>${esc(c.tenant || '')}</strong></td>
                 <td>
-                    <div style="font-size: var(--text-base); font-weight: 500;">$${(c.amount || 0).toLocaleString()}</div>
+                    <div style="font-size: var(--text-base); font-weight: 500;">${moneyAmount(c.amount || 0)}</div>
                     <div style="font-size: var(--text-xs); color: var(--text-muted);">${c.termMonths === 3 ? '3 個月期' : '1 個月期'}</div>
                 </td>
                 <td>${c.startDate ? `<span style="font-weight: 500;">${c.startDate}</span>` : '<span style="color: var(--text-muted)">—</span>'}</td>
@@ -254,10 +238,7 @@ export function renderContracts() {
                 </td>
                 <td>${lifecycleBadge(lifecycle)}${renewIntentBadge(c)}</td>
                 <td style="text-align: right;">
-                    <div style="display: inline-flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end;">
-                        ${decisionButtons}
-                        ${standardButtons}
-                    </div>
+                    ${rowActionGroup(`${decisionButtons}${standardButtons}`)}
                 </td>
             </tr>
         `;
@@ -373,7 +354,7 @@ export function renderContracts() {
                         <th>狀態</th>
                         <th style="text-align: right;">操作</th>
                     </tr></thead>
-                    <tbody>${tableRows}</tbody>
+                    <tbody>${tableRows || emptyState({ mode: 'table-row', colspan: 8, icon: 'ph-file-text', title: '尚無合約', hint: '點右上「建立合約」開始新增' })}</tbody>
                 </table>
             </div>
 
@@ -1272,7 +1253,7 @@ export function initContractActions(scope) {
                 <input type="radio" name="bundle-primary" value="${esc(c.id)}" ${idx === 0 ? 'checked' : ''}>
                 <div style="flex: 1;">
                     <div style="font-weight: 600;">${esc(c.id)} <span style="color: var(--text-muted); font-size: var(--text-xs);">${esc(c.propertyName?.replace('聚空間 - ', '') || '')}</span></div>
-                    <div style="font-size: var(--text-xs); color: var(--text-muted);">月租 $${(c.amount || 0).toLocaleString()} · ${c.startDate || '—'} ~ ${c.endDate || '—'}</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted);">月租 ${moneyAmount(c.amount || 0)} · ${c.startDate || '—'} ~ ${c.endDate || '—'}</div>
                 </div>
             </label>
         `).join('');
@@ -1286,7 +1267,7 @@ export function initContractActions(scope) {
                 </div>
                 <div style="margin-bottom: 0.75rem;">${radios}</div>
                 <div style="padding: 0.6rem; background: var(--bg-tertiary); border-radius: 6px; font-size: var(--text-sm);">
-                    <div>合併後主合約應收 = <strong>$${(total * term).toLocaleString()}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">(月租合計 $${total.toLocaleString()} × ${term} 期)</span></div>
+                    <div>合併後主合約應收 = <strong>${moneyAmount(total * term)}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">(月租合計 ${moneyAmount(total)} × ${term} 期)</span></div>
                     <div style="color: var(--color-warning); font-size: var(--text-xs); margin-top: 0.3rem;">⚠ 子合約原本的 invoice / 收款記錄會被刪除。請確認以主合約 invoice 為準。</div>
                 </div>
             `,

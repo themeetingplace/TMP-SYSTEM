@@ -11,6 +11,7 @@ import { showTenantNoteEditor, showTenantDetails } from './tenants.js';
 import { getMode } from '../utils/appMode.js';
 import { showPropertyDetails, showCheckinAssignmentForm } from './properties.js';
 import { showContractDetails, confirmTerminate, confirmRenew, confirmSnooze } from './contracts.js';
+import { emptyState } from '../utils/emptyState.js';
 
 const START_OFFSET = -1; // 顯示從上個月開始
 const END_OFFSET = 8;    // 最後顯示到「今天 + 8 個月」(e.g. 5月 → 顯示到隔年 1 月) — 每月自動向後滾
@@ -318,7 +319,7 @@ function renderBuildingTable(building, months, today) {
         });
 
     if (beds.length === 0) {
-        return `<div class="card"><p style="text-align: center; color: var(--text-muted); padding: 2rem;">${building.name} 尚無床位</p></div>`;
+        return `<div class="card">${emptyState({ mode: 'block', icon: 'ph-house-line', title: `${building.name} 尚無床位`, hint: '請先到房源管理新增床位' })}</div>`;
     }
 
     // 依房號 group，每個房間先放一條 header (顯示房型 / 床數 / 總租金)，再放該房床位
@@ -425,7 +426,7 @@ function renderMobileBuildingsList() {
     const buildings = getSortedBuildings({ activeOnly: true });
     const today = new Date().toISOString().slice(0, 10);
     if (!buildings.length) {
-        return `<div class="omn-empty">尚無館別資料</div>`;
+        return emptyState({ mode: 'block', icon: 'ph-buildings', title: '尚無館別資料', hint: '請先到房源管理新增館別' });
     }
     const cards = buildings.map(b => {
         const beds = mockData.properties.filter(p => p.buildingId === b.id);
@@ -461,7 +462,7 @@ function renderMobileBuildingsList() {
 
 function renderMobileRoomsList(buildingId) {
     const building = mockData.buildings.find(b => b.id === buildingId);
-    if (!building) return `<div class="omn-empty">館別不存在，請返回</div>`;
+    if (!building) return emptyState({ mode: 'block', icon: 'ph-buildings', title: '館別不存在', hint: '請返回上一層重新選擇' });
     const beds = mockData.properties.filter(p => p.buildingId === buildingId);
     const roomMap = new Map();
     beds.forEach(b => {
@@ -507,7 +508,7 @@ function renderMobileRoomsList(buildingId) {
 
 function renderMobileBedsList(buildingId, roomNumber) {
     const building = mockData.buildings.find(b => b.id === buildingId);
-    if (!building) return `<div class="omn-empty">館別不存在，請返回</div>`;
+    if (!building) return emptyState({ mode: 'block', icon: 'ph-buildings', title: '館別不存在', hint: '請返回上一層重新選擇' });
     const beds = mockData.properties
         .filter(p => p.buildingId === buildingId && p.roomNumber === Number(roomNumber))
         .sort((a, b) => (a.bedLetter || '').localeCompare(b.bedLetter || ''));
