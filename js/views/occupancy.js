@@ -61,17 +61,38 @@ function clampToMonthEnd(year, month, day) {
 // 回傳: 'paid' | 'partial' | 'unpaid' | null  (null = 無對應 invoice，可能是新月份還沒建)
 function paymentStatusFor(contract, month) {
     const monthKey = `${month.year}-${String(month.month).padStart(2, '0')}`;
-    // audit: 移除 tenant name fallback 避免跨館同名串色 (房租 vs 租金 也順手只認 '房租' 收入)
+    // 同租客在當月可能有多份合約 (e.g. 一人租兩床)
+    // 收款常常一筆涵蓋多份合約 → 用合計判斷, 任一付款可分攤
+    // 限制: 同 building (避免跨館同名串色), 同期間重疊
+    const thisBuildingId = mockData.properties.find(p => p.name === contract.propertyName)?.buildingId;
+    const sameTenantContractIds = new Set(
+        mockData.contracts
+            .filter(c => c.tenant === contract.tenant && (c.renewalState === 'active' || c.renewalState === 'snoozed'))
+            .filter(c => {
+                if (!c.startDate || !c.endDate) return false;
+                const start = c.startDate.substring(0, 7);
+                const end = c.endDate.substring(0, 7);
+                if (!(start <= monthKey && monthKey <= end)) return false;
+                // 同 building (反查 propertyName)
+                const cBuildingId = mockData.properties.find(p => p.name === c.propertyName)?.buildingId;
+                return cBuildingId === thisBuildingId;
+            })
+            .map(c => c.id)
+    );
     const relevant = mockData.invoices.filter(inv => {
         if (inv.direction !== 'in') return false;
         if (inv.type !== '房租') return false;
-        if (inv.contractId !== contract.id) return false;  // 嚴格只用 contractId 對應
+        if (!sameTenantContractIds.has(inv.contractId)) return false;
         const m = (inv.paidDate || inv.dueDate || '').substring(0, 7);
         return m === monthKey;
     });
     if (!relevant.length) return null;
-    if (relevant.some(isSettled)) return 'paid';
-    if (relevant.some(inv => (inv.paidAmount || 0) > 0)) return 'partial';
+    // 合計判斷：總已收 >= 總應收 → 全 paid (這樣一張床位的多收能 cover 另一張的未收)
+    const totalDue = relevant.reduce((s, inv) => s + ((Number(inv.amount) || 0) - (Number(inv.discount) || 0)), 0);
+    const totalPaid = relevant.reduce((s, inv) => s + (Number(inv.paidAmount) || 0), 0);
+    if (totalDue <= 0) return 'paid';
+    if (totalPaid >= totalDue) return 'paid';
+    if (totalPaid > 0) return 'partial';
     return 'unpaid';
 }
 
