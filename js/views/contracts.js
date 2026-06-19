@@ -437,19 +437,17 @@ function showContractForm(contract) {
 
     function buildTermOptions(startDate) {
         const fmt = (iso) => iso ? iso.slice(5).replace('-', '/') : '?';
-        const addDays = (s, n) => {
-            const d = new Date(s);
-            d.setDate(d.getDate() + n);
-            return d.toISOString().split('T')[0];
-        };
-        const end1 = startDate ? addDays(startDate, 30) : '';
-        const end3 = startDate ? addDays(startDate, 90) : '';
         return [
-            { value: 1, label: `1 個月${end1 ? ` · ${fmt(end1)} 到期` : ''}` },
-            { value: 3, label: `3 個月${end3 ? ` · ${fmt(end3)} 到期` : ''}` }
+            { value: '1', label: `1 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 1))} 到期` : ''}` },
+            { value: '3', label: `3 個月${startDate ? ` · ${fmt(leaseEndISO(startDate, 3))} 到期` : ''}` },
+            { value: '__custom', label: '自訂月數...' }
         ];
     }
     const initialStart = contract.startDate ?? TODAY;
+    // termMonths 不是 1 或 3 → 視為自訂; 帶入 __custom + termMonthsCustom 顯示
+    const ctermNum = Number(contract.termMonths) || 1;
+    const isCustomTerm = ctermNum !== 1 && ctermNum !== 3;
+    const initialTerm = isCustomTerm ? '__custom' : String(ctermNum);
 
     openFormModal({
         title: `編輯合約：${contract.id}`,
@@ -469,7 +467,8 @@ function showContractForm(contract) {
             // 3. 合約期間 (純日期)
             { name: '__sep_contract', type: 'section', label: '合約期間' },
             { name: 'startDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: initialStart },
-            { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: contract.termMonths ?? 1 },
+            { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: initialTerm },
+            { name: 'termMonthsCustom', label: '自訂月數', type: 'number', value: isCustomTerm ? ctermNum : '', placeholder: '例: 6' },
             { name: 'endDate', label: '到期日 (留空自動算)', type: 'date', span: 2 },
 
             // 4. 收費方式 (先決定要不要開帳單)
@@ -593,7 +592,14 @@ function showContractForm(contract) {
                     return;
                 }
                 const amt = Number(amountInput?.value) || 0;
-                const t = parseInt(termInput?.value, 10) || 1;
+                // term: __custom 讀 termMonthsCustom; 其他 parseInt termMonths
+                let t;
+                if (termInput?.value === '__custom') {
+                    const tc = form.querySelector('[name="termMonthsCustom"]');
+                    t = parseInt(tc?.value, 10) || 1;
+                } else {
+                    t = parseInt(termInput?.value, 10) || 1;
+                }
                 const disc = Number(discountInput?.value) || 0;
                 // bundle parent: 應收 = (主月租 + 子月租加總) × 期數 − 折扣
                 const baseAmt = isBundleParent ? amt + childRentSumLocal : amt;
@@ -706,16 +712,29 @@ function showContractForm(contract) {
                 prefillItems.forEach(it => addRow(it));
                 recalcAdjustments();
             }
+            // 自訂月數欄位 — termMonths === '__custom' 才顯示
+            const termCustomInput = form.querySelector('[name="termMonthsCustom"]');
+            const termCustomWrap = termCustomInput?.closest('.form-group');
+            const syncCustomTermVisibility = () => {
+                if (!termCustomWrap) return;
+                termCustomWrap.style.display = termInput?.value === '__custom' ? '' : 'none';
+            };
+            syncCustomTermVisibility();
+            termInput?.addEventListener('change', syncCustomTermVisibility);
+
+            // 取得當前生效的月數 (含 __custom)
+            const getEffectiveTerm = () => {
+                if (termInput?.value === '__custom') {
+                    return parseInt(termCustomInput?.value, 10) || 1;
+                }
+                return parseInt(termInput?.value, 10) || 1;
+            };
+
             const refresh = () => {
                 if (termWrap?.__setOptions) termWrap.__setOptions(buildTermOptions(startInput.value));
                 if (!endInput.value && startInput.value) {
-                    const termRaw = form.querySelector('[name="termMonths"]').value;
-                    const term = parseInt(termRaw, 10);
-                    if (term) {
-                        const d = new Date(startInput.value);
-                        d.setDate(d.getDate() + (term === 3 ? 90 : 30));
-                        endInput.value = d.toISOString().split('T')[0];
-                    }
+                    const term = getEffectiveTerm();
+                    if (term) endInput.value = leaseEndISO(startInput.value, term);
                 }
                 refreshTotal();
             };
@@ -723,6 +742,7 @@ function showContractForm(contract) {
             startInput.addEventListener('input', refresh);
             amountInput?.addEventListener('input', refreshTotal);
             termInput?.addEventListener('change', refreshTotal);
+            termCustomInput?.addEventListener('input', refreshTotal);
         },
         onSubmit: (values) => {
             const property = mockData.properties.find(p => p.name === values.propertyName);
@@ -730,10 +750,21 @@ function showContractForm(contract) {
                 showToast('找不到對應的物件', 'danger');
                 return false;
             }
+            // termMonths: __custom → 讀 termMonthsCustom 的整數值, 寫回 values.termMonths
+            if (values.termMonths === '__custom') {
+                const customMonths = parseInt(values.termMonthsCustom, 10);
+                if (!customMonths || customMonths < 1) {
+                    showToast('自訂月數請填 ≥ 1 的整數', 'danger');
+                    return false;
+                }
+                values.termMonths = customMonths;
+            } else {
+                values.termMonths = parseInt(values.termMonths, 10) || 1;
+            }
+            delete values.termMonthsCustom;
             let endDate = values.endDate;
             if (!endDate && values.startDate && values.termMonths) {
-                const months = parseInt(values.termMonths, 10) || 1;
-                endDate = leaseEndISO(values.startDate, months);  // 起租 + N 月 − 1 天
+                endDate = leaseEndISO(values.startDate, values.termMonths);  // 起租 + N 月 − 1 天
             }
 
             // 抽離 tenant 子欄位 + totalDue (顯示用) + adjustments + paidAmount/paymentMethod (寫到 invoice)
