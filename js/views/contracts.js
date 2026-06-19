@@ -408,12 +408,19 @@ function showContractForm(contract) {
     // 編輯時 dropdown 依當前 mode 篩 (避免共居/代管 properties 混在一起)
     const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
     const modeBuildingIds = new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === targetMode).map(b => b.id));
-    const propertyOptions = mockData.properties
-        .filter(p => modeBuildingIds.has(p.buildingId))
+    // 館別 options (對齊 finance.js 樣式)
+    const buildingOptions = mockData.buildings
+        .filter(b => (b.mode || 'cohousing') === targetMode)
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(b => ({ value: b.id, label: b.name }));
+    // 當前合約對應床位的 buildingId, 供初始 prefill 用
+    const currentProperty = mockData.properties.find(p => p.name === contract.propertyName);
+    const initialBuildingId = currentProperty?.buildingId || buildingOptions[0]?.value || '';
+    // 床位 options builder: 依 buildingId filter
+    const buildPropertyOptions = (buildingId) => mockData.properties
+        .filter(p => buildingId ? p.buildingId === buildingId : modeBuildingIds.has(p.buildingId))
         .slice()
         .sort((a, b) => {
-            const ba = a.buildingId || '', bb = b.buildingId || '';
-            if (ba !== bb) return ba.localeCompare(bb);
             const ra = Number(a.roomNumber ?? 999), rb = Number(b.roomNumber ?? 999);
             if (ra !== rb) return ra - rb;
             return (a.bedLetter || '').localeCompare(b.bedLetter || '');
@@ -425,6 +432,7 @@ function showContractForm(contract) {
                 : ' · 空床';
             return { value: p.name, label: `${p.name.replace('聚空間 - ', '')}${tag}` };
         });
+    const propertyOptions = buildPropertyOptions(initialBuildingId);
     const tenantOptions = mockData.tenants.map(t => {
         const active = activeContractOfTenant(t.name);
         const tag = active && active.id !== contract.id
@@ -453,9 +461,10 @@ function showContractForm(contract) {
         title: `編輯合約：${contract.id}`,
         maxWidth: 640,
         fields: [
-            // 1. 床位
+            // 1. 床位 (館別 → 物件 兩段, 對齊 finance 編輯 modal)
             { name: '__sep_bed', type: 'section', label: '床位' },
-            { name: 'propertyName', label: '床位', type: 'select', required: true, span: 2, options: propertyOptions },
+            { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions, value: initialBuildingId },
+            { name: 'propertyName', label: '物件', type: 'select', required: true, options: propertyOptions },
 
             // 2. 租客
             { name: '__sep_tenant', type: 'section', label: '租客資料' },
@@ -550,6 +559,24 @@ function showContractForm(contract) {
                 sub.innerHTML = `合約 <span class="mono">${esc(contract.id)}</span> · 租客 <strong>${esc(contract.tenant || '—')}</strong> <span class="modal-subtitle__faded">· ${esc(contract.propertyName?.replace('聚空間 - ', '') || '')}</span>`;
                 headerEl.insertAdjacentElement('afterend', sub);
             }
+
+            // 館別變更 → 重 build 物件下拉 (filter 該館床位)
+            const buildingHidden = form.querySelector('[name="buildingId"]');
+            const propertyWrap = form.querySelector('.custom-select[data-name="propertyName"]');
+            const propertyHidden = form.querySelector('[name="propertyName"]');
+            buildingHidden?.addEventListener('change', () => {
+                const bid = buildingHidden.value;
+                if (propertyWrap?.__setOptions) {
+                    propertyWrap.__setOptions(buildPropertyOptions(bid));
+                    // 換館後若原本床位不屬於這個館, 清空 (避免送出時帶錯)
+                    const newOpts = buildPropertyOptions(bid);
+                    if (propertyHidden && !newOpts.find(o => o.value === propertyHidden.value)) {
+                        propertyHidden.value = '';
+                        const trigger = propertyWrap.querySelector('.custom-select-trigger');
+                        if (trigger) trigger.textContent = '請選擇...';
+                    }
+                }
+            });
 
             // === 收費方式切換 — platform → 隱藏 platformName 以外的收款相關 ===
             const channelInput = form.querySelector('[name="paymentChannel"]');
@@ -762,6 +789,7 @@ function showContractForm(contract) {
                 values.termMonths = parseInt(values.termMonths, 10) || 1;
             }
             delete values.termMonthsCustom;
+            delete values.buildingId;  // 只用於 form 內篩物件下拉, 不寫進合約 (合約透過 propertyName 反查 building)
             let endDate = values.endDate;
             if (!endDate && values.startDate && values.termMonths) {
                 endDate = leaseEndISO(values.startDate, values.termMonths);  // 起租 + N 月 − 1 天
