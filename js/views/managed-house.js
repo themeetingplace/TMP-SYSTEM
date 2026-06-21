@@ -1648,14 +1648,19 @@ function showManagedTenantContractForm(building, opts = {}) {
                 recompute();
             };
 
-            // 初次 mount 也算一次 (新建模式 endDate 為空時)
-            if (!endInput.value) recompute();
+            // 若一開始就有值 (編輯模式)，標記為使用者已手動編輯，避免被後續的 term / start change 事件覆蓋
+            if (endInput.value) {
+                endInput.dataset.userEdited = '1';
+            } else {
+                recompute();
+            }
             startInput.addEventListener('change', refresh);
             startInput.addEventListener('input', refresh);
             termInput.addEventListener('change', recompute);
             termCustomInput?.addEventListener('input', recompute);
             termCustomInput?.addEventListener('change', recompute);
             endInput.addEventListener('input', () => { endInput.dataset.userEdited = '1'; });
+            endInput.addEventListener('change', () => { endInput.dataset.userEdited = '1'; });
         },
         onSubmit: (values) => {
             const prop = mockData.properties.find(p => p.name === values.propertyName);

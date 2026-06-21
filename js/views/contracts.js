@@ -1,11 +1,11 @@
-﻿import {
+import {
     mockData, store,
     getContractLifecycle, daysUntilExpiry, needsDecision, contractLifecycleLabel,
     activeContractFor, activeContractOfTenant,
     findOverlappingBedContracts, findOverlappingTenantContracts,
     getSortedBuildings, leaseEndISO
 } from '../data.js';
-import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
+import { openFormModal, openConfirm, openDetailModal, openModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { fillContractPdf, downloadPdfBytes, formatRentalPeriod } from '../utils/pdfGen.js';
 import { showCheckinAssignmentForm } from './properties.js';
@@ -241,7 +241,7 @@ export function renderContracts() {
                 <td><strong>${esc(c.tenant || '')}</strong></td>
                 <td>
                     <div style="font-size: var(--text-base); font-weight: 500;">${moneyAmount(c.amount || 0)}</div>
-                    <div style="font-size: var(--text-xs); color: var(--text-muted);">${c.termMonths === 3 ? '3 個月期' : '1 個月期'}</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted);">${c.termMonths || 1} 個月期</div>
                 </td>
                 <td>${c.startDate ? `<span style="font-weight: 500;">${c.startDate}</span>` : '<span style="color: var(--text-muted)">—</span>'}</td>
                 <td>
@@ -268,7 +268,7 @@ export function renderContracts() {
                         chips: mobileChips,
                         meta: [
                             { cap: '租客', val: `<strong>${esc(c.tenant || '—')}</strong>` },
-                            { cap: '合約期', val: c.termMonths === 3 ? '3 個月期' : '1 個月期' }
+                            { cap: '合約期', val: `${c.termMonths || 1} 個月期` }
                         ],
                         note: !isArchived && days != null ? daysLabel(days) : '',
                         actions: mobileActions
@@ -832,7 +832,7 @@ export function showContractDetails(id) {
             { label: '物件', value: c.propertyName },
             { label: '租客', value: c.tenant },
             { label: '租金', value: `$${(c.amount || 0).toLocaleString()} / 月` },
-            { label: '簽約期', value: c.termMonths === 3 ? '3 個月' : '1 個月' },
+            { label: '簽約期', value: `${c.termMonths || 1} 個月` },
             { label: '起始日', value: c.startDate || '—' },
             { label: '到期日', value: c.endDate || '—' },
             { label: '簽署狀態', value: c.status },
@@ -1075,24 +1075,52 @@ export function confirmRenew(id) {
     const newStartStr = c.endDate;
     const newEndStr = leaseEndISO(newStartStr, c.termMonths || 1);
 
-    openConfirm({
+    openModal({
         title: '🔄 確認續租',
-        message: `將為 <strong>${c.tenant}</strong> 自動建立下一期合約：
-            <div style="margin-top: 1rem; padding: 0.875rem; background-color: var(--color-background); border-radius: var(--radius-md); font-size: var(--text-base); line-height: 1.8;">
-                <div><strong>物件：</strong>${c.propertyName}</div>
-                <div><strong>租金：</strong>$${(c.amount || 0).toLocaleString()} / 月（沿用）</div>
-                <div><strong>新期間：</strong>${newStartStr} ~ ${newEndStr}（${c.termMonths === 3 ? '3 個月' : '1 個月'}）</div>
+        maxWidth: 500,
+        bodyHtml: `
+            <div style="margin: 0; color: var(--text-main); line-height: 1.6;">
+                將為 <strong>${esc(c.tenant)}</strong> 自動建立下一期合約：
+                <div style="margin-top: 1rem; padding: 0.875rem; background-color: var(--color-background); border-radius: var(--radius-md); font-size: var(--text-base); line-height: 1.8;">
+                    <div><strong>物件：</strong>${esc(c.propertyName)}</div>
+                    <div><strong>租金：</strong>$${(c.amount || 0).toLocaleString()} / 月（沿用）</div>
+                    <div><strong>新期間：</strong>${newStartStr} ~ ${newEndStr}（${c.termMonths || 1} 個月）</div>
+                </div>
+                <p style="margin-top: 1rem; font-size: var(--text-xs); color: var(--text-muted);">舊合約 ${esc(c.id)} 將標記為「已續約」。</p>
             </div>
-            <p style="margin-top: 1rem; font-size: var(--text-xs); color: var(--text-muted);">舊合約 ${c.id} 將標記為「已續約」。</p>`,
-        confirmLabel: '確認續租',
-        onConfirm: () => {
-            const result = store.renewContract(id);
-            if (result.error) {
-                showToast(`續租失敗：${result.error}`, 'danger');
-                return;
-            }
-            showToast(`已續租，新合約 ${result.newContract.id}`, 'success');
-            refreshView();
+        `,
+        footerHtml: `
+            <button type="button" class="btn btn-outline" data-action="cancel">取消</button>
+            <button type="button" class="btn btn-outline" data-action="edit-renew" style="color: var(--color-primary); border-color: var(--color-primary); margin-left: auto;"><i class="ph ph-pencil"></i> 編輯續租資訊</button>
+            <button type="button" class="btn btn-primary" data-action="confirm-renew">直接續租</button>
+        `,
+        lockOutsideClose: true,
+        onMount: (overlay, close) => {
+            overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
+            
+            overlay.querySelector('[data-action="confirm-renew"]')?.addEventListener('click', () => {
+                const result = store.renewContract(id);
+                if (result.error) {
+                    showToast(`續租失敗：${result.error}`, 'danger');
+                    return;
+                }
+                showToast(`已續租，新合約 ${result.newContract.id}`, 'success');
+                close();
+                refreshView();
+            });
+
+            overlay.querySelector('[data-action="edit-renew"]')?.addEventListener('click', () => {
+                const result = store.renewContract(id);
+                if (result.error) {
+                    showToast(`續租失敗：${result.error}`, 'danger');
+                    return;
+                }
+                showToast(`已建立新合約 ${result.newContract.id}，請編輯細節`, 'success');
+                close();
+                setTimeout(() => {
+                    showContractForm(result.newContract);
+                }, 150);
+            });
         }
     });
 }

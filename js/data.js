@@ -1376,6 +1376,10 @@ export const store = {
 
         const newContract = {
             id: nextId('C', mockData.contracts),
+            contractType: oldContract.contractType || null,
+            buildingId: oldContract.buildingId || null,
+            ownerId: oldContract.ownerId || null,
+            lessorName: oldContract.lessorName || null,
             propertyId: oldContract.propertyId,
             propertyName: oldContract.propertyName,
             tenant: oldContract.tenant,
@@ -1389,7 +1393,9 @@ export const store = {
             renewalState: 'active',
             snoozeUntil: null,
             signedFileUrl: null,
-            terminatedDate: null
+            terminatedDate: null,
+            paymentChannel: oldContract.paymentChannel || 'self',
+            platformName: oldContract.platformName || null
         };
         mockData.contracts.push(newContract);
 
