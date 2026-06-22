@@ -141,15 +141,34 @@ serve(async (req) => {
         }
 
         // 6. 找 / 建 tenant
-        const { data: existing } = await supabase
+        //   優先順序:
+        //   (a) 同 phone 完全相符 → 確定是同一人, 直接 merge
+        //   (b) phone 沒中, 但同名(完全相符) + 還沒綁 LINE 的只有 1 筆 → 視為「先建合約後 LIFF 登記」, 自動 merge
+        //       (避免同名多人時誤合: >1 筆同名 unbound → 不 merge, 建新的交給管理員手動處理)
+        //   (c) 都沒中 → 建新 tenant
+        const trimmedName = String(form.name || '').trim();
+        let { data: existing } = await supabase
             .from('tenants').select('*').eq('phone', phone).maybeSingle();
+        let mergedBy: 'phone' | 'name' | null = existing ? 'phone' : null;
+
+        if (!existing && trimmedName) {
+            const { data: nameMatches } = await supabase
+                .from('tenants').select('*')
+                .eq('name', trimmedName)
+                .is('line_user_id', null);
+            if (nameMatches && nameMatches.length === 1) {
+                existing = nameMatches[0];
+                mergedBy = 'name';
+            }
+        }
 
         const nowIso = new Date().toISOString();
         let tenantId: string;
 
         if (existing) {
-            // 同手機已存在 → 更新 + 綁 LINE (保留現有 current_property，不覆寫)
-            await supabase.from('tenants').update({
+            // 已有 tenant (merge) → 更新 + 綁 LINE (保留現有 current_property/合約, 不覆寫)
+            // 注意: 按 name merge 時 phone 用 LIFF 填的 (因為原本 phone 不對才走 name fallback)
+            const updates: any = {
                 name: form.name,
                 email: form.email || existing.email,
                 emergency_contact: form.emergencyContact || existing.emergency_contact,
@@ -158,7 +177,11 @@ serve(async (req) => {
                 line_picture_url: pictureUrl || null,
                 line_bound_at: nowIso,
                 source: existing.source || 'LIFF'
-            }).eq('id', existing.id);
+            };
+            if (mergedBy === 'name') {
+                updates.phone = phone;  // 用 LIFF 提供的 phone (原本 phone 沒對到才落到 name match)
+            }
+            await supabase.from('tenants').update(updates).eq('id', existing.id);
             tenantId = existing.id;
         } else {
             // 新建 tenant — 床位 / 居住中狀態 由管理員後台確認
@@ -206,8 +229,12 @@ serve(async (req) => {
             line_user_id: userId,
             direction: 'in',
             message_type: 'liff_register',
-            content: `LIFF 登記：${form.name} (${phone})${existing ? ' — 更新舊客' : ' — 新客'}${frontPath ? ' · 含身分證照' : ''}`,
-            raw: { form, profile: { displayName, pictureUrl }, idCardUploaded: !!frontPath }
+            content: `LIFF 登記：${form.name} (${phone})${
+                existing
+                    ? (mergedBy === 'name' ? ' — 同名合併 (原 phone 不符)' : ' — 更新舊客')
+                    : ' — 新客'
+            }${frontPath ? ' · 含身分證照' : ''}`,
+            raw: { form, profile: { displayName, pictureUrl }, idCardUploaded: !!frontPath, mergedBy }
         });
 
         return new Response(JSON.stringify({

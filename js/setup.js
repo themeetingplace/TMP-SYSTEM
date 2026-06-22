@@ -124,6 +124,85 @@ window.fixContractEndDates = async (apply = false) => {
     return result;
 };
 
+// 同名重複租客合併 — 找出同名且其中一筆有 lineUserId 的, 把 lineUserId 搬到「有合約」那筆, 刪掉沒合約那筆
+// 用於: 先建合約 (admin 後台) → 後做 LIFF 登記 (LINE) 時拆出第二筆 tenant 的修復
+window.fixDuplicateTenants = async (apply = false) => {
+    const { store, mockData } = await import('./data.js');
+    const byName = new Map();
+    mockData.tenants.forEach(t => {
+        const key = (t.name || '').trim();
+        if (!key) return;
+        if (!byName.has(key)) byName.set(key, []);
+        byName.get(key).push(t);
+    });
+
+    const merges = [];
+    const skipped = [];
+    byName.forEach((rows, name) => {
+        if (rows.length < 2) return;
+        const bound = rows.filter(r => r.lineUserId);
+        const unbound = rows.filter(r => !r.lineUserId);
+        if (bound.length === 0) {
+            skipped.push({ name, count: rows.length, reason: '都沒綁 LINE, 不確定是不是同一人' });
+            return;
+        }
+        if (bound.length > 1) {
+            skipped.push({ name, count: rows.length, reason: '有 >1 筆綁了 LINE, 需手動分辨' });
+            return;
+        }
+        // 1 筆 bound + N 筆 unbound — 把 bound 的 LINE 資料搬到「有合約的 unbound 那筆」(通常是 admin 先建的)
+        // 若 unbound 都沒合約 → 直接保留 bound, 刪 unbound
+        const lineRecord = bound[0];
+        const unboundWithContract = unbound.filter(t =>
+            mockData.contracts.some(c => c.tenant === t.name && c.renewalState === 'active')
+        );
+        // 決策: 留哪一筆當 master?
+        // - 優先留「有合約」的 unbound, 把 LINE 資料 merge 進來
+        // - 否則留 bound, 刪 unbound
+        let masterId, deleteIds, lineFieldsTo;
+        if (unboundWithContract.length === 1) {
+            masterId = unboundWithContract[0].id;
+            const others = rows.filter(r => r.id !== masterId).map(r => r.id);
+            deleteIds = others;
+            lineFieldsTo = masterId;
+        } else {
+            masterId = lineRecord.id;
+            deleteIds = unbound.map(r => r.id);
+            lineFieldsTo = null;  // bound 本身已有 LINE 資料
+        }
+        merges.push({ name, masterId, deleteIds, copyLineFrom: lineFieldsTo ? lineRecord.id : null });
+    });
+
+    if (apply) {
+        merges.forEach(m => {
+            if (m.copyLineFrom) {
+                const src = mockData.tenants.find(t => t.id === m.copyLineFrom);
+                const dstIdx = mockData.tenants.findIndex(t => t.id === m.masterId);
+                if (src && dstIdx >= 0) {
+                    mockData.tenants[dstIdx] = {
+                        ...mockData.tenants[dstIdx],
+                        lineUserId: src.lineUserId,
+                        lineDisplayName: src.lineDisplayName,
+                        linePictureUrl: src.linePictureUrl,
+                        lineBoundAt: src.lineBoundAt,
+                        idCardFrontPath: src.idCardFrontPath || mockData.tenants[dstIdx].idCardFrontPath,
+                        idCardBackPath: src.idCardBackPath || mockData.tenants[dstIdx].idCardBackPath,
+                        idCardUploadedAt: src.idCardUploadedAt || mockData.tenants[dstIdx].idCardUploadedAt
+                    };
+                }
+            }
+            m.deleteIds.forEach(id => store.deleteTenant(id));
+        });
+    }
+    console.log(`%c[duplicateTenantMerge] ${apply ? 'APPLIED' : 'DRY-RUN'}`, 'color: #08a;', { merges, skipped });
+    console.table(merges);
+    if (skipped.length) {
+        console.warn('Skipped:');
+        console.table(skipped);
+    }
+    return { merges, skipped, apply };
+};
+
 // bundle 重複 invoice 校正 — 舊版多床位合約會在額外床位開重複 invoice
 window.fixBundleInvoices = async (apply = false) => {
     const { store } = await import('./data.js');
