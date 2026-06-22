@@ -90,7 +90,7 @@ serve(async (req) => {
     }
 
     try {
-        const { idToken, userId, displayName, pictureUrl, form, idCardFront, idCardBack } = await req.json();
+        const { idToken, userId, displayName, pictureUrl, form, idCardFront, idCardBack, claimTenantId } = await req.json();
 
         // 1. 驗 LINE ID Token
         if (!idToken || !userId) throw new Error('缺少 idToken / userId');
@@ -142,23 +142,71 @@ serve(async (req) => {
 
         // 6. 找 / 建 tenant
         //   優先順序:
-        //   (a) 同 phone 完全相符 → 確定是同一人, 直接 merge
-        //   (b) phone 沒中, 但同名(完全相符) + 還沒綁 LINE 的只有 1 筆 → 視為「先建合約後 LIFF 登記」, 自動 merge
-        //       (避免同名多人時誤合: >1 筆同名 unbound → 不 merge, 建新的交給管理員手動處理)
-        //   (c) 都沒中 → 建新 tenant
+        //   (a) claimTenantId 由 LIFF 傳入 (客戶自己選的) → 驗證+綁定該筆
+        //   (b) 同 phone 完全相符 → 直接 merge
+        //   (c) phone 沒中, 但同名 unbound 剛好 1 筆 → 自動 merge
+        //   (d) 同名 unbound 2+ 筆 → 不自動綁, 回 candidates 讓 LIFF UI 列出讓客戶選
+        //   (e) 都沒中 → 建新 tenant
         const trimmedName = String(form.name || '').trim();
-        let { data: existing } = await supabase
-            .from('tenants').select('*').eq('phone', phone).maybeSingle();
-        let mergedBy: 'phone' | 'name' | null = existing ? 'phone' : null;
+        let existing: any = null;
+        let mergedBy: 'phone' | 'name' | 'claim' | null = null;
 
-        if (!existing && trimmedName) {
-            const { data: nameMatches } = await supabase
-                .from('tenants').select('*')
-                .eq('name', trimmedName)
-                .is('line_user_id', null);
-            if (nameMatches && nameMatches.length === 1) {
-                existing = nameMatches[0];
-                mergedBy = 'name';
+        // (a) claim 路徑
+        if (claimTenantId) {
+            const { data: claimRow } = await supabase
+                .from('tenants').select('*').eq('id', claimTenantId).maybeSingle();
+            if (!claimRow) throw new Error('您選的租客資料找不到, 請重新嘗試');
+            if (claimRow.line_user_id) throw new Error('該租客已綁定其他 LINE, 請聯絡小編');
+            if ((claimRow.name || '').trim() !== trimmedName) throw new Error('姓名跟選擇的合約對不上, 請重新確認');
+            existing = claimRow;
+            mergedBy = 'claim';
+        } else {
+            // (b) phone
+            const { data: phoneMatch } = await supabase
+                .from('tenants').select('*').eq('phone', phone).maybeSingle();
+            if (phoneMatch) {
+                existing = phoneMatch;
+                mergedBy = 'phone';
+            } else if (trimmedName) {
+                // (c) (d) 同名 unbound
+                const { data: nameMatches } = await supabase
+                    .from('tenants').select('id, name, phone, current_property, status, created_at')
+                    .eq('name', trimmedName)
+                    .is('line_user_id', null);
+                if (nameMatches && nameMatches.length === 1) {
+                    // (c) 唯一同名 → auto merge
+                    const { data: fullRow } = await supabase
+                        .from('tenants').select('*').eq('id', nameMatches[0].id).maybeSingle();
+                    existing = fullRow;
+                    mergedBy = 'name';
+                } else if (nameMatches && nameMatches.length > 1) {
+                    // (d) 多筆同名 → 回 candidates 給 LIFF 列表, 客戶選了再重 POST 帶 claimTenantId
+                    // 把每位 tenant 的 active 合約一起帶回去, 讓客戶看「住哪間 / 何時起租」幫助辨認
+                    const tenantIds = nameMatches.map((t: any) => t.id);
+                    const { data: contracts } = await supabase
+                        .from('contracts').select('id, tenant, property_name, start_date, end_date, renewal_state')
+                        .in('tenant', [trimmedName])
+                        .eq('renewal_state', 'active');
+                    const candidates = nameMatches.map((t: any) => ({
+                        tenantId: t.id,
+                        name: t.name,
+                        phoneMasked: t.phone ? `${String(t.phone).slice(0, 3)}***${String(t.phone).slice(-3)}` : null,
+                        currentProperty: t.current_property,
+                        status: t.status,
+                        createdAt: t.created_at,
+                        contracts: (contracts || [])
+                            .filter((c: any) => c.tenant === t.name)
+                            .map((c: any) => ({
+                                id: c.id, propertyName: c.property_name,
+                                startDate: c.start_date, endDate: c.end_date
+                            }))
+                    }));
+                    return new Response(JSON.stringify({
+                        needsClaim: true,
+                        candidates,
+                        message: '查詢到多筆同名租客紀錄, 請選擇您的合約'
+                    }), { headers: { 'Content-Type': 'application/json', ...corsHeaders() } });
+                }
             }
         }
 
@@ -178,8 +226,8 @@ serve(async (req) => {
                 line_bound_at: nowIso,
                 source: existing.source || 'LIFF'
             };
-            if (mergedBy === 'name') {
-                updates.phone = phone;  // 用 LIFF 提供的 phone (原本 phone 沒對到才落到 name match)
+            if (mergedBy === 'name' || mergedBy === 'claim') {
+                updates.phone = phone;  // 用 LIFF 提供的 phone (原本 phone 沒對到才落到 name/claim 路徑)
             }
             await supabase.from('tenants').update(updates).eq('id', existing.id);
             tenantId = existing.id;
@@ -231,7 +279,9 @@ serve(async (req) => {
             message_type: 'liff_register',
             content: `LIFF 登記：${form.name} (${phone})${
                 existing
-                    ? (mergedBy === 'name' ? ' — 同名合併 (原 phone 不符)' : ' — 更新舊客')
+                    ? (mergedBy === 'name' ? ' — 同名合併 (原 phone 不符)'
+                        : mergedBy === 'claim' ? ' — 客戶自選合約 (claim)'
+                        : ' — 更新舊客')
                     : ' — 新客'
             }${frontPath ? ' · 含身分證照' : ''}`,
             raw: { form, profile: { displayName, pictureUrl }, idCardUploaded: !!frontPath, mergedBy }

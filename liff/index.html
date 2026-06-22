@@ -673,35 +673,103 @@ async function handleSubmit(profile) {
         const idCardFrontB64 = await blobToBase64(idCardImages.front);
         const idCardBackB64  = idCardImages.back ? await blobToBase64(idCardImages.back) : null;
 
-        btn.textContent = t('btnUploading');
-        const resp = await fetch(EDGE_FUNCTION, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            body: JSON.stringify({
-                idToken,
-                userId: profile.userId,
-                displayName: profile.displayName,
-                pictureUrl: profile.pictureUrl,
-                form: data,
-                idCardFront: idCardFrontB64,
-                idCardBack: idCardBackB64
-            })
-        });
+        // 用 closure 包起來方便客戶選 claim 後重 POST 不用再上傳一次身分證
+        const callEdge = async (claimTenantId) => {
+            const resp = await fetch(EDGE_FUNCTION, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({
+                    idToken,
+                    userId: profile.userId,
+                    displayName: profile.displayName,
+                    pictureUrl: profile.pictureUrl,
+                    form: data,
+                    idCardFront: idCardFrontB64,
+                    idCardBack: idCardBackB64,
+                    ...(claimTenantId ? { claimTenantId } : {})
+                })
+            });
+            return { resp, body: await resp.json() };
+        };
 
-        const result = await resp.json();
+        btn.textContent = t('btnUploading');
+        const { resp, body: result } = await callEdge();
         if (!resp.ok || result.error) {
             throw new Error(result.error || `HTTP ${resp.status}`);
         }
-
+        // 多筆同名 → 客戶選哪一份合約是自己的
+        if (result.needsClaim) {
+            renderClaimChoice(profile, data, result.candidates || [], async (chosenTenantId) => {
+                const cMsg = document.getElementById('claim-msg');
+                if (cMsg) cMsg.innerHTML = '';
+                const { resp: r2, body: r2body } = await callEdge(chosenTenantId);
+                if (!r2.ok || r2body.error) {
+                    if (cMsg) cMsg.innerHTML = `<div class="msg error">${t('errSubmitFailed', { msg: r2body.error || r2.status })}</div>`;
+                    return;
+                }
+                renderDone(profile, data);
+            });
+            return;
+        }
         renderDone(profile, data);
     } catch (e) {
         msg.innerHTML = `<div class="msg error">${t('errSubmitFailed', { msg: e.message })}</div>`;
         btn.disabled = false;
         btn.textContent = t('btnRetry');
     }
+}
+
+function renderClaimChoice(profile, data, candidates, onPick) {
+    _currentRender = () => renderClaimChoice(profile, data, candidates, onPick);
+    const isZh = LANG === 'zh';
+    const title = isZh ? '請選擇您的合約' : 'Pick Your Contract';
+    const sub = isZh
+        ? '系統找到多筆相同姓名的紀錄, 請點選您的住處 / 合約以完成 LINE 綁定。'
+        : 'We found multiple records with this name. Please pick yours to complete LINE binding.';
+    const noContractTag = isZh ? '(尚無合約)' : '(no contract)';
+    const cardsHtml = candidates.map((c, idx) => {
+        const contractsHtml = (c.contracts && c.contracts.length)
+            ? c.contracts.map(k => `
+                <div style="font-size: 0.85rem; color: #444; line-height: 1.5;">
+                    <strong>${k.id}</strong> · ${k.propertyName || '—'}<br>
+                    <span style="color: #888;">${k.startDate || '—'} ~ ${k.endDate || '—'}</span>
+                </div>
+            `).join('')
+            : `<div style="color: #999; font-style: italic;">${noContractTag}</div>`;
+        return `
+            <button type="button" class="claim-card" data-tenant-id="${c.tenantId}" style="
+                display: block; width: 100%; text-align: left; padding: 1rem;
+                border: 2px solid #e5e5e5; border-radius: 0.75rem; background: white;
+                margin-bottom: 0.75rem; cursor: pointer; transition: border-color 0.15s;
+            ">
+                <div style="font-weight: 600; font-size: 1rem; margin-bottom: 0.4rem;">
+                    ${c.name}${c.phoneMasked ? ` <span style="color: #888; font-weight: 400; font-size: 0.85rem;">${c.phoneMasked}</span>` : ''}
+                </div>
+                ${c.currentProperty ? `<div style="color: #555; font-size: 0.85rem; margin-bottom: 0.4rem;">📍 ${c.currentProperty}</div>` : ''}
+                ${contractsHtml}
+            </button>
+        `;
+    }).join('');
+    document.getElementById('root').innerHTML = `
+        <div style="max-width: 480px; margin: 0 auto; padding: 1.5rem 1rem;">
+            <h1 style="font-size: 1.25rem; margin-bottom: 0.5rem;">${title}</h1>
+            <p style="color: #666; font-size: 0.9rem; margin-bottom: 1.25rem; line-height: 1.5;">${sub}</p>
+            <div id="claim-msg"></div>
+            <div id="claim-list">${cardsHtml}</div>
+        </div>
+    `;
+    document.querySelectorAll('.claim-card').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            document.querySelectorAll('.claim-card').forEach(b => { b.style.borderColor = '#e5e5e5'; b.disabled = true; });
+            btn.style.borderColor = 'var(--color-primary, #ff8859)';
+            btn.style.background = '#fff8f4';
+            const tenantId = btn.dataset.tenantId;
+            await onPick(tenantId);
+        });
+    });
 }
 
 function renderDone(profile, data) {
