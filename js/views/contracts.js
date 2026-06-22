@@ -1015,7 +1015,10 @@ async function downloadContractPdf(id) {
 async function sendContractToLine(id) {
     const c = mockData.contracts.find(x => x.id === id);
     if (!c) return;
-    const tenant = mockData.tenants.find(t => t.name === c.tenant);
+    // 同名租客可能有多筆 (歷史殘留 / LINE 綁定建的新 record) → 優先找已綁 LINE 的, fallback first match
+    const tenantName = (c.tenant || '').trim();
+    const tenant = mockData.tenants.find(t => (t.name || '').trim() === tenantName && t.lineUserId)
+                || mockData.tenants.find(t => (t.name || '').trim() === tenantName);
     if (!tenant) { showToast(`找不到租客 ${c.tenant}`, 'danger'); return; }
     if (!tenant.lineUserId) {
         showToast(`${tenant.name} 尚未綁定 LINE，請先請他加 LINE 官方帳號並回覆手機號`, 'warning', 7000);

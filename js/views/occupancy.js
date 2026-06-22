@@ -210,7 +210,9 @@ function renderContractRow(bed, chain, months, today, stripeClass, todayStr) {
     const bedLabel = bed.roomNumber && bed.bedLetter ? `R${bed.roomNumber}-${bed.bedLetter}` : bed.name;
     const bedLabelHtml = `<button class="occ-link" data-action="show-bed" data-bed-id="${bed.id}" title="點擊看床位資料">${bedLabel}</button>`;
 
-    const tenantObj = mockData.tenants.find(t => t.name === latest.tenant);
+    // 同名租客可能有多筆 (歷史殘留 / LINE 綁定建的新 record) → 優先抓有 lineUserId 的
+    const tenantObj = mockData.tenants.find(t => t.name === latest.tenant && t.lineUserId)
+                   || mockData.tenants.find(t => t.name === latest.tenant);
     const tenantInner = tenantObj
         ? `<button class="occ-link" data-action="show-tenant" data-tenant-id="${tenantObj.id}" title="點擊看租客詳細資料">${latest.tenant}</button>`
         : latest.tenant;

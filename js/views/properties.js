@@ -1214,7 +1214,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                 ['顧客來源', values.source || '其他'],
                 ['入住日', startDate],
                 ['到期日', endDate],
-                ['合約期', term === 3 ? '3 個月（季繳）' : '1 個月'],
+                ['合約期', term === 3 ? '3 個月（季繳）' : `${term} 個月`],
                 ['月租金', `${moneyAmount(amount + extraBedRentTotal)}${extraBeds.length ? ` <span style="color: var(--text-muted); font-size: var(--text-xs);">(主 ${moneyAmount(amount)} + 額外 ${moneyAmount(extraBedRentTotal)})</span>` : ''}`],
                 ['應收總額', `<div><strong>${moneyAmount(due)}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">(月租 × ${term} = ${moneyAmount((amount + extraBedRentTotal) * term)})</span></div>${adjustmentLines}`],
                 ['已收金額', `${moneyAmount(paidAmount)}${paidAmount >= due ? ' <span style="color: var(--color-success);">✅ 已收訖</span>' : paidAmount > 0 ? ` <span style="color: var(--color-warning);">部分繳款 (餘 ${moneyAmount(due - paidAmount)})</span>` : ' <span style="color: var(--color-danger);">❌ 未繳</span>'}`],
