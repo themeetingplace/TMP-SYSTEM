@@ -544,14 +544,44 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
 
             if (!isExpense) {
                 // 收入: 填了 periodStart 自動帶 periodEnd = leaseEndISO(start, 1)
-                // (起租 + 1 月 − 1 天, calendar-month-aware, 2 月也對)
                 const psInput = form.querySelector('[name="periodStart"]');
                 const peInput = form.querySelector('[name="periodEnd"]');
+                const tenantHidden = form.querySelector('[name="tenant"]');
+                const propertyHiddenInv = form.querySelector('[name="propertyName"]');
+                const amountInputInv = form.querySelector('[name="amount"]');
+
                 psInput?.addEventListener('change', () => {
                     if (psInput.value && !peInput.value) {
                         peInput.value = leaseEndISO(psInput.value, 1);
                     }
                 });
+
+                // 物件 + 租客 鎖定 → 自動帶該合約的 startDate / endDate / 月租 (沒手動改才覆寫)
+                const syncFromContract = () => {
+                    const propName = propertyHiddenInv?.value;
+                    const tenantName = tenantHidden?.value;
+                    if (!propName || !tenantName) return;
+                    // 找符合的 active 合約 (propertyName + tenant)
+                    const c = mockData.contracts.find(x =>
+                        x.propertyName === propName && x.tenant === tenantName
+                        && (x.renewalState === 'active' || x.renewalState === 'snoozed')
+                    );
+                    if (!c) return;
+                    // 租期起 / 止 沒填才自動帶 (user 有手動填就尊重)
+                    if (psInput && !psInput.value && c.startDate) psInput.value = c.startDate;
+                    if (peInput && !peInput.value && c.endDate) peInput.value = c.endDate;
+                    // 月租金沒填或 0 才自動帶
+                    if (amountInputInv && (!amountInputInv.value || Number(amountInputInv.value) === 0) && c.amount) {
+                        amountInputInv.value = c.amount;
+                        amountInputInv.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                };
+                propertyHiddenInv?.addEventListener('change', syncFromContract);
+                tenantHidden?.addEventListener('change', syncFromContract);
+                // 編輯模式進來 invoice 已有 contractId 但 period* 空白 → 立即補
+                if (invoice && !psInput?.value && !peInput?.value) {
+                    setTimeout(syncFromContract, 50);
+                }
             }
         },
         onSubmit: (values) => {
