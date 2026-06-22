@@ -248,6 +248,11 @@ function renderContractRow(bed, chain, months, today, stripeClass, todayStr) {
         const platformLabel = latest.platformName || '外部平台';
         tenantCell += ` <span style="display: inline-block; font-size: 0.65rem; padding: 1px 4px; background: var(--color-info-light); color: var(--color-info); border-radius: 3px; vertical-align: middle;" title="外部平台代收，不開帳單">🌐 ${platformLabel}</span>`;
     }
+    // 退租倒數: pendingTerminationDate 在未來 → 顯示「⏳ M/D 退」chip, 床位視覺保留 (還住著)
+    if (latest.pendingTerminationDate && latest.pendingTerminationDate > todayStr) {
+        const [, em, ed] = latest.pendingTerminationDate.split('-');
+        tenantCell += ` <span style="display: inline-block; font-size: 0.65rem; padding: 1px 6px; background: var(--color-danger-light); color: var(--color-danger); border-radius: 3px; vertical-align: middle; font-weight: 600;" title="預約退租 — ${latest.pendingTerminationDate} 生效後正式釋床">⏳ ${parseInt(em)}/${parseInt(ed)} 退</span>`;
+    }
     // 備註欄
     const noteContent = tenantObj?.note
         ? `<span class="occ-note-clamp">${tenantObj.note}</span>`

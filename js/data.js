@@ -1621,17 +1621,40 @@ export const store = {
         const c = mockData.contracts.find(x => x.id === contractId);
         if (!c) return { error: 'not_found' };
 
-        const effectiveDate = options.effectiveDate || new Date().toISOString().split('T')[0];
+        const today = new Date().toISOString().split('T')[0];
+        const effectiveDate = options.effectiveDate || today;
+        const idx = mockData.contracts.findIndex(x => x.id === contractId);
+
+        // 退租生效日 > 今天 → 延後處理: 只標 pendingTerminationDate, 床位/租客還在
+        // 到生效日後 finalizePendingTerminations() 會自動完成
+        if (effectiveDate > today) {
+            mockData.contracts[idx] = {
+                ...mockData.contracts[idx],
+                pendingTerminationDate: effectiveDate
+            };
+            recalcMetrics();
+            return { ok: true, pending: true, effectiveDate };
+        }
+
+        // 立即執行 (effectiveDate <= today)
+        return this._finalizeTermination(contractId, effectiveDate);
+    },
+
+    // 內部: 真正執行退租 (釋放床位+租客+清 pending 旗標)
+    _finalizeTermination(contractId, effectiveDate) {
+        const c = mockData.contracts.find(x => x.id === contractId);
+        if (!c) return { error: 'not_found' };
         const idx = mockData.contracts.findIndex(x => x.id === contractId);
         mockData.contracts[idx] = {
             ...mockData.contracts[idx],
             renewalState: 'terminated',
             terminatedDate: effectiveDate,
-            status: '已終止'
+            status: '已終止',
+            pendingTerminationDate: null
         };
 
-        // 釋放床位
-        const property = mockData.properties.find(p => p.name === c.propertyName);
+        // 釋放床位 (僅當床位仍指向此合約)
+        const property = mockData.properties.find(p => p.name === c.propertyName && p.contractId === contractId);
         if (property) {
             const pIdx = mockData.properties.indexOf(property);
             mockData.properties[pIdx] = {
@@ -1643,19 +1666,35 @@ export const store = {
             };
         }
 
-        // 租客標記
+        // 租客標記 (僅當該租客沒其他 active 合約)
         const tenant = mockData.tenants.find(t => t.name === c.tenant);
         if (tenant) {
-            const tIdx = mockData.tenants.indexOf(tenant);
-            mockData.tenants[tIdx] = {
-                ...tenant,
-                status: '已退租',
-                currentProperty: null
-            };
+            const stillActive = mockData.contracts.some(x =>
+                x.id !== contractId && x.tenant === c.tenant && x.renewalState === 'active'
+            );
+            if (!stillActive) {
+                const tIdx = mockData.tenants.indexOf(tenant);
+                mockData.tenants[tIdx] = {
+                    ...tenant,
+                    status: '已退租',
+                    currentProperty: null
+                };
+            }
         }
 
         recalcMetrics();
         return { ok: true };
+    },
+
+    // 掃描 pendingTerminationDate <= today 的合約, 一律執行 _finalizeTermination
+    // 由 app.js / sync 在 boot + 每日 (或頁面 focus) 觸發
+    finalizePendingTerminations() {
+        const today = new Date().toISOString().split('T')[0];
+        const due = mockData.contracts.filter(c =>
+            c.pendingTerminationDate && c.pendingTerminationDate <= today
+        );
+        due.forEach(c => this._finalizeTermination(c.id, c.pendingTerminationDate));
+        return { processed: due.length };
     },
 
     // 暫緩：snooze 到指定日期再提醒

@@ -409,6 +409,12 @@ window.addEventListener('DOMContentLoaded', async () => {
         const { renderSidebarForMode } = await import('./utils/sidebarRender.js');
         renderSidebarForMode('managed');
     }
+    // sync 完跑一次 pending 退租檢查 — 把生效日 ≤ today 的延後退租正式收掉
+    try {
+        const { store } = await import('./data.js');
+        const r = store.finalizePendingTerminations?.();
+        if (r?.processed > 0) console.log(`[pending-termination] 已處理 ${r.processed} 筆到期退租`);
+    } catch (e) { console.warn('[pending-termination] failed:', e); }
     handleRoute();
     // 資料載完後跑 audit (dry-run) — 有 affected 才彈 modal
     setTimeout(() => promptRenewalAuditIfNeeded(), 800);
