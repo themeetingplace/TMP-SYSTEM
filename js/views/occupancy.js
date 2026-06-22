@@ -113,18 +113,28 @@ function rentCellFor(contract, month, today) {
     const cellDateStr = `${month.year}-${String(month.month).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`;
     const cellDate = new Date(month.year, month.month - 1, actualDay);
 
-    // 合約結束的當月：在「應結日已過、合約已到期」的格子位置顯示「到期 X/Y」標記
+    // 合約結束的當月：cell 顯示「endDay 到期」(蓋過 startDay 算的應結日)
+    // 這樣 user 改過的 endDate 才會被住房一覽尊重 (不會被起始日 + N 月覆蓋掉)
     const [endYearStr, endMonthStr, endDayStr] = contract.endDate.split('-');
     const endYear = parseInt(endYearStr, 10);
     const endMonth = parseInt(endMonthStr, 10);
     const endDay = parseInt(endDayStr, 10);
-    if (month.year === endYear && month.month === endMonth && cellDateStr > contract.endDate) {
-        return {
-            value: `${endMonth}/${endDay} 到期`,
-            className: 'occ-cell occ-end-marker',
-            contractId: contract.id,
-            tooltip: `合約 ${contract.id} 到期\n${contract.tenant} · ${contract.startDate} ~ ${contract.endDate}`
-        };
+    if (month.year === endYear && month.month === endMonth) {
+        // 該月在合約期內才顯示 (避免單月合約把 startMonth 也蓋掉變到期)
+        // startMonth === endMonth 時, 仍顯示到期 (合約該月就結束)
+        const monthEndCellStr = `${month.year}-${String(month.month).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+        if (monthEndCellStr >= contract.startDate) {
+            const payStatus = paymentStatusFor(contract, month);
+            const isFutureEnd = new Date(contract.endDate) > today;
+            const badge = paymentBadge(payStatus, isFutureEnd);
+            const statusLabel = payStatus === 'paid' ? '已繳' : payStatus === 'partial' ? '部分繳' : payStatus === 'unpaid' ? '未繳' : '尚無收款紀錄';
+            return {
+                value: `${endMonth}/${endDay} 到期${badge}`,
+                className: 'occ-cell occ-end-marker',
+                contractId: contract.id,
+                tooltip: `合約 ${contract.id} 到期\n${contract.tenant} · ${contract.startDate} ~ ${contract.endDate}\n月租 $${(contract.amount || 0).toLocaleString()}\n${statusLabel}`
+            };
+        }
     }
 
     // 收租週期：cellDate 必須在 startDate ~ endDate 之間 (含起訖日)
