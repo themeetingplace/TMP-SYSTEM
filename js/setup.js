@@ -111,6 +111,33 @@ import('./data.js').then(m => {
     window.mockData = m.mockData;
 });
 
+// 5月期初結算 種子 — 把用戶 Excel 內 5月各館各項數字寫成 invoice (paidDate=2026-05-31, periodTag='opening')
+// 重跑安全: 已存在的 opening 會先砍, 再用最新 EXPECTED_5MAY_OPENING 重建
+// dry-run: seedMay2026Opening() → 印出要建的清單, 不動 DB
+// apply:   seedMay2026Opening(true) → 寫入 + persist + recalcMetrics
+window.seedMay2026Opening = async (apply = false) => {
+    const { store } = await import('./data.js');
+    const result = store.seedMay2026Opening({ apply });
+    console.log(`%c[seedMay2026Opening] ${apply ? 'APPLIED' : 'DRY-RUN'}`, 'color: #08a; font-weight: bold;', {
+        要建: result.summary.count + ' 筆',
+        IN合計: '$' + result.summary.in.toLocaleString(),
+        OUT合計: '$' + result.summary.out.toLocaleString(),
+        既存opening: result.existingOpeningCount + ' 筆 (apply 時會先砍掉重建)'
+    });
+    if (result.warnings.length) {
+        console.warn('警告:');
+        result.warnings.forEach(w => console.warn(' -', w));
+    }
+    console.table(result.toCreate.map(p => ({
+        館: window.mockData?.buildings?.find(b => b.id === p.buildingId)?.name || p.buildingId,
+        方向: p.direction === 'in' ? '收' : '支',
+        項目: p.type,
+        金額: p.amount.toLocaleString(),
+        note: p.note
+    })));
+    return result;
+};
+
 // 5月期初餘額對賬 — 把 mockData 內 paidDate < 2026-06-01 的 invoices 加總 per 館 per type, 跟用戶 Excel 比對
 // 用法: verifyOpeningBalance()  → 列出差額表, 自動標紅
 window.verifyOpeningBalance = async () => {

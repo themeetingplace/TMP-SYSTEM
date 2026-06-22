@@ -1766,6 +1766,119 @@ export const store = {
         recalcMetrics();
         return item;
     },
+
+    // 種 5月期初結算 invoices 進 DB
+    // - 每筆 paidDate = 2026-05-31, periodTag='opening', status='已繳清'
+    // - cutoff filter (isPreCutoff) 會把它們從全站統計排除
+    // - 重跑安全: 會先刪舊的 opening (periodTag='opening' on 2026-05-31), 再建新的
+    // dry-run: seedMay2026Opening() → 回傳要建的 invoice 清單, 不動 DB
+    // apply:   seedMay2026Opening({ apply: true }) → 寫入
+    seedMay2026Opening({ apply = false } = {}) {
+        const SEED_DATE = '2026-05-31';
+        const TAG = 'opening';
+        const expected = EXPECTED_5MAY_OPENING;
+        const buildingByName = new Map(mockData.buildings.map(b => [b.name, b]));
+
+        const planned = [];
+        const warnings = [];
+
+        Object.entries(expected.perBuilding).forEach(([bName, agg]) => {
+            const b = buildingByName.get(bName);
+            if (!b) {
+                warnings.push(`館 "${bName}" 找不到 buildingId, 跳過 (請確認系統設定的館名跟 Excel 一致)`);
+                return;
+            }
+            // 收入: 每館一筆 aggregate (Excel 沒給細項 by type)
+            if (agg.in > 0) {
+                planned.push({
+                    buildingId: b.id,
+                    direction: 'in',
+                    type: '房租',
+                    amount: agg.in,
+                    discount: 0,
+                    paidAmount: agg.in,
+                    paidDate: SEED_DATE,
+                    dueDate: SEED_DATE,
+                    status: '已繳清',
+                    note: `5月期初結算 — 各項收入合計 (Excel 5/31)`,
+                    periodTag: TAG,
+                    propertyName: null,
+                    tenant: null
+                });
+            }
+            // 支出: 每館每項一筆 (有 perBuildingOutByType 才細分, 否則 aggregate)
+            const types = expected.perBuildingOutByType[bName];
+            if (types && Object.keys(types).length > 0) {
+                Object.entries(types).forEach(([typeName, amount]) => {
+                    if (amount > 0) {
+                        planned.push({
+                            buildingId: b.id,
+                            direction: 'out',
+                            type: typeName,
+                            amount,
+                            discount: 0,
+                            paidAmount: amount,
+                            paidDate: SEED_DATE,
+                            dueDate: SEED_DATE,
+                            status: '已繳清',
+                            note: `5月期初結算 — ${typeName}`,
+                            periodTag: TAG,
+                            propertyName: null,
+                            tenant: null
+                        });
+                    }
+                });
+            } else if (agg.out > 0) {
+                planned.push({
+                    buildingId: b.id,
+                    direction: 'out',
+                    type: '其他',
+                    amount: agg.out,
+                    discount: 0,
+                    paidAmount: agg.out,
+                    paidDate: SEED_DATE,
+                    dueDate: SEED_DATE,
+                    status: '已繳清',
+                    note: `5月期初結算 — 支出合計`,
+                    periodTag: TAG,
+                    propertyName: null,
+                    tenant: null
+                });
+            }
+        });
+
+        // 找現有的 opening seed (要刪掉重建)
+        const existingOpening = mockData.invoices.filter(inv =>
+            inv.periodTag === TAG && inv.paidDate === SEED_DATE
+        );
+
+        if (apply) {
+            // 1. 砍舊 opening
+            existingOpening.forEach(inv => {
+                mockData.invoices = mockData.invoices.filter(x => x.id !== inv.id);
+                window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'invoices', id: inv.id } }));
+            });
+            // 2. 種新的
+            planned.forEach(p => {
+                const item = { id: nextId('INV-', mockData.invoices), ...p };
+                mockData.invoices.push(item);
+            });
+            recalcMetrics();
+            persist();
+        }
+
+        return {
+            apply,
+            toCreate: planned,
+            existingOpeningCount: existingOpening.length,
+            warnings,
+            summary: {
+                count: planned.length,
+                in: planned.filter(p => p.direction === 'in').reduce((s, p) => s + p.amount, 0),
+                out: planned.filter(p => p.direction === 'out').reduce((s, p) => s + p.amount, 0)
+            }
+        };
+    },
     updateInvoice(id, patch) {
         const i = mockData.invoices.findIndex(inv => inv.id === id);
         if (i >= 0) {
