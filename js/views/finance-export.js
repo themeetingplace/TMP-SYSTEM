@@ -2,7 +2,7 @@
 //
 // 流程：點 BMS「📄 匯出 PDF」→ 開新分頁顯示報告 → 點上方「列印」→ 瀏覽器存 PDF
 
-import { mockData, isSettled, invoiceMonth, formatMonthLabel, invoiceActualAmount as actualAmount, formatDiscountReason } from '../data.js';
+import { mockData, isSettled, invoiceMonth, formatMonthLabel, invoiceActualAmount as actualAmount, formatDiscountReason, isPreCutoff } from '../data.js';
 
 function esc(s) { return String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function fmtMoney(n) { return (n || 0).toLocaleString(); }
@@ -15,6 +15,7 @@ export function buildFinanceReportHtml(ym) {
     const periodLabel = formatMonthLabel(ym);
 
     const invoices = mockData.invoices
+        .filter(inv => !isPreCutoff(inv))  // pre-cutoff 不算進 PDF 匯出
         .filter(inv => isSettled(inv) && invoiceMonth(inv) === ym)
         .sort((a, b) => {
             const da = a.paidDate || a.dueDate || '';

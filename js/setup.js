@@ -111,6 +111,102 @@ import('./data.js').then(m => {
     window.mockData = m.mockData;
 });
 
+// 5月期初餘額對賬 — 把 mockData 內 paidDate < 2026-06-01 的 invoices 加總 per 館 per type, 跟用戶 Excel 比對
+// 用法: verifyOpeningBalance()  → 列出差額表, 自動標紅
+window.verifyOpeningBalance = async () => {
+    const { mockData, FINANCE_CUTOFF_DATE, EXPECTED_5MAY_OPENING, isPreCutoff } = await import('./data.js');
+    const buildingById = new Map(mockData.buildings.map(b => [b.id, b.name]));
+    const expected = EXPECTED_5MAY_OPENING;
+
+    // 1. 算系統內 pre-cutoff invoices per 館 in/out aggregate
+    const actualByBuilding = {};
+    Object.keys(expected.perBuilding).forEach(name => {
+        actualByBuilding[name] = { in: 0, out: 0, inByType: {}, outByType: {} };
+    });
+    actualByBuilding.__無館別 = { in: 0, out: 0, inByType: {}, outByType: {} };
+
+    let preCount = 0;
+    mockData.invoices.forEach(inv => {
+        if (!isPreCutoff(inv)) return;
+        preCount++;
+        const bName = buildingById.get(inv.buildingId) || '__無館別';
+        const bucket = actualByBuilding[bName] || actualByBuilding.__無館別;
+        const amt = Number(inv.amount) || 0;
+        const disc = Number(inv.discount) || 0;
+        const actualPaid = inv.paidAmount != null ? (Number(inv.paidAmount) || 0) : amt;
+        const v = actualPaid;  // 用實收/實付 (paidAmount) 對賬
+        if (inv.direction === 'in') {
+            bucket.in += v;
+            const t = inv.type || '未分類';
+            bucket.inByType[t] = (bucket.inByType[t] || 0) + v;
+        } else if (inv.direction === 'out') {
+            bucket.out += v;
+            const t = inv.type || '未分類';
+            bucket.outByType[t] = (bucket.outByType[t] || 0) + v;
+        }
+    });
+
+    // 2. 比對 per 館 in/out aggregate
+    const aggregateRows = [];
+    let aggMismatchCount = 0;
+    Object.entries(expected.perBuilding).forEach(([name, exp]) => {
+        const act = actualByBuilding[name] || { in: 0, out: 0 };
+        const inDiff = act.in - exp.in;
+        const outDiff = act.out - exp.out;
+        if (inDiff !== 0 || outDiff !== 0) aggMismatchCount++;
+        aggregateRows.push({
+            館: name,
+            'IN_期望': exp.in,
+            'IN_系統': act.in,
+            'IN_差': inDiff,
+            'OUT_期望': exp.out,
+            'OUT_系統': act.out,
+            'OUT_差': outDiff,
+            狀態: (inDiff === 0 && outDiff === 0) ? '✓' : '✗'
+        });
+    });
+    // __無館別 (沒掛 buildingId 的 pre-cutoff invoices) — 應該為 0
+    const noBuilding = actualByBuilding.__無館別;
+    if (noBuilding && (noBuilding.in > 0 || noBuilding.out > 0)) {
+        aggregateRows.push({
+            館: '⚠ 無館別 (這些 invoice 沒 buildingId)',
+            'IN_期望': 0, 'IN_系統': noBuilding.in, 'IN_差': noBuilding.in,
+            'OUT_期望': 0, 'OUT_系統': noBuilding.out, 'OUT_差': noBuilding.out,
+            狀態: '✗'
+        });
+    }
+
+    // 3. 比對 per 館 out by type
+    const typeRows = [];
+    let typeMismatchCount = 0;
+    Object.entries(expected.perBuildingOutByType).forEach(([name, types]) => {
+        const actTypes = actualByBuilding[name]?.outByType || {};
+        const allTypes = new Set([...Object.keys(types), ...Object.keys(actTypes)]);
+        allTypes.forEach(t => {
+            const expVal = types[t] || 0;
+            const actVal = actTypes[t] || 0;
+            const diff = actVal - expVal;
+            if (diff !== 0) typeMismatchCount++;
+            typeRows.push({
+                館: name, 項目: t,
+                '期望': expVal, '系統': actVal, '差': diff,
+                狀態: diff === 0 ? '✓' : '✗'
+            });
+        });
+    });
+
+    console.log(`%c[verifyOpeningBalance] cutoff = ${FINANCE_CUTOFF_DATE} | pre-cutoff invoices: ${preCount}`, 'color: #08a; font-weight: bold;');
+    console.log('=== 1. 每館 IN / OUT aggregate ===');
+    console.table(aggregateRows);
+    console.log(`%c${aggMismatchCount === 0 ? '✓ 全對' : `✗ ${aggMismatchCount} 個館有差額`}`, `color: ${aggMismatchCount === 0 ? '#0a7' : '#c00'}; font-weight: bold;`);
+
+    console.log('=== 2. 每館 OUT per type ===');
+    console.table(typeRows);
+    console.log(`%c${typeMismatchCount === 0 ? '✓ 全對' : `✗ ${typeMismatchCount} 筆項目有差額`}`, `color: ${typeMismatchCount === 0 ? '#0a7' : '#c00'}; font-weight: bold;`);
+
+    return { aggregate: aggregateRows, byType: typeRows, preCount, aggMismatchCount, typeMismatchCount };
+};
+
 // 合約 endDate 校正 — 舊版用 +30/+90 days 算的合約 endDate 改成 leaseEndISO (start + N 月 − 1 天)
 window.fixContractEndDates = async (apply = false) => {
     const { store } = await import('./data.js');

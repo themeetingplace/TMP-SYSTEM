@@ -1,4 +1,4 @@
-﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings, bedOccupied } from '../data.js';
+﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings, bedOccupied, isPreCutoff } from '../data.js';
 import { emptyState } from '../utils/emptyState.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { getChartColors } from '../utils/chartTheme.js';
@@ -150,6 +150,7 @@ export function renderDashboard() {
         pendingContracts: contracts.filter(c => c.status === '待簽署' && c.renewalState === 'active').length,
         pendingMaintenances: maintenances.filter(m => m.status !== '已完成').length,
         monthlyIncome: invoices
+            .filter(i => !isPreCutoff(i))  // 起算自 FINANCE_CUTOFF_DATE 之前的不算
             .filter(i => i.direction === 'in' && (i.paidDate || i.dueDate || '').startsWith(thisMonthStr))
             .reduce((s, i) => s + actualAmt(i), 0)
     };

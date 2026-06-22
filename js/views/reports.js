@@ -9,7 +9,7 @@ import {
     getSortedBuildings,
     activeContractFor,
     bedOccupied,
-    isSettled,
+    isSettled, isPreCutoff, FINANCE_CUTOFF_DATE,
     invoiceActualAmount as actualAmount
 } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
@@ -43,7 +43,8 @@ function _modeBuildings() {
 const pct = v => `${(v * 100).toFixed(1)}%`;
 
 function settledInRange(range = reportState.viewRange) {
-    return _md().invoices.filter(i => isSettled(i) && invoiceInRange(i, range));
+    // 起算自 FINANCE_CUTOFF_DATE, pre-cutoff invoices 不算進報表統計 (保留在 DB 但隱藏)
+    return _md().invoices.filter(i => !isPreCutoff(i) && isSettled(i) && invoiceInRange(i, range));
 }
 
 function rangeDayCount(range = reportState.viewRange) {
@@ -1139,7 +1140,7 @@ function computeGroupCumulatives() {
         const cumKey = GROUP_TO_CUM_KEY[b.group];
         if (cumKey && groupBuildings[cumKey]) groupBuildings[cumKey].push(b.id);
     });
-    const allInvoices = mockData.invoices.filter(isSettled);
+    const allInvoices = mockData.invoices.filter(i => !isPreCutoff(i) && isSettled(i));
     const result = {};
     Object.entries(GROUP_CUM_BASELINES.groups).forEach(([groupKey, baseline]) => {
         const buildingIds = new Set(groupBuildings[groupKey] || []);
@@ -1337,7 +1338,7 @@ function computeYearlyData(year) {
         .filter(b => (md.mode === 'managed' ? b.mode === 'managed' : b.mode !== 'managed'));
 
     const invs = md.invoices.filter(i =>
-        isSettled(i) && (i.paidDate || i.dueDate || '').startsWith(yearStr)
+        !isPreCutoff(i) && isSettled(i) && (i.paidDate || i.dueDate || '').startsWith(yearStr)
     );
 
     function monthly(filterFn) {
@@ -1714,6 +1715,9 @@ export function renderReports() {
     const showRangePicker = reportState.activeTab !== 'yearly';
     return `
         ${renderTabBar()}
+        <div class="cutoff-banner" title="${FINANCE_CUTOFF_DATE} 之前的舊資料保留在 DB 但不算進統計">
+            <i class="ph ph-pin"></i> 起算自 <strong>${FINANCE_CUTOFF_DATE}</strong> · 之前的歷史不算進報表
+        </div>
         ${showRangePicker ? `<div style="margin-bottom: 1rem;">${renderRangePicker()}</div>` : ''}
         ${tabContent}
     `;

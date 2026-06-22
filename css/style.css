@@ -7014,6 +7014,23 @@ select.form-input {
     margin-top: 0.5rem;
 }
 
+/* === cutoff-banner: 財務起算日提示, 帳務 / 報表頁頂部 === */
+.cutoff-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.85rem;
+    margin-bottom: 0.9rem;
+    background: var(--color-info-light);
+    color: var(--color-info);
+    border-left: 3px solid var(--color-info);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    cursor: help;
+}
+.cutoff-banner i { font-size: 1rem; }
+.cutoff-banner strong { font-weight: 700; font-family: monospace; }
+
 /* === row-action-group: 列表 row 操作鈕容器 (取代各 view 手寫 inline-flex) === */
 /* 桌機: nowrap 一行排完, 寬度交給 colgroup 控制 */
 /* 手機: 允許 wrap (row-mobile-card 內空間夠) */

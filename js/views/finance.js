@@ -1,7 +1,7 @@
 ﻿// 總收支表 — 只顯示「已結帳目」的條目清單
 // 各館分析 / 交叉表 → 移到「收支分析」分頁
 // 待結帳款 → 「待結帳款」分頁
-import { mockData, store, invoiceMonth, shiftMonth, currentMonth, formatMonthLabel, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount, formatDiscountReason, leaseEndISO } from '../data.js';
+import { mockData, store, invoiceMonth, shiftMonth, currentMonth, formatMonthLabel, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount, formatDiscountReason, leaseEndISO, isPreCutoff, FINANCE_CUTOFF_DATE } from '../data.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
@@ -84,6 +84,7 @@ export function renderFinance() {
         }
     };
     const monthInvoices = filterInvoicesByMode(mockData.invoices)
+        .filter(inv => !isPreCutoff(inv))  // 起算自 FINANCE_CUTOFF_DATE, pre-cutoff 不算
         .filter(inv => isSettled(inv) && invoiceMonth(inv) === financeState.viewMonth)
         .sort((a, b) => {
             const va = getSortVal(a), vb = getSortVal(b);
@@ -249,6 +250,9 @@ export function renderFinance() {
 
     return `
         ${renderFinanceSubTabs('finance')}
+        <div class="cutoff-banner" title="${FINANCE_CUTOFF_DATE} 之前的舊資料保留在 DB 但不算進統計 (例外: 房租查帳的舊欠款照樣追)">
+            <i class="ph ph-pin"></i> 起算自 <strong>${FINANCE_CUTOFF_DATE}</strong> · 之前的歷史不算進統計
+        </div>
         <div class="month-switcher">
             <button class="btn btn-outline btn-sm" data-month-action="prev">
                 <i class="ph ph-caret-left"></i> 上個月

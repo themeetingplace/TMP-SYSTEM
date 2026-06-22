@@ -67,6 +67,53 @@ const STORAGE_KEY = 'bananas-pms-data-v1';
 const LEGACY_STORAGE_KEY = 'bananas-bms-data-v1';
 let _persistDisabled = false;
 
+// ── 財務起算日 cutoff ──
+// 2026-06-22: 系統正式上線, 用戶把過去歷史先 key 進去當資料底
+// 從 2026-06-01 起算所有 KPI / 報表 / 帳務統計
+// pre-cutoff invoices 保留在 DB 但不算進統計 (例外: 房租查帳未結款照樣顯示, 不漏舊欠款)
+export const FINANCE_CUTOFF_DATE = '2026-06-01';
+
+// 判斷一筆 invoice 是否在 cutoff 之前 (= 不算進統計)
+// 用 paidDate (已結) 優先, 沒有就用 dueDate (未結)
+// 已結 + paidDate < cutoff → 排除
+// 未結 + dueDate  < cutoff → 通常房租查帳會顯示, 別處排除
+export function isPreCutoff(inv) {
+    if (!inv) return false;
+    const d = inv.paidDate || inv.dueDate || '';
+    return d && d < FINANCE_CUTOFF_DATE;
+}
+
+// 5 月期初預期值 (用戶 5/31 結算)
+// 給 verifyOpeningBalance() console 腳本對 DB 用
+// 松山支出 250,536 詳細 + 8,200 未分類 = 258,736 (用戶 Excel 算式差異, 整數對齊用)
+export const EXPECTED_5MAY_OPENING = {
+    cutoff: FINANCE_CUTOFF_DATE,
+    notes: '5/31 結算數字 (用戶整理), 用來對 DB 內 pre-cutoff invoices 加總',
+    perBuilding: {
+        '松山館':   { in: 178395, out: 258736 },
+        '中山館':   { in: 171000, out:  64682 },
+        '溫州館':   { in:      0, out:      0 },
+        '古亭2館':  { in:   8500, out:  66040 },
+        '古亭1館':  { in: 101250, out:  50639 },
+        '師大館':   { in:  40500, out:  49469 },
+        '信義館':   { in:  42500, out:  69207 }
+    },
+    // 支出 per-type (用戶詳細分項), 加總 == perBuilding.out
+    perBuildingOutByType: {
+        '松山館':  { '租金': 113000, '管理費': 15051, '591': 1289, '水費': 16437, '電費': 23123, '網路費': 1199, '瓦斯費': 4690, '薪水': 36000, '其他': 39747, '未分類補登': 8200 },
+        '中山館':  { '租金': 40015, '管理費': 8000, '591': 789, '電費': 8483, '網路費': 2859, '其他': 4536 },
+        '古亭2館': { '租金': 45675, '管理費': 5500, '水費': 3109, '其他': 11756 },
+        '古亭1館': { '租金': 35000, '591': 789, '其他': 14850 },
+        '師大館':  { '租金': 32015, '591': 789, '網路費': 6028, '其他': 10637 },
+        '信義館':  { '租金': 23015, '水費': 1314, '網路費': 6028, '其他': 38850 }
+    },
+    totals: {
+        in: 542145,
+        out: 558773,
+        net: -16628
+    }
+};
+
 // P1-15: contractTemplates (PDF base64) 不寫 localStorage，避免一個樣板就撐爆 5MB
 // 雲端 Supabase 已是 source of truth (contract_templates table)
 function persist() {
