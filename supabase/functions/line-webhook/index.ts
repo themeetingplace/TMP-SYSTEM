@@ -163,12 +163,25 @@ async function logCannedSent(userId: string, content: string) {
 
 // === 事件處理 ===
 
-// 快速選單 — 接在任何 reply 後讓用戶按鈕選擇
+// 快速選單 — 接在 any reply 後讓用戶按鈕選擇
 function welcomeQuickReply() {
     return {
         items: [
             { type: 'action', action: { type: 'message', label: '🏠 入住詢問', text: '入住詢問' } },
+            { type: 'action', action: { type: 'message', label: '🏠 預約看房', text: '預約看房' } },
             { type: 'action', action: { type: 'uri', label: '🔗 住客登記', uri: 'https://liff.line.me/2010185822-G7D3N3Gw' } },
+            { type: 'action', action: { type: 'message', label: '💬 找小編', text: '找小編' } }
+        ]
+    };
+}
+
+// 住客專用快速選單 (維修申報、帳單查詢、繳款告知、找小編)
+function tenantServiceQuickReply() {
+    return {
+        items: [
+            { type: 'action', action: { type: 'message', label: '🔧 維修申報', text: '維修申報' } },
+            { type: 'action', action: { type: 'message', label: '🧾 帳單查詢', text: '帳單查詢' } },
+            { type: 'action', action: { type: 'message', label: '💰 繳款告知', text: '繳款告知' } },
             { type: 'action', action: { type: 'message', label: '💬 找小編', text: '找小編' } }
         ]
     };
@@ -356,7 +369,7 @@ async function handleMessage(event: any) {
 
         if (!contracts || contracts.length === 0) {
             await lineReply(event.replyToken, [
-                { type: 'text', text: `⚠️ ${bound.name} 您好，目前找不到您的進行中合約，無法附上簽署檔。\n請聯絡小編確認。`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `⚠️ ${bound.name} 您好，目前找不到您的進行中合約，無法附上簽署檔。\n請聯絡小編確認。`, quickReply: tenantServiceQuickReply() }
             ]);
             return;
         }
@@ -383,12 +396,12 @@ async function handleMessage(event: any) {
             }).eq('id', targetContract.id);
 
             await lineReply(event.replyToken, [
-                { type: 'text', text: `✅ 已收到您的合約簽署檔\n\n合約：${targetContract.id}\n租期：${targetContract.start_date} ~ ${targetContract.end_date}\n\n感謝您 ✨`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `✅ 已收到您的合約簽署檔\n\n合約：${targetContract.id}\n租期：${targetContract.start_date} ~ ${targetContract.end_date}\n\n感謝您 ✨`, quickReply: tenantServiceQuickReply() }
             ]);
         } catch (e: any) {
             console.error('[file upload] failed:', e);
             await lineReply(event.replyToken, [
-                { type: 'text', text: `❌ 檔案處理失敗：${e.message}\n請聯絡小編協助。`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `❌ 檔案處理失敗：${e.message}\n請聯絡小編協助。`, quickReply: tenantServiceQuickReply() }
             ]);
         }
         return;
@@ -425,9 +438,8 @@ async function handleMessage(event: any) {
 
     if (/館別|關於/.test(text)) return;
 
-    // 入住詢問 / 預約看房 / 詢問空房 — 共用同一份填空模板
-    // 注意：quick reply 按鈕「🏠 入住詢問」送的是「入住詢問」，必須在 regex 內
-    if (/入住|詢問|預約|看房|參觀|空房|租房|價錢|價格|租金|床位/.test(text)) {
+    // 「預約看房」— 只有精確打「預約看房」才跳出完整填空模板
+    if (text === '預約看房') {
         await lineReply(event.replyToken, [
             {
                 type: 'text',
@@ -439,7 +451,7 @@ async function handleMessage(event: any) {
 為了幫你找到合適的空間，請複製下方填好回傳給我～
 
 ━━━━━━━━━
-📝 入住詢問
+📝 預約看房
 
 姓名：
 性別：(男或女)
@@ -464,6 +476,43 @@ Email：
         return;
     }
 
+    // 「入住詢問」(Quick Reply 按鈕) — 簡短引導，不跳填空模板
+    if (text === '入住詢問') {
+        await lineReply(event.replyToken, [
+            {
+                type: 'text',
+                text: `嗨！歡迎來到聚空間 ☺️\n有任何問題請直接留下訊息文字，會有小編為您解答🙂↕️`,
+                quickReply: welcomeQuickReply()
+            }
+        ]);
+        return;
+    }
+
+    // 「住客服務」(Rich Menu 中間按鈕)
+    if (text === '住客服務' || text === '住客服務快速訊息') {
+        if (bound) {
+            await lineReply(event.replyToken, [
+                {
+                    type: 'text',
+                    text: `您好 ${bound.name}！請選擇您需要的住客服務項目：🙂`,
+                    quickReply: tenantServiceQuickReply()
+                }
+            ]);
+        } else {
+            await lineReply(event.replyToken, [
+                {
+                    type: 'text',
+                    text: `您好！住客服務（報修、帳單、繳款）僅提供給已簽約綁定的房客使用。如果您是房客，請點下方「住客登記」完成綁定；若是新朋友想預約看房或有其他問題，歡迎直接留言，小編會盡快回覆您！`,
+                    quickReply: welcomeQuickReply()
+                }
+            ]);
+        }
+        return;
+    }
+
+    // 其他入住相關關鍵字 (租金/空房/價格/床位/參觀等) — 保持沉默，交給小編人工回覆
+    // 不再自動跳填空模板，避免嚇跑只是隨口問的用戶
+
     // 找小編 — 已綁定 / 未綁定都要回覆 (放在 bound 區塊前避免被「沉默」吃掉)
     // 關鍵字含舊版「管理員」，老用戶記憶猶新；新標準稱呼 = 小編
     if (/小編|管理員|找人|聯絡|客服/.test(text)) {
@@ -476,7 +525,7 @@ Email：
             {
                 type: 'text',
                 text: '💬 小編會盡快回覆您，您可以直接在此留言詳細需求。',
-                quickReply: welcomeQuickReply()
+                quickReply: bound ? tenantServiceQuickReply() : welcomeQuickReply()
             }
         ]);
         return;
@@ -506,7 +555,7 @@ Email：
                     {
                         type: 'text',
                         text: `✅ ${bound.name} 您的繳款已記錄\n\n• 帳單：${inv.type} $${(inv.amount || 0).toLocaleString()}\n• 到期日：${inv.due_date || '未定'}\n• 末 5 碼：${text}\n\n小編核對銀行對帳單後會通知您 ✨`,
-                        quickReply: welcomeQuickReply()
+                        quickReply: tenantServiceQuickReply()
                     }
                 ]);
                 return;
@@ -518,7 +567,7 @@ Email：
                 {
                     type: 'text',
                     text: `✅ 已收到您的末 5 碼 ${text}\n\n${bound.name} 您好，目前無待繳帳單，將視為「續約預繳款」處理。\n小編會盡快為您建立續約合約並聯絡您 ✨`,
-                    quickReply: welcomeQuickReply()
+                    quickReply: tenantServiceQuickReply()
                 }
             ]);
             return;
@@ -530,7 +579,7 @@ Email：
                 {
                     type: 'text',
                     text: `${bound.name} 您好，繳款後請直接傳「帳戶末 5 碼」5 位數字 (例如：12345)，系統會自動記錄到您的帳單上 ✨\n\n不用再填任何表單～`,
-                    quickReply: welcomeQuickReply()
+                    quickReply: tenantServiceQuickReply()
                 }
             ]);
             return;
@@ -558,7 +607,7 @@ Email：
             // 情境 F：完全無帳單
             if (invoices.length === 0) {
                 await lineReply(event.replyToken, [
-                    { type: 'text', text: `${bound.name} 您好~ 目前沒有任何帳單紀錄\n\n如有疑問請傳「找小編」`, quickReply: welcomeQuickReply() }
+                    { type: 'text', text: `${bound.name} 您好~ 目前沒有任何帳單紀錄\n\n如有疑問請傳「找小編」`, quickReply: tenantServiceQuickReply() }
                 ]);
                 return;
             }
@@ -596,7 +645,7 @@ Email：
                 const i = invoices[0];
                 const due = (i.amount || 0) - (i.discount || 0);
                 await lineReply(event.replyToken, [
-                    { type: 'text', text: `${bound.name} 您好~\n\n合約期間：${periodLabel(i)}\n應繳金額：$${due.toLocaleString()}\n繳費狀態：${statusText(i)}\n\n${tail}`, quickReply: welcomeQuickReply() }
+                    { type: 'text', text: `${bound.name} 您好~\n\n合約期間：${periodLabel(i)}\n應繳金額：$${due.toLocaleString()}\n繳費狀態：${statusText(i)}\n\n${tail}`, quickReply: tenantServiceQuickReply() }
                 ]);
                 return;
             }
@@ -614,7 +663,7 @@ Email：
                 ? `\n\n未繳合計 $${unpaidTotal.toLocaleString()}，${tail}`
                 : `\n\n${tail}`;
             await lineReply(event.replyToken, [
-                { type: 'text', text: `${bound.name} 您好~ 您目前有 ${invoices.length} 筆帳單\n\n${lines}${totalLine}`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `${bound.name} 您好~ 您目前有 ${invoices.length} 筆帳單\n\n${lines}${totalLine}`, quickReply: tenantServiceQuickReply() }
             ]);
             return;
         }
@@ -622,7 +671,7 @@ Email：
         // 維修申報 (引導格式)
         if (text === '維修申報') {
             await lineReply(event.replyToken, [
-                { type: 'text', text: `🔧 維修申報\n\n請以「維修：問題描述」格式傳訊息\n\n例如：\n維修：冷氣不冷會滴水\n維修：浴室水管堵塞\n\n小編收到後會盡快安排處理。`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `🔧 維修申報\n\n請以「維修：問題描述」格式傳訊息\n\n例如：\n維修：冷氣不冷會滴水\n維修：浴室水管堵塞\n\n小編收到後會盡快安排處理。`, quickReply: tenantServiceQuickReply() }
             ]);
             return;
         }
@@ -653,7 +702,7 @@ Email：
                 cost: null
             });
             await lineReply(event.replyToken, [
-                { type: 'text', text: `✅ 已收到維修申報 (${newId})\n\n位置：${bound.current_property || '未指定'}\n問題：${issue}\n\n小編會盡快聯絡您。`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `✅ 已收到維修申報 (${newId})\n\n位置：${bound.current_property || '未指定'}\n問題：${issue}\n\n小編會盡快聯絡您。`, quickReply: tenantServiceQuickReply() }
             ]);
             return;
         }
@@ -701,7 +750,7 @@ Email：
                 line_bound_at: new Date().toISOString()
             }).eq('id', tenant.id);
             await lineReply(event.replyToken, [
-                { type: 'text', text: `✅ 綁定成功！您好 ${tenant.name}，之後合約跟繳費通知會傳到這裡。`, quickReply: welcomeQuickReply() }
+                { type: 'text', text: `✅ 綁定成功！您好 ${tenant.name}，之後合約跟繳費通知會傳到這裡。`, quickReply: tenantServiceQuickReply() }
             ]);
         } else {
             await lineReply(event.replyToken, [
