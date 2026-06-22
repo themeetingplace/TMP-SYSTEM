@@ -601,6 +601,14 @@ function showContractForm(contract) {
             const totalDueInput = form.querySelector('[name="totalDue"]');
             const discountInput = form.querySelector('[name="discount"]');
             const discountReasonInput = form.querySelector('[name="discountReason"]');
+            // 應收總額 readonly + 灰底橘字 (跟新增入住 / 收支編輯一致)
+            if (totalDueInput) {
+                totalDueInput.readOnly = true;
+                totalDueInput.style.backgroundColor = 'var(--bg-tertiary)';
+                totalDueInput.style.cursor = 'not-allowed';
+                totalDueInput.style.fontWeight = '700';
+                totalDueInput.style.color = 'var(--color-primary)';
+            }
             // bundle child / parent 偵測
             const isBundleChild = !!contract.bundleParentContractId;
             const bundleChildrenLocal = mockData.contracts.filter(c => c.bundleParentContractId === contract.id);
