@@ -6062,13 +6062,16 @@ tr.is-await-verify-row:hover {
 /* Modal Footer */
 .modal-footer {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.5rem;
     justify-content: flex-end;
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--border-color);
     background-color: var(--color-background);
-    flex-shrink: 0;   /* footer 不被擠壓 */
-    /* border-radius 不需要：modal-content 用 overflow:hidden 已自動帶圓角 */
+    flex-shrink: 0;
+    flex-wrap: wrap;  /* 多按鈕 (e.g. 4 顆) 自動換行不溢出 */
+}
+.modal-footer .btn {
+    white-space: nowrap;
 }
 
 /* Form Grid (used in modals) */

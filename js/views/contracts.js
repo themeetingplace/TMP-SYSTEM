@@ -1329,7 +1329,7 @@ export function confirmRenew(id) {
 
     openModal({
         title: '🔄 確認續租',
-        maxWidth: 500,
+        maxWidth: 640,
         bodyHtml: `
             <div style="margin: 0; color: var(--text-main); line-height: 1.6;">
                 將為 <strong>${esc(c.tenant)}</strong> 自動建立下一期合約：
