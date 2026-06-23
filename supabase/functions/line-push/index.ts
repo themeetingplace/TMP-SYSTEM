@@ -80,7 +80,7 @@ serve(async (req) => {
     }
 
     try {
-        const { tenantId, message, fileUrl, fileName } = await req.json();
+        const { tenantId, message, fileUrl, fileName, messageType, invoiceId } = await req.json();
         if (!tenantId) throw new Error('tenantId required');
 
         // 找 tenant
@@ -105,14 +105,15 @@ serve(async (req) => {
 
         const result = await linePush(tenant.line_user_id, messages);
 
-        // log
+        // log — messageType 可指定 'reminder' / 'contract' / 'notice' 等專用標籤, 預設依 fileUrl 推斷
+        const resolvedType = messageType || (fileUrl ? 'file' : 'text');
         await supabase.from('line_messages').insert({
             tenant_id: tenant.id,
             line_user_id: tenant.line_user_id,
             direction: 'out',
-            message_type: fileUrl ? 'file' : 'text',
+            message_type: resolvedType,
             content: message || fileName,
-            raw: { messages, result }
+            raw: { messages, result, invoiceId: invoiceId || null }
         });
 
         return new Response(JSON.stringify({ ok: true, tenant: tenant.name }), {

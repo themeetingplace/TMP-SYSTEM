@@ -1020,7 +1020,7 @@ async function downloadContractPdf(id) {
 }
 
 // 產生 PDF → 上傳 Supabase Storage → 推到租客 LINE
-async function sendContractToLine(id) {
+export async function sendContractToLine(id) {
     const c = mockData.contracts.find(x => x.id === id);
     if (!c) return;
     // 同名租客可能有多筆 (歷史殘留 / LINE 綁定建的新 record) → 優先找已綁 LINE 的, fallback first match
@@ -1069,6 +1069,9 @@ async function sendContractToLine(id) {
             fileUrl,
             fileName: filename
         });
+
+        // 記錄合約已寄出時間 (給「進度條」chip + 防 auto-send 重複寄)
+        store.updateContract(c.id, { contractSentAt: new Date().toISOString() });
 
         showToast(`✅ 已傳送到 ${tenant.name} 的 LINE`, 'success', 4000);
     } catch (e) {

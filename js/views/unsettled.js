@@ -8,6 +8,8 @@ import { escapeHtml } from '../utils/escape.js';
 import { filterInvoicesByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
+import { pushToTenant } from '../utils/line.js';
+import { sendContractToLine } from './contracts.js';
 import { moneyAmount, moneyCell, adjustmentBadge } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { emptyState } from '../utils/emptyState.js';
@@ -343,6 +345,22 @@ function showVerifyModal(id) {
                 status: deriveInvoiceStatus(patched)
             });
             showToast(`✅ 核對通過：${inv.id} 已結帳`, 'success');
+
+            // Q4 入帳即發 — 核對通過 + 合約還沒寄 → 自動寄合約 PDF 給租客
+            // 防呆: 只在 inv.contractId 有對應合約 + contract.contractSentAt 未設 才寄
+            if (inv.contractId) {
+                const c = mockData.contracts.find(x => x.id === inv.contractId);
+                if (c && !c.contractSentAt && c.status === '已簽署' && c.renewalState === 'active') {
+                    setTimeout(() => {
+                        showToast(`核對通過, 自動寄合約 ${c.id} 給 ${c.tenant}…`, 'info', 3000);
+                        sendContractToLine(c.id).catch(e => {
+                            console.warn('[auto-send-contract]', e);
+                            showToast(`自動寄合約失敗: ${e.message} (可手動到合約頁重寄)`, 'warning', 6000);
+                        });
+                    }, 500);
+                }
+            }
+
             refreshView();
         }
     });
@@ -660,11 +678,79 @@ function deleteUnsettled(id) {
     });
 }
 
-function remindUnsettled(id) {
+// 催繳: 發 LINE 推送給租客 + 7 天 cooldown 防 spam
+async function remindUnsettled(id) {
     const inv = mockData.invoices.find(x => x.id === id);
     if (!inv) return;
-    const target = inv.direction === 'in' ? inv.tenant : (inv.contractId || '對方');
-    showToast(`已記錄通知：${target}（之後串 LINE 即可實際發送）`, 'info');
+
+    // 支出 (向房東付款) 沒 LINE 對象, 維持原行為只記錄
+    if (inv.direction !== 'in') {
+        showToast(`已記錄通知：合約 ${inv.contractId || '對方'}（支出類目前不發 LINE）`, 'info');
+        return;
+    }
+
+    const tenantName = (inv.tenant || '').trim();
+    if (!tenantName) {
+        showToast('此筆 invoice 沒有租客資料, 無法催繳', 'danger');
+        return;
+    }
+    // 找對應租客 — 優先綁定 LINE 的, fallback first match
+    const tenant = mockData.tenants.find(t => (t.name || '').trim() === tenantName && t.lineUserId)
+                || mockData.tenants.find(t => (t.name || '').trim() === tenantName);
+    if (!tenant) {
+        showToast(`找不到租客「${tenantName}」`, 'danger');
+        return;
+    }
+    if (!tenant.lineUserId) {
+        showToast(`${tenant.name} 還沒綁 LINE, 無法自動催繳。請先請他加 LINE 官方帳號`, 'warning', 6000);
+        return;
+    }
+
+    // 7 天 cooldown — 同一筆 invoice 7 天內已催過 → 跳 confirm 才能再催
+    const COOLDOWN_DAYS = 7;
+    const lastReminderAt = inv.lastReminderAt ? new Date(inv.lastReminderAt) : null;
+    const now = new Date();
+    if (lastReminderAt) {
+        const daysSince = Math.floor((now - lastReminderAt) / (86400 * 1000));
+        if (daysSince < COOLDOWN_DAYS) {
+            const ok = window.confirm(
+                `這筆帳款 ${daysSince} 天前剛催過 (${inv.lastReminderAt.slice(0,10)}), 真的要再催一次嗎?\n\n建議至少間隔 ${COOLDOWN_DAYS} 天避免打擾。`
+            );
+            if (!ok) return;
+        }
+    }
+
+    // 組訊息 (Q2 模板, 你可以改成自己的口吻)
+    const due = (Number(inv.amount) || 0) - (Number(inv.discount) || 0);
+    const paid = Number(inv.paidAmount) || 0;
+    const remaining = Math.max(0, due - paid);
+    const dueDateLabel = inv.dueDate ? `應結日 ${inv.dueDate}` : '';
+    const typeLabel = inv.type || '帳款';
+
+    const message =
+`${tenant.name} 您好 ☺️
+
+提醒您, 您的「${typeLabel}」還有 NT$${remaining.toLocaleString()} 未繳清${dueDateLabel ? `\n${dueDateLabel}` : ''}
+
+繳款完成後, 請回傳「銀行帳戶末 5 碼」(5 位數字, 例如 12345), 系統會自動記錄到您的帳單上 ✨
+
+如有疑問請傳「找小編」, 會有專人回覆 🙂`;
+
+    showToast(`催繳 ${tenant.name}…`, 'info');
+    try {
+        await pushToTenant(tenant.id, {
+            message,
+            messageType: 'reminder',
+            invoiceId: inv.id
+        });
+        // 記錄 lastReminderAt 到 invoice 上
+        store.updateInvoice(inv.id, { lastReminderAt: now.toISOString() });
+        showToast(`✅ 已催繳 ${tenant.name} ($${remaining.toLocaleString()})`, 'success', 4000);
+        refreshView();
+    } catch (e) {
+        console.error('[remind]', e);
+        showToast(`催繳失敗: ${e.message}`, 'danger', 5000);
+    }
 }
 
 export function initUnsettledActions(scope) {
