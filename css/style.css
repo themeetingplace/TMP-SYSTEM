@@ -7058,6 +7058,108 @@ select.form-input {
     margin-left: 2px;
 }
 
+/* === contract-timeline: 合約流程全版時間軸 (detail modal 頂部) === */
+.contract-timeline-wrap {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+}
+.ctl-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.85rem;
+    font-size: var(--text-sm);
+}
+.ctl-title {
+    font-weight: 600;
+    color: var(--text-main);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.ctl-progress {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+.ctl-track {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+}
+.ctl-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 60px;
+    flex: 1;
+}
+.ctl-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    border: 2px solid var(--border-color);
+    background: var(--color-surface);
+    color: var(--text-muted);
+    transition: all var(--transition-fast);
+}
+.ctl-step.is-done .ctl-circle {
+    background: var(--color-success);
+    border-color: var(--color-success);
+    color: white;
+}
+.ctl-step.is-current .ctl-circle {
+    background: var(--color-warning-light);
+    border-color: var(--color-warning);
+    color: var(--color-warning-text);
+    box-shadow: 0 0 0 4px rgba(184, 135, 31, 0.15);
+}
+.ctl-step.is-skipped .ctl-circle {
+    background: var(--bg-tertiary);
+    border-color: var(--border-strong);
+    color: var(--text-muted);
+}
+.ctl-step.is-future .ctl-circle {
+    background: var(--color-surface);
+    border-color: var(--border-color);
+    color: var(--text-muted);
+}
+.ctl-label {
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
+    text-align: center;
+    line-height: 1.2;
+}
+.ctl-step.is-done .ctl-label { color: var(--color-success); font-weight: 600; }
+.ctl-step.is-current .ctl-label { color: var(--color-warning-text); font-weight: 700; }
+.ctl-step.is-future .ctl-label { color: var(--text-muted); }
+.ctl-step.is-skipped .ctl-label { color: var(--text-muted); text-decoration: line-through; }
+.ctl-date {
+    font-size: 0.625rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+.ctl-line {
+    flex: 0 0 16px;
+    height: 2px;
+    background: var(--border-color);
+    align-self: center;
+    margin-top: 13px;
+}
+@media (max-width: 600px) {
+    .ctl-track { flex-wrap: wrap; }
+    .ctl-line { display: none; }
+    .ctl-step { min-width: 0; flex: 1 1 30%; }
+}
+
 /* === cutoff-banner: 財務起算日提示, 帳務 / 報表頁頂部 === */
 .cutoff-banner {
     display: flex;

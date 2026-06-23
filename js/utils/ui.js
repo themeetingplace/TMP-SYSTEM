@@ -593,14 +593,14 @@ export function openConfirm({ title = '確認操作', message, confirmLabel = '�
 }
 
 // 詳情檢視（唯讀）
-export function openDetailModal({ title, items = [], extraHtml = '', maxWidth = 560, footerHtml = '', onMount }) {
+export function openDetailModal({ title, items = [], topHtml = '', extraHtml = '', maxWidth = 560, footerHtml = '', onMount }) {
     const grid = items.map(it => `
         <div class="detail-item">
             <label>${it.label}</label>
             <span>${it.value ?? '<span style="color: var(--text-muted)">—</span>'}</span>
         </div>
     `).join('');
-    const bodyHtml = `<div class="property-detail-grid">${grid}</div>${extraHtml || ''}`;
+    const bodyHtml = `${topHtml || ''}<div class="property-detail-grid">${grid}</div>${extraHtml || ''}`;
     return openModal({ title, bodyHtml, maxWidth, footerHtml, onMount });
 }
 

@@ -127,6 +127,86 @@ function contractProgressChip(c, lifecycle) {
     return `<span class="contract-progress${completeClass}" title="${esc(tooltip)}">${dots}</span>`;
 }
 
+// 合約流程全版時間軸 — detail modal 頂部用
+// 每步驟一個圓圈 + 日期 + 標籤, 已完成 ✓ green / 進行中 (current step) ⏳ warn / 未來 grey
+function contractProgressTimeline(c, lifecycle) {
+    if (lifecycle === 'renewed' || lifecycle === 'terminated') return '';
+    if (c.contractType && c.contractType !== 'cohousing') return '';
+    if (c.paymentChannel === 'platform') return '';
+
+    const inv = mockData.invoices.find(i =>
+        i.contractId === c.id && i.direction === 'in' && i.type === '房租'
+    );
+    const due = inv ? ((Number(inv.amount) || 0) - (Number(inv.discount) || 0)) : 0;
+    const paid = inv ? (Number(inv.paidAmount) || 0) : 0;
+    const fullPaid = inv && paid >= due && due > 0;
+
+    const fmtDate = (iso) => iso ? iso.slice(0, 10) : '';
+    const steps = [
+        { key: 'signed', label: '簽署', icon: 'ph-pen-nib',
+          done: c.status === '已簽署', at: c.signDate || c.startDate },
+        { key: 'reminded', label: '催繳', icon: 'ph-bell',
+          done: !!(inv?.lastReminderAt) || fullPaid || !!inv?.bankLast5,
+          at: inv?.lastReminderAt || null,
+          skipped: fullPaid && !inv?.lastReminderAt && !inv?.bankLast5 },
+        { key: 'last5', label: '客回末5碼', icon: 'ph-keyhole',
+          done: !!inv?.bankLast5 || fullPaid,
+          at: null,
+          skipped: fullPaid && !inv?.bankLast5 },
+        { key: 'verified', label: '核對入帳', icon: 'ph-shield-check',
+          done: !!inv?.bankVerified || fullPaid,
+          at: inv?.paidDate || null },
+        { key: 'sent', label: '寄合約', icon: 'ph-paper-plane-tilt',
+          done: !!c.contractSentAt,
+          at: c.contractSentAt },
+        { key: 'returned', label: '收簽署檔', icon: 'ph-check-square',
+          done: !!c.signedFileUrl,
+          at: null }
+    ];
+
+    const doneCount = steps.filter(s => s.done).length;
+    const currentIdx = steps.findIndex(s => !s.done);
+    const isComplete = doneCount === 6;
+
+    const items = steps.map((s, i) => {
+        let stateCls = 'is-future';
+        let iconSymbol = '';
+        if (s.done) {
+            stateCls = s.skipped ? 'is-skipped' : 'is-done';
+            iconSymbol = s.skipped ? '–' : '✓';
+        } else if (i === currentIdx) {
+            stateCls = 'is-current';
+            iconSymbol = '⏳';
+        } else {
+            iconSymbol = '○';
+        }
+        const dateLabel = s.at ? `<div class="ctl-date">${fmtDate(s.at)}</div>` : '';
+        return `
+            <div class="ctl-step ${stateCls}">
+                <div class="ctl-circle">${iconSymbol}</div>
+                <div class="ctl-label">${s.label}</div>
+                ${dateLabel}
+            </div>
+        `;
+    }).join('<div class="ctl-line"></div>');
+
+    const headLabel = isComplete
+        ? '✅ 流程完成'
+        : currentIdx >= 0
+            ? `⏳ 目前到 ${steps[currentIdx].label} (${doneCount}/6)`
+            : '';
+
+    return `
+        <div class="contract-timeline-wrap">
+            <div class="ctl-head">
+                <span class="ctl-title"><i class="ph ph-list-checks"></i> 合約流程</span>
+                <span class="ctl-progress">${headLabel}</span>
+            </div>
+            <div class="ctl-track">${items}</div>
+        </div>
+    `;
+}
+
 // 續租意願 badge (LINE 自動詢問結果)
 function renewIntentBadge(contract) {
     const intent = contract.renewIntent;
@@ -875,6 +955,7 @@ export function showContractDetails(id) {
     const days = daysUntilExpiry(c, TODAY_DATE);
     openDetailModal({
         title: `合約 ${c.id}`,
+        topHtml: contractProgressTimeline(c, state),
         items: [
             { label: '生命週期', value: lifecycleBadge(state) + (days != null && state !== 'renewed' && state !== 'terminated' ? ` <span style="color: var(--text-muted); font-size: var(--text-sm);">${daysLabel(days)}</span>` : '') },
             { label: '物件', value: c.propertyName },
