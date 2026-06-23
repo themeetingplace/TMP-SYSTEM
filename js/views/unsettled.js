@@ -345,22 +345,8 @@ function showVerifyModal(id) {
                 status: deriveInvoiceStatus(patched)
             });
             showToast(`✅ 核對通過：${inv.id} 已結帳`, 'success');
-
-            // Q4 入帳即發 — 核對通過 + 合約還沒寄 → 自動寄合約 PDF 給租客
-            // 防呆: 只在 inv.contractId 有對應合約 + contract.contractSentAt 未設 才寄
-            if (inv.contractId) {
-                const c = mockData.contracts.find(x => x.id === inv.contractId);
-                if (c && !c.contractSentAt && c.status === '已簽署' && c.renewalState === 'active') {
-                    setTimeout(() => {
-                        showToast(`核對通過, 自動寄合約 ${c.id} 給 ${c.tenant}…`, 'info', 3000);
-                        sendContractToLine(c.id).catch(e => {
-                            console.warn('[auto-send-contract]', e);
-                            showToast(`自動寄合約失敗: ${e.message} (可手動到合約頁重寄)`, 'warning', 6000);
-                        });
-                    }, 500);
-                }
-            }
-
+            // Q4 入帳即發 — 跟 settleInvoice 共用 helper
+            maybeAutoSendContract({ ...inv, paidAmount: due, paidDate: values.paidDate, bankVerified: true });
             refreshView();
         }
     });
@@ -384,9 +370,31 @@ function settleInvoice(id) {
                 status: deriveInvoiceStatus(patched)
             });
             showToast(`已結帳：${inv.id}`, 'success');
+            // Q4 入帳即發 — 結帳通過後若對應合約還沒寄合約 PDF, 自動寄
+            maybeAutoSendContract(inv);
             refreshView();
         }
     });
+}
+
+// 共用: 入帳後自動寄合約 (核對結帳 + 一般結帳 + 批次結帳 都呼叫)
+function maybeAutoSendContract(inv) {
+    if (!inv?.contractId) return;
+    const c = mockData.contracts.find(x => x.id === inv.contractId);
+    if (!c) return;
+    if (c.contractSentAt) return;        // 已寄過, 不重發
+    if (c.status !== '已簽署') return;    // 還沒簽不寄
+    if (c.renewalState !== 'active') return;
+    if (c.contractType && c.contractType !== 'cohousing') return;
+    if (c.paymentChannel === 'platform') return;
+    // 預設租客有綁 LINE 才寄, 沒綁 sendContractToLine 自己會 toast warning
+    setTimeout(() => {
+        showToast(`入帳完成, 自動寄合約 ${c.id} 給 ${c.tenant}…`, 'info', 3000);
+        sendContractToLine(c.id).catch(e => {
+            console.warn('[auto-send-contract]', e);
+            showToast(`自動寄合約失敗: ${e.message} (可手動到合約頁重寄)`, 'warning', 6000);
+        });
+    }, 500);
 }
 
 // === 批次結帳 ===

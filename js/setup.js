@@ -111,6 +111,53 @@ import('./data.js').then(m => {
     window.mockData = m.mockData;
 });
 
+// 補寄「已核對入帳但合約還沒寄」的合約 (Q4 hook 上線前已 verify 的歷史合約救援)
+// 用法: backfillSendContracts(false) → 列出哪些要寄
+//      backfillSendContracts(true)  → 真的寄出去
+window.backfillSendContracts = async (apply = false) => {
+    const { mockData } = await import('./data.js');
+    const { sendContractToLine } = await import('./views/contracts.js');
+    // 條件: bankVerified=true (核對過) + 對應合約 status=已簽署/active/沒寄過/非平台/非代管/租客已綁 LINE
+    const candidates = [];
+    mockData.invoices.forEach(inv => {
+        if (!inv.bankVerified) return;
+        if (!inv.contractId) return;
+        const c = mockData.contracts.find(x => x.id === inv.contractId);
+        if (!c) return;
+        if (c.contractSentAt) return;
+        if (c.status !== '已簽署') return;
+        if (c.renewalState !== 'active') return;
+        if (c.contractType && c.contractType !== 'cohousing') return;
+        if (c.paymentChannel === 'platform') return;
+        const t = mockData.tenants.find(x => x.name === c.tenant && x.lineUserId)
+              || mockData.tenants.find(x => x.name === c.tenant);
+        const hasLine = !!t?.lineUserId;
+        candidates.push({
+            invoiceId: inv.id, contractId: c.id, tenant: c.tenant,
+            property: c.propertyName, hasLine,
+            verifyDate: inv.paidDate
+        });
+    });
+    console.log(`%c[backfillSendContracts] ${apply ? 'APPLIED' : 'DRY-RUN'} — ${candidates.length} 筆候選`, 'color:#08a;font-weight:bold');
+    console.table(candidates);
+    if (!apply) return candidates;
+    // 逐筆 sendContractToLine, 隔 1.5 秒一筆避免 LINE rate limit
+    const results = [];
+    for (const cand of candidates) {
+        if (!cand.hasLine) { results.push({ ...cand, result: 'SKIP_NO_LINE' }); continue; }
+        try {
+            await sendContractToLine(cand.contractId);
+            results.push({ ...cand, result: 'SENT' });
+            await new Promise(r => setTimeout(r, 1500));
+        } catch (e) {
+            results.push({ ...cand, result: `FAIL: ${e.message}` });
+        }
+    }
+    console.log('=== 寄送結果 ===');
+    console.table(results);
+    return results;
+};
+
 // 5月期初結算 種子 — 把用戶 Excel 內 5月各館各項數字寫成 invoice (paidDate=2026-05-31, periodTag='opening')
 // 重跑安全: 已存在的 opening 會先砍, 再用最新 EXPECTED_5MAY_OPENING 重建
 // dry-run: seedMay2026Opening() → 印出要建的清單, 不動 DB
