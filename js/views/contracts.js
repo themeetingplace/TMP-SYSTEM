@@ -1367,6 +1367,19 @@ export function confirmRenew(id) {
                 showToast(`已續租，新合約 ${result.newContract.id}`, 'success');
                 close();
                 refreshView();
+                // 自動寄新合約 PDF — 若該租客有綁 LINE
+                const newC = result.newContract;
+                const t = mockData.tenants.find(x => x.name === newC.tenant && x.lineUserId)
+                       || mockData.tenants.find(x => x.name === newC.tenant);
+                if (t?.lineUserId) {
+                    setTimeout(() => {
+                        showToast(`寄新合約 ${newC.id} 給 ${newC.tenant}…`, 'info', 3000);
+                        sendContractToLine(newC.id).catch(e => {
+                            console.warn('[auto-send-after-renew]', e);
+                            showToast(`自動寄合約失敗: ${e.message} (可到合約頁手動寄)`, 'warning', 6000);
+                        });
+                    }, 800);
+                }
             });
 
             overlay.querySelector('[data-action="edit-renew"]')?.addEventListener('click', () => {

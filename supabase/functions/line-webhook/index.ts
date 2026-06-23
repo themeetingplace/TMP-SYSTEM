@@ -255,6 +255,51 @@ async function handlePostback(event: any) {
     if (!action || !contractId) return;
 
     // 續租意願 mapping
+    // === 檔案分類 postback (用戶傳檔後選用途) ===
+    if (action === 'classify_file') {
+        const tempKey = params.get('key');
+        const fileType = params.get('type');  // 'signed' | 'other'
+        if (!tempKey) return;
+
+        const { data: bound } = await supabase
+            .from('tenants').select('id, name').eq('line_user_id', userId).maybeSingle();
+        if (!bound) {
+            await lineReply(event.replyToken, [{ type: 'text', text: '⚠ 您的 LINE 未綁定，請先到「住客登記」完成綁定' }]);
+            return;
+        }
+
+        if (fileType === 'signed') {
+            // 找該租客最新一份「待簽署」合約 → 把 temp 檔搬到 signed key
+            const { data: contracts } = await supabase
+                .from('contracts').select('id, start_date, end_date, status')
+                .eq('tenant', bound.name)
+                .eq('renewal_state', 'active')
+                .eq('status', '待簽署')
+                .order('start_date', { ascending: false });
+            const target = contracts?.[0];
+            if (!target) {
+                await lineReply(event.replyToken, [{
+                    type: 'text', text: '⚠ 找不到您目前的「待簽署」合約, 檔案保留給小編檢視。', quickReply: tenantServiceQuickReply()
+                }]);
+                return;
+            }
+            // 直接把 temp 檔的 storage key 寫進 contract.signed_file_url + status='已簽署'
+            await supabase.from('contracts').update({
+                signed_file_url: tempKey,
+                status: '已簽署'
+            }).eq('id', target.id);
+            await lineReply(event.replyToken, [{
+                type: 'text', text: `✅ 已收到您的合約簽署檔\n\n合約：${target.id}\n租期：${target.start_date} ~ ${target.end_date}\n\n感謝您 ✨`, quickReply: tenantServiceQuickReply()
+            }]);
+        } else {
+            // 'other' or unknown → 不動合約, 檔案留在 temp (小編可在 line_messages 表找到)
+            await lineReply(event.replyToken, [{
+                type: 'text', text: `好的, 您的訊息已收到 🙂 小編會盡快回覆您。`, quickReply: tenantServiceQuickReply()
+            }]);
+        }
+        return;
+    }
+
     const intentMap: Record<string, string> = {
         renew: 'renew',
         decline: 'decline',
@@ -345,7 +390,12 @@ async function handleMessage(event: any) {
         .from('tenants').select('*').eq('line_user_id', userId).maybeSingle();
     if (boundErr) throw new Error(`tenants lookup failed: ${boundErr.message}`);
 
-    // ───────────── 圖片 / 檔案 (合約回傳專用) ─────────────
+    // ───────────── 圖片 / 檔案 ─────────────
+    // 改版 (2026-06-23): 不再自動當「合約簽署檔」歸檔, 改成先問用途避免誤判
+    //   - 退租客戶傳截圖問問題 / 客戶傳水單 / 自拍 / 食物照 都不該被當合約簽
+    //   - 收到 → 先存 temp + 發 Quick Reply 問「這是合約簽署檔嗎?」
+    //   - 用戶點「是」→ postback 觸發 attach 到合約
+    //   - 用戶點「否」或不回 → 檔案保留在 temp 給小編檢視, 但不動合約
     if (event.message.type === 'image' || event.message.type === 'file') {
         await supabase.from('line_messages').insert({
             line_user_id: userId, direction: 'in', message_type: event.message.type,
@@ -353,57 +403,67 @@ async function handleMessage(event: any) {
             webhook_event_id: event.webhookEventId
         });
 
-        // 未綁定 → 純 log 不回，避免一般用戶傳貼圖/檔案被嗆「請先綁定」
+        // 未綁定 → 純 log 不回
         if (!bound) {
             console.log(`[handleMessage] unbound user sent ${event.message.type} — silent skip`);
             return;
         }
 
-        // 找該租客最新一份 active 合約 (優先 待簽署)
-        const { data: contracts, error: ctErr } = await supabase
-            .from('contracts').select('*')
-            .eq('tenant', bound.name)
-            .eq('renewal_state', 'active')
-            .order('start_date', { ascending: false });
-        if (ctErr) throw new Error(`contracts lookup failed: ${ctErr.message}`);
-
-        if (!contracts || contracts.length === 0) {
-            await lineReply(event.replyToken, [
-                { type: 'text', text: `⚠️ ${bound.name} 您好，目前找不到您的進行中合約，無法附上簽署檔。\n請聯絡小編確認。`, quickReply: tenantServiceQuickReply() }
-            ]);
-            return;
-        }
-        const targetContract = contracts.find((c: any) => c.status === '待簽署') || contracts[0];
-
+        // 先把檔案存到 temp 區 (key 帶 messageId, 之後 postback 用這個 key 找)
+        let tempKey: string | null = null;
         try {
-            // 下載 + 上傳
             const { bytes, contentType } = await lineDownloadContent(event.message.id);
             const ext = contentType.includes('pdf') ? 'pdf'
                      : contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg'
                      : contentType.includes('png') ? 'png'
                      : 'bin';
-            const key = `signed_${targetContract.id}_${Date.now()}.${ext}`;
+            tempKey = `pending_${bound.id}_${event.message.id}_${Date.now()}.${ext}`;
             const { error: upErr } = await supabase.storage
                 .from('contract-pdfs')
-                .upload(key, bytes, { contentType, upsert: false });
+                .upload(tempKey, bytes, { contentType, upsert: false });
             if (upErr) throw new Error(`Storage 上傳失敗：${upErr.message}`);
-
-            // 存 storage path（不存 public URL）— BMS 端會用 createSignedUrl 動態產
-            // bucket 已改 private，不再有 public URL 可用
-            await supabase.from('contracts').update({
-                signed_file_url: key,
-                status: '已簽署'
-            }).eq('id', targetContract.id);
-
-            await lineReply(event.replyToken, [
-                { type: 'text', text: `✅ 已收到您的合約簽署檔\n\n合約：${targetContract.id}\n租期：${targetContract.start_date} ~ ${targetContract.end_date}\n\n感謝您 ✨`, quickReply: tenantServiceQuickReply() }
-            ]);
+            // log 此 pending 檔讓 postback 可以找
+            await supabase.from('line_messages').insert({
+                line_user_id: userId, direction: 'out',
+                message_type: 'file_pending',
+                content: `temp:${tempKey}`,
+                raw: { messageId: event.message.id, tempKey, contentType, fileName: event.message.fileName }
+            });
         } catch (e: any) {
-            console.error('[file upload] failed:', e);
+            console.error('[file pending upload] failed:', e);
             await lineReply(event.replyToken, [
-                { type: 'text', text: `❌ 檔案處理失敗：${e.message}\n請聯絡小編協助。`, quickReply: tenantServiceQuickReply() }
+                { type: 'text', text: `❌ 檔案處理失敗: ${e.message}\n請聯絡小編協助。`, quickReply: tenantServiceQuickReply() }
             ]);
+            return;
         }
+
+        // 找該租客是否有「待簽署」的合約 (沒有就不問合約 option)
+        const { data: contracts } = await supabase
+            .from('contracts').select('id, status, end_date')
+            .eq('tenant', bound.name)
+            .eq('renewal_state', 'active')
+            .in('status', ['待簽署']);
+
+        const hasPendingContract = contracts && contracts.length > 0;
+        const items: any[] = [];
+        if (hasPendingContract) {
+            items.push({
+                type: 'action',
+                action: { type: 'postback', label: '📄 是, 合約簽署檔', data: `action=classify_file&type=signed&key=${encodeURIComponent(tempKey)}` }
+            });
+        }
+        items.push({
+            type: 'action',
+            action: { type: 'postback', label: '💬 否, 一般訊息', data: `action=classify_file&type=other&key=${encodeURIComponent(tempKey)}` }
+        });
+        items.push({ type: 'action', action: { type: 'message', label: '💬 找小編', text: '找小編' } });
+
+        const promptText = hasPendingContract
+            ? `${bound.name} 您好, 收到您傳的檔案 ✨\n請問用途？(沒回應系統會視為一般訊息)`
+            : `${bound.name} 您好, 收到您傳的檔案 ✨\n目前您沒有待簽署的合約, 系統會視為一般訊息給小編檢視。`;
+        await lineReply(event.replyToken, [
+            { type: 'text', text: promptText, quickReply: { items } }
+        ]);
         return;
     }
 
