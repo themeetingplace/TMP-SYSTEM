@@ -6,6 +6,7 @@ import { openFormModal, openConfirm, showToast, refreshView } from '../utils/ui.
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { escapeHtml } from '../utils/escape.js';
 import { filterInvoicesByMode } from '../utils/modeFilter.js';
+import { getMode } from '../utils/appMode.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { moneyAmount, moneyCell, adjustmentBadge } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
@@ -55,8 +56,10 @@ export function renderUnsettled() {
     }, 0);
     const awaitVerifyCount = unsettled.filter(i => i.bankLast5 && !i.bankVerified).length;
 
-    // 各館未結筆數
-    const allBuildings = getSortedBuildings({ activeOnly: true });
+    // 各館未結筆數 (依當前 mode 篩 — 共居/代管不混)
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const allBuildings = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === targetMode);
     const buildingCounts = {};
     unsettled.forEach(inv => {
         const name = buildingName(inv.buildingId);
@@ -464,7 +467,10 @@ function showUnsettledForm(invoice = null) {
     const isEdit = !!invoice;
     const direction = invoice?.direction || 'in';
 
-    const buildingOptions = getSortedBuildings({ activeOnly: true }).map(b => ({ value: b.id, label: b.name }));
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const buildingOptions = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === targetMode)
+        .map(b => ({ value: b.id, label: b.name }));
     // 床位 options builder: 依 buildingId filter (跟 contracts.js showContractForm 同款 pattern)
     const buildPropertyOptions = (buildingId) => mockData.properties
         .filter(p => buildingId ? p.buildingId === buildingId : true)
