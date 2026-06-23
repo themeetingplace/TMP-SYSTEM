@@ -92,6 +92,41 @@ function lifecycleBadge(state) {
     return `<span class="status-badge ${cls}">${text}</span>`;
 }
 
+// 合約流程進度條 — 6 階段
+// 1. 已簽署 2. 已催繳 3. 客回末5碼 4. 已核對入帳 5. 已寄合約 6. 收到簽署檔
+// archived (renewed/terminated) 不顯示 — 已結案
+function contractProgressChip(c, lifecycle) {
+    if (lifecycle === 'renewed' || lifecycle === 'terminated') return '';
+    if (c.contractType && c.contractType !== 'cohousing') return ''; // 代管不適用
+    if (c.paymentChannel === 'platform') return ''; // 外部平台代收, 不走我們收款流程
+
+    // 找該合約的房租 invoice (沒對應 invoice 就只看合約本身的兩個 stamp)
+    const inv = mockData.invoices.find(i =>
+        i.contractId === c.id && i.direction === 'in' && i.type === '房租'
+    );
+    const due = inv ? ((Number(inv.amount) || 0) - (Number(inv.discount) || 0)) : 0;
+    const paid = inv ? (Number(inv.paidAmount) || 0) : 0;
+    const fullPaid = inv && paid >= due && due > 0;
+
+    const steps = [
+        { key: 'signed',    label: '簽署',     done: c.status === '已簽署' },
+        { key: 'reminded',  label: '催繳',     done: !!(inv?.lastReminderAt) || fullPaid || !!inv?.bankLast5 },
+        { key: 'last5',     label: '客回末5碼', done: !!inv?.bankLast5 || fullPaid },
+        { key: 'verified',  label: '核對入帳',  done: !!inv?.bankVerified || fullPaid },
+        { key: 'sent',      label: '寄合約',   done: !!c.contractSentAt },
+        { key: 'returned',  label: '收簽署檔', done: !!c.signedFileUrl }
+    ];
+    const doneCount = steps.filter(s => s.done).length;
+    const currentStep = steps.find(s => !s.done);
+    const tooltipParts = steps.map(s => `${s.done ? '✓' : '○'} ${s.label}`);
+    const tooltip = `進度 ${doneCount}/6 · ${currentStep ? '當前: ' + currentStep.label : '✅ 完成'}\n\n${tooltipParts.join('\n')}`;
+    const dots = steps.map(s =>
+        `<span class="prog-dot${s.done ? ' is-done' : ''}"></span>`
+    ).join('');
+    const completeClass = doneCount === 6 ? ' is-complete' : '';
+    return `<span class="contract-progress${completeClass}" title="${esc(tooltip)}">${dots}</span>`;
+}
+
 // 續租意願 badge (LINE 自動詢問結果)
 function renewIntentBadge(contract) {
     const intent = contract.renewIntent;
@@ -251,7 +286,12 @@ export function renderContracts() {
                         ${lifecycle === 'snoozed' && c.snoozeUntil ? `<span style="font-size: var(--text-2xs); color: var(--color-info);">⏸ ${c.snoozeUntil} 再提醒</span>` : ''}
                     </div>
                 </td>
-                <td>${lifecycleBadge(lifecycle)}${renewIntentBadge(c)}</td>
+                <td>
+                    <div style="display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-start;">
+                        <div>${lifecycleBadge(lifecycle)}${renewIntentBadge(c)}</div>
+                        ${contractProgressChip(c, lifecycle)}
+                    </div>
+                </td>
                 <td style="text-align: right;">
                     ${rowActionGroup(`${decisionButtons}${standardButtons}`)}
                 </td>

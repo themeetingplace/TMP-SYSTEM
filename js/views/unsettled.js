@@ -720,21 +720,29 @@ async function remindUnsettled(id) {
         }
     }
 
-    // 組訊息 (Q2 模板, 你可以改成自己的口吻)
+    // 組訊息 (用戶最終確認版)
     const due = (Number(inv.amount) || 0) - (Number(inv.discount) || 0);
     const paid = Number(inv.paidAmount) || 0;
     const remaining = Math.max(0, due - paid);
-    const dueDateLabel = inv.dueDate ? `應結日 ${inv.dueDate}` : '';
-    const typeLabel = inv.type || '帳款';
+    const typeLabel = inv.type || '房租';
+    // 館別 / 床位 / 合約起訖日 — 從對應合約抓 (沒對應就秀帳單上的)
+    const contract = inv.contractId ? mockData.contracts.find(c => c.id === inv.contractId) : null;
+    const buildingName = mockData.buildings.find(b => b.id === inv.buildingId)?.name || '';
+    const propertyName = (contract?.propertyName || inv.propertyName || '').replace('聚空間 - ', '').replace(buildingName, '').trim();
+    const locationLine = [buildingName, propertyName, contract ? `${contract.startDate} ~ ${contract.endDate}` : null]
+        .filter(Boolean).join(' / ');
 
     const message =
-`${tenant.name} 您好 ☺️
+`${tenant.name} 你好 ☺️
 
-提醒您, 您的「${typeLabel}」還有 NT$${remaining.toLocaleString()} 未繳清${dueDateLabel ? `\n${dueDateLabel}` : ''}
+🔔提醒你 「${typeLabel}」還有 NT$${remaining.toLocaleString()} 未繳清
 
-繳款完成後, 請回傳「銀行帳戶末 5 碼」(5 位數字, 例如 12345), 系統會自動記錄到您的帳單上 ✨
+${locationLine}
 
-如有疑問請傳「找小編」, 會有專人回覆 🙂`;
+繳款完成後， 請回傳「銀行帳戶末 5 碼」(5 位數字就好，例如 12345)，
+系統會自動記錄到您的帳單上 ✨
+
+如有疑問請傳「找小編」 🙂`;
 
     showToast(`催繳 ${tenant.name}…`, 'info');
     try {

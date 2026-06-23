@@ -7026,6 +7026,38 @@ select.form-input {
     margin-top: 0.5rem;
 }
 
+/* === contract-progress: 合約流程進度條 (6 步小圓點) — 合約管理 row 狀態欄下方 === */
+.contract-progress {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+    padding: 3px 6px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-full);
+    cursor: help;
+    white-space: pre-line;
+}
+.contract-progress .prog-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--border-strong);
+    transition: background var(--transition-fast);
+}
+.contract-progress .prog-dot.is-done {
+    background: var(--color-success);
+}
+.contract-progress.is-complete {
+    background: var(--color-success-light);
+}
+.contract-progress.is-complete::after {
+    content: '✓';
+    font-size: 0.7rem;
+    color: var(--color-success);
+    font-weight: 700;
+    margin-left: 2px;
+}
+
 /* === cutoff-banner: 財務起算日提示, 帳務 / 報表頁頂部 === */
 .cutoff-banner {
     display: flex;
