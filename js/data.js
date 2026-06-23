@@ -1202,7 +1202,7 @@ export const store = {
         recalcMetrics();
         return item;
     },
-    updateContract(id, patch) {
+    updateContract(id, patch, _skipBundleCascade = false) {
         const i = mockData.contracts.findIndex(c => c.id === id);
         if (i < 0) return null;
         const before = mockData.contracts[i];
@@ -1248,6 +1248,29 @@ export const store = {
             const property = mockData.properties.find(p => p.name === after.propertyName);
             if (property && property.rent !== after.amount) {
                 this.updateProperty(property.id, { rent: after.amount });
+            }
+        }
+
+        // === bundle 群組同步: 改一邊, 主合約 + 全子合約跟著同步關鍵欄位 ===
+        // 同步欄位: startDate / endDate / termMonths / tenant / paymentChannel / platformName / renewalState / pendingTerminationDate
+        // 不同步: amount (每床自己的租金) / propertyName (每張各綁不同床) / status (簽署狀態各自填)
+        // _skipBundleCascade 旗標防無限迴圈
+        if (!_skipBundleCascade) {
+            const SYNC_FIELDS = ['startDate', 'endDate', 'termMonths', 'tenant', 'paymentChannel', 'platformName', 'renewalState', 'pendingTerminationDate', 'terminatedDate'];
+            const syncPatch = {};
+            SYNC_FIELDS.forEach(k => {
+                if (k in patch && before[k] !== after[k]) syncPatch[k] = after[k];
+            });
+            if (Object.keys(syncPatch).length > 0) {
+                // 找 bundle 群組: 該合約若是 parent → 找所有 child; 若是 child → 找 parent + 兄弟 child
+                const groupRootId = after.bundleParentContractId || after.id;
+                const groupMembers = mockData.contracts.filter(c =>
+                    c.id !== after.id &&
+                    (c.id === groupRootId || c.bundleParentContractId === groupRootId)
+                );
+                groupMembers.forEach(member => {
+                    this.updateContract(member.id, syncPatch, true); // skip 防迴圈
+                });
             }
         }
         recalcMetrics();
