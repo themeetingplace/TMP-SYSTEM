@@ -90,7 +90,7 @@ export const EXPECTED_5MAY_OPENING = {
     cutoff: FINANCE_CUTOFF_DATE,
     notes: '5/31 結算數字 (用戶整理), 用來對 DB 內 pre-cutoff invoices 加總',
     perBuilding: {
-        '松山館':   { in: 178395, out: 250536 },
+        '松山館':   { in: 186595, out: 250536 },
         '中山館':   { in: 171000, out:  64682 },
         '溫州館':   { in:      0, out:      0 },
         '古亭2館':  { in:   8500, out:  66040 },
@@ -108,9 +108,9 @@ export const EXPECTED_5MAY_OPENING = {
         '信義館':  { '租金': 23015, '水費': 1314, '網路費': 6028, '其他': 38850 }
     },
     totals: {
-        in: 542145,
+        in: 550345,
         out: 550573,
-        net: -8428
+        net: -228
     }
 };
 
