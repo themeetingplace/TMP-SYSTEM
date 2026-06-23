@@ -1341,16 +1341,22 @@ export function confirmRenew(id) {
                 <p style="margin-top: 1rem; font-size: var(--text-xs); color: var(--text-muted);">舊合約 ${esc(c.id)} 將標記為「已續約」。</p>
             </div>
         `,
-        footerHtml: `
-            <button type="button" class="btn btn-outline" data-action="cancel">取消</button>
-            <button type="button" class="btn btn-outline" data-action="edit-renew" style="color: var(--color-primary); border-color: var(--color-primary); margin-left: auto;"><i class="ph ph-pencil"></i> 編輯續租資訊</button>
-            <button type="button" class="btn btn-primary" data-action="confirm-renew">直接續租</button>
-        `,
+        footerHtml: (() => {
+            // 該租客有沒有綁 LINE → 決定「續租並寄出」按鈕能不能按
+            const t = mockData.tenants.find(x => x.name === c.tenant && x.lineUserId);
+            const hasLine = !!t?.lineUserId;
+            return `
+                <button type="button" class="btn btn-outline" data-action="cancel">取消</button>
+                <button type="button" class="btn btn-outline" data-action="edit-renew" style="color: var(--color-primary); border-color: var(--color-primary); margin-left: auto;"><i class="ph ph-pencil"></i> 編輯續租資訊</button>
+                <button type="button" class="btn btn-outline" data-action="renew-only" style="color: var(--color-primary); border-color: var(--color-primary);"><i class="ph ph-file-plus"></i> 直接續租</button>
+                <button type="button" class="btn btn-primary" data-action="renew-and-send" ${hasLine ? '' : 'disabled title="租客未綁 LINE, 無法自動寄"'}><i class="ph ph-paper-plane-tilt"></i> 續租並寄出合約</button>
+            `;
+        })(),
         lockOutsideClose: true,
         onMount: (overlay, close) => {
             overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
-            
-            overlay.querySelector('[data-action="confirm-renew"]')?.addEventListener('click', () => {
+
+            const doRenew = (sendContract) => {
                 const result = store.renewContract(id);
                 if (result.error) {
                     showToast(`續租失敗：${result.error}`, 'danger');
@@ -1359,20 +1365,25 @@ export function confirmRenew(id) {
                 showToast(`已續租，新合約 ${result.newContract.id}`, 'success');
                 close();
                 refreshView();
-                // 自動寄新合約 PDF — 若該租客有綁 LINE
+                if (!sendContract) return;
                 const newC = result.newContract;
                 const t = mockData.tenants.find(x => x.name === newC.tenant && x.lineUserId)
                        || mockData.tenants.find(x => x.name === newC.tenant);
-                if (t?.lineUserId) {
-                    setTimeout(() => {
-                        showToast(`寄新合約 ${newC.id} 給 ${newC.tenant}…`, 'info', 3000);
-                        sendContractToLine(newC.id).catch(e => {
-                            console.warn('[auto-send-after-renew]', e);
-                            showToast(`自動寄合約失敗: ${e.message} (可到合約頁手動寄)`, 'warning', 6000);
-                        });
-                    }, 800);
+                if (!t?.lineUserId) {
+                    showToast(`${newC.tenant} 未綁 LINE, 無法自動寄合約`, 'warning', 5000);
+                    return;
                 }
-            });
+                setTimeout(() => {
+                    showToast(`寄新合約 ${newC.id} 給 ${newC.tenant}…`, 'info', 3000);
+                    sendContractToLine(newC.id).catch(e => {
+                        console.warn('[auto-send-after-renew]', e);
+                        showToast(`自動寄合約失敗: ${e.message} (可到合約頁手動寄)`, 'warning', 6000);
+                    });
+                }, 800);
+            };
+
+            overlay.querySelector('[data-action="renew-only"]')?.addEventListener('click', () => doRenew(false));
+            overlay.querySelector('[data-action="renew-and-send"]')?.addEventListener('click', () => doRenew(true));
 
             overlay.querySelector('[data-action="edit-renew"]')?.addEventListener('click', () => {
                 const result = store.renewContract(id);

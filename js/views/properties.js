@@ -1,6 +1,6 @@
 ﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, addMonthsISO, leaseEndISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts, bedOccupied } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
-import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
+import { openFormModal, openConfirm, openDetailModal, openModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
 import { showTenantDetails } from './tenants.js';
 import { filterPropertiesByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
@@ -1222,14 +1222,12 @@ export function showCheckinAssignmentForm(opts = {}) {
             const tenantHasLine = !!linkedTenant?.lineUserId;
 
             const reviewHtml = `
-                <div style="font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 1rem;">請仔細核對下方資料，確認無誤後送出。送出後系統會：</div>
+                <div style="font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 1rem;">請核對下方資料 → 選擇下方按鈕：</div>
                 <ol style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0 0 1rem 1.2rem; padding: 0; line-height: 1.7;">
-                    <li>建立合約 (狀態：<strong style="color: var(--color-warning);">待簽署</strong>)</li>
-                    <li>自動產生本期帳單</li>
-                    <li>更新床位 / 租客狀態</li>
+                    <li><strong>建立合約</strong>：建合約 + 開帳單 + 更新床位 (狀態 <span style="color: var(--color-warning);">待簽署</span>) — 合約 PDF <strong>不寄出</strong></li>
                     ${tenantHasLine
-                        ? `<li><strong style="color: var(--color-success);">✉ 自動寄合約 PDF 給租客 LINE</strong></li>`
-                        : `<li style="color: var(--text-muted);">⚠ 租客尚未綁 LINE, 合約 PDF 不會自動寄 (之後手動到合約頁寄 / 或請客戶綁 LINE)</li>`}
+                        ? `<li><strong style="color: var(--color-success);">建立並寄出合約檔案</strong>：上面全部 + ✉ 自動寄 PDF 給租客 LINE</li>`
+                        : `<li style="color: var(--text-muted);">⚠ 租客尚未綁 LINE, 「建立並寄出」按鈕關閉 (合約建後可到合約頁手動寄)</li>`}
                 </ol>
                 <table style="width: 100%; border-collapse: collapse; font-size: var(--text-base);">
                     ${reviewRows.map(([k, v]) => `
@@ -1241,13 +1239,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                 </table>
             `;
 
-            openConfirm({
-                title: `📋 確認建立合約 ${predictedContractId}`,
-                message: reviewHtml,
-                confirmLabel: tenantHasLine ? '✅ 建立並寄出合約' : '✅ 確認建立',
-                cancelLabel: '返回修改',
-                maxWidth: 560,
-                onConfirm: () => {
+            // ── 建合約核心邏輯 (送出後 send=true 才寄合約 PDF) ──
+            const doCreate = (sendContract) => {
                     // ── 3. 真正執行 ──
                     const inputPhone = (values.tenantPhone || '').trim();
                     const inputEmail = (values.tenantEmail || '').trim();
@@ -1348,8 +1341,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                     formModal.close();
                     refreshView();
 
-                    // 自動寄合約 PDF 給租客 (有綁 LINE 才寄)
-                    if (tenantHasLine) {
+                    // 寄合約 PDF (使用者點「建立並寄出」才寄)
+                    if (sendContract && tenantHasLine) {
                         setTimeout(() => {
                             showToast(`寄合約 ${contract.id} 給 ${tenant.name}…`, 'info', 3000);
                             import('./contracts.js').then(({ sendContractToLine }) => {
@@ -1360,6 +1353,34 @@ export function showCheckinAssignmentForm(opts = {}) {
                             });
                         }, 800);
                     }
+            };
+
+            // 開 confirm modal 兩顆按鈕 (取消 / 只建立 / 建立並寄出)
+            openModal({
+                title: `📋 確認建立合約 ${predictedContractId}`,
+                bodyHtml: reviewHtml,
+                maxWidth: 580,
+                lockOutsideClose: true,
+                footerHtml: `
+                    <button type="button" class="btn btn-outline" data-action="cancel">返回修改</button>
+                    <button type="button" class="btn btn-outline" data-action="create-only" style="color: var(--color-primary); border-color: var(--color-primary); margin-left: auto;">
+                        <i class="ph ph-file-plus"></i> 建立合約
+                    </button>
+                    <button type="button" class="btn btn-primary" data-action="create-and-send" ${tenantHasLine ? '' : 'disabled title="租客未綁 LINE, 無法自動寄"'}>
+                        <i class="ph ph-paper-plane-tilt"></i> 建立並寄出合約檔案
+                    </button>
+                `,
+                onMount: (overlay, close) => {
+                    overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
+                    overlay.querySelector('[data-action="create-only"]')?.addEventListener('click', () => {
+                        close();
+                        doCreate(false);
+                    });
+                    overlay.querySelector('[data-action="create-and-send"]')?.addEventListener('click', () => {
+                        if (!tenantHasLine) return;
+                        close();
+                        doCreate(true);
+                    });
                 }
             });
             return false; // 不關閉表單，等待確認結果
