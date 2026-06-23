@@ -534,12 +534,8 @@ export function showCheckinAssignmentForm(opts = {}) {
         { name: 'scheduledDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: todayStr },
         { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(todayStr), value: '1' },
         { name: 'termMonthsCustom', label: '自訂月數', type: 'number', value: 4, placeholder: '4' },
-        { name: 'amount', label: '月租金', type: 'number', required: true, value: preselectBed?.rent || 0, hint: '會自動帶床位設定的租金，可調整' },
-        { name: 'status', label: '簽署狀態', type: 'select', required: true, value: '已簽署',
-          options: [
-              { value: '已簽署', label: '已簽署' },
-              { value: '待簽署', label: '待簽署' }
-          ] }
+        { name: 'amount', label: '月租金', type: 'number', required: true, span: 2, value: preselectBed?.rent || 0, hint: '會自動帶床位設定的租金，可調整' }
+        // 簽署狀態 拿掉, 一律預設「待簽署」(在 confirm page 後自動寄合約 PDF 給客戶簽)
     ];
     // 收款欄位 — 收費對象拉到收款步驟頂端
     const paymentFields = [
@@ -975,7 +971,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             const STEP_MAP = {
                 buildingId: 1, bedId: 1, extraBeds: 1,
                 source: 1, tenantName: 1, tenantPhone: 1, tenantEmail: 1, tenantEmergency: 1,
-                scheduledDate: 2, termMonths: 2, termMonthsCustom: 2, amount: 2, status: 2,
+                scheduledDate: 2, termMonths: 2, termMonthsCustom: 2, amount: 2,
                 paymentChannel: 3, platformName: 3,
                 __sep_payment: 3, adjustments: 3, discount: 3, discountReason: 3,
                 totalDue: 3, paidAmount: 3, paymentMethod: 3
@@ -1220,8 +1216,21 @@ export function showCheckinAssignmentForm(opts = {}) {
                 ['已收金額', `${moneyAmount(paidAmount)}${paidAmount >= due ? ' <span style="color: var(--color-success);">✅ 已收訖</span>' : paidAmount > 0 ? ` <span style="color: var(--color-warning);">部分繳款 (餘 ${moneyAmount(due - paidAmount)})</span>` : ' <span style="color: var(--color-danger);">❌ 未繳</span>'}`],
                 ['付款方式', values.paymentMethod || '匯款']
             ];
+            // 找該租客有沒有綁 LINE — 決定要不要自動寄合約
+            const linkedTenant = mockData.tenants.find(t => t.name === inputName && t.lineUserId)
+                              || mockData.tenants.find(t => t.name === inputName);
+            const tenantHasLine = !!linkedTenant?.lineUserId;
+
             const reviewHtml = `
-                <div style="font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 1rem;">請仔細核對下方資料，確認無誤後送出。送出後系統會：建立合約 → 自動產生帳單 → 更新床位 / 租客狀態。</div>
+                <div style="font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 1rem;">請仔細核對下方資料，確認無誤後送出。送出後系統會：</div>
+                <ol style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0 0 1rem 1.2rem; padding: 0; line-height: 1.7;">
+                    <li>建立合約 (狀態：<strong style="color: var(--color-warning);">待簽署</strong>)</li>
+                    <li>自動產生本期帳單</li>
+                    <li>更新床位 / 租客狀態</li>
+                    ${tenantHasLine
+                        ? `<li><strong style="color: var(--color-success);">✉ 自動寄合約 PDF 給租客 LINE</strong></li>`
+                        : `<li style="color: var(--text-muted);">⚠ 租客尚未綁 LINE, 合約 PDF 不會自動寄 (之後手動到合約頁寄 / 或請客戶綁 LINE)</li>`}
+                </ol>
                 <table style="width: 100%; border-collapse: collapse; font-size: var(--text-base);">
                     ${reviewRows.map(([k, v]) => `
                         <tr>
@@ -1235,7 +1244,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             openConfirm({
                 title: `📋 確認建立合約 ${predictedContractId}`,
                 message: reviewHtml,
-                confirmLabel: '✅ 確認建立',
+                confirmLabel: tenantHasLine ? '✅ 建立並寄出合約' : '✅ 確認建立',
                 cancelLabel: '返回修改',
                 maxWidth: 560,
                 onConfirm: () => {
@@ -1274,7 +1283,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                         startDate,
                         endDate,
                         termMonths: term,
-                        status: values.status || '已簽署',
+                        status: '待簽署',  // 新合約一律待簽署, 等客戶回傳簽署檔再改
                         amount,
                         depositAmount: 0,
                         parentContractId: null,
@@ -1312,7 +1321,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                             signDate: startDate,
                             startDate, endDate,
                             termMonths: term,
-                            status: values.status || '已簽署',
+                            status: '待簽署',
                             amount: Number(eb.rent) || 0,
                             depositAmount: 0,
                             parentContractId: null,
@@ -1338,6 +1347,19 @@ export function showCheckinAssignmentForm(opts = {}) {
                     showToast(msg, 'success', 5000);
                     formModal.close();
                     refreshView();
+
+                    // 自動寄合約 PDF 給租客 (有綁 LINE 才寄)
+                    if (tenantHasLine) {
+                        setTimeout(() => {
+                            showToast(`寄合約 ${contract.id} 給 ${tenant.name}…`, 'info', 3000);
+                            import('./contracts.js').then(({ sendContractToLine }) => {
+                                sendContractToLine(contract.id).catch(e => {
+                                    console.warn('[auto-send-after-create]', e);
+                                    showToast(`自動寄合約失敗: ${e.message} (可到合約頁手動寄)`, 'warning', 6000);
+                                });
+                            });
+                        }, 800);
+                    }
                 }
             });
             return false; // 不關閉表單，等待確認結果
