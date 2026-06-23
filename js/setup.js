@@ -125,7 +125,7 @@ window.backfillSendContracts = async (apply = false) => {
         const c = mockData.contracts.find(x => x.id === inv.contractId);
         if (!c) return;
         if (c.contractSentAt) return;
-        if (c.status !== '已簽署') return;
+        if (c.status === '已終止') return;
         if (c.renewalState !== 'active') return;
         if (c.contractType && c.contractType !== 'cohousing') return;
         if (c.paymentChannel === 'platform') return;

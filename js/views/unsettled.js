@@ -378,12 +378,14 @@ function settleInvoice(id) {
 }
 
 // 共用: 入帳後自動寄合約 (核對結帳 + 一般結帳 + 批次結帳 都呼叫)
+// 寄合約 = 客戶簽署「前」要拿到的, 所以 status 是「待簽署」或「已簽署」都該寄
+// 只擋「已終止」(=合約失效不該寄)
 function maybeAutoSendContract(inv) {
     if (!inv?.contractId) return;
     const c = mockData.contracts.find(x => x.id === inv.contractId);
     if (!c) return;
     if (c.contractSentAt) return;        // 已寄過, 不重發
-    if (c.status !== '已簽署') return;    // 還沒簽不寄
+    if (c.status === '已終止') return;    // 終止合約不寄
     if (c.renewalState !== 'active') return;
     if (c.contractType && c.contractType !== 'cohousing') return;
     if (c.paymentChannel === 'platform') return;
