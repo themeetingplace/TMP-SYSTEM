@@ -437,13 +437,20 @@ async function handleMessage(event: any) {
         const pendingContract = contracts?.[0];
 
         // 判定: 歸合約 or 一般訊息
+        // 規則 (放寬版, 避免 sync race 漏判):
+        //   1. PDF + 有 active 合約 (待簽署/已簽署) → 歸合約
+        //   2. image + 「待簽署」合約 + 還沒收過簽署檔 → 歸合約 (不要求 contract_sent_at)
+        //   3. image + 「已簽署」合約 + contract_sent_at 在 2 天內 → 歸合約 (補件)
+        //   4. 其他 → 一般訊息
         let treatAsContract = false;
         if (pendingContract) {
             if (isPdf) {
-                // 規則 1: PDF + 有最近寄出的合約 → 歸合約
                 treatAsContract = true;
-            } else if (pendingContract.contract_sent_at) {
-                // 規則 2: image + 寄出 2 天內 → 歸合約 (多張圖也算)
+            } else if (pendingContract.status === '待簽署' && !pendingContract.signed_file_url) {
+                // 還沒簽好 → 客戶傳圖 = 簽合約 (主流程)
+                treatAsContract = true;
+            } else if (pendingContract.status === '已簽署' && pendingContract.contract_sent_at) {
+                // 已簽過, 但 2 天內可補件
                 const sentAt = new Date(pendingContract.contract_sent_at);
                 const twoDaysMs = 2 * 86400 * 1000;
                 if (Date.now() - sentAt.getTime() <= twoDaysMs) {
