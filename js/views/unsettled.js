@@ -277,12 +277,12 @@ export function renderUnsettled() {
                 <table class="data-table cards-with-hero" style="table-layout: fixed;">
                     <colgroup>
                         <col style="width: 36px;">
-                        <col style="width: 14%;">
-                        <col style="width: 22%;">
-                        <col style="width: 11%;">
-                        <col style="width: 11%;">
-                        <col style="width: 11%;">
-                        <col style="width: 9%;">
+                        <col style="width: 13%;">
+                        <col style="width: 21%;">
+                        <col style="width: 10%;">
+                        <col style="width: 10%;">
+                        <col style="width: 10%;">
+                        <col style="width: 13%;">
                         <col style="width: 22%;">
                     </colgroup>
                     <thead><tr>

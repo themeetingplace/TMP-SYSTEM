@@ -5641,6 +5641,7 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     font-size: 0.75rem;
     font-weight: 500;
     border: 1px solid;
+    white-space: nowrap;  /* 避免欄位窄時被擠成直書 */
 }
 
 .bank-last5-badge.pending {
