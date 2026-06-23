@@ -109,15 +109,14 @@ function lifecycleBadge(state) {
     return `<span class="status-badge ${cls}">${text}</span>`;
 }
 
-// 合約流程進度條 — 6 階段
-// 1. 已簽署 2. 已催繳 3. 客回末5碼 4. 已核對入帳 5. 已寄合約 6. 收到簽署檔
-// archived (renewed/terminated) 不顯示 — 已結案
+// 合約流程進度條 — 5 階段 (對齊用戶流程)
+// 1. 催繳 → 2. 客回末5碼 → 3. 核對入帳 → 4. 寄合約 → 5. 收簽署檔 (簽署完成)
+// 收簽署檔的同時 webhook 自動把 status 改成「已簽署」, 所以 step 5 = 全流程完成
 function contractProgressChip(c, lifecycle) {
     if (lifecycle === 'renewed' || lifecycle === 'terminated') return '';
-    if (c.contractType && c.contractType !== 'cohousing') return ''; // 代管不適用
-    if (c.paymentChannel === 'platform') return ''; // 外部平台代收, 不走我們收款流程
+    if (c.contractType && c.contractType !== 'cohousing') return '';
+    if (c.paymentChannel === 'platform') return '';
 
-    // 找該合約的房租 invoice (沒對應 invoice 就只看合約本身的兩個 stamp)
     const inv = mockData.invoices.find(i =>
         i.contractId === c.id && i.direction === 'in' && i.type === '房租'
     );
@@ -126,21 +125,20 @@ function contractProgressChip(c, lifecycle) {
     const fullPaid = inv && paid >= due && due > 0;
 
     const steps = [
-        { key: 'signed',    label: '簽署',     done: c.status === '已簽署' },
-        { key: 'reminded',  label: '催繳',     done: !!(inv?.lastReminderAt) || fullPaid || !!inv?.bankLast5 },
-        { key: 'last5',     label: '客回末5碼', done: !!inv?.bankLast5 || fullPaid },
-        { key: 'verified',  label: '核對入帳',  done: !!inv?.bankVerified || fullPaid },
-        { key: 'sent',      label: '寄合約',   done: !!c.contractSentAt },
-        { key: 'returned',  label: '收簽署檔', done: !!c.signedFileUrl }
+        { key: 'reminded', label: '催繳',     done: !!(inv?.lastReminderAt) || fullPaid || !!inv?.bankLast5 },
+        { key: 'last5',    label: '客回末5碼', done: !!inv?.bankLast5 || fullPaid },
+        { key: 'verified', label: '核對入帳',  done: !!inv?.bankVerified || fullPaid },
+        { key: 'sent',     label: '寄合約',   done: !!c.contractSentAt },
+        { key: 'returned', label: '收簽署檔', done: !!c.signedFileUrl }
     ];
     const doneCount = steps.filter(s => s.done).length;
     const currentStep = steps.find(s => !s.done);
     const tooltipParts = steps.map(s => `${s.done ? '✓' : '○'} ${s.label}`);
-    const tooltip = `進度 ${doneCount}/6 · ${currentStep ? '當前: ' + currentStep.label : '✅ 完成'}\n\n${tooltipParts.join('\n')}`;
+    const tooltip = `進度 ${doneCount}/5 · ${currentStep ? '當前: ' + currentStep.label : '✅ 完成'}\n\n${tooltipParts.join('\n')}`;
     const dots = steps.map(s =>
         `<span class="prog-dot${s.done ? ' is-done' : ''}"></span>`
     ).join('');
-    const completeClass = doneCount === 6 ? ' is-complete' : '';
+    const completeClass = doneCount === 5 ? ' is-complete' : '';
     return `<span class="contract-progress${completeClass}" title="${esc(tooltip)}">${dots}</span>`;
 }
 
@@ -160,8 +158,6 @@ function contractProgressTimeline(c, lifecycle) {
 
     const fmtDate = (iso) => iso ? iso.slice(0, 10) : '';
     const steps = [
-        { key: 'signed', label: '簽署', icon: 'ph-pen-nib',
-          done: c.status === '已簽署', at: c.signDate || c.startDate },
         { key: 'reminded', label: '催繳', icon: 'ph-bell',
           done: !!(inv?.lastReminderAt) || fullPaid || !!inv?.bankLast5,
           at: inv?.lastReminderAt || null,
@@ -183,7 +179,7 @@ function contractProgressTimeline(c, lifecycle) {
 
     const doneCount = steps.filter(s => s.done).length;
     const currentIdx = steps.findIndex(s => !s.done);
-    const isComplete = doneCount === 6;
+    const isComplete = doneCount === 5;
 
     const items = steps.map((s, i) => {
         let stateCls = 'is-future';
@@ -212,7 +208,7 @@ function contractProgressTimeline(c, lifecycle) {
     const headLabel = isComplete
         ? '✅ 流程完成'
         : currentIdx >= 0
-            ? `⏳ 目前到 ${steps[currentIdx].label} (${doneCount}/6)`
+            ? `⏳ 目前到 ${steps[currentIdx].label} (${doneCount}/5)`
             : '';
 
     return `
@@ -1031,8 +1027,6 @@ function editProgressStep(contractId, stepKey, onDone) {
     );
     // 6 個 step 的 metadata
     const STEP_META = {
-        signed:   { label: '簽署',     hasDate: false, isDone: c.status === '已簽署',
-                    note: '把合約「簽署狀態」標記為「已簽署 / 待簽署」' },
         reminded: { label: '催繳',     hasDate: true,  isDone: !!inv?.lastReminderAt, date: inv?.lastReminderAt,
                     note: '記錄手動 (打電話 / 當面提醒) 的催繳時間。LINE 自動催繳會自動填這個欄位。' },
         last5:    { label: '客回末5碼', hasDate: false, isDone: !!inv?.bankLast5,
@@ -1043,7 +1037,7 @@ function editProgressStep(contractId, stepKey, onDone) {
         sent:     { label: '寄合約',   hasDate: true,  isDone: !!c.contractSentAt, date: c.contractSentAt,
                     note: '線下傳合約 PDF 給租客時手動填。LINE 自動寄合約也會自動填這個。' },
         returned: { label: '收簽署檔', hasDate: false, isDone: !!c.signedFileUrl,
-                    note: '收到實體簽署檔 (line/email/紙本)時手動標記。若 LINE 自動傳檔, 系統會自動填 URL。' }
+                    note: '收到實體簽署檔 (line/email/紙本)時手動標記。若 LINE 自動傳檔, 系統會自動填 URL + 把 status 改成已簽署。' }
     };
     const meta = STEP_META[stepKey];
     if (!meta) return;
@@ -1079,18 +1073,16 @@ function editProgressStep(contractId, stepKey, onDone) {
         onSubmit: (values) => {
             if (meta.isDone) {
                 // 取消標記 — 清掉對應欄位
-                if (stepKey === 'signed') store.updateContract(c.id, { status: '待簽署' });
-                else if (stepKey === 'reminded') store.updateInvoice(inv.id, { lastReminderAt: null });
+                if (stepKey === 'reminded') store.updateInvoice(inv.id, { lastReminderAt: null });
                 else if (stepKey === 'last5') store.updateInvoice(inv.id, { bankLast5: null, bankVerified: false });
                 else if (stepKey === 'verified') store.updateInvoice(inv.id, { bankVerified: false });
                 else if (stepKey === 'sent') store.updateContract(c.id, { contractSentAt: null });
-                else if (stepKey === 'returned') store.updateContract(c.id, { signedFileUrl: null });
+                else if (stepKey === 'returned') store.updateContract(c.id, { signedFileUrl: null, status: '待簽署' });
                 showToast(`已清除「${meta.label}」標記`, 'info');
             } else {
                 // 標記完成
                 const dateISO = values.date ? new Date(values.date).toISOString() : new Date().toISOString();
-                if (stepKey === 'signed') store.updateContract(c.id, { status: '已簽署' });
-                else if (stepKey === 'reminded') store.updateInvoice(inv.id, { lastReminderAt: dateISO });
+                if (stepKey === 'reminded') store.updateInvoice(inv.id, { lastReminderAt: dateISO });
                 else if (stepKey === 'last5') {
                     const last5 = (values.bankLast5 || 'MANUAL').toString().trim();
                     store.updateInvoice(inv.id, { bankLast5: last5 });
@@ -1105,7 +1097,7 @@ function editProgressStep(contractId, stepKey, onDone) {
                     });
                 }
                 else if (stepKey === 'sent') store.updateContract(c.id, { contractSentAt: dateISO });
-                else if (stepKey === 'returned') store.updateContract(c.id, { signedFileUrl: 'MANUAL_MARKED' });
+                else if (stepKey === 'returned') store.updateContract(c.id, { signedFileUrl: 'MANUAL_MARKED', status: '已簽署' });
                 showToast(`✓ 已標記「${meta.label}」完成`, 'success');
             }
             if (typeof onDone === 'function') onDone();
