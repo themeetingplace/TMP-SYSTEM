@@ -182,7 +182,9 @@ function contractProgressTimeline(c, lifecycle) {
         }
         const dateLabel = s.at ? `<div class="ctl-date">${fmtDate(s.at)}</div>` : '';
         return `
-            <div class="ctl-step ${stateCls}">
+            <div class="ctl-step ${stateCls}" role="button" tabindex="0"
+                 data-step-edit="${s.key}" data-contract-id="${esc(c.id)}"
+                 title="點擊手動編輯此步驟">
                 <div class="ctl-circle">${iconSymbol}</div>
                 <div class="ctl-label">${s.label}</div>
                 ${dateLabel}
@@ -984,6 +986,108 @@ export function showContractDetails(id) {
                 closeModal();
                 showContractForm(c);
             });
+            // 時間軸圓圈可點 → 開手動編輯 modal
+            overlay.querySelectorAll('[data-step-edit]').forEach(el => {
+                const open = () => editProgressStep(c.id, el.dataset.stepEdit, () => {
+                    closeModal();
+                    setTimeout(() => showContractDetails(c.id), 100);
+                });
+                el.addEventListener('click', open);
+                el.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+                });
+            });
+        }
+    });
+}
+
+// 手動編輯合約流程某一步 — 開小 modal 設「標記完成 (帶日期) / 取消標記」
+function editProgressStep(contractId, stepKey, onDone) {
+    const c = mockData.contracts.find(x => x.id === contractId);
+    if (!c) return;
+    const inv = mockData.invoices.find(i =>
+        i.contractId === c.id && i.direction === 'in' && i.type === '房租'
+    );
+    // 6 個 step 的 metadata
+    const STEP_META = {
+        signed:   { label: '簽署',     hasDate: false, isDone: c.status === '已簽署',
+                    note: '把合約「簽署狀態」標記為「已簽署 / 待簽署」' },
+        reminded: { label: '催繳',     hasDate: true,  isDone: !!inv?.lastReminderAt, date: inv?.lastReminderAt,
+                    note: '記錄手動 (打電話 / 當面提醒) 的催繳時間。LINE 自動催繳會自動填這個欄位。' },
+        last5:    { label: '客回末5碼', hasDate: false, isDone: !!inv?.bankLast5,
+                    note: '線下收到末5碼時手動填。標記後 LINE 自動收到的末5碼會被忽略 (要重設先清標記)。',
+                    needInput: 'bankLast5' },
+        verified: { label: '核對入帳',  hasDate: true,  isDone: !!inv?.bankVerified, date: inv?.paidDate,
+                    note: '確認入帳後手動勾。會同時把 invoice paidAmount 設為應收, 標記為已繳清。' },
+        sent:     { label: '寄合約',   hasDate: true,  isDone: !!c.contractSentAt, date: c.contractSentAt,
+                    note: '線下傳合約 PDF 給租客時手動填。LINE 自動寄合約也會自動填這個。' },
+        returned: { label: '收簽署檔', hasDate: false, isDone: !!c.signedFileUrl,
+                    note: '收到實體簽署檔 (line/email/紙本)時手動標記。若 LINE 自動傳檔, 系統會自動填 URL。' }
+    };
+    const meta = STEP_META[stepKey];
+    if (!meta) return;
+    if (!inv && (stepKey === 'reminded' || stepKey === 'last5' || stepKey === 'verified')) {
+        showToast('此合約沒對應的房租 invoice, 無法編輯這步', 'warning');
+        return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const fields = [
+        { name: '__note', type: 'placeholder' },
+        ...(meta.hasDate ? [{ name: 'date', label: '日期', type: 'date', value: meta.date ? meta.date.slice(0, 10) : today, required: true }] : []),
+        ...(meta.needInput === 'bankLast5' && !meta.isDone
+            ? [{ name: 'bankLast5', label: '末 5 碼', type: 'text', placeholder: '5 位數字, 例如 12345', required: true, hint: '空白 = 標記「客戶口頭告知, 線下收款」' }]
+            : [])
+    ];
+
+    openFormModal({
+        title: `手動編輯: ${meta.label}`,
+        maxWidth: 480,
+        fields,
+        values: {},
+        submitLabel: meta.isDone ? '✗ 取消標記' : '✓ 標記完成',
+        onFormMount: (form) => {
+            const ph = form.querySelector('#ph-__note');
+            if (ph) ph.innerHTML = `
+                <div style="padding: 0.7rem 0.85rem; background: var(--bg-tertiary); border-radius: var(--radius-md); font-size: var(--text-xs); line-height: 1.6; color: var(--text-secondary);">
+                    <strong style="color: var(--text-main);">當前狀態:</strong> ${meta.isDone ? '<span style="color: var(--color-success);">✓ 已完成</span>' : '<span style="color: var(--text-muted);">○ 未完成</span>'}<br>
+                    <strong style="color: var(--text-main);">說明:</strong> ${meta.note}
+                </div>
+            `;
+        },
+        onSubmit: (values) => {
+            if (meta.isDone) {
+                // 取消標記 — 清掉對應欄位
+                if (stepKey === 'signed') store.updateContract(c.id, { status: '待簽署' });
+                else if (stepKey === 'reminded') store.updateInvoice(inv.id, { lastReminderAt: null });
+                else if (stepKey === 'last5') store.updateInvoice(inv.id, { bankLast5: null, bankVerified: false });
+                else if (stepKey === 'verified') store.updateInvoice(inv.id, { bankVerified: false });
+                else if (stepKey === 'sent') store.updateContract(c.id, { contractSentAt: null });
+                else if (stepKey === 'returned') store.updateContract(c.id, { signedFileUrl: null });
+                showToast(`已清除「${meta.label}」標記`, 'info');
+            } else {
+                // 標記完成
+                const dateISO = values.date ? new Date(values.date).toISOString() : new Date().toISOString();
+                if (stepKey === 'signed') store.updateContract(c.id, { status: '已簽署' });
+                else if (stepKey === 'reminded') store.updateInvoice(inv.id, { lastReminderAt: dateISO });
+                else if (stepKey === 'last5') {
+                    const last5 = (values.bankLast5 || 'MANUAL').toString().trim();
+                    store.updateInvoice(inv.id, { bankLast5: last5 });
+                }
+                else if (stepKey === 'verified') {
+                    const due = (Number(inv.amount) || 0) - (Number(inv.discount) || 0);
+                    store.updateInvoice(inv.id, {
+                        bankVerified: true,
+                        paidAmount: due,
+                        paidDate: values.date || today,
+                        status: '已繳清'
+                    });
+                }
+                else if (stepKey === 'sent') store.updateContract(c.id, { contractSentAt: dateISO });
+                else if (stepKey === 'returned') store.updateContract(c.id, { signedFileUrl: 'MANUAL_MARKED' });
+                showToast(`✓ 已標記「${meta.label}」完成`, 'success');
+            }
+            if (typeof onDone === 'function') onDone();
         }
     });
 }

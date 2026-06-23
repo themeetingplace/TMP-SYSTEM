@@ -7096,6 +7096,17 @@ select.form-input {
     gap: 0.25rem;
     min-width: 60px;
     flex: 1;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--radius-md);
+    transition: background var(--transition-fast);
+}
+.ctl-step:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+.ctl-step:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
 }
 .ctl-circle {
     width: 28px;
