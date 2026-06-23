@@ -3838,6 +3838,26 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     background: linear-gradient(135deg, rgba(34, 148, 110, 0.12), rgba(34, 148, 110, 0.06));
     transform: translateX(2px);
 }
+/* X 關閉按鈕 — 右側獨立, 不觸發 banner click */
+.renew-banner-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-left: 0.4rem;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.renew-banner-close:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--text-main);
+}
+.renew-banner-close i { font-size: 1rem; }
 .renew-intent-banner-icon {
     width: 36px;
     height: 36px;

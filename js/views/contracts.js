@@ -23,6 +23,23 @@ const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'
 const TODAY_DATE = new Date();
 const TODAY = TODAY_DATE.toISOString().split('T')[0];
 
+// 「要續租」banner dismiss — 用 localStorage 記住已關過的最大 renew count
+// 如果 renew count 增加了 (有新的要續租) 再跳出來
+const RENEW_BANNER_KEY = 'pms-renew-banner-dismissed-count';
+function isRenewBannerDismissed() {
+    try {
+        const dismissed = parseInt(localStorage.getItem(RENEW_BANNER_KEY) || '0', 10);
+        const current = mockData.contracts.filter(c => c.renewIntent === 'renew' && c.renewalState === 'active').length;
+        return current > 0 && current <= dismissed;
+    } catch { return false; }
+}
+function dismissRenewBanner() {
+    try {
+        const current = mockData.contracts.filter(c => c.renewIntent === 'renew' && c.renewalState === 'active').length;
+        localStorage.setItem(RENEW_BANNER_KEY, String(current));
+    } catch {}
+}
+
 // 從合約的首張帳單抓加減項目 (季繳優惠 / 能源費等)，給合約 PDF 填入用
 function getContractAdjustments(contract) {
     if (!contract?.id) return [];
@@ -440,7 +457,7 @@ export function renderContracts() {
                 `).join('')}
             </div>
 
-            ${renewCounts.renew > 0 ? `
+            ${renewCounts.renew > 0 && !isRenewBannerDismissed() ? `
                 <div class="renew-intent-banner" data-jump-filter="renew" data-jump-value="renew">
                     <div class="renew-intent-banner-icon"><i class="ph ph-confetti"></i></div>
                     <div class="renew-intent-banner-body">
@@ -448,6 +465,9 @@ export function renderContracts() {
                         <small>點此只看這些合約，準備建立續租</small>
                     </div>
                     <i class="ph ph-arrow-right" style="font-size: 1.1rem; color: var(--color-success);"></i>
+                    <button type="button" class="renew-banner-close" data-action="dismiss-renew-banner" title="關閉此提示" aria-label="關閉">
+                        <i class="ph ph-x"></i>
+                    </button>
                 </div>
             ` : ''}
 
@@ -1474,9 +1494,18 @@ export function initContractActions(scope) {
     scope.querySelector('#btn-new-contract')?.addEventListener('click', () => showCheckinAssignmentForm());
 
     // 「N 位租客已表達續租意願」banner → 自動套上「✅ 要續租」filter
-    scope.querySelector('.renew-intent-banner')?.addEventListener('click', () => {
+    scope.querySelector('.renew-intent-banner')?.addEventListener('click', (e) => {
+        // X 按鈕另外處理 (dismiss), 點 banner 主體才跳 filter
+        if (e.target.closest('[data-action="dismiss-renew-banner"]')) return;
         const chip = scope.querySelector('[data-filter-value="renew"][data-filter-group="renew"]');
         if (chip) chip.click();
+    });
+    // banner X 關閉 → 記到 localStorage, 下次有新「要續租」會重新跳出
+    scope.querySelector('[data-action="dismiss-renew-banner"]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dismissRenewBanner();
+        const banner = scope.querySelector('.renew-intent-banner');
+        if (banner) banner.style.display = 'none';
     });
 
     // 詢問續租 — 觸發 Edge Function renewal-poll (10 天前發)

@@ -872,6 +872,10 @@ export function ensureContractInvoices() {
     mockData.contracts.forEach(c => {
         if (c.renewalState !== 'active') return;
         if (!c.startDate) return;
+        // 排除: 外部平台代收 / 代管合約 / bundle 子合約 (主合約 invoice 已含)
+        if (c.paymentChannel === 'platform') { skipped++; return; }
+        if (c.contractType && c.contractType !== 'cohousing') { skipped++; return; }
+        if (c.bundleParentContractId) { skipped++; return; }
 
         // 此合約是否已有帳單？（用 contractId 比對）
         const exists = mockData.invoices.some(inv =>
@@ -904,6 +908,10 @@ export function previewContractInvoices() {
     mockData.contracts.forEach(c => {
         if (c.renewalState !== 'active') return;
         if (!c.startDate) return;
+        // 排除 (跟 ensureContractInvoices 同邏輯): 外部平台 / 代管 / bundle 子合約
+        if (c.paymentChannel === 'platform') { wouldSkip.push(c); return; }
+        if (c.contractType && c.contractType !== 'cohousing') { wouldSkip.push(c); return; }
+        if (c.bundleParentContractId) { wouldSkip.push(c); return; }
         const exists = mockData.invoices.some(inv =>
             inv.direction === 'in' && inv.type === '房租' && inv.contractId === c.id
         );
