@@ -230,7 +230,8 @@ export function openFormModal({ title, fields = [], values = {}, submitLabel = '
             if (onFormMount) onFormMount(form);
             // 自動把所有 date input 升級成 Flatpickr (繁中、漂亮)
             initFlatpickr(form);
-            const first = form.querySelector('.custom-select-trigger, input:not([type="hidden"]), textarea');
+            // 自動 focus 第一個 input — 排除 date (flatpickr 一 focus 就開日曆, 干擾)
+            const first = form.querySelector('.custom-select-trigger, input:not([type="hidden"]):not([type="date"]), textarea');
             if (first) first.focus();
         }
     });
