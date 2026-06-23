@@ -292,8 +292,9 @@ export function renderContracts() {
         const lifecycle = c._state;
         // 租客已透過 LINE 表達意願 → 也算「該決策」(就算還沒進 awaiting_decision)，讓小編能立刻動作
         const hasIntent = ['renew', 'decline', 'inquiry'].includes(c.renewIntent);
-        const isDecision = lifecycle === 'awaiting_decision' || lifecycle === 'expired' || hasIntent;
         const isArchived = lifecycle === 'renewed' || lifecycle === 'terminated';
+        // archived (已續約 / 已終止) 的合約已經處理完, 不該再出現決策按鈕
+        const isDecision = !isArchived && (lifecycle === 'awaiting_decision' || lifecycle === 'expired' || hasIntent);
 
         const searchText = [c.id, c.propertyName, c.tenant].join(' ').toLowerCase();
         const days = c._daysLeft;
