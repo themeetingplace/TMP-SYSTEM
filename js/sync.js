@@ -48,6 +48,31 @@ const state = {
 // (forensic 確認 2026-06-16 用戶昨晚的資料復活就是這個 race)
 let firstPullDone = false;
 
+// ⚠ Dedupe helper: 移除本機 mockData[src] 內同 ID 重複 row
+//    PostgreSQL upsert batch 內同 PK 兩筆會回 "ON CONFLICT DO UPDATE cannot affect row a second time"
+//    每次 push 前先把 mockData 本身去重一次, 順便修正 source-of-truth
+function dedupeById(arr, srcKey) {
+    if (!Array.isArray(arr) || arr.length === 0) return arr;
+    const pkJs = srcKey === 'buildings' ? 'buildingId' : 'id';
+    const seen = new Map();
+    arr.forEach(r => {
+        if (!r) return;
+        const k = r[pkJs];
+        if (k == null) return;
+        // 後寫的覆蓋前寫的 (最新 mutation 勝)
+        seen.set(k, r);
+    });
+    const deduped = Array.from(seen.values());
+    if (deduped.length !== arr.length) {
+        const removed = arr.length - deduped.length;
+        console.warn(`[sync] dedupe ${srcKey}: ${arr.length} → ${deduped.length} (移除 ${removed} 筆重複 ID)`);
+        // 同步修正 mockData 本身 (in-place 替換內容, 不換 reference)
+        arr.length = 0;
+        arr.push(...deduped);
+    }
+    return arr;
+}
+
 const listeners = new Set();
 function emit() { listeners.forEach(fn => { try { fn({ ...state }); } catch {} }); }
 function setStatus(s, error = null) {
@@ -161,7 +186,10 @@ async function pushSmall() {
         setStatus('pushing');
         try {
             for (const t of SMALL_TABLES) {
-                const rows = (mockData[t.src] || []).map(t.toDb);
+                // ⚠ 防呆: 本機 mockData 若有同 ID 重複 row → upsert batch 內同 PK 多筆會被 PostgreSQL 拒收 (ON CONFLICT DO UPDATE cannot affect row a second time)
+                // 推之前先 dedupe + 同步修正 mockData 本身
+                const dedupeBeforePush = dedupeById(mockData[t.src] || [], t.src);
+                const rows = dedupeBeforePush.map(t.toDb);
                 if (rows.length === 0) continue;
                 // sanity check: 雲端 0 筆但本機很多 → 強烈懷疑是 zombie restore，拒絕推
                 if (rows.length > 5) {
@@ -196,7 +224,9 @@ async function pushLarge() {
     setStatus('pushing');
     try {
         for (const t of LARGE_TABLES) {
-            const rows = (mockData[t.src] || []).map(t.toDb);
+            // 同 pushSmall: 防本機 dup → upsert batch 內同 PK 多筆會被 PostgreSQL 拒收
+            const dedupeBeforePush = dedupeById(mockData[t.src] || [], t.src);
+            const rows = dedupeBeforePush.map(t.toDb);
             if (rows.length === 0) continue;
             const { error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk });
             if (error) throw new Error(`${t.key}: ${error.message}`);
