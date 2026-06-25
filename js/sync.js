@@ -184,6 +184,10 @@ async function pushSmall() {
             return;
         }
         setStatus('pushing');
+        // ⚠ 在 push 開始就 markJustPushed —
+        //   若某表 push 失敗 throw, 已經 upsert 成功的表 echo 還是會回來;
+        //   原本 markJustPushed 在 loop 之後才執行 → 這些 echo 變「外人改的」 → 觸發 re-render → 畫面跳
+        markJustPushed();
         try {
             for (const t of SMALL_TABLES) {
                 // ⚠ 防呆: 本機 mockData 若有同 ID 重複 row → upsert batch 內同 PK 多筆會被 PostgreSQL 拒收 (ON CONFLICT DO UPDATE cannot affect row a second time)
@@ -204,8 +208,9 @@ async function pushSmall() {
                 }
                 const { error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk });
                 if (error) throw new Error(`${t.key}: ${error.message}`);
+                // 每張表成功也續杯 markJustPushed, 讓 3s echo window 持續覆蓋
+                markJustPushed();
             }
-            markJustPushed();
             setStatus('idle');
         } catch (e) {
             setStatus('error', e.message);
@@ -222,6 +227,7 @@ async function pushLarge() {
         return;
     }
     setStatus('pushing');
+    markJustPushed();  // 防 partial push echo 被誤判
     try {
         for (const t of LARGE_TABLES) {
             // 同 pushSmall: 防本機 dup → upsert batch 內同 PK 多筆會被 PostgreSQL 拒收
@@ -230,8 +236,8 @@ async function pushLarge() {
             if (rows.length === 0) continue;
             const { error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk });
             if (error) throw new Error(`${t.key}: ${error.message}`);
+            markJustPushed();
         }
-        markJustPushed();
         setStatus('idle');
     } catch (e) {
         setStatus('error', e.message);
