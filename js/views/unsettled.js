@@ -430,11 +430,13 @@ function doSplitSettle(inv, paidPortion, remainingBalance) {
     const isIncome = inv.direction === 'in';
     const origDue = (inv.amount || 0) - (inv.discount || 0);
 
-    // 1. 建新帳目（已結）— 金額 = paidPortion，完全結清
+    // 1. 建新帳目（已結）— 金額 = paidPortion，完全結清, 不帶任何折扣/加收
+    //    把 discount + discountReason + adjustments 全清掉 (新帳目代表「實收」乾淨一筆)
     const draft = {
         ...inv,
         amount: paidPortion,
-        discount: 0,           // 拆出去的帳目不再帶折扣
+        discount: 0,
+        discountReason: '',
         paidAmount: paidPortion,
         paidDate: TODAY,
         dueDate: TODAY,
@@ -448,10 +450,13 @@ function doSplitSettle(inv, paidPortion, remainingBalance) {
     delete draft.createdAt;
     delete draft.updatedAt;
     delete draft.lastReminderAt;
-    draft.status = deriveInvoiceStatus({ ...draft });
+    delete draft.adjustments;  // widget JSON 殘留, 防再次編輯時誤套
+    // 明確 status (避免 addInvoice 漏 derive 或 deriveInvoiceStatus 邊緣 case)
+    draft.status = isIncome ? '已繳清' : '已付';
     const created = store.addInvoice(draft);
 
     // 2. 原帳目：amount 改成剩餘 due（=remainingBalance + 原 discount），paidAmount 歸 0，清掉末5碼/核對狀態
+    //    discount + discountReason 保留 (剩餘那筆的加收/折扣性質還在)
     const remainingPatch = {
         amount: remainingBalance + (inv.discount || 0),  // 還原 due = amount - discount
         paidAmount: 0,
@@ -459,7 +464,8 @@ function doSplitSettle(inv, paidPortion, remainingBalance) {
         bankVerified: false,
         note: (inv.note ? inv.note + ' · ' : '') + `[已拆出 $${paidPortion.toLocaleString()} → ${created.id}]`
     };
-    remainingPatch.status = deriveInvoiceStatus({ ...inv, ...remainingPatch });
+    // 明確 status：剩餘那筆 paid=0 → 欠繳/未付
+    remainingPatch.status = isIncome ? '欠繳' : '未付';
     store.updateInvoice(inv.id, remainingPatch);
 
     showToast(`已拆帳：已${isIncome ? '收' : '付'} $${paidPortion.toLocaleString()} → ${created.id}，餘 $${remainingBalance.toLocaleString()} 留待結`, 'success', 5000);
