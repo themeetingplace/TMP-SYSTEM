@@ -691,14 +691,11 @@ function renderMoveInOutChart(months /* , maxVal */) {
 }
 
 // ───────────────────── Tab 3: 財務分析 (獲利面) ─────────────────────
-// 偵測「房東租金」支出 — 房東租金是「租金」這個分類底下，direction='out' 的那種
-// 抓所有 direction='out' 且 type 含「租金 / 房租 / 房東」字眼的 invoice，全部加總視為房東租金
+// 偵測房東租金支出 — 嚴格只看 type === '房東租金' (精準字串比對, 不用 regex 模糊)
+// (audit: 原本 /租金|房租|房東/ 模糊配對會把住客「房租」誤抓到 — 收支邊界破洞)
+// 用戶強約定: 房租=in / 房東租金=out, 絕對不混用 (見 utils/terminology.js)
 function detectLandlordRentInvoices(invoices) {
-    return invoices.filter(i =>
-        i.direction === 'out' &&
-        typeof i.type === 'string' &&
-        /租金|房租|房東/.test(i.type)
-    );
+    return invoices.filter(i => i.direction === 'out' && i.type === '房東租金');
 }
 
 function computeAggForInvoices(invoices) {
@@ -1082,7 +1079,7 @@ function renderSingleBuildingAnalysis(buildingId) {
 // === 支出分類桶 (對齊用戶 excel 表) ===
 // 對應 invoice.type；未匹配的歸到「其他」
 const EXPENSE_BUCKETS = [
-    { key: 'rent',     label: '租金',    matchTypes: ['房東租金', '租金'] },
+    { key: 'rent',     label: '房東租金', matchTypes: ['房東租金'] },
     { key: 'mgmt',     label: '管理費',  matchTypes: ['管理費'] },
     { key: '591',      label: '591',     matchTypes: ['591'] },
     { key: 'water',    label: '水費',    matchTypes: ['水費'] },

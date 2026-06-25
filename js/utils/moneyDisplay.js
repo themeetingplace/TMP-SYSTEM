@@ -57,8 +57,8 @@ export function moneyAmount(amount, { sign = null, color = null, bold = false } 
     }
     const cssColor = colorVar(resolvedColor);
     const weight = bold ? ' font-weight: 700;' : '';
-    if (!cssColor && !bold) return `${prefix}${fmt(abs)}`;
-    return `<span style="${cssColor}${weight}">${prefix}${fmt(abs)}</span>`;
+    // 金額永遠 nowrap + tabular-nums (對齊小數位 + 不被斷行)
+    return `<span class="money-value" style="white-space:nowrap;font-variant-numeric:tabular-nums;${cssColor}${weight}">${prefix}${fmt(abs)}</span>`;
 }
 
 /** label → 統一 CSS 變數 */

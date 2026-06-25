@@ -651,6 +651,41 @@ export function showToast(message, type = 'success', duration = 2500) {
     }, duration);
 }
 
+// === Loading toast — 給 async 操作 (寄合約 / push line / PDF 匯出 / 批次結帳) 用 ===
+// 用法: const tid = showLoadingToast('寄合約中...'); try { await ... } finally { hideLoadingToast(tid); }
+const _loadingToasts = new Map();
+export function showLoadingToast(message, key) {
+    ensureToastContainer();
+    const tid = key || `lt-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    // 若同 key 已存在 → 更新訊息不重複建
+    const existing = _loadingToasts.get(tid);
+    if (existing) {
+        const span = existing.querySelector('span');
+        if (span) span.textContent = String(message ?? '');
+        return tid;
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-loading show';
+    toast.setAttribute('role', 'status');
+    const spinner = document.createElement('i');
+    spinner.className = 'ph ph-circle-notch';
+    spinner.setAttribute('aria-hidden', 'true');
+    spinner.style.animation = 'spin 0.8s linear infinite';
+    const span = document.createElement('span');
+    span.textContent = String(message ?? '處理中…');
+    toast.append(spinner, ' ', span);
+    toastContainer.appendChild(toast);
+    _loadingToasts.set(tid, toast);
+    return tid;
+}
+export function hideLoadingToast(tid) {
+    const toast = _loadingToasts.get(tid);
+    if (!toast) return;
+    _loadingToasts.delete(tid);
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 260);
+}
+
 // UIUX #3: 危險操作護欄 — 5 秒倒數 undo toast
 // 用法: showUndoToast({ message: '已刪除合約 C012', onUndo: () => restore(), onCommit: () => actualCloudDelete(), durationMs: 5000 })
 // - 倒數期間點 toast 上「復原」→ 觸發 onUndo

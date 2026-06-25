@@ -559,13 +559,32 @@ async function handleMessage(event: any) {
         return;
     }
 
-    // 其他非文字訊息 (貼圖 / 影片 / 位置) — 一律 silent log
+    // 非文字訊息 (貼圖 / 影片 / 音訊 / 位置) — log + 回 ack 訊息
+    // (audit: 原本 silent 客戶不知道訊息被收到, 容易誤會沒人在看)
     if (event.message.type !== 'text') {
         await supabase.from('line_messages').insert({
             line_user_id: userId, direction: 'in', message_type: event.message.type,
             content: `(${event.message.type})`, raw: event,
             webhook_event_id: event.webhookEventId
         });
+        // 對非媒體訊息回 ack (避免客戶以為沒收到)
+        const ackMap: Record<string, string> = {
+            audio: '🎙 我們收到您的語音訊息了, 暫時無法處理語音, 麻煩改用文字描述, 小編會盡快回覆 🙂',
+            video: '🎬 我們收到您的影片了, 影片較難閱讀, 如有問題可改用文字或圖片說明 🙂',
+            location: '📍 我們收到您傳送的位置, 已轉給小編了 🙂',
+            sticker: ''  // 貼圖不回 (避免無限互傳)
+        };
+        const ack = ackMap[event.message.type];
+        if (ack && event.replyToken) {
+            try {
+                await lineReply(event.replyToken, [{
+                    type: 'text', text: ack,
+                    quickReply: bound ? tenantServiceQuickReply() : welcomeQuickReply()
+                }]);
+            } catch (e) {
+                console.warn(`[ack ${event.message.type}] reply failed:`, (e as Error).message);
+            }
+        }
         return;
     }
 

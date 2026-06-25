@@ -8246,6 +8246,13 @@ button.omn-card { font-family: inherit; }
         gap: 0.6rem 1rem;
         margin-bottom: 0.65rem;
     }
+    /* iPhone SE / 小手機 (≤420px) 改 1 column 避免文字溢出 */
+    @media (max-width: 420px) {
+        .entity-mobile-card .c-meta-grid {
+            grid-template-columns: 1fr;
+            gap: 0.45rem;
+        }
+    }
     .entity-mobile-card .c-meta-cell {
         text-align: left;
     }
