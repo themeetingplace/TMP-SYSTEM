@@ -399,10 +399,10 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
           ]
         : [
-            // 館別 | 物件 | 租客 (一列三段邏輯, 但 2-col 改用 1+1 / span2 排)
+            // 館別 | 物件 | 租客 (物件非必填, 租客可手打新名)
             { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions },
-            { name: 'propertyName', label: '物件', type: 'select', required: true, options: propertyOptions },
-            { name: 'tenant', label: '租客', type: 'select', required: true, options: tenantOptions, searchable: true, placeholder: '輸入姓名或電話搜尋...', span: 2 },
+            { name: 'propertyName', label: '物件', type: 'select', options: propertyOptions, hint: '無對應床位可留空' },
+            { name: 'tenant', label: '租客', type: 'text', required: true, span: 2, placeholder: '輸入姓名 (按 ↓ 看現有租客建議)', hint: '建議從現有租客挑選；打全新名字會自動建檔', suggestions: tenantOptions },
             { name: 'periodStart', label: '租期起', type: 'date' },
             { name: 'periodEnd', label: '租期止', type: 'date' },
             { name: '__sep_payment', type: 'section', label: '' },
@@ -585,6 +585,23 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             }
         },
         onSubmit: (values) => {
+            // 租客 (收入 form 才有): 打了新名字 → 自動建檔
+            if (!isExpense && values.tenant) {
+                const tenantName = String(values.tenant).trim();
+                const exists = mockData.tenants.some(t => (t.name || '').trim() === tenantName);
+                if (!exists) {
+                    store.addTenant({
+                        name: tenantName,
+                        phone: '',
+                        email: '',
+                        currentProperty: values.propertyName || null,
+                        status: '待入住',
+                        source: '帳務新增'
+                    });
+                    showToast(`已自動建立新租客「${tenantName}」`, 'info', 4000);
+                }
+                values.tenant = tenantName;
+            }
             // widget 寫進 discount (net = sub - add): 正=折扣, 負=加收
             // 收入 invoice: discount 直接用 widget 值 (DB 正=折扣 / 負=加收, 跟 due = amount - discount 公式對得起來)
             // 支出 invoice: 翻轉 (DB 正=多付 / 負=少付)
