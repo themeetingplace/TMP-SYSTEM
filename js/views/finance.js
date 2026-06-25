@@ -5,7 +5,6 @@ import { mockData, store, invoiceMonth, shiftMonth, currentMonth, formatMonthLab
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
-import { showTenantForm } from './tenants.js';
 import { financeState } from './finance-state.js';
 import { exportFinanceReport } from './finance-export.js';
 import { escapeHtml } from '../utils/escape.js';
@@ -407,12 +406,9 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             // 館別 | 物件 | 租客 (物件非必填, 租客可手打新名)
             { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions },
             { name: 'propertyName', label: '物件', type: 'select', options: propertyOptions, hint: '無對應床位可留空' },
-            { name: 'tenant', label: '租客', type: 'select', required: true, span: 2,
-              options: [
-                  { value: '__new', label: '✨ 新增新租客 (建檔後自動帶回)' },
-                  ...tenantOptions.map(name => ({ value: name, label: name }))
-              ],
-              searchable: true, placeholder: '選擇租客 / 輸入關鍵字搜尋...' },
+            // 跟新增入住同款: text input + 輸入時跳建議列, 沒比對到舊客 → submit 自動建檔
+            { name: 'tenant', label: '租客', type: 'text', required: true, span: 2,
+              placeholder: '輸入姓名搜尋舊資料 / 或輸入新姓名 (沒比對到會自動建檔)' },
             { name: 'periodStart', label: '租期起', type: 'date' },
             { name: 'periodEnd', label: '租期止', type: 'date' },
             { name: '__sep_payment', type: 'section', label: '' },
@@ -493,28 +489,48 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
                 }
             });
 
-            // 「✨ 新增新租客」option — 攔截 __new value, 開租客 form (跟租客清單同款), 建檔後自動 select
+            // 租客欄 typeahead — 跟新增入住 wizard 同款 suggest strip
+            // 打字 → 跳建議列 (符合的舊客) / 沒比對到 → 提示「將建立新顧客」
             if (!isExpense) {
-                const tenantHiddenInv = form.querySelector('[name="tenant"]');
-                const tenantWrap = form.querySelector('.custom-select[data-name="tenant"]');
-                tenantHiddenInv?.addEventListener('change', () => {
-                    if (tenantHiddenInv.value !== '__new') return;
-                    // 先清掉 __new (避免關掉 modal 後值還是 __new)
-                    tenantHiddenInv.value = '';
-                    // 直接重用租客清單頁的「新增租客」form (showTenantForm), 建檔後自動帶回
-                    showTenantForm(null, {
-                        onCreated: (created) => {
-                            if (tenantWrap?.__setOptions) {
-                                const newOpts = [
-                                    { value: '__new', label: '✨ 新增新租客 (建檔後自動帶回)' },
-                                    ...mockData.tenants.map(t => ({ value: t.name, label: t.name }))
-                                ];
-                                tenantWrap.__setOptions(newOpts);
-                                tenantWrap.__setValue?.(created.name);
-                            }
-                        }
+                const tenantInput = form.querySelector('[name="tenant"]');
+                if (tenantInput) {
+                    const strip = document.createElement('div');
+                    strip.className = 'tenant-suggest-strip';
+                    tenantInput.closest('.form-group')?.appendChild(strip);
+
+                    const renderSuggest = (q) => {
+                        const query = (q || '').trim();
+                        if (query.length < 1) { strip.innerHTML = ''; return; }
+                        const ql = query.toLowerCase();
+                        const matches = mockData.tenants.filter(t =>
+                            (t.name || '').toLowerCase().includes(ql) ||
+                            (t.phone || '').replace(/-/g, '').includes(query.replace(/-/g, ''))
+                        ).slice(0, 5);
+                        const isExactExisting = mockData.tenants.some(t => t.name === query);
+                        const willCreateNew = !isExactExisting;
+                        const headerHtml = willCreateNew
+                            ? `<div class="ts-header ts-header-new">✨ 沒符合的舊資料 → 將建立新顧客「<strong>${escapeHtml(query)}</strong>」</div>`
+                            : (matches.length > 0 ? `<div class="ts-header">找到 ${matches.length} 筆舊資料 — 點擊載入</div>` : '');
+                        if (!headerHtml && matches.length === 0) { strip.innerHTML = ''; return; }
+                        strip.innerHTML = headerHtml + matches.map(t => `
+                            <div class="ts-item" data-tenant-name="${escapeHtml(t.name)}">
+                                <span class="ts-name">${escapeHtml(t.name)} <span class="ts-phone">${escapeHtml(t.phone || '無電話')}</span></span>
+                                ${t.source ? `<span class="ts-source">${escapeHtml(t.source)}</span>` : '<span></span>'}
+                                <span class="ts-load">點此載入 →</span>
+                            </div>
+                        `).join('');
+                    };
+
+                    tenantInput.addEventListener('input', () => renderSuggest(tenantInput.value));
+                    strip.addEventListener('click', (e) => {
+                        const item = e.target.closest('.ts-item');
+                        if (!item) return;
+                        tenantInput.value = item.dataset.tenantName;
+                        strip.innerHTML = `<div class="ts-loaded">✅ 已載入 ${escapeHtml(tenantInput.value)}</div>`;
+                        setTimeout(() => { strip.innerHTML = ''; }, 1500);
+                        tenantInput.dispatchEvent(new Event('change', { bubbles: true }));
                     });
-                });
+                }
             }
 
             // 折扣 / 加收 widget — 跟合約 form 同款
