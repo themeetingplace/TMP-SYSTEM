@@ -62,21 +62,44 @@ function corsHeaders() {
 
 // base64 → Uint8Array
 function base64ToBytes(b64: string): Uint8Array {
-    const binary = atob(b64);
+    // 剝掉 data:image/...;base64, 前綴 (如果有)
+    const cleaned = b64.replace(/^data:[^,]*,/, '');
+    const binary = atob(cleaned);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return bytes;
 }
 
+// 驗 magic bytes 確認真的是圖片 (JPEG / PNG / WEBP / HEIC)
+// (audit: 原本只驗 base64 長度, 客戶可上傳 .exe 偽裝)
+function detectImageType(bytes: Uint8Array): 'jpeg' | 'png' | 'webp' | 'heic' | null {
+    if (bytes.length < 12) return null;
+    if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'jpeg';
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) return 'png';
+    if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+        && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'webp';
+    if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+        const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+        if (['heic', 'heix', 'mif1', 'hevc'].includes(brand)) return 'heic';
+    }
+    return null;
+}
+
 // 上傳浮水印身分證到 id-cards bucket
-// path = id-cards/{tenantId}/{side}_{timestamp}.jpg
+// path = id-cards/{tenantId}/{side}_{timestamp}.{ext}
 async function uploadIdCard(tenantId: string, side: 'front' | 'back', b64: string): Promise<string> {
     const bytes = base64ToBytes(b64);
+    const kind = detectImageType(bytes);
+    if (!kind) {
+        throw new Error(`身分證 ${side} 不是合法圖片格式 (僅接受 JPEG/PNG/WEBP/HEIC)`);
+    }
+    const ext = kind === 'jpeg' ? 'jpg' : kind;
+    const contentType = kind === 'heic' ? 'image/heic' : `image/${kind === 'jpeg' ? 'jpeg' : kind}`;
     const ts = Date.now();
-    const path = `${tenantId}/${side}_${ts}.jpg`;
+    const path = `${tenantId}/${side}_${ts}.${ext}`;
     const { error } = await supabase.storage
         .from('id-cards')
-        .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
+        .upload(path, bytes, { contentType, upsert: true });
     if (error) throw new Error(`身分證 ${side} 上傳失敗：${error.message}`);
     return path;
 }
@@ -229,7 +252,18 @@ serve(async (req) => {
             if (mergedBy === 'name' || mergedBy === 'claim') {
                 updates.phone = phone;  // 用 LIFF 提供的 phone (原本 phone 沒對到才落到 name/claim 路徑)
             }
-            await supabase.from('tenants').update(updates).eq('id', existing.id);
+            // ⚠ Atomic UPDATE: 只在 line_user_id IS NULL 時才綁定
+            //    (audit: 兩個客戶同時 claim 同一 tenant, 後者覆寫前者的 line_user_id → 攔截別人的繳款/合約通知)
+            const { data: claimed, error: claimErr } = await supabase
+                .from('tenants').update(updates)
+                .eq('id', existing.id)
+                .is('line_user_id', null)
+                .select('id');
+            if (claimErr) throw new Error(`綁定租客失敗: ${claimErr.message}`);
+            if (!claimed || claimed.length === 0) {
+                // race condition — 在我們檢查跟 update 之間, 別人搶先綁定了
+                throw new Error('該租客資料剛被其他 LINE 帳號綁定, 請聯絡小編確認');
+            }
             tenantId = existing.id;
         } else {
             // 新建 tenant — 床位 / 居住中狀態 由管理員後台確認

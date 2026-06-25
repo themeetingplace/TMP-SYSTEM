@@ -379,10 +379,18 @@ let LANG = (function() {
     return (saved === 'zh' || saved === 'en') ? saved : 'zh';
 })();
 
+// ⚠ XSS 防護: 任何用戶可控字串 (LINE displayName / 自填表單) 塞進 innerHTML 都要 escape
+function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[ch]);
+}
+
 function t(key, vars) {
     let s = (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.zh[key] || `[${key}]`;
     if (vars) {
-        Object.keys(vars).forEach(k => { s = s.split(`{${k}}`).join(vars[k]); });
+        // 自動 escape 所有插值, 避免 displayName 帶 <script> 注入
+        Object.keys(vars).forEach(k => { s = s.split(`{${k}}`).join(escapeHtml(vars[k])); });
     }
     return s;
 }
@@ -456,12 +464,15 @@ function renderForm(profile) {
         if (idCardImages.back)  applyIdPreview('back',  idCardImages.back);
     };
 
+    // pictureUrl 必須是 https:// 才接受 — 防 javascript: / data: URL 注入
+    const safePicUrl = (profile.pictureUrl && /^https:\/\//.test(profile.pictureUrl))
+        ? profile.pictureUrl : '';
     document.getElementById('root').innerHTML = `
         <h1>${t('pageTitle')}</h1>
         <div class="subtitle">${t('subtitle')}</div>
 
         <div class="user-card">
-            <img src="${profile.pictureUrl || ''}" alt="" onerror="this.style.display='none'">
+            <img src="${escapeHtml(safePicUrl)}" alt="" onerror="this.style.display='none'">
             <span>${t('loggedInAs', { name: profile.displayName })}</span>
         </div>
 

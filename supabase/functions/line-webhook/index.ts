@@ -25,16 +25,45 @@ const ADMIN_LINE_USER_IDS = (Deno.env.get('ADMIN_LINE_USER_IDS') ?? '').split(',
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+// === fetch with timeout — 防 LINE API 502 卡死 Edge function 15-30s 整體 timeout ===
+async function fetchWithTimeout(url: string, opts: RequestInit = {}, timeoutMs = 5000): Promise<Response> {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...opts, signal: ctrl.signal });
+    } finally {
+        clearTimeout(tid);
+    }
+}
+
+// 指數退避重試 (1s / 2s / 4s) — 用於 push (對 LINE 而言失敗代價高)
+async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 2, timeoutMs = 5000): Promise<Response> {
+    let lastErr: unknown;
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const r = await fetchWithTimeout(url, opts, timeoutMs);
+            if (r.ok || r.status < 500) return r;  // 4xx 不 retry (請求本身有問題)
+            lastErr = new Error(`HTTP ${r.status}`);
+        } catch (e) {
+            lastErr = e;
+        }
+        if (i < retries) {
+            await new Promise(res => setTimeout(res, 1000 * Math.pow(2, i)));
+        }
+    }
+    throw lastErr;
+}
+
 // === LINE Messaging API helpers ===
 async function lineReply(replyToken: string, messages: any[]) {
-    const r = await fetch('https://api.line.me/v2/bot/message/reply', {
+    const r = await fetchWithTimeout('https://api.line.me/v2/bot/message/reply', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`
         },
         body: JSON.stringify({ replyToken, messages })
-    });
+    }, 5000);
     if (!r.ok) {
         const errText = await r.text();
         console.error(`[lineReply] FAILED ${r.status}: ${errText}`);
@@ -44,22 +73,27 @@ async function lineReply(replyToken: string, messages: any[]) {
 }
 
 async function lineGetProfile(userId: string) {
-    const r = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
-        headers: { 'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}` }
-    });
-    return r.ok ? await r.json() : null;
+    try {
+        const r = await fetchWithTimeout(`https://api.line.me/v2/bot/profile/${userId}`, {
+            headers: { 'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}` }
+        }, 5000);
+        return r.ok ? await r.json() : null;
+    } catch (e) {
+        console.warn(`[lineGetProfile] timeout/fail: ${(e as Error).message}`);
+        return null;
+    }
 }
 
-// Push 給單一 userId
+// Push 給單一 userId — 帶 timeout + retry (主動推訊失敗代價高)
 async function linePush(userId: string, messages: any[]) {
-    const r = await fetch('https://api.line.me/v2/bot/message/push', {
+    const r = await fetchWithRetry('https://api.line.me/v2/bot/message/push', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`
         },
         body: JSON.stringify({ to: userId, messages })
-    });
+    }, 2, 5000);
     // P2-6: 失敗就 throw，呼叫端決定要不要 catch (notifyAdmin 會 catch，避免錯誤循環通知)
     if (!r.ok) {
         const errText = await r.text();
@@ -141,7 +175,9 @@ async function shouldSendCanned(userId: string): Promise<boolean> {
         .limit(1);
     if (error) {
         console.error('[shouldSendCanned] DB error:', error);
-        return true;  // DB 壞了就放行，免得卡死
+        // ⚠ DB 故障時改回傳 false (不發) — 寧可漏發也不轟炸客戶
+        // (audit: 原本 return true 會在 Supabase 故障時雪崩式 spam, 客戶連續收罐頭)
+        return false;
     }
     return !data || data.length === 0;
 }
@@ -351,9 +387,10 @@ async function handlePostback(event: any) {
 // 限制：MAX_FILE_BYTES 以內，超過直接拒，避免 LINE 用戶傳超大檔耗光 Storage 配額
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 async function lineDownloadContent(messageId: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-    const r = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+    // 圖片/檔案下載給 15s timeout (檔案大過普通 API 久)
+    const r = await fetchWithTimeout(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
         headers: { 'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}` }
-    });
+    }, 15000);
     if (!r.ok) throw new Error(`LINE content fetch ${r.status}`);
     // 先看 Content-Length，超過就直接拒，連讀都不讀
     const cl = parseInt(r.headers.get('content-length') || '0', 10);
@@ -733,6 +770,16 @@ Just paste your replies right here. Let us know your preferred viewing times, an
             if (unpaid && unpaid.length > 0) {
                 // 場景 A：有欠繳 → 寫入末 5 碼
                 const inv = unpaid[0];
+                // ⚠ 24h dedup: 已對到的 invoice 24h 內客戶又傳一次 → 不覆寫 bank_verified, 只回 ack
+                //   (audit: 原本第二次傳會 reset bank_verified=false, 把已核對狀態打回)
+                if (inv.bank_last5 && inv.bank_last5 === text && inv.bank_verified) {
+                    await lineReply(event.replyToken, [{
+                        type: 'text',
+                        text: `✅ ${bound.name} 您的這筆末 5 碼 (${text}) 已對帳完成，不用重傳 🙂`,
+                        quickReply: tenantServiceQuickReply()
+                    }]);
+                    return;
+                }
                 await supabase.from('invoices').update({
                     bank_last5: text,
                     bank_verified: false
