@@ -18,9 +18,10 @@ export function buildFinanceReportHtml(ym) {
         .filter(inv => !isPreCutoff(inv))  // pre-cutoff 不算進 PDF 匯出
         .filter(inv => isSettled(inv) && invoiceMonth(inv) === ym)
         .sort((a, b) => {
+            // 日期升冪 (1 號最早, 月底最晚) — 用戶慣例: 從月初翻到月底
             const da = a.paidDate || a.dueDate || '';
             const db = b.paidDate || b.dueDate || '';
-            return db.localeCompare(da);
+            return da.localeCompare(db);
         });
 
     const inAll  = invoices.filter(i => i.direction === 'in').reduce((s, i) => s + actualAmount(i), 0);
@@ -71,7 +72,23 @@ export function buildFinanceReportHtml(ym) {
 <meta charset="UTF-8">
 <title>${esc(periodLabel)} 總收支表</title>
 <style>
-    @page { size: A4 landscape; margin: 1cm; }
+    /* A4 直式 + CSS Paged Media 自動印頁碼 (Chrome 列印 preview 支援) */
+    @page {
+        size: A4 portrait;
+        margin: 1.2cm 1cm 1.5cm 1cm;
+        @bottom-right {
+            content: "第 " counter(page) " 頁 / 共 " counter(pages) " 頁";
+            font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+            font-size: 9pt;
+            color: #6b7280;
+        }
+        @bottom-left {
+            content: "聚空間 PMS · 總收支表";
+            font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+            font-size: 8pt;
+            color: #9ca3af;
+        }
+    }
     * { box-sizing: border-box; }
     body {
         font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
@@ -84,6 +101,11 @@ export function buildFinanceReportHtml(ym) {
         body { background: white; padding: 0; }
         .toolbar { display: none !important; }
         .report-page { box-shadow: none !important; padding: 0 !important; max-width: none !important; }
+        /* 分頁: tbody row 不要在中間斷開 */
+        tr { page-break-inside: avoid; }
+        /* thead 每頁重複 */
+        thead { display: table-header-group; }
+        tfoot { display: table-row-group; }
     }
     .toolbar {
         position: sticky;
@@ -115,7 +137,7 @@ export function buildFinanceReportHtml(ym) {
         color: #475569;
     }
     .report-page {
-        max-width: 29.7cm;
+        max-width: 21cm;   /* A4 portrait 寬度 */
         margin: 0 auto;
         background: white;
         padding: 1.5rem;
