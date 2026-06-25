@@ -206,10 +206,16 @@ async function pushSmall() {
                         return;
                     }
                 }
-                const { error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk });
+                // ⚠ 用 .select() 拿回 DB trigger 寫的 updated_at, 用來標記 per-row push timestamp
+                //   讓 handleRealtimeChange 能精準分辨「自家剛 push」vs「別 tab 改動」
+                const { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
                 if (error) throw new Error(`${t.key}: ${error.message}`);
                 // 每張表成功也續杯 markJustPushed, 讓 3s echo window 持續覆蓋
                 markJustPushed();
+                // mark per-row 用 DB 回來的 updated_at
+                (returned || []).forEach(r => {
+                    if (r?.[t.pk] && r?.updated_at) markRowPushed(t.key, r[t.pk], r.updated_at);
+                });
             }
             setStatus('idle');
         } catch (e) {
@@ -230,13 +236,15 @@ async function pushLarge() {
     markJustPushed();  // 防 partial push echo 被誤判
     try {
         for (const t of LARGE_TABLES) {
-            // 同 pushSmall: 防本機 dup → upsert batch 內同 PK 多筆會被 PostgreSQL 拒收
             const dedupeBeforePush = dedupeById(mockData[t.src] || [], t.src);
             const rows = dedupeBeforePush.map(t.toDb);
             if (rows.length === 0) continue;
-            const { error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk });
+            const { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
             if (error) throw new Error(`${t.key}: ${error.message}`);
             markJustPushed();
+            (returned || []).forEach(r => {
+                if (r?.[t.pk] && r?.updated_at) markRowPushed(t.key, r[t.pk], r.updated_at);
+            });
         }
         setStatus('idle');
     } catch (e) {
@@ -328,6 +336,22 @@ let lastPushAt = 0;
 function markJustPushed() { lastPushAt = Date.now(); }
 function isOwnEcho() { return Date.now() - lastPushAt < 3000; }
 
+// === Per-row dirty timestamp 追蹤 ===
+// (audit: 全局 lastPushAt 跨 tab 會誤判 — tab A push 後 tab B 改同一筆的 echo 被認為自家)
+// 改成記錄「本機這個 row 最近一次 push 的 updated_at」, realtime 進來時若 incoming.updated_at <= 記錄值
+// 就視為自家 echo. 跨 tab 改動因 updated_at 不同會通過.
+const rowPushTimestamps = new Map();  // key=`${table}/${id}` → updated_at ISO string
+function markRowPushed(table, id, updatedAt) {
+    if (id == null || !updatedAt) return;
+    rowPushTimestamps.set(`${table}/${id}`, updatedAt);
+}
+function isOwnRowEcho(table, id, incomingUpdatedAt) {
+    if (id == null || !incomingUpdatedAt) return false;
+    const last = rowPushTimestamps.get(`${table}/${id}`);
+    if (!last) return false;
+    return incomingUpdatedAt <= last;
+}
+
 // === Realtime — 訂閱所有表 ===
 let realtimeChannel = null;
 
@@ -379,8 +403,9 @@ function startRealtime() {
 }
 
 // 最近刪除黑名單 — 防 race: 自己刪了之後，先前 upsert 的 echo 才到、會把剛刪的 row 復活
+// (audit: 5s 太短, realtime 慢時刪掉的 row 會被 echo 復活 — 延長到 30s)
 const recentlyDeleted = new Map();  // key=`${table}/${id}` → expireAt timestamp
-const DELETE_BLACKLIST_MS = 5_000;
+const DELETE_BLACKLIST_MS = 30_000;
 function markRecentlyDeleted(table, id) {
     recentlyDeleted.set(`${table}/${id}`, Date.now() + DELETE_BLACKLIST_MS);
 }
@@ -404,40 +429,60 @@ function handleRealtimeChange(payload) {
     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
         const converted = t.fromDb(payload.new);
         const id = converted[pkJs];
-        // ⚠ 防復活: 最近 5s 內被本機刪過 → 不接受 INSERT/UPDATE echo
-        // (避免步驟 [upsert → broadcast UPDATE → 本機刪 → echo 才到] 把刪掉的 row push 回來)
+        // ⚠ 防復活: 最近 30s 內被本機刪過 → 不接受 INSERT/UPDATE echo
         if (isRecentlyDeleted(t.key, id)) {
             console.log(`[realtime] ${payload.eventType} ${t.key}/${id} 略過 (最近剛刪)`);
             return;
         }
+        // ⚠ Per-row echo check: 用 incoming.updated_at 比對本機這個 row 最近 push 的 updated_at
+        //   通過 → 真的是別人改的 (或跨 tab 自己另開改的) → 套用 + re-render
+        //   不通過 → 自家 echo → 靜默
+        const isSelfEcho = isOwnRowEcho(t.key, id, payload.new.updated_at);
         const idx = mockData[t.src].findIndex(r => r[pkJs] === id);
         if (idx >= 0) {
-            // 若本機資料完全相同 (通常是自己 push 後的迴響)，跳過 re-render
             const existing = mockData[t.src][idx];
-            const sameUpdatedAt = payload.new.updated_at && existing.updatedAt === payload.new.updated_at;
-            if (sameUpdatedAt) return;
+            if (payload.new.updated_at && existing.updatedAt === payload.new.updated_at) return;
+            // ⚠ 純 updated_at 改動 (其他欄位都一樣) → 不算實質變動, 不 re-render
+            //   (audit: cron job 批量改 updated_at 會推 N 萬 update event 浪費頻寬)
+            const diffsBesidesUpdatedAt = Object.keys(converted).some(k => {
+                if (k === 'updatedAt') return false;
+                const a = existing[k], b = converted[k];
+                if (a == null && b == null) return false;
+                return JSON.stringify(a) !== JSON.stringify(b);
+            });
+            if (!diffsBesidesUpdatedAt) {
+                // 只更新 updatedAt 自己, 不 fire data-changed
+                mockData[t.src][idx] = { ...existing, updatedAt: converted.updatedAt };
+                return;
+            }
             mockData[t.src][idx] = { ...existing, ...converted };
         } else if (payload.eventType === 'INSERT') {
-            // INSERT 才 push 進來 (別人新增)
             mockData[t.src].push(converted);
         } else {
-            // UPDATE 但本機沒這筆 → 不復活；可能 race 或先前漏 INSERT
             console.log(`[realtime] UPDATE ${t.key}/${id} 略過 (本機無此筆)`);
             return;
         }
-        console.log(`[realtime] ${payload.eventType} ${t.key}/${id}`);
+        console.log(`[realtime] ${payload.eventType} ${t.key}/${id}${isSelfEcho ? ' (self echo, silent)' : ''}`);
+        // 自家 echo → 已套用但不 fire data-changed (省 re-render)
+        if (isSelfEcho) {
+            runMigration();
+            return;
+        }
     } else if (payload.eventType === 'DELETE') {
         const id = payload.old[t.pk];
-        markRecentlyDeleted(t.key, id);  // 接到 DELETE 也黑名單，防後續 echo 重新加回
+        markRecentlyDeleted(t.key, id);
         const before = mockData[t.src]?.length || 0;
         mockData[t.src] = (mockData[t.src] || []).filter(r => r[pkJs] !== id);
         if (mockData[t.src].length === before) return;
         console.log(`[realtime] DELETE ${t.key}/${id}`);
+        // DELETE 也要看是不是自家 (剛剛我們 store.delete 觸發 sync, 然後 echo 回來)
+        if (isOwnEcho()) {
+            runMigration();
+            return;
+        }
     }
 
     runMigration();
-    // 若是自家剛 push 的迴響 → 靜默套用，不觸發 re-render (避免畫面狂閃)
-    if (isOwnEcho()) return;
     window.dispatchEvent(new CustomEvent('bms:data-changed', { detail: { source: 'realtime', table: payload.table } }));
 }
 
