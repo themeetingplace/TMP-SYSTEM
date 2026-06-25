@@ -263,6 +263,14 @@ export function runMigration() {
         if (!('terminatedDate' in c)) c.terminatedDate = null;
         // 押金金額（合約上需寫，預設 0 表示不收押金）
         if (!('depositAmount' in c)) c.depositAmount = 0;
+        // contractType 預設 cohousing — 避免 null 在 ensureContractInvoices 判斷時模糊
+        // (audit: managed-* 合約若忘設 contractType, 會被當共居產房租 invoice)
+        if (!c.contractType) c.contractType = 'cohousing';
+        // buildingId backfill — 給 modeFilter 統一使用 (從 propertyName 反查)
+        if (!c.buildingId && c.propertyName) {
+            const prop = mockData.properties.find(p => p.name === c.propertyName);
+            if (prop?.buildingId) c.buildingId = prop.buildingId;
+        }
     });
 
     // 2. invoices 遷移
@@ -874,6 +882,9 @@ export function ensureContractInvoices() {
         if (!c.startDate) return;
         // 排除: 外部平台代收 / 代管合約 / bundle 子合約 (主合約 invoice 已含)
         if (c.paymentChannel === 'platform') { skipped++; return; }
+        // 只有明確 cohousing 才產生房租 invoice;
+        // contractType=null/undefined 預設為 cohousing (跟現有共居合約相容)
+        // 若是 managed-owner / managed-tenant 等明確標 managed 類 → skip
         if (c.contractType && c.contractType !== 'cohousing') { skipped++; return; }
         if (c.bundleParentContractId) { skipped++; return; }
 
@@ -1154,12 +1165,23 @@ export const store = {
     },
     updateProperty(id, patch) {
         const i = mockData.properties.findIndex(p => p.id === id);
-        if (i >= 0) {
-            mockData.properties[i] = { ...mockData.properties[i], ...patch };
-            recalcMetrics();
-            return mockData.properties[i];
+        if (i < 0) return null;
+        const before = mockData.properties[i];
+        mockData.properties[i] = { ...before, ...patch };
+        const after = mockData.properties[i];
+        // === cascade: 改 name → contracts/invoices/maintenances/checkins/tenants.currentProperty 同步 ===
+        // (audit: updateProperty 之前完全沒 cascade, 改名後 contract.propertyName 變孤兒)
+        if (patch.name && before.name && before.name !== after.name) {
+            const oldName = before.name;
+            const newName = after.name;
+            mockData.contracts.forEach(c => { if (c.propertyName === oldName) c.propertyName = newName; });
+            mockData.invoices.forEach(inv => { if (inv.propertyName === oldName) inv.propertyName = newName; });
+            (mockData.maintenances || []).forEach(m => { if (m.propertyName === oldName) m.propertyName = newName; });
+            (mockData.checkins || []).forEach(ci => { if (ci.propertyName === oldName) ci.propertyName = newName; });
+            mockData.tenants.forEach(t => { if (t.currentProperty === oldName) t.currentProperty = newName; });
         }
-        return null;
+        recalcMetrics();
+        return after;
     },
     deleteProperty(id) {
         mockData.properties = mockData.properties.filter(p => p.id !== id);
@@ -1176,12 +1198,21 @@ export const store = {
     },
     updateTenant(id, patch) {
         const i = mockData.tenants.findIndex(t => t.id === id);
-        if (i >= 0) {
-            mockData.tenants[i] = { ...mockData.tenants[i], ...patch };
-            persist();
-            return mockData.tenants[i];
+        if (i < 0) return null;
+        const before = mockData.tenants[i];
+        mockData.tenants[i] = { ...before, ...patch };
+        const after = mockData.tenants[i];
+        // === cascade: 改 name → contracts.tenant / invoices.tenant 全部同步 ===
+        // (audit: name 被當 denormalized key 卻沒同步, 改名後 contract 查不到原 tenant)
+        if (patch.name && before.name && before.name !== after.name) {
+            const oldName = before.name;
+            const newName = after.name;
+            mockData.contracts.forEach(c => { if (c.tenant === oldName) c.tenant = newName; });
+            mockData.invoices.forEach(inv => { if (inv.tenant === oldName) inv.tenant = newName; });
+            (mockData.deposits || []).forEach(d => { if (d.tenantName === oldName) d.tenantName = newName; });
         }
-        return null;
+        persist();
+        return after;
     },
     deleteTenant(id) {
         mockData.tenants = mockData.tenants.filter(t => t.id !== id);
@@ -1216,6 +1247,19 @@ export const store = {
         const before = mockData.contracts[i];
         mockData.contracts[i] = { ...before, ...patch };
         const after = mockData.contracts[i];
+
+        // === cascade: 改 tenant / propertyName → 同步該合約的 invoices 對應欄位 ===
+        // (audit: name 改了但 invoice 留舊值 → 帳單查不到、報表搜尋失敗)
+        if ('tenant' in patch && before.tenant !== after.tenant && before.tenant) {
+            mockData.invoices.forEach(inv => {
+                if (inv.contractId === after.id) inv.tenant = after.tenant;
+            });
+        }
+        if ('propertyName' in patch && before.propertyName !== after.propertyName && before.propertyName) {
+            mockData.invoices.forEach(inv => {
+                if (inv.contractId === after.id) inv.propertyName = after.propertyName;
+            });
+        }
 
         // 改合約月租 → 反向同步該合約的房租 invoice 跟床位 property.rent
         // bundle 子合約 (bundleParentContractId) 改 amount → 透過 parent 重新觸發 cascade
@@ -1789,8 +1833,23 @@ export const store = {
             }
         }
 
+        // === 清掉終止日之後的預排 invoice (audit: terminated 合約留未來預排單會繼續寄催繳) ===
+        // 規則: dueDate > effectiveDate 且 paidAmount == 0 → 直接刪除 (預排但未繳)
+        //       paidAmount > 0 (部分繳款) → 不刪, 留給管理員手動處理
+        let cleanedCount = 0;
+        mockData.invoices = mockData.invoices.filter(inv => {
+            if (inv.contractId !== contractId) return true;
+            if (!inv.dueDate || inv.dueDate <= effectiveDate) return true;
+            if ((inv.paidAmount || 0) > 0) return true;  // 有實收的留下
+            cleanedCount++;
+            return false;
+        });
+        if (cleanedCount > 0) {
+            console.log(`[terminate] ${contractId} 清掉 ${cleanedCount} 筆終止日後預排 invoice`);
+        }
+
         recalcMetrics();
-        return { ok: true };
+        return { ok: true, cleanedFutureInvoices: cleanedCount };
     },
 
     // 掃描 pendingTerminationDate <= today 的合約, 一律執行 _finalizeTermination

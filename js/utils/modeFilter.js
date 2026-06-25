@@ -20,15 +20,16 @@ export function filterPropertiesByMode(properties, mode = getMode()) {
 
 export function filterContractsByMode(contracts, mode = getMode()) {
     const ids = currentModeBuildingIdSet(mode);
-    // contract 沒 buildingId 時靠 propertyName 反查 properties
+    // 統一邏輯: 優先用 buildingId (一致 source of truth)
+    // 若 contract.buildingId 缺 (舊資料) → 退而靠 propertyName 反查 (給 cohousing 用)
+    // (audit: 原本代管 contract 走 buildingId、共居 contract 走 propertyName 兩條 path 不對稱
+    //   propertyName 改名後孤兒合約會被誤過濾, 用 buildingId 主導比較穩)
     const allowedPropNames = new Set(
         mockData.properties.filter(p => ids.has(p.buildingId)).map(p => p.name)
     );
     return contracts.filter(c => {
-        // R4: 代管合約 (managed-owner / managed-tenant) 走 buildingId 直接判斷
-        if (c.contractType && c.contractType !== 'cohousing') {
-            return c.buildingId && ids.has(c.buildingId);
-        }
+        if (c.buildingId) return ids.has(c.buildingId);
+        // fallback: 沒 buildingId 的舊合約靠 propertyName 反查
         return allowedPropNames.has(c.propertyName);
     });
 }
