@@ -409,8 +409,8 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'propertyName', label: '物件', type: 'select', options: propertyOptions, hint: '無對應床位可留空' },
             { name: 'tenant', label: '租客', type: 'select', required: true, span: 2,
               options: [
-                  ...tenantOptions.map(name => ({ value: name, label: name })),
-                  { value: '__new', label: '✨ 新增新租客...' }
+                  { value: '__new', label: '✨ 新增新租客 (建檔後自動帶回)' },
+                  ...tenantOptions.map(name => ({ value: name, label: name }))
               ],
               searchable: true, placeholder: '選擇租客 / 輸入關鍵字搜尋...' },
             { name: 'periodStart', label: '租期起', type: 'date' },
@@ -506,8 +506,8 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
                         onCreated: (created) => {
                             if (tenantWrap?.__setOptions) {
                                 const newOpts = [
-                                    ...mockData.tenants.map(t => ({ value: t.name, label: t.name })),
-                                    { value: '__new', label: '✨ 新增新租客...' }
+                                    { value: '__new', label: '✨ 新增新租客 (建檔後自動帶回)' },
+                                    ...mockData.tenants.map(t => ({ value: t.name, label: t.name }))
                                 ];
                                 tenantWrap.__setOptions(newOpts);
                                 tenantWrap.__setValue?.(created.name);
