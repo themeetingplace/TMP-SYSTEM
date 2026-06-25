@@ -193,13 +193,8 @@ function showMaintenanceForm(item = null) {
             buildingHidden?.addEventListener('change', () => {
                 const bid = buildingHidden.value;
                 if (propertyWrap?.__setOptions) {
+                    // __setOptions 內部已自動清 hidden.value + 重設 trigger 文字, 不需手動重置
                     propertyWrap.__setOptions(buildPropertyOptions(bid));
-                    const newOpts = buildPropertyOptions(bid);
-                    if (propertyHidden && !newOpts.find(o => o.value === propertyHidden.value)) {
-                        propertyHidden.value = '';
-                        const trigger = propertyWrap.querySelector('.custom-select-trigger');
-                        if (trigger) trigger.textContent = '請選擇...';
-                    }
                 }
             });
         },

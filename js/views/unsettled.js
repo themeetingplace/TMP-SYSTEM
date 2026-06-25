@@ -600,14 +600,8 @@ function showUnsettledForm(invoice = null) {
             buildingHidden?.addEventListener('change', () => {
                 const bid = buildingHidden.value;
                 if (propertyWrap?.__setOptions) {
-                    const newOpts = buildPropertyOptions(bid);
-                    propertyWrap.__setOptions(newOpts);
-                    // 換館後若原本床位不屬於這個館, 清空 (避免送出時帶錯)
-                    if (propertyHidden && propertyHidden.value && !newOpts.find(o => o.value === propertyHidden.value)) {
-                        propertyHidden.value = '';
-                        const trigger = propertyWrap.querySelector('.custom-select-trigger');
-                        if (trigger) trigger.textContent = '請選擇...';
-                    }
+                    // __setOptions 內部已自動清 hidden.value + 重設 trigger 文字, 不需手動重置
+                    propertyWrap.__setOptions(buildPropertyOptions(bid));
                 }
             });
 

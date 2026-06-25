@@ -478,13 +478,8 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             buildingHidden?.addEventListener('change', () => {
                 const bid = buildingHidden.value;
                 if (propertyWrap?.__setOptions) {
-                    const newOpts = buildPropertyOptions(bid);
-                    propertyWrap.__setOptions(newOpts);
-                    if (propertyHidden && !newOpts.find(o => o.value === propertyHidden.value)) {
-                        propertyHidden.value = '';
-                        const trigger = propertyWrap.querySelector('.custom-select-trigger');
-                        if (trigger) trigger.textContent = '請選擇...';
-                    }
+                    // __setOptions 內部已自動清 hidden.value + 重設 trigger 文字, 不需手動重置
+                    propertyWrap.__setOptions(buildPropertyOptions(bid));
                 }
             });
 
