@@ -2,7 +2,7 @@
 // 集中追蹤所有「欠繳 / 未付」帳款
 // 階段 2 新增：末 5 碼核對 / 批次結帳 / 一鍵產生本月帳單
 import { mockData, store, isUnsettled, ensureContractInvoices, previewContractInvoices, getSortedBuildings, deriveInvoiceStatus, formatDiscountReason } from '../data.js';
-import { openFormModal, openConfirm, showToast, refreshView } from '../utils/ui.js';
+import { openFormModal, openModal, openConfirm, showToast, refreshView } from '../utils/ui.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { escapeHtml } from '../utils/escape.js';
 import { filterInvoicesByMode } from '../utils/modeFilter.js';
@@ -356,25 +356,115 @@ function settleInvoice(id) {
     const inv = mockData.invoices.find(x => x.id === id);
     if (!inv) return;
     const due = (inv.amount || 0) - (inv.discount || 0);
-    const balance = Math.max(0, due - (inv.paidAmount || 0));
-    const newStatus = inv.direction === 'in' ? '已繳清' : '已付';
-    openConfirm({
-        title: '結帳確認',
-        message: `確定要將 <strong>${inv.id}</strong>（餘額 $${balance.toLocaleString()}）標記為「${newStatus}」？<br><br>結帳後會自動移到「帳務管理」頁的已結帳目。`,
-        confirmLabel: `確認${newStatus}`,
-        onConfirm: () => {
-            const patched = { ...inv, paidAmount: due, paidDate: TODAY };
-            store.updateInvoice(id, {
-                paidAmount: due,
-                paidDate: TODAY,
-                status: deriveInvoiceStatus(patched)
+    const paid = inv.paidAmount || 0;
+    const balance = Math.max(0, due - paid);
+    const isIncome = inv.direction === 'in';
+    const newStatus = isIncome ? '已繳清' : '已付';
+    const hasPartial = paid > 0 && paid < due;
+
+    // 非部分繳款 → 走原本單按鈕確認
+    if (!hasPartial) {
+        openConfirm({
+            title: '結帳確認',
+            message: `確定要將 <strong>${inv.id}</strong>（餘額 $${balance.toLocaleString()}）標記為「${newStatus}」？<br><br>結帳後會自動移到「帳務管理」頁的已結帳目。`,
+            confirmLabel: `確認${newStatus}`,
+            onConfirm: () => doFullSettle(inv, due, newStatus)
+        });
+        return;
+    }
+
+    // 部分繳款 → 3 個按鈕：取消 / 拆帳結 / 全額結
+    openModal({
+        title: '結帳確認（部分繳款）',
+        maxWidth: 540,
+        bodyHtml: `
+            <div style="line-height: 1.7;">
+                <div><strong>${inv.id}</strong>（${isIncome ? '收入' : '支出'}）</div>
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--color-background); border-radius: 6px; font-size: 0.9rem;">
+                    <div>應${isIncome ? '收' : '付'}總額：<strong>$${due.toLocaleString()}</strong></div>
+                    <div style="color: #22946e;">已${isIncome ? '收' : '付'}：<strong>$${paid.toLocaleString()}</strong></div>
+                    <div style="color: #b13535;">未${isIncome ? '收' : '付'}餘額：<strong>$${balance.toLocaleString()}</strong></div>
+                </div>
+                <div style="margin-top: 1rem;">兩種處理方式：</div>
+                <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem; font-size: 0.88rem; color: var(--color-text-secondary);">
+                    <li><strong>拆帳結 $${paid.toLocaleString()}</strong> — 只把已${isIncome ? '收' : '付'}部分結成獨立帳目，剩 $${balance.toLocaleString()} 留待結（新帳目 ID 自動產生，備註會註記來源）</li>
+                    <li><strong>全額結 $${due.toLocaleString()}</strong> — 餘額視為已${isIncome ? '收' : '付'}，整筆關掉（適用對方一次補完）</li>
+                </ul>
+            </div>
+        `,
+        footerHtml: `
+            <button class="btn btn-secondary" data-action="cancel">取消</button>
+            <button class="btn btn-secondary" data-action="split">拆帳結 $${paid.toLocaleString()}</button>
+            <button class="btn btn-primary" data-action="full">全額結 $${due.toLocaleString()}</button>
+        `,
+        onMount: (modal, close) => {
+            modal.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
+            modal.querySelector('[data-action="full"]')?.addEventListener('click', () => {
+                close();
+                doFullSettle(inv, due, newStatus);
             });
-            showToast(`已結帳：${inv.id}`, 'success');
-            // Q4 入帳即發 — 結帳通過後若對應合約還沒寄合約 PDF, 自動寄
-            maybeAutoSendContract(inv);
-            refreshView();
+            modal.querySelector('[data-action="split"]')?.addEventListener('click', () => {
+                close();
+                doSplitSettle(inv, paid, balance);
+            });
         }
     });
+}
+
+// 全額結帳：餘額視為已收/付，整筆關
+function doFullSettle(inv, due, newStatus) {
+    const patched = { ...inv, paidAmount: due, paidDate: TODAY };
+    store.updateInvoice(inv.id, {
+        paidAmount: due,
+        paidDate: TODAY,
+        status: deriveInvoiceStatus(patched)
+    });
+    showToast(`已結帳：${inv.id}`, 'success');
+    // Q4 入帳即發 — 結帳通過後若對應合約還沒寄合約 PDF，自動寄
+    maybeAutoSendContract(inv);
+    refreshView();
+}
+
+// 拆帳結帳：已收部分拆成新帳目（已結），原帳目改為剩餘金額未收
+function doSplitSettle(inv, paidPortion, remainingBalance) {
+    const isIncome = inv.direction === 'in';
+    const origDue = (inv.amount || 0) - (inv.discount || 0);
+
+    // 1. 建新帳目（已結）— 金額 = paidPortion，完全結清
+    const draft = {
+        ...inv,
+        amount: paidPortion,
+        discount: 0,           // 拆出去的帳目不再帶折扣
+        paidAmount: paidPortion,
+        paidDate: TODAY,
+        dueDate: TODAY,
+        note: `[拆帳結帳] 來源 ${inv.id}（原應${isIncome ? '收' : '付'} $${origDue.toLocaleString()}，本次結 $${paidPortion.toLocaleString()}）` + (inv.note ? ` · ${inv.note}` : ''),
+        bankLast5: inv.bankLast5 || '',
+        bankVerified: !!inv.bankVerified
+    };
+    // 拋掉這些欄位避免帶到新 invoice
+    delete draft.id;
+    delete draft._id;
+    delete draft.createdAt;
+    delete draft.updatedAt;
+    delete draft.lastReminderAt;
+    draft.status = deriveInvoiceStatus({ ...draft });
+    const created = store.addInvoice(draft);
+
+    // 2. 原帳目：amount 改成剩餘 due（=remainingBalance + 原 discount），paidAmount 歸 0，清掉末5碼/核對狀態
+    const remainingPatch = {
+        amount: remainingBalance + (inv.discount || 0),  // 還原 due = amount - discount
+        paidAmount: 0,
+        bankLast5: '',
+        bankVerified: false,
+        note: (inv.note ? inv.note + ' · ' : '') + `[已拆出 $${paidPortion.toLocaleString()} → ${created.id}]`
+    };
+    remainingPatch.status = deriveInvoiceStatus({ ...inv, ...remainingPatch });
+    store.updateInvoice(inv.id, remainingPatch);
+
+    showToast(`已拆帳：已${isIncome ? '收' : '付'} $${paidPortion.toLocaleString()} → ${created.id}，餘 $${remainingBalance.toLocaleString()} 留待結`, 'success', 5000);
+    maybeAutoSendContract(inv);
+    refreshView();
 }
 
 // 共用: 入帳後自動寄合約 (核對結帳 + 一般結帳 + 批次結帳 都呼叫)
