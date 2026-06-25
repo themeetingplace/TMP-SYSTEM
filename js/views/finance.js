@@ -402,7 +402,12 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             // 館別 | 物件 | 租客 (物件非必填, 租客可手打新名)
             { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions },
             { name: 'propertyName', label: '物件', type: 'select', options: propertyOptions, hint: '無對應床位可留空' },
-            { name: 'tenant', label: '租客', type: 'text', required: true, span: 2, placeholder: '輸入姓名 (按 ↓ 看現有租客建議)', hint: '建議從現有租客挑選；打全新名字會自動建檔', suggestions: tenantOptions },
+            { name: 'tenant', label: '租客', type: 'select', required: true, span: 2,
+              options: [
+                  ...tenantOptions.map(name => ({ value: name, label: name })),
+                  { value: '__new', label: '✨ 新增新租客...' }
+              ],
+              searchable: true, placeholder: '選擇租客 / 輸入關鍵字搜尋...' },
             { name: 'periodStart', label: '租期起', type: 'date' },
             { name: 'periodEnd', label: '租期止', type: 'date' },
             { name: '__sep_payment', type: 'section', label: '' },
@@ -482,6 +487,50 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
                     propertyWrap.__setOptions(buildPropertyOptions(bid));
                 }
             });
+
+            // 「✨ 新增新租客」option — 攔截 __new value, 開小 modal 輸入姓名, 建檔後自動 select
+            if (!isExpense) {
+                const tenantHiddenInv = form.querySelector('[name="tenant"]');
+                const tenantWrap = form.querySelector('.custom-select[data-name="tenant"]');
+                tenantHiddenInv?.addEventListener('change', () => {
+                    if (tenantHiddenInv.value !== '__new') return;
+                    // 先清掉 __new (避免關掉 modal 後值還是 __new)
+                    tenantHiddenInv.value = '';
+                    openFormModal({
+                        title: '✨ 新增租客',
+                        maxWidth: 400,
+                        fields: [
+                            { name: 'name', label: '姓名', type: 'text', required: true, placeholder: '輸入新租客姓名' }
+                        ],
+                        values: {},
+                        submitLabel: '建立並選擇',
+                        onSubmit: (vals) => {
+                            const newName = String(vals.name || '').trim();
+                            if (!newName) return false;
+                            // 避免同名重複建檔
+                            const existing = mockData.tenants.find(t => (t.name || '').trim() === newName);
+                            if (!existing) {
+                                store.addTenant({
+                                    name: newName, phone: '', email: '',
+                                    currentProperty: null, status: '待入住', source: '帳務新增'
+                                });
+                                showToast(`已建立新租客「${newName}」`, 'success');
+                            } else {
+                                showToast(`「${newName}」已存在, 直接選用`, 'info');
+                            }
+                            // 重 build tenant select options + 自動選中該名
+                            if (tenantWrap?.__setOptions) {
+                                const newOpts = [
+                                    ...mockData.tenants.map(t => ({ value: t.name, label: t.name })),
+                                    { value: '__new', label: '✨ 新增新租客...' }
+                                ];
+                                tenantWrap.__setOptions(newOpts);
+                                tenantWrap.__setValue?.(newName);
+                            }
+                        }
+                    });
+                });
+            }
 
             // 折扣 / 加收 widget — 跟合約 form 同款
             // 收入: widget net (sub-add) 直接 = invoice.discount (正=折扣, 負=加收)

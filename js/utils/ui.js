@@ -460,6 +460,15 @@ export function initCustomSelects(scope) {
             if (emptyEl) emptyEl.hidden = true;
             bindOptionClicks();
         };
+
+        // 對外暴露：程式化設定當前選中 (含更新 trigger 文字)
+        sel.__setValue = function(value) {
+            const opt = optionsWrap.querySelector(`.custom-select-option[data-value="${String(value).replace(/"/g, '&quot;')}"]`);
+            if (!opt) return false;
+            const label = opt.querySelector('span').textContent;
+            selectValue(value, label);
+            return true;
+        };
     });
 }
 
