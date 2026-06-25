@@ -1259,6 +1259,35 @@ export const store = {
             }
         }
 
+        // === 改 startDate / endDate → 同步該合約所有 invoice 的 periodStart / periodEnd / dueDate ===
+        // 邏輯: 算 startDate 的位移天數 (delta), 全部 invoice 平移同樣天數 (保持期數結構)
+        // 漏掉這層: user 在合約頁改入住日, 該合約的 invoice 還停留舊日期 → 對帳漂移
+        const startChanged = 'startDate' in patch && before.startDate !== after.startDate && before.startDate && after.startDate;
+        const endChanged = 'endDate' in patch && before.endDate !== after.endDate && before.endDate && after.endDate;
+        if (startChanged || endChanged) {
+            const startDelta = startChanged
+                ? Math.round((new Date(after.startDate) - new Date(before.startDate)) / 86400000)
+                : 0;
+            const endDelta = endChanged
+                ? Math.round((new Date(after.endDate) - new Date(before.endDate)) / 86400000)
+                : 0;
+            const relatedInvoices = mockData.invoices.filter(inv => inv.contractId === after.id);
+            relatedInvoices.forEach(inv => {
+                const invPatch = {};
+                if (startDelta !== 0) {
+                    if (inv.periodStart) invPatch.periodStart = addDaysISO(inv.periodStart, startDelta);
+                    if (inv.dueDate) invPatch.dueDate = addDaysISO(inv.dueDate, startDelta);
+                    // paidDate 若已結帳 — 不動 (用戶實際入帳日不該被合約改動覆蓋)
+                }
+                if (endDelta !== 0 && inv.periodEnd) {
+                    invPatch.periodEnd = addDaysISO(inv.periodEnd, endDelta);
+                }
+                if (Object.keys(invPatch).length > 0) {
+                    this.updateInvoice(inv.id, invPatch);
+                }
+            });
+        }
+
         // === bundle 群組同步: 改一邊, 主合約 + 全子合約跟著同步關鍵欄位 ===
         // 同步欄位: startDate / endDate / termMonths / tenant / paymentChannel / platformName / renewalState / pendingTerminationDate
         // 不同步: amount (每床自己的租金) / propertyName (每張各綁不同床) / status (簽署狀態各自填)
