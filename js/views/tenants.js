@@ -180,7 +180,7 @@ export function renderTenants() {
     `;
 }
 
-function showTenantForm(tenant = null) {
+export function showTenantForm(tenant = null, { onCreated } = {}) {
     const isEdit = !!tenant;
     const propertyOptions = [
         { value: '', label: '— 無 —' },
@@ -210,6 +210,7 @@ function showTenantForm(tenant = null) {
             } else {
                 const created = store.addTenant(values);
                 showToast(`已新增租客：${created.name}`, 'success');
+                if (onCreated) onCreated(created);
             }
             refreshView();
         }
