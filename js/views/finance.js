@@ -363,7 +363,11 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
     const direction = invoice?.direction || defaultDirection;
     const isExpense = direction === 'out';
 
-    const buildingOptions = getSortedBuildings({ activeOnly: true }).map(b => ({ value: b.id, label: b.name }));
+    // 依當前模式 filter (共居/代管) — 不讓代管館跑進共居 form 反之亦然
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const buildingOptions = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === targetMode)
+        .map(b => ({ value: b.id, label: b.name }));
     // 物件下拉依館 filter (對齊 contracts 編輯模式)
     const buildPropertyOptions = (buildingId) => mockData.properties
         .filter(p => buildingId ? p.buildingId === buildingId : true)
