@@ -463,7 +463,7 @@ function doSplitSettle(inv, paidPortion, remainingBalance) {
     store.updateInvoice(inv.id, remainingPatch);
 
     showToast(`已拆帳：已${isIncome ? '收' : '付'} $${paidPortion.toLocaleString()} → ${created.id}，餘 $${remainingBalance.toLocaleString()} 留待結`, 'success', 5000);
-    maybeAutoSendContract(inv);
+    // 拆帳結帳不寄合約 — 客戶還沒全付完, 合約應該等全額入帳後 (走全額結帳路徑) 才寄
     refreshView();
 }
 
