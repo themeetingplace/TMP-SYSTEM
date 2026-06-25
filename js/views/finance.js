@@ -4,7 +4,7 @@
 import { mockData, store, invoiceMonth, shiftMonth, currentMonth, formatMonthLabel, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount, formatDiscountReason, leaseEndISO, isPreCutoff, FINANCE_CUTOFF_DATE } from '../data.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
-import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
+import { openFormModal, openModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
 import { financeState } from './finance-state.js';
 import { exportFinanceReport } from './finance-export.js';
 import { escapeHtml } from '../utils/escape.js';
@@ -500,37 +500,60 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
                     if (tenantHiddenInv.value !== '__new') return;
                     // 先清掉 __new (避免關掉 modal 後值還是 __new)
                     tenantHiddenInv.value = '';
-                    openFormModal({
+                    // 用 openModal 直接寫 (避免 openFormModal 套娃可能的 focus/submit 衝突)
+                    openModal({
                         title: '✨ 新增租客',
                         maxWidth: 400,
-                        fields: [
-                            { name: 'name', label: '姓名', type: 'text', required: true, placeholder: '輸入新租客姓名' }
-                        ],
-                        values: {},
-                        submitLabel: '建立並選擇',
-                        onSubmit: (vals) => {
-                            const newName = String(vals.name || '').trim();
-                            if (!newName) return false;
-                            // 避免同名重複建檔
-                            const existing = mockData.tenants.find(t => (t.name || '').trim() === newName);
-                            if (!existing) {
-                                store.addTenant({
-                                    name: newName, phone: '', email: '',
-                                    currentProperty: null, status: '待入住', source: '帳務新增'
-                                });
-                                showToast(`已建立新租客「${newName}」`, 'success');
-                            } else {
-                                showToast(`「${newName}」已存在, 直接選用`, 'info');
-                            }
-                            // 重 build tenant select options + 自動選中該名
-                            if (tenantWrap?.__setOptions) {
-                                const newOpts = [
-                                    ...mockData.tenants.map(t => ({ value: t.name, label: t.name })),
-                                    { value: '__new', label: '✨ 新增新租客...' }
-                                ];
-                                tenantWrap.__setOptions(newOpts);
-                                tenantWrap.__setValue?.(newName);
-                            }
+                        bodyHtml: `
+                            <div class="form-group">
+                                <label for="new-tenant-name" style="display:block;margin-bottom:0.4rem;font-weight:600;">姓名 <span style="color:#dc2626;">*</span></label>
+                                <input id="new-tenant-name" type="text" class="form-input" placeholder="輸入新租客姓名" autocomplete="off">
+                                <div class="form-hint" style="margin-top:0.4rem;font-size:0.78rem;color:var(--color-text-secondary);">建檔後會自動帶回租客欄</div>
+                            </div>
+                        `,
+                        footerHtml: `
+                            <button class="btn btn-secondary" data-action="cancel">取消</button>
+                            <button class="btn btn-primary" data-action="create">建立並選擇</button>
+                        `,
+                        onMount: (overlay, close) => {
+                            const input = overlay.querySelector('#new-tenant-name');
+                            const createBtn = overlay.querySelector('[data-action="create"]');
+                            const cancelBtn = overlay.querySelector('[data-action="cancel"]');
+                            setTimeout(() => input?.focus(), 50);
+                            const doCreate = () => {
+                                const newName = String(input.value || '').trim();
+                                if (!newName) {
+                                    input.classList.add('input-error');
+                                    input.focus();
+                                    return;
+                                }
+                                const existing = mockData.tenants.find(t => (t.name || '').trim() === newName);
+                                if (!existing) {
+                                    store.addTenant({
+                                        name: newName, phone: '', email: '',
+                                        currentProperty: null, status: '待入住', source: '帳務新增'
+                                    });
+                                    showToast(`已建立新租客「${newName}」`, 'success');
+                                } else {
+                                    showToast(`「${newName}」已存在, 直接選用`, 'info');
+                                }
+                                // 重 build tenant select options + 自動選中該名
+                                if (tenantWrap?.__setOptions) {
+                                    const newOpts = [
+                                        ...mockData.tenants.map(t => ({ value: t.name, label: t.name })),
+                                        { value: '__new', label: '✨ 新增新租客...' }
+                                    ];
+                                    tenantWrap.__setOptions(newOpts);
+                                    tenantWrap.__setValue?.(newName);
+                                }
+                                close();
+                            };
+                            createBtn?.addEventListener('click', doCreate);
+                            cancelBtn?.addEventListener('click', close);
+                            // Enter 鍵 = 建立
+                            input?.addEventListener('keydown', (e) => {
+                                if (e.key === 'Enter') { e.preventDefault(); doCreate(); }
+                            });
                         }
                     });
                 });
