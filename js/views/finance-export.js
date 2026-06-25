@@ -176,15 +176,15 @@ export function buildFinanceReportHtml(ym) {
         table-layout: fixed;
         font-size: 0.74rem;
     }
-    /* 欄寬比例：日期 / 館別 / 類別 / 項目 / 實收 / 折扣 / 付款 / 備註 */
-    col.c-date     { width: 7%; }
-    col.c-building { width: 7%; }
-    col.c-type     { width: 8%; }
-    col.c-item     { width: 18%; }
+    /* 欄寬比例 (A4 直式 ~19cm 可用寬度): 日期 / 館別 / 類別 / 項目 / 實收 / 折扣 / 付款 / 備註 */
+    col.c-date     { width: 11%; }   /* 1.8cm — 容 2026-06-01 八字 */
+    col.c-building { width: 8%; }
+    col.c-type     { width: 7%; }
+    col.c-item     { width: 17%; }
     col.c-amount   { width: 11%; }
-    col.c-discount { width: 10%; }
+    col.c-discount { width: 9%; }
     col.c-method   { width: 7%; }
-    col.c-note     { width: 32%; }
+    col.c-note     { width: 30%; }
 
     th {
         background: #f1f5f9;
