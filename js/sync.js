@@ -51,13 +51,13 @@ let firstPullDone = false;
 // ⚠ Dedupe helper: 移除本機 mockData[src] 內同 ID 重複 row
 //    PostgreSQL upsert batch 內同 PK 兩筆會回 "ON CONFLICT DO UPDATE cannot affect row a second time"
 //    每次 push 前先把 mockData 本身去重一次, 順便修正 source-of-truth
+//    註: 所有表的 JS row PK 統一用 'id' (db-mapping.js 內 buildings.pk='id', tenants.pk='id' 等)
 function dedupeById(arr, srcKey) {
     if (!Array.isArray(arr) || arr.length === 0) return arr;
-    const pkJs = srcKey === 'buildings' ? 'buildingId' : 'id';
     const seen = new Map();
     arr.forEach(r => {
         if (!r) return;
-        const k = r[pkJs];
+        const k = r.id;
         if (k == null) return;
         // 後寫的覆蓋前寫的 (最新 mutation 勝)
         seen.set(k, r);
