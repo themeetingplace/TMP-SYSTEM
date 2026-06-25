@@ -199,17 +199,27 @@ function destroyAllCharts() {
 
 export function initReportsCharts(scope) {
     destroyAllCharts();
-    while (_pendingCharts.length) {
-        const spec = _pendingCharts.shift();
+    // ⚠ 同步 init 時 browser layout 還沒做 → canvas parent width=0 → Chart.js 渲染 0x0 失敗
+    //    用 requestAnimationFrame 延後 1 frame, 讓 .pie-chart-canvas-wrap / .trend-chart-wrap 量到實際尺寸再 init
+    //    (使用者實測: 報表頁圓餅圖+折線圖很常空白 — 就是這個 race)
+    const initOne = (spec) => {
         const canvas = scope.querySelector(`#${spec.canvasId}`);
-        if (!canvas || typeof Chart === 'undefined') continue;
+        if (!canvas || typeof Chart === 'undefined') return;
+        // double check 父層真的有寬度才 init, 沒有就再 defer 一次 (插在 hidden tab 內或 layout 還沒收斂)
+        const parent = canvas.parentElement;
+        if (parent && parent.offsetWidth === 0) {
+            requestAnimationFrame(() => initOne(spec));
+            return;
+        }
         try {
             const inst = new Chart(canvas, spec.config);
             _chartInstances.set(spec.canvasId, inst);
         } catch (e) {
             console.warn('[reports] chart init failed', spec.canvasId, e);
         }
-    }
+    };
+    const queue = _pendingCharts.splice(0);
+    requestAnimationFrame(() => queue.forEach(initOne));
 }
 
 // 月度趨勢 — 收支雙線 (smooth + fill)
