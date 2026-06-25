@@ -294,14 +294,17 @@ export function buildFinanceReportHtml(ym) {
             <tr>
                 <td colspan="4" style="text-align: right;">本月合計</td>
                 <td class="right" style="color: #22946e;">+$${fmtMoney(inAll)}</td>
-                <td class="right" style="color: #b13535;">-$${fmtMoney(outAll)}</td>
-                <td colspan="2" style="text-align: right;">淨 <span style="color: ${net >= 0 ? '#22946e' : '#b13535'};">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</span></td>
+                <td class="right muted">—</td>
+                <td colspan="2" style="text-align: right;">
+                    <span style="color: #b13535;">-$${fmtMoney(outAll)}</span>
+                    &nbsp;·&nbsp; 淨 <span style="color: ${net >= 0 ? '#22946e' : '#b13535'};">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</span>
+                </td>
             </tr>
         </tfoot>` : ''}
     </table>
 
     <footer class="report-footer">
-        <span>聚空間共生公寓 · 總收支表</span>
+        <span>聚空間租賃管理有限公司 · 總收支表</span>
         <span>${today}</span>
     </footer>
 </div>
