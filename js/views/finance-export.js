@@ -42,28 +42,34 @@ export function buildFinanceReportHtml(ym) {
         const shown = actualAmount(inv);
         const hasDiscount = inv.discount && inv.discount > 0;
 
+        // 收入 col / 支出 col 拆兩欄
+        const inAmountCell = inv.direction === 'in'
+            ? `<div class="amount" style="color: #22946e;">+$${fmtMoney(shown)}</div>
+               ${hasDiscount ? `<div class="sub">原價 $${fmtMoney(inv.amount)}</div>` : ''}`
+            : `<span class="muted">—</span>`;
+        const outAmountCell = inv.direction === 'out'
+            ? `<div class="amount" style="color: #b13535;">-$${fmtMoney(shown)}</div>
+               ${hasDiscount ? `<div class="sub">原價 $${fmtMoney(inv.amount)}</div>` : ''}`
+            : `<span class="muted">—</span>`;
+
         return `
             <tr class="${inv.direction === 'in' ? 'row-in' : 'row-out'}">
                 <td class="nowrap">${esc(inv.paidDate || inv.dueDate || '—')}</td>
                 <td class="nowrap">${esc(buildingName(inv.buildingId))}</td>
-                <td class="nowrap"><span class="tag">${esc(inv.type)}</span></td>
-                <td>${esc(item)}${periodSub}</td>
-                <td class="right nowrap">
-                    <div class="amount" style="color: ${color};">${sign}$${fmtMoney(shown)}</div>
-                    ${hasDiscount ? `<div class="sub">原價 $${fmtMoney(inv.amount)}</div>` : ''}
-                </td>
+                <td><span class="tag">${esc(inv.type)}</span> ${esc(item)}${periodSub}</td>
+                <td class="right nowrap">${inAmountCell}</td>
+                <td class="right nowrap">${outAmountCell}</td>
                 <td class="right nowrap">${hasDiscount
                     ? `<div style="color: #b8871f; font-weight: 600;">-$${fmtMoney(inv.discount)}</div>
                        ${inv.discountReason ? `<div class="sub">${esc(formatDiscountReason(inv.discountReason))}</div>` : ''}`
                     : '<span class="muted">—</span>'}</td>
-                <td class="nowrap">${esc(inv.paymentMethod || '—')}</td>
                 <td>${esc(inv.note || '—')}</td>
             </tr>
         `;
     }).join('');
 
     const emptyRow = invoices.length === 0
-        ? `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #6b7280;">${esc(periodLabel)} 尚無已結帳目</td></tr>`
+        ? `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #6b7280;">${esc(periodLabel)} 尚無已結帳目</td></tr>`
         : '';
 
     return `<!DOCTYPE html>
@@ -176,15 +182,14 @@ export function buildFinanceReportHtml(ym) {
         table-layout: fixed;
         font-size: 0.74rem;
     }
-    /* 欄寬比例 (A4 直式 ~19cm 可用寬度): 日期 / 館別 / 類別 / 項目 / 實收 / 折扣 / 付款 / 備註 */
+    /* 欄寬比例 (A4 直式 ~19cm 可用寬度): 日期 / 館別 / 項目 / 收入 / 支出 / 應收調整 / 備註 */
     col.c-date     { width: 11%; }   /* 1.8cm — 容 2026-06-01 八字 */
     col.c-building { width: 8%; }
-    col.c-type     { width: 7%; }
-    col.c-item     { width: 17%; }
-    col.c-amount   { width: 11%; }
-    col.c-discount { width: 9%; }
-    col.c-method   { width: 7%; }
-    col.c-note     { width: 30%; }
+    col.c-item     { width: 22%; }   /* 類別 chip + 項目 + 租期合併 */
+    col.c-income   { width: 12%; }
+    col.c-expense  { width: 12%; }
+    col.c-discount { width: 10%; }
+    col.c-note     { width: 25%; }
 
     th {
         background: #f1f5f9;
@@ -270,35 +275,31 @@ export function buildFinanceReportHtml(ym) {
         <colgroup>
             <col class="c-date">
             <col class="c-building">
-            <col class="c-type">
             <col class="c-item">
-            <col class="c-amount">
+            <col class="c-income">
+            <col class="c-expense">
             <col class="c-discount">
-            <col class="c-method">
             <col class="c-note">
         </colgroup>
         <thead>
             <tr>
                 <th class="nowrap">日期</th>
                 <th class="nowrap">館別</th>
-                <th class="nowrap">類別</th>
                 <th>項目</th>
-                <th class="right nowrap">實收 / 實付</th>
+                <th class="right nowrap">收入</th>
+                <th class="right nowrap">支出</th>
                 <th class="right nowrap">應收調整</th>
-                <th class="nowrap">付款</th>
                 <th>備註</th>
             </tr>
         </thead>
         <tbody>${rows}${emptyRow}</tbody>
         ${invoices.length > 0 ? `<tfoot>
             <tr>
-                <td colspan="4" style="text-align: right;">本月合計</td>
-                <td class="right" style="color: #22946e;">+$${fmtMoney(inAll)}</td>
+                <td colspan="3" style="text-align: right;">本月合計</td>
+                <td class="right" style="color: #22946e; font-weight: 700;">+$${fmtMoney(inAll)}</td>
+                <td class="right" style="color: #b13535; font-weight: 700;">-$${fmtMoney(outAll)}</td>
                 <td class="right muted">—</td>
-                <td colspan="2" style="text-align: right;">
-                    <span style="color: #b13535;">-$${fmtMoney(outAll)}</span>
-                    &nbsp;·&nbsp; 淨 <span style="color: ${net >= 0 ? '#22946e' : '#b13535'};">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</span>
-                </td>
+                <td style="text-align: right;">淨 <span style="color: ${net >= 0 ? '#22946e' : '#b13535'}; font-weight: 700;">${net < 0 ? '-' : ''}$${fmtMoney(Math.abs(net))}</span></td>
             </tr>
         </tfoot>` : ''}
     </table>
