@@ -53,11 +53,31 @@ export function filterMaintenancesByMode(maintenances, mode = getMode()) {
 
 export function filterTenantsByMode(tenants, mode = getMode()) {
     const ids = currentModeBuildingIdSet(mode);
-    // tenant 沒 buildingId，靠 currentProperty 反查
     const allowedPropNames = new Set(
         mockData.properties.filter(p => ids.has(p.buildingId)).map(p => p.name)
     );
-    return tenants.filter(t => !t.currentProperty || allowedPropNames.has(t.currentProperty));
+    // 三層判斷:
+    //   1. tenant.currentProperty 在此 mode → 收
+    //   2. 有任何 active 合約屬於此 mode (buildingId 或 propertyName 對到) → 收
+    //   3. 完全沒合約 (新建/退租過久 etc) → 看 source 或最近合約決定
+    //      退而求其次: 若有任何 contract (不管 active) 屬於此 mode → 收
+    //      仍判不出來 → 視為共居 (cohousing 是預設, 代管是少數)
+    // (audit: 原本 !currentProperty 一律放行 → 退租/待入住租客在兩 mode 都出現, 重複混雜)
+    return tenants.filter(t => {
+        // 1. currentProperty 直接判
+        if (t.currentProperty) return allowedPropNames.has(t.currentProperty);
+        // 2. 從合約反查
+        const contracts = mockData.contracts.filter(c => c.tenant === t.name);
+        if (contracts.length === 0) {
+            // 沒合約 — 預設只在 cohousing 顯示 (代管不顯示無合約租客)
+            return mode !== 'managed';
+        }
+        // 拿最新 startDate 那筆判斷
+        const latest = [...contracts].sort((a,b) => (b.startDate || '').localeCompare(a.startDate || ''))[0];
+        if (latest.buildingId) return ids.has(latest.buildingId);
+        if (latest.propertyName) return allowedPropNames.has(latest.propertyName);
+        return mode !== 'managed';
+    });
 }
 
 // 一次性回傳所有 filtered 子集 (給 dashboard / reports 用方便)
