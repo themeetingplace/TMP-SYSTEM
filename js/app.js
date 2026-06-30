@@ -39,7 +39,7 @@ const navItems = document.querySelectorAll('.nav-item');
 //   owner / admin / viewer = 看得到全部分頁 (差別在能不能管帳號 / 寫入)
 //   helper = 小幫手 → 只能看 物件管理 / 住房一覽 / 租客清單，且寫入按鈕全隱藏
 //   helper 預設首頁 = 住房一覽 (#occupancy)，不給看 dashboard
-const HELPER_ALLOWED = new Set(['properties', 'occupancy', 'tenants']);
+const HELPER_ALLOWED = new Set(['properties', 'occupancy', 'tenants', 'finance', 'contracts', 'maintenance']);
 const HELPER_DEFAULT_HASH = 'occupancy';
 const routes = {
     dashboard:     { title: '首頁',         group: '總覽', render: renderDashboard },
@@ -366,6 +366,10 @@ window.addEventListener('DOMContentLoaded', async () => {
             const visibleItems = Array.from(group.querySelectorAll('.nav-item')).filter(el => el.style.display !== 'none');
             if (visibleItems.length === 0) group.style.display = 'none';
         });
+        // helper 只能看共居 — 隱藏模式切換按鈕 + 強制鎖在 cohousing
+        const modeSwitcher = document.querySelector('.mode-switcher');
+        if (modeSwitcher) modeSwitcher.style.display = 'none';
+        try { localStorage.setItem('pms-app-mode', 'cohousing'); } catch {}
         // 強制把當前路徑改成 helper 預設頁 (避免登入時還停在 #dashboard)
         if (!HELPER_ALLOWED.has(window.location.hash.substring(1))) {
             window.location.hash = HELPER_DEFAULT_HASH;
