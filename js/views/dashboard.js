@@ -210,9 +210,11 @@ export function renderDashboard() {
         }
     }
 
+    // helper 角色不看金額相關 (本月租金收入 + 收支圖表)
+    const isHelper = window.__currentRole === 'helper';
     return `
         ${checkBanner}
-        <div class="metrics-grid">
+        <div class="metrics-grid${isHelper ? ' metrics-grid--3col' : ''}">
             <a href="#properties" class="card metric-card metric-link" title="點擊前往物件管理">
                 <div class="metric-header">
                     <span>物件已租 / 總數</span>
@@ -246,7 +248,7 @@ export function renderDashboard() {
                 <div class="metric-subtext">${metrics.pendingMaintenances === 0 ? '目前無待處理報修' : '追蹤租客報修進度'}</div>
             </a>
 
-            <a href="#finance" class="card metric-card metric-link" title="點擊前往總收支表">
+            ${isHelper ? '' : `<a href="#finance" class="card metric-card metric-link" title="點擊前往總收支表">
                 <div class="metric-header">
                     <span>本月租金收入</span>
                     <div class="metric-icon success">
@@ -255,11 +257,11 @@ export function renderDashboard() {
                 </div>
                 <div class="metric-value">${moneyAmount(metrics.monthlyIncome, { sign: 'in' })}</div>
                 <div class="metric-subtext">${metrics.monthlyIncome === 0 ? '尚無本月入帳' : '本月已入帳房租'}</div>
-            </a>
+            </a>`}
         </div>
 
-        <div class="dashboard-grid">
-            <div class="card chart-card">
+        <div class="dashboard-grid${isHelper ? ' dashboard-grid--single' : ''}">
+            ${isHelper ? '' : `<div class="card chart-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
                     <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-chart-line-up"></i> 近半年收支概況</h2>
                     <div class="chart-mode-toggle" role="group" aria-label="圖表模式">
@@ -270,8 +272,8 @@ export function renderDashboard() {
                 <div style="height: 300px; width: 100%;">
                     <canvas id="incomeChart"></canvas>
                 </div>
-            </div>
-            
+            </div>`}
+
             <div class="card">
                 <div style="margin-bottom: 1rem;">
                     <h3 style="font-size: var(--text-md); font-weight: 600; margin-bottom: 0.75rem; white-space: nowrap;">各館空床狀態</h3>

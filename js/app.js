@@ -39,7 +39,7 @@ const navItems = document.querySelectorAll('.nav-item');
 //   owner / admin / viewer = 看得到全部分頁 (差別在能不能管帳號 / 寫入)
 //   helper = 小幫手 → 只能看 物件管理 / 住房一覽 / 租客清單，且寫入按鈕全隱藏
 //   helper 預設首頁 = 住房一覽 (#occupancy)，不給看 dashboard
-const HELPER_ALLOWED = new Set(['properties', 'occupancy', 'tenants', 'finance', 'contracts', 'maintenance']);
+const HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'tenants', 'finance', 'unsettled', 'contracts', 'maintenance']);
 const HELPER_DEFAULT_HASH = 'occupancy';
 const routes = {
     dashboard:     { title: '首頁',         group: '總覽', render: renderDashboard },
