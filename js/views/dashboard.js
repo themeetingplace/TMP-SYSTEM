@@ -215,7 +215,7 @@ export function renderDashboard() {
     return `
         ${checkBanner}
         <div class="metrics-grid${isHelper ? ' metrics-grid--3col' : ''}">
-            <a href="#properties" class="card metric-card metric-link" title="點擊前往物件管理">
+            <a href="${isHelper ? '#occupancy' : '#properties'}" class="card metric-card metric-link" title="點擊前往${isHelper ? '房況一覽' : '物件管理'}">
                 <div class="metric-header">
                     <span>物件已租 / 總數</span>
                     <div class="metric-icon primary">
