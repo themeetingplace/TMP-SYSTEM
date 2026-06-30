@@ -376,6 +376,18 @@ window.addEventListener('DOMContentLoaded', async () => {
             const label = financeNav.querySelector('.nav-label');
             if (label) label.textContent = '房租查帳';
         }
+        // 同理: 「物件管理」(#properties) 改成「房況一覽」(#occupancy) — helper 看不到完整物件編輯
+        const propertyNav = document.querySelector('.nav-item[data-view="properties"]');
+        if (propertyNav) {
+            propertyNav.style.display = '';
+            propertyNav.setAttribute('href', '#occupancy');
+            propertyNav.setAttribute('data-view', 'occupancy');
+            propertyNav.setAttribute('data-label', '房況一覽');
+            const icon = propertyNav.querySelector('i');
+            if (icon) icon.className = 'ph ph-grid-four';
+            const label = propertyNav.querySelector('.nav-label');
+            if (label) label.textContent = '房況一覽';
+        }
         // 整個 group 都被隱掉的話順手收起 label
         document.querySelectorAll('.nav-group').forEach(group => {
             const visibleItems = Array.from(group.querySelectorAll('.nav-item')).filter(el => el.style.display !== 'none');
