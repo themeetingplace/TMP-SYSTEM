@@ -363,6 +363,18 @@ window.addEventListener('DOMContentLoaded', async () => {
             const view = el.dataset.view;
             if (!HELPER_ALLOWED.has(view)) el.style.display = 'none';
         });
+        // 「帳務管理」(#finance) 改成「房租查帳」(#unsettled) — helper 不能看總收支表
+        const financeNav = document.querySelector('.nav-item[data-view="finance"]');
+        if (financeNav) {
+            financeNav.style.display = '';
+            financeNav.setAttribute('href', '#unsettled');
+            financeNav.setAttribute('data-view', 'unsettled');
+            financeNav.setAttribute('data-label', '房租查帳');
+            const icon = financeNav.querySelector('i');
+            if (icon) icon.className = 'ph ph-magnifying-glass';
+            const label = financeNav.querySelector('.nav-label');
+            if (label) label.textContent = '房租查帳';
+        }
         // 整個 group 都被隱掉的話順手收起 label
         document.querySelectorAll('.nav-group').forEach(group => {
             const visibleItems = Array.from(group.querySelectorAll('.nav-item')).filter(el => el.style.display !== 'none');
