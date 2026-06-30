@@ -39,9 +39,8 @@ const navItems = document.querySelectorAll('.nav-item');
 //   owner / admin / viewer = 看得到全部分頁 (差別在能不能管帳號 / 寫入)
 //   helper = 小幫手 → 只能看 物件管理 / 住房一覽 / 租客清單，且寫入按鈕全隱藏
 //   helper 預設首頁 = 住房一覽 (#occupancy)，不給看 dashboard
-// helper 能看的 view —
-//   #finance (總收支表) helper 不能看, 改 nav 指向 #unsettled (房租查帳)
-//   各頁內部的「新增/編輯/刪除」按鈕用 CSS hide (body[data-role="helper"])
+// helper 能看的 view (sidebar 已把 #finance 換成 #unsettled, 全員生效)
+// 各頁內部的「新增/編輯/刪除」按鈕用 CSS hide (body[data-role="helper"])
 const HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'contracts', 'unsettled', 'maintenance', 'tenants']);
 const HELPER_DEFAULT_HASH = 'occupancy';
 const routes = {
@@ -364,18 +363,6 @@ window.addEventListener('DOMContentLoaded', async () => {
             const view = el.dataset.view;
             if (!HELPER_ALLOWED.has(view)) el.style.display = 'none';
         });
-        // 「帳務管理」(#finance) 改成「房租查帳」(#unsettled) — helper 不能看總收支
-        const financeNav = document.querySelector('.nav-item[data-view="finance"]');
-        if (financeNav) {
-            financeNav.style.display = '';
-            financeNav.setAttribute('href', '#unsettled');
-            financeNav.setAttribute('data-view', 'unsettled');
-            financeNav.setAttribute('data-label', '房租查帳');
-            const icon = financeNav.querySelector('i');
-            if (icon) icon.className = 'ph ph-magnifying-glass';
-            const label = financeNav.querySelector('.nav-label');
-            if (label) label.textContent = '房租查帳';
-        }
         // 整個 group 都被隱掉的話順手收起 label
         document.querySelectorAll('.nav-group').forEach(group => {
             const visibleItems = Array.from(group.querySelectorAll('.nav-item')).filter(el => el.style.display !== 'none');

@@ -381,10 +381,10 @@ select:focus-visible,
     user-select: none;
 }
 
-/* === helper role: 隱藏寫入類按鈕 (只能檢視 / 下載 / 催繳) ===
+/* === helper role: 隱藏寫入類按鈕 (只能檢視 / 下載 / 催繳 / 結帳) ===
    body[data-role="helper"] selector + data-action 列舉
-   保留: view / view-signed / download / remind / settle (結帳 helper 還是要做)
-   隱藏: 編輯 / 刪除 / 終止 / 暫緩 / 續租 / 寄合約 / 解綁 / 新增 */
+   保留: view / view-signed / download / remind / settle
+   隱藏: 編輯 / 刪除 / 終止 / 暫緩 / 續租 / 寄合約 / 解綁 / 新增 / 房屋管理 / 床位編輯 */
 body[data-role="helper"] [data-action="renew"],
 body[data-role="helper"] [data-action="terminate"],
 body[data-role="helper"] [data-action="snooze"],
@@ -394,12 +394,19 @@ body[data-role="helper"] [data-action="delete"],
 body[data-role="helper"] [data-action="unbundle-group"],
 body[data-role="helper"] [data-action="unbundle-self"],
 body[data-role="helper"] [data-action="edit-from-detail"],
+body[data-role="helper"] [data-action="manage-rooms"],
+body[data-role="helper"] [data-action="toggle-status"],
+body[data-role="helper"] [data-section-action="edit"],
 body[data-role="helper"] #btn-new-contract,
 body[data-role="helper"] #btn-new-checkin-assign,
 body[data-role="helper"] #btn-new-tenant,
 body[data-role="helper"] #btn-new-income,
 body[data-role="helper"] #btn-new-expense,
-body[data-role="helper"] #btn-new-maintenance {
+body[data-role="helper"] #btn-new-maintenance,
+body[data-role="helper"] #btn-new-house,
+body[data-role="helper"] #btn-new-building,
+body[data-role="helper"] #btn-new-invoicetype,
+body[data-role="helper"] #btn-new-owner {
     display: none !important;
 }
 
