@@ -3857,13 +3857,8 @@ body[data-role="helper"] [id^="btn-export"] { display: none !important; }
 body[data-role="helper"] [id^="btn-ask-"] { display: none !important; }
 body[data-role="helper"] [id^="btn-gen-"] { display: none !important; }
 body[data-role="helper"] [id^="btn-bulk-"] { display: none !important; }
-/* 表格列尾的 操作 td 整欄隱藏 (含編輯/刪除/付款/匯出/查驗)
-   ⚠ 住房一覽 (.occ-table) 排除 — 它的最後一欄是月份格 (本月橘色)，不能誤刪
-   ⚠ 住房一覽的「退房」欄 = 第 4 欄，另外針對 .occ-table 處理 */
-body[data-role="helper"] .data-table:not(.occ-table) thead th:last-child,
-body[data-role="helper"] .data-table:not(.occ-table) tbody td:last-child {
-    display: none !important;
-}
+/* 舊版整欄隱藏已拿掉 — helper 還是要看到 view/download/settle/remind 等讀取類操作
+   個別寫入按鈕由前面的 body[data-role="helper"] [data-action="..."] 規則處理 */
 /* 住房一覽 退房欄 = 第 4 欄，hide for helper (床位/房客/備註/月份 都保留) */
 body[data-role="helper"] .occ-table thead th:nth-child(4),
 body[data-role="helper"] .occ-table tbody td:nth-child(4) {
