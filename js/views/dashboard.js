@@ -210,9 +210,11 @@ export function renderDashboard() {
         }
     }
 
+    // helper 不看「本月租金收入」(沒有總收支權限)
+    const isHelper = window.__currentRole === 'helper';
     return `
         ${checkBanner}
-        <div class="metrics-grid">
+        <div class="metrics-grid${isHelper ? ' metrics-grid--3col' : ''}">
             <a href="#properties" class="card metric-card metric-link" title="點擊前往物件管理">
                 <div class="metric-header">
                     <span>物件已租 / 總數</span>
@@ -246,7 +248,7 @@ export function renderDashboard() {
                 <div class="metric-subtext">${metrics.pendingMaintenances === 0 ? '目前無待處理報修' : '追蹤租客報修進度'}</div>
             </a>
 
-            <a href="#finance" class="card metric-card metric-link" title="點擊前往總收支表">
+            ${isHelper ? '' : `<a href="#finance" class="card metric-card metric-link" title="點擊前往總收支表">
                 <div class="metric-header">
                     <span>本月租金收入</span>
                     <div class="metric-icon success">
@@ -255,107 +257,103 @@ export function renderDashboard() {
                 </div>
                 <div class="metric-value">${moneyAmount(metrics.monthlyIncome, { sign: 'in' })}</div>
                 <div class="metric-subtext">${metrics.monthlyIncome === 0 ? '尚無本月入帳' : '本月已入帳房租'}</div>
-            </a>
+            </a>`}
         </div>
 
-        <div class="dashboard-grid">
-            <div class="card chart-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-                    <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-chart-line-up"></i> 近半年收支概況</h2>
-                    <div class="chart-mode-toggle" role="group" aria-label="圖表模式">
-                        <button type="button" class="chart-mode-btn active" data-chart-mode="total">總和</button>
-                        <button type="button" class="chart-mode-btn" data-chart-mode="byBuilding">各館</button>
-                    </div>
-                </div>
-                <div style="height: 300px; width: 100%;">
-                    <canvas id="incomeChart"></canvas>
-                </div>
-            </div>
-
-            <div class="card">
-                <div style="margin-bottom: 1rem;">
-                    <h3 style="font-size: var(--text-md); font-weight: 600; margin-bottom: 0.75rem; white-space: nowrap;">各館空床狀態</h3>
-                    <div id="property-selector" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                        ${propertyNames.map((name, idx) => `
-                            <button class="property-filter-btn ${idx === 0 ? 'active' : ''}" data-property="${name}">
-                                ${name}
-                            </button>
-                        `).join('')}
-                    </div>
-                </div>
-                <div id="empty-beds-display">
-                    <div style="position: relative; height: 200px; margin: 0.5rem 0;">
-                        <canvas id="emptyBedsChart"></canvas>
-                        <div id="empty-beds-center" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;">
-                            <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-primary); line-height: 1;">${selectedPropertyData.vacant}</div>
-                            <div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.25rem;">空床 / 共 ${selectedPropertyData.total}</div>
-                        </div>
-                    </div>
-                    <div id="empty-beds-legend" style="text-align: center; font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.5rem;">
-                        居住 <strong style="color: var(--color-success);">${selectedPropertyData.active}</strong> ·
-                        ${selectedPropertyData.snoozed > 0 ? `暫緩 <strong style="color: var(--color-warning);">${selectedPropertyData.snoozed}</strong> · ` : ''}空床 <strong style="color: var(--color-primary);">${selectedPropertyData.vacant}</strong>
-                    </div>
-                    <div id="empty-beds-gender" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; padding-top: 0.75rem; border-top: 1px dashed var(--border-color);">
-                        <div class="gender-chip male"><i class="ph-fill ph-person-simple"></i> 男 <strong>${selectedPropertyData.vacantByGender['男']}</strong></div>
-                        <div class="gender-chip female"><i class="ph-fill ph-person-simple"></i> 女 <strong>${selectedPropertyData.vacantByGender['女']}</strong></div>
-                        <div class="gender-chip mixed"><i class="ph-fill ph-users"></i> 不限 <strong>${selectedPropertyData.vacantByGender['不限']}</strong></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="todo-cards-grid">
-            <div class="card">
-                <h2 class="card-title"><i class="ph ph-file-text"></i> 合約事項</h2>
-                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    ${contractTodos.length > 0 ? contractTodos.map(item => `
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="margin-bottom: 0.25rem;">
-                                    <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
+        ${(() => {
+            // === 共用 card template ===
+            const todoCardHtml = (icon, title, todos, emptyMsg) => `
+                <div class="card">
+                    <h2 class="card-title"><i class="ph ${icon}"></i> ${title}</h2>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        ${todos.length > 0 ? todos.map(item => `
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="margin-bottom: 0.25rem;">
+                                        <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
+                                    </div>
+                                    <div style="font-size: var(--text-xs); color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
                                 </div>
-                                <div style="font-size: var(--text-xs); color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
+                                <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: var(--text-2xs); white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
                             </div>
-                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: var(--text-2xs); white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
-                        </div>
-                    `).join('') : emptyState({ icon: 'ph-check-circle', title: '本月合約都安全', hint: '沒有即將到期 / 待簽 / 需決策的合約' })}
+                        `).join('') : emptyState({ icon: emptyMsg.icon, title: emptyMsg.title, hint: emptyMsg.hint })}
+                    </div>
                 </div>
-            </div>
+            `;
 
-            <div class="card">
-                <h2 class="card-title"><i class="ph ph-wallet"></i> 帳款事項</h2>
-                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    ${financeTodos.length > 0 ? financeTodos.map(item => `
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="margin-bottom: 0.25rem;">
-                                    <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
-                                </div>
-                                <div style="font-size: var(--text-xs); color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
-                            </div>
-                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: var(--text-2xs); white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
+            const vacancyCardHtml = `
+                <div class="card">
+                    <div style="margin-bottom: 1rem;">
+                        <h3 style="font-size: var(--text-md); font-weight: 600; margin-bottom: 0.75rem; white-space: nowrap;">各館空床狀態</h3>
+                        <div id="property-selector" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            ${propertyNames.map((name, idx) => `
+                                <button class="property-filter-btn ${idx === 0 ? 'active' : ''}" data-property="${name}">
+                                    ${name}
+                                </button>
+                            `).join('')}
                         </div>
-                    `).join('') : emptyState({ icon: 'ph-coffee', title: '所有帳款都清光了', hint: '沒有待繳款或未對帳的項目' })}
+                    </div>
+                    <div id="empty-beds-display">
+                        <div style="position: relative; height: 200px; margin: 0.5rem 0;">
+                            <canvas id="emptyBedsChart"></canvas>
+                            <div id="empty-beds-center" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;">
+                                <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-primary); line-height: 1;">${selectedPropertyData.vacant}</div>
+                                <div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.25rem;">空床 / 共 ${selectedPropertyData.total}</div>
+                            </div>
+                        </div>
+                        <div id="empty-beds-legend" style="text-align: center; font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.5rem;">
+                            居住 <strong style="color: var(--color-success);">${selectedPropertyData.active}</strong> ·
+                            ${selectedPropertyData.snoozed > 0 ? `暫緩 <strong style="color: var(--color-warning);">${selectedPropertyData.snoozed}</strong> · ` : ''}空床 <strong style="color: var(--color-primary);">${selectedPropertyData.vacant}</strong>
+                        </div>
+                        <div id="empty-beds-gender" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; padding-top: 0.75rem; border-top: 1px dashed var(--border-color);">
+                            <div class="gender-chip male"><i class="ph-fill ph-person-simple"></i> 男 <strong>${selectedPropertyData.vacantByGender['男']}</strong></div>
+                            <div class="gender-chip female"><i class="ph-fill ph-person-simple"></i> 女 <strong>${selectedPropertyData.vacantByGender['女']}</strong></div>
+                            <div class="gender-chip mixed"><i class="ph-fill ph-users"></i> 不限 <strong>${selectedPropertyData.vacantByGender['不限']}</strong></div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            `;
 
-            <div class="card">
-                <h2 class="card-title"><i class="ph ph-wrench"></i> 維修事項</h2>
-                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    ${maintenanceTodos.length > 0 ? maintenanceTodos.map(item => `
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="margin-bottom: 0.25rem;">
-                                    <span class="status-badge ${item.status}" style="white-space: nowrap;">${item.label}</span>
-                                </div>
-                                <div style="font-size: var(--text-xs); color: var(--text-main); word-break: break-word; overflow-wrap: break-word;">${item.text}</div>
+            const contractTodoHtml = todoCardHtml('ph-file-text', '合約事項', contractTodos, { icon: 'ph-check-circle', title: '本月合約都安全', hint: '沒有即將到期 / 待簽 / 需決策的合約' });
+            const financeTodoHtml = todoCardHtml('ph-wallet', '帳款事項', financeTodos, { icon: 'ph-coffee', title: '所有帳款都清光了', hint: '沒有待繳款或未對帳的項目' });
+            const maintTodoHtml = todoCardHtml('ph-wrench', '維修事項', maintenanceTodos, { icon: 'ph-confetti', title: '沒有未處理的維修', hint: '所有報修都已完成或進行中' });
+
+            if (isHelper) {
+                // helper 版: 第二列 = 帳款事項 / 維修事項 / 各館空床 (3-col)
+                //           不顯示收支圖表 + 合約事項
+                return `
+                    <div class="dashboard-grid dashboard-grid--3col">
+                        ${financeTodoHtml}
+                        ${maintTodoHtml}
+                        ${vacancyCardHtml}
+                    </div>
+                `;
+            }
+
+            // admin / owner 版: 維持原樣 (收支圖表 + 各館空床 + 3 個 todo)
+            return `
+                <div class="dashboard-grid">
+                    <div class="card chart-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-chart-line-up"></i> 近半年收支概況</h2>
+                            <div class="chart-mode-toggle" role="group" aria-label="圖表模式">
+                                <button type="button" class="chart-mode-btn active" data-chart-mode="total">總和</button>
+                                <button type="button" class="chart-mode-btn" data-chart-mode="byBuilding">各館</button>
                             </div>
-                            <button class="btn btn-outline todo-action" style="padding: 0.3rem 0.6rem; font-size: var(--text-2xs); white-space: nowrap; flex-shrink: 0; cursor: pointer;" data-entity-type="${item.entityType}" data-entity-id="${item.entityId}">${item.action}</button>
                         </div>
-                    `).join('') : emptyState({ icon: 'ph-confetti', title: '沒有未處理的維修', hint: '所有報修都已完成或進行中' })}
+                        <div style="height: 300px; width: 100%;">
+                            <canvas id="incomeChart"></canvas>
+                        </div>
+                    </div>
+                    ${vacancyCardHtml}
                 </div>
-            </div>
-        </div>
+                <div class="todo-cards-grid">
+                    ${contractTodoHtml}
+                    ${financeTodoHtml}
+                    ${maintTodoHtml}
+                </div>
+            `;
+        })()}
     `;
 }
 

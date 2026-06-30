@@ -3667,6 +3667,31 @@ select.inline-edit-input { cursor: pointer; }
     grid-column: span 2;
 }
 
+/* helper 版本: 3-col 整齊 (帳款 / 維修 / 各館空床), 不含 chart-card */
+.dashboard-grid--3col {
+    grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 1024px) {
+    .dashboard-grid--3col {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* helper 版本: metrics 強制 3-col (不含本月租金收入) */
+.metrics-grid--3col {
+    grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 900px) {
+    .metrics-grid--3col {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+@media (max-width: 600px) {
+    .metrics-grid--3col {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 1024px) {
     .dashboard-grid {
         grid-template-columns: 1fr;

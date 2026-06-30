@@ -39,7 +39,9 @@ const navItems = document.querySelectorAll('.nav-item');
 //   owner / admin / viewer = 看得到全部分頁 (差別在能不能管帳號 / 寫入)
 //   helper = 小幫手 → 只能看 物件管理 / 住房一覽 / 租客清單，且寫入按鈕全隱藏
 //   helper 預設首頁 = 住房一覽 (#occupancy)，不給看 dashboard
-const HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'tenants', 'finance', 'unsettled', 'contracts', 'maintenance']);
+// helper 只能看: 總覽 / 物件 / 房況 / 合約 (檢視) / 房租查帳 (催繳結帳) / 維修 / 租客
+// 不能看: 總收支 (#finance) / 報表 / 設定 / 帳號管理
+const HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'tenants', 'unsettled', 'contracts', 'maintenance']);
 const HELPER_DEFAULT_HASH = 'occupancy';
 const routes = {
     dashboard:     { title: '首頁',         group: '總覽', render: renderDashboard },
