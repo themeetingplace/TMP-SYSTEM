@@ -403,61 +403,6 @@ body[data-role="helper"] #btn-new-maintenance {
     display: none !important;
 }
 
-/* === 巢狀 nav 父子層 === */
-/* 父層 label (e.g. 物件管理) — 非連結, 視覺類似 nav-item 但無 hover/active */
-.nav-parent {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-}
-.nav-parent-label {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0.875rem 0.35rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--sidebar-section-color);
-    user-select: none;
-}
-.nav-parent-label i {
-    font-size: 1.15rem;
-    flex-shrink: 0;
-    opacity: 0.75;
-}
-.nav-children {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    padding-left: 0.75rem;
-    border-left: 2px solid var(--sidebar-border);
-    margin-left: 0.875rem;
-}
-/* 子層 nav-item 縮小 + 左 padding 對齊 */
-.nav-item.nav-child {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.85rem;
-}
-.nav-item.nav-child i {
-    font-size: 1.1rem;
-}
-
-/* 收合狀態: 隱藏父 label 文字 + 把子 item 顯示成獨立 icon */
-.sidebar.is-collapsed .nav-parent-label .nav-label {
-    display: none;
-}
-.sidebar.is-collapsed .nav-children {
-    padding-left: 0;
-    border-left: 0;
-    margin-left: 0;
-}
-.sidebar.is-collapsed .nav-item.nav-child {
-    padding: 0.625rem 0.875rem;
-    font-size: 0.9rem;
-}
-.sidebar.is-collapsed .nav-item.nav-child i {
-    font-size: 1.25rem;
-}
 
 .sidebar.is-collapsed .nav-section-label {
     height: 1px;
