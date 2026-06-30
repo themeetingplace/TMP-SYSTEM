@@ -32,6 +32,20 @@ function fmt(n) {
 }
 
 /**
+ * 金額純文字版本 — 用於 attribute (title=, aria-label=) / tooltip / console
+ * (moneyAmount 回傳含 " 的 <span>, 放 title 內會破壞 HTML attribute 解析)
+ */
+export function moneyText(amount, sign = null) {
+    const abs = Math.abs(Number(amount) || 0);
+    const n = Number(amount) || 0;
+    let prefix = '$';
+    if (sign === '+' || sign === 'in') prefix = '+$';
+    else if (sign === '-' || sign === 'out') prefix = '-$';
+    else if (sign === 'auto') prefix = n > 0 ? '+$' : n < 0 ? '-$' : '$';
+    return `${prefix}${fmt(abs)}`;
+}
+
+/**
  * 金額純文字 (帶 $ 符號 + 千分位 + 可選正負號 + 可選顏色 wrapper)
  * @param {number} amount
  * @param {object} opts

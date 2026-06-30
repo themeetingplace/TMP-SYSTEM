@@ -1170,8 +1170,10 @@ function renderGroupCumulativeBar() {
     const chips = Object.entries(cums).map(([key, c]) => {
         const deltaSign = c.delta >= 0 ? '+' : '−';
         const deltaColor = c.delta >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+        // ⚠ title= 內必須是純文字, 不能放 moneyAmount() (它回傳含 " 的 <span>, 會破壞 attribute 解析)
+        const baselinePlain = `$${(c.baseline || 0).toLocaleString()}`;
         return `
-            <span class="cum-chip" title="${key} 累金 = baseline ${moneyAmount(c.baseline)} (${GROUP_CUM_BASELINES.asOf}) + 結餘 − 紅利">
+            <span class="cum-chip" title="${key} 累金 = baseline ${baselinePlain} (${GROUP_CUM_BASELINES.asOf}) + 結餘 − 紅利">
                 <span class="cum-chip-label">${key} 累金</span>
                 <span class="cum-chip-value">${moneyAmount(c.amount)}</span>
                 ${c.delta !== 0 ? `<span class="cum-chip-delta" style="color: ${deltaColor};">${deltaSign}$${Math.abs(c.delta).toLocaleString()}</span>` : ''}
