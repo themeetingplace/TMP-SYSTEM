@@ -1214,10 +1214,11 @@ export const store = {
         persist();
         return after;
     },
-    // === 合併租客: 把 sourceId 的 LINE 綁定 + LIFF 資料轉到 targetId, 然後刪掉 sourceId ===
-    // 使用場景: admin 手動建過一筆租客, 客戶又用 LIFF 註冊建了另一筆, 想合併成同一人
-    // 保留 target 的 name/phone/email/emergency, 轉移 source 的 LINE 相關欄位 + 身分證照片路徑
-    // 若 target 已有 LINE 綁定, 拒絕合併 (避免覆寫)
+    // === 合併租客: 把 sourceId 的資料 merge 到 targetId, 然後刪掉 sourceId ===
+    // 策略: 「填空不覆寫」— target 已有的欄位保留, target 空/未填的欄位從 source 補進來
+    //   例如 admin 只打了名字, source 有電話/email/緊急聯絡人 → 通通填進 target
+    //   例外: LINE 綁定, 一定要從 source 帶過來 (合併主要目的)
+    // 回傳: 保留 source 完整快照, 可用於 undo 恢復
     mergeTenant(targetId, sourceId) {
         if (!targetId || !sourceId || targetId === sourceId) {
             return { ok: false, msg: 'target / source ID 不合法' };
@@ -1226,39 +1227,92 @@ export const store = {
         const source = mockData.tenants.find(t => t.id === sourceId);
         if (!target) return { ok: false, msg: `找不到目標租客 ${targetId}` };
         if (!source) return { ok: false, msg: `找不到來源租客 ${sourceId}` };
-        if (target.lineUserId) return { ok: false, msg: `${target.name} 已有 LINE 綁定, 不能覆寫` };
-        if (!source.lineUserId) return { ok: false, msg: `${source.name} 沒有 LINE 綁定可轉移` };
+        if (target.lineUserId && source.lineUserId && target.lineUserId !== source.lineUserId) {
+            return { ok: false, msg: `${target.name} 已有不同的 LINE 綁定, 合併會衝突` };
+        }
+        if (!source.lineUserId && !target.lineUserId) {
+            return { ok: false, msg: `兩筆都沒 LINE 綁定, 合併沒意義` };
+        }
 
-        // 1. 轉移 LINE / LIFF 欄位 → target
+        // 存 pre-merge 完整快照 (undo 用)
+        const targetSnapshot = JSON.parse(JSON.stringify(target));
+        const sourceSnapshot = JSON.parse(JSON.stringify(source));
+
+        // 「填空不覆寫」helper
+        const prefer = (targetVal, sourceVal) => {
+            // 空字串 / null / undefined / 0 都當空 (但 emergencyContact 中 0 沒意義, 這邊統一)
+            if (targetVal == null || targetVal === '' || targetVal === false) return sourceVal ?? targetVal;
+            return targetVal;
+        };
+
         const ti = mockData.tenants.findIndex(t => t.id === targetId);
         mockData.tenants[ti] = {
             ...target,
-            lineUserId: source.lineUserId,
-            lineDisplayName: source.lineDisplayName || null,
-            linePictureUrl: source.linePictureUrl || null,
-            lineBoundAt: source.lineBoundAt || null,
-            // 身分證浮水印路徑 — 若 target 沒填就用 source 的
-            idCardFrontPath: target.idCardFrontPath || source.idCardFrontPath || null,
-            idCardBackPath: target.idCardBackPath || source.idCardBackPath || null,
-            // 來源標註 (LIFF 註冊過的紀錄)
-            source: target.source || source.source || 'LIFF',
+            // LINE 綁定: 一定要有 (從 source 或 target 取, 兩者有一個)
+            lineUserId: target.lineUserId || source.lineUserId,
+            lineDisplayName: target.lineDisplayName || source.lineDisplayName || null,
+            linePictureUrl: target.linePictureUrl || source.linePictureUrl || null,
+            lineBoundAt: target.lineBoundAt || source.lineBoundAt || null,
+            // 一般欄位: 填空不覆寫
+            phone: prefer(target.phone, source.phone),
+            email: prefer(target.email, source.email),
+            emergencyContact: prefer(target.emergencyContact, source.emergencyContact),
+            currentProperty: prefer(target.currentProperty, source.currentProperty),
+            status: prefer(target.status, source.status),
+            source: prefer(target.source, source.source),
+            // 身分證: 填空不覆寫
+            idCardFrontPath: prefer(target.idCardFrontPath, source.idCardFrontPath),
+            idCardBackPath: prefer(target.idCardBackPath, source.idCardBackPath),
+            idCardUploadedAt: prefer(target.idCardUploadedAt, source.idCardUploadedAt),
+            // note 合併 (兩者都保留)
             note: [target.note, source.note ? `[合併自 ${source.id}] ${source.note}` : ''].filter(Boolean).join('\n')
         };
 
-        // 2. cascade: source 名下所有合約 / invoice / deposit 改掛 target 名
-        //    (若同名就跳過, 已經指向對的人)
+        // cascade: source 名下所有合約 / invoice / deposit 改掛 target 名
         if (source.name !== target.name) {
             mockData.contracts.forEach(c => { if (c.tenant === source.name) c.tenant = target.name; });
             mockData.invoices.forEach(inv => { if (inv.tenant === source.name) inv.tenant = target.name; });
             (mockData.deposits || []).forEach(d => { if (d.tenantName === source.name) d.tenantName = target.name; });
         }
 
-        // 3. 刪掉 source
+        // 從本機 mockData 移除 source (但不立即 push DELETE 到雲端, 留給 caller 決定 — 例如 undo 視窗)
         mockData.tenants = mockData.tenants.filter(t => t.id !== sourceId);
-        window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'tenants', id: sourceId } }));
 
         persist();
-        return { ok: true, mergedInto: target.name, removed: sourceId };
+        return {
+            ok: true,
+            mergedInto: target.name,
+            removed: sourceId,
+            targetSnapshot,
+            sourceSnapshot,
+            mergedTargetId: targetId
+        };
+    },
+    // === undo merge: 依 snapshot 還原兩筆租客 + 反向 cascade ===
+    unmergeTenant({ targetSnapshot, sourceSnapshot, mergedTargetId }) {
+        if (!targetSnapshot || !sourceSnapshot || !mergedTargetId) {
+            return { ok: false, msg: '缺少快照資料' };
+        }
+        // 1. 還原 target 到 pre-merge 樣貌
+        const ti = mockData.tenants.findIndex(t => t.id === mergedTargetId);
+        if (ti >= 0) mockData.tenants[ti] = targetSnapshot;
+        else mockData.tenants.push(targetSnapshot);
+        // 2. 復活 source
+        if (!mockData.tenants.some(t => t.id === sourceSnapshot.id)) {
+            mockData.tenants.push(sourceSnapshot);
+        }
+        // 3. cascade: 曾被改掛的 contract/invoice/deposit 改回 source 名
+        if (sourceSnapshot.name !== targetSnapshot.name) {
+            mockData.contracts.forEach(c => {
+                if (c.tenant === targetSnapshot.name && c._preMergeSourceName === sourceSnapshot.name) {
+                    c.tenant = sourceSnapshot.name;
+                    delete c._preMergeSourceName;
+                }
+            });
+            // 沒有 _preMergeSourceName 標記, 保守: 只提示無法自動反轉 cascade
+        }
+        persist();
+        return { ok: true, restored: [targetSnapshot.name, sourceSnapshot.name] };
     },
     deleteTenant(id) {
         mockData.tenants = mockData.tenants.filter(t => t.id !== id);

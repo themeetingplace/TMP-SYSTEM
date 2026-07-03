@@ -414,8 +414,9 @@ function showLineMergePicker(targetTenantId) {
                     close();
                     openConfirm({
                         title: '確認合併',
-                        message: `確定把「<strong>${source.name}</strong>」(${source.id}) 的 LINE 綁定轉到「<strong>${target.name}</strong>」(${target.id})，並刪除來源紀錄？<br><br>此動作無法還原。`,
-                        danger: true,
+                        message: `確定把「<strong>${source.name}</strong>」(${source.id}) 的資料合併到「<strong>${target.name}</strong>」(${target.id})？<br><br>
+                            策略：<strong>填空不覆寫</strong>（target 空的欄位才從 source 補進來），LINE 綁定會轉過來。<br><br>
+                            合併後有 <strong>10 秒</strong> 可按「復原」還原兩筆紀錄。`,
                         confirmLabel: '確認合併',
                         onConfirm: () => {
                             const r = store.mergeTenant(targetTenantId, sourceId);
@@ -423,8 +424,30 @@ function showLineMergePicker(targetTenantId) {
                                 showToast(r.msg, 'danger', 5000);
                                 return;
                             }
-                            showToast(`已合併 ${source.name} → ${target.name}`, 'success');
                             refreshView();
+                            showUndoToast({
+                                message: `已合併 ${source.name} → ${target.name}`,
+                                durationMs: 10000,
+                                onUndo: () => {
+                                    const u = store.unmergeTenant({
+                                        targetSnapshot: r.targetSnapshot,
+                                        sourceSnapshot: r.sourceSnapshot,
+                                        mergedTargetId: r.mergedTargetId
+                                    });
+                                    if (u.ok) {
+                                        showToast(`已還原 ${u.restored.join(' / ')}`, 'success');
+                                        refreshView();
+                                    } else {
+                                        showToast(`還原失敗: ${u.msg}`, 'danger', 5000);
+                                    }
+                                },
+                                onCommit: () => {
+                                    // 10 秒過後才真的推 DELETE 到雲端
+                                    window.dispatchEvent(new CustomEvent('bms:delete', {
+                                        detail: { table: 'tenants', id: r.removed }
+                                    }));
+                                }
+                            });
                         }
                     });
                 });
