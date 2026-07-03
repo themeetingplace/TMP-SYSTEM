@@ -317,10 +317,10 @@ export function showTenantDetails(id) {
             { label: '狀態', value: `<span class="status-badge ${statusClass}">${t.status}</span>` },
             { label: '目前物件', value: t.currentProperty || '無' },
             { label: '緊急聯絡人', value: t.emergencyContact || '無' },
-            { label: 'LINE 綁定', value: t.lineUserId
+            { label: 'LINE 綁定', value: (t.lineUserId
                 ? `<span class="status-badge success"><i class="ph-fill ph-check-circle"></i> 已綁定</span>${t.lineDisplayName ? ` · ${t.lineDisplayName}` : ''}`
-                : `<span style="color: var(--text-muted)">未綁定</span>
-                   <button class="btn btn-outline" style="margin-left: 0.5rem; padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="merge-line" data-id="${t.id}"><i class="ph ph-link"></i> 合併已註冊 LINE 帳號</button>` },
+                : '<span style="color: var(--text-muted)">未綁定</span>')
+                + ` <button class="btn btn-outline" style="margin-left: 0.5rem; padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="merge-line" data-id="${t.id}"><i class="ph ph-link"></i> 合併其他 LINE 綁定紀錄</button>` },
             { label: '身分證 (浮水印)', value: idCardHtml },
             { label: '備註', value: t.note
                 ? `<span style="white-space: pre-wrap; color: var(--text-main);">${t.note.replace(/</g, '&lt;')}</span>`
