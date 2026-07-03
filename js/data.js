@@ -1214,6 +1214,52 @@ export const store = {
         persist();
         return after;
     },
+    // === 合併租客: 把 sourceId 的 LINE 綁定 + LIFF 資料轉到 targetId, 然後刪掉 sourceId ===
+    // 使用場景: admin 手動建過一筆租客, 客戶又用 LIFF 註冊建了另一筆, 想合併成同一人
+    // 保留 target 的 name/phone/email/emergency, 轉移 source 的 LINE 相關欄位 + 身分證照片路徑
+    // 若 target 已有 LINE 綁定, 拒絕合併 (避免覆寫)
+    mergeTenant(targetId, sourceId) {
+        if (!targetId || !sourceId || targetId === sourceId) {
+            return { ok: false, msg: 'target / source ID 不合法' };
+        }
+        const target = mockData.tenants.find(t => t.id === targetId);
+        const source = mockData.tenants.find(t => t.id === sourceId);
+        if (!target) return { ok: false, msg: `找不到目標租客 ${targetId}` };
+        if (!source) return { ok: false, msg: `找不到來源租客 ${sourceId}` };
+        if (target.lineUserId) return { ok: false, msg: `${target.name} 已有 LINE 綁定, 不能覆寫` };
+        if (!source.lineUserId) return { ok: false, msg: `${source.name} 沒有 LINE 綁定可轉移` };
+
+        // 1. 轉移 LINE / LIFF 欄位 → target
+        const ti = mockData.tenants.findIndex(t => t.id === targetId);
+        mockData.tenants[ti] = {
+            ...target,
+            lineUserId: source.lineUserId,
+            lineDisplayName: source.lineDisplayName || null,
+            linePictureUrl: source.linePictureUrl || null,
+            lineBoundAt: source.lineBoundAt || null,
+            // 身分證浮水印路徑 — 若 target 沒填就用 source 的
+            idCardFrontPath: target.idCardFrontPath || source.idCardFrontPath || null,
+            idCardBackPath: target.idCardBackPath || source.idCardBackPath || null,
+            // 來源標註 (LIFF 註冊過的紀錄)
+            source: target.source || source.source || 'LIFF',
+            note: [target.note, source.note ? `[合併自 ${source.id}] ${source.note}` : ''].filter(Boolean).join('\n')
+        };
+
+        // 2. cascade: source 名下所有合約 / invoice / deposit 改掛 target 名
+        //    (若同名就跳過, 已經指向對的人)
+        if (source.name !== target.name) {
+            mockData.contracts.forEach(c => { if (c.tenant === source.name) c.tenant = target.name; });
+            mockData.invoices.forEach(inv => { if (inv.tenant === source.name) inv.tenant = target.name; });
+            (mockData.deposits || []).forEach(d => { if (d.tenantName === source.name) d.tenantName = target.name; });
+        }
+
+        // 3. 刪掉 source
+        mockData.tenants = mockData.tenants.filter(t => t.id !== sourceId);
+        window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'tenants', id: sourceId } }));
+
+        persist();
+        return { ok: true, mergedInto: target.name, removed: sourceId };
+    },
     deleteTenant(id) {
         mockData.tenants = mockData.tenants.filter(t => t.id !== id);
         persist();

@@ -155,7 +155,7 @@ export function renderTenants() {
             </div>
 
             <div class="table-container">
-                <table class="data-table" style="table-layout: fixed;">
+                <table class="data-table cards-with-hero" style="table-layout: fixed;">
                     <colgroup>
                         <col style="width: 24%;">
                         <col style="width: 13%;">
@@ -319,7 +319,8 @@ export function showTenantDetails(id) {
             { label: '緊急聯絡人', value: t.emergencyContact || '無' },
             { label: 'LINE 綁定', value: t.lineUserId
                 ? `<span class="status-badge success"><i class="ph-fill ph-check-circle"></i> 已綁定</span>${t.lineDisplayName ? ` · ${t.lineDisplayName}` : ''}`
-                : '<span style="color: var(--text-muted)">未綁定</span>' },
+                : `<span style="color: var(--text-muted)">未綁定</span>
+                   <button class="btn btn-outline" style="margin-left: 0.5rem; padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="merge-line" data-id="${t.id}"><i class="ph ph-link"></i> 合併已註冊 LINE 帳號</button>` },
             { label: '身分證 (浮水印)', value: idCardHtml },
             { label: '備註', value: t.note
                 ? `<span style="white-space: pre-wrap; color: var(--text-main);">${t.note.replace(/</g, '&lt;')}</span>`
@@ -329,6 +330,96 @@ export function showTenantDetails(id) {
         onMount: (overlay) => {
             overlay.querySelectorAll('[data-action="view-id-card"]').forEach(btn => {
                 btn.addEventListener('click', () => openIdCard(btn.dataset.path, btn.dataset.side));
+            });
+            overlay.querySelector('[data-action="merge-line"]')?.addEventListener('click', () => {
+                showLineMergePicker(id);
+            });
+        }
+    });
+}
+
+// 合併 picker: 列出所有已綁 LINE 的租客 (可能重複紀錄), 挑一個把其 LINE 綁定轉移到當前 tenant
+function showLineMergePicker(targetTenantId) {
+    const target = mockData.tenants.find(t => t.id === targetTenantId);
+    if (!target) return;
+
+    // 候選: 已綁 LINE 的租客, 排除 target 自己
+    const candidates = mockData.tenants
+        .filter(t => t.lineUserId && t.id !== targetTenantId)
+        .sort((a, b) => {
+            // 同名優先, 其次同電話, 再來按建立時間新→舊
+            const aMatch = (a.name === target.name ? 100 : 0) + (a.phone && a.phone === target.phone ? 50 : 0);
+            const bMatch = (b.name === target.name ? 100 : 0) + (b.phone && b.phone === target.phone ? 50 : 0);
+            return bMatch - aMatch;
+        });
+
+    if (candidates.length === 0) {
+        openConfirm({
+            title: '沒有可合併的紀錄',
+            message: '目前沒有其他已綁定 LINE 的租客紀錄可供合併。',
+            confirmLabel: '知道了',
+            hideCancel: true
+        });
+        return;
+    }
+
+    const bodyHtml = `
+        <div style="margin-bottom: 0.75rem; color: var(--text-secondary); font-size: var(--text-sm);">
+            把「<strong>${target.name}</strong>」跟以下已註冊 LINE 的紀錄合併，會把 LINE 綁定 + 身分證資料轉過來，然後<strong style="color: var(--color-danger);">刪掉來源那筆</strong>。
+        </div>
+        <div class="merge-candidate-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 400px; overflow-y: auto;">
+            ${candidates.map(c => {
+                const nameMatch = c.name === target.name;
+                const phoneMatch = c.phone && c.phone === target.phone;
+                const matchBadge = nameMatch && phoneMatch
+                    ? '<span class="status-badge success" style="font-size: var(--text-2xs);">✓ 姓名+電話都相符</span>'
+                    : nameMatch
+                        ? '<span class="status-badge success" style="font-size: var(--text-2xs);">同名</span>'
+                        : phoneMatch
+                            ? '<span class="status-badge warning" style="font-size: var(--text-2xs);">同電話</span>'
+                            : '<span class="status-badge info" style="font-size: var(--text-2xs);">名字/電話不同</span>';
+                return `
+                    <button class="btn btn-outline" data-source-id="${c.id}" style="text-align: left; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; height: auto;">
+                        <div style="display: flex; justify-content: space-between; gap: 0.5rem;">
+                            <strong>${c.name}</strong>
+                            ${matchBadge}
+                        </div>
+                        <div style="font-size: var(--text-xs); color: var(--text-muted);">
+                            ${c.id} · ${c.phone || '無電話'} · LINE: ${c.lineDisplayName || '未設'}
+                        </div>
+                    </button>
+                `;
+            }).join('')}
+        </div>
+    `;
+
+    openModal({
+        title: `🔗 合併 LINE 綁定 → ${target.name}`,
+        maxWidth: 520,
+        bodyHtml,
+        onMount: (overlay, close) => {
+            overlay.querySelectorAll('[data-source-id]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const sourceId = btn.dataset.sourceId;
+                    const source = mockData.tenants.find(t => t.id === sourceId);
+                    if (!source) return;
+                    close();
+                    openConfirm({
+                        title: '確認合併',
+                        message: `確定把「<strong>${source.name}</strong>」(${source.id}) 的 LINE 綁定轉到「<strong>${target.name}</strong>」(${target.id})，並刪除來源紀錄？<br><br>此動作無法還原。`,
+                        danger: true,
+                        confirmLabel: '確認合併',
+                        onConfirm: () => {
+                            const r = store.mergeTenant(targetTenantId, sourceId);
+                            if (!r.ok) {
+                                showToast(r.msg, 'danger', 5000);
+                                return;
+                            }
+                            showToast(`已合併 ${source.name} → ${target.name}`, 'success');
+                            refreshView();
+                        }
+                    });
+                });
             });
         }
     });
