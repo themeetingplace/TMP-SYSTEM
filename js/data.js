@@ -1245,10 +1245,19 @@ export const store = {
             return targetVal;
         };
 
+        // 姓名策略: source 有 LINE 綁定 → 假設 source 是 LIFF 走完流程的本名, 優先用 source.name
+        //   target 那筆是 admin 手打, 可能是暱稱 → 轉到 note 保留 (例: "[原後台備註名: Nicole]")
+        //   兩邊姓名相同 → 沒歧義, 直接用
+        const useSourceName = source.name && source.name !== target.name && source.lineUserId;
+        const finalName = useSourceName ? source.name : target.name;
+        const nicknameNote = useSourceName ? `[原後台備註名: ${target.name}]` : '';
+
         const ti = mockData.tenants.findIndex(t => t.id === targetId);
         mockData.tenants[ti] = {
             ...target,
-            // LINE 綁定: 一定要有 (從 source 或 target 取, 兩者有一個)
+            // 姓名: 本名優先
+            name: finalName,
+            // LINE 綁定: 一定要有 (從 source 或 target 取)
             lineUserId: target.lineUserId || source.lineUserId,
             lineDisplayName: target.lineDisplayName || source.lineDisplayName || null,
             linePictureUrl: target.linePictureUrl || source.linePictureUrl || null,
@@ -1264,16 +1273,17 @@ export const store = {
             idCardFrontPath: prefer(target.idCardFrontPath, source.idCardFrontPath),
             idCardBackPath: prefer(target.idCardBackPath, source.idCardBackPath),
             idCardUploadedAt: prefer(target.idCardUploadedAt, source.idCardUploadedAt),
-            // note 合併 (兩者都保留)
-            note: [target.note, source.note ? `[合併自 ${source.id}] ${source.note}` : ''].filter(Boolean).join('\n')
+            // note 合併 (原兩邊 note + 暱稱備註)
+            note: [target.note, source.note ? `[合併自 ${source.id}] ${source.note}` : '', nicknameNote].filter(Boolean).join('\n')
         };
 
-        // cascade: source 名下所有合約 / invoice / deposit 改掛 target 名
-        if (source.name !== target.name) {
-            mockData.contracts.forEach(c => { if (c.tenant === source.name) c.tenant = target.name; });
-            mockData.invoices.forEach(inv => { if (inv.tenant === source.name) inv.tenant = target.name; });
-            (mockData.deposits || []).forEach(d => { if (d.tenantName === source.name) d.tenantName = target.name; });
-        }
+        // cascade: 兩邊名字都要指向 finalName (可能是 source 或 target 的名字)
+        [source.name, target.name].forEach(oldName => {
+            if (!oldName || oldName === finalName) return;
+            mockData.contracts.forEach(c => { if (c.tenant === oldName) c.tenant = finalName; });
+            mockData.invoices.forEach(inv => { if (inv.tenant === oldName) inv.tenant = finalName; });
+            (mockData.deposits || []).forEach(d => { if (d.tenantName === oldName) d.tenantName = finalName; });
+        });
 
         // 從本機 mockData 移除 source (但不立即 push DELETE 到雲端, 留給 caller 決定 — 例如 undo 視窗)
         mockData.tenants = mockData.tenants.filter(t => t.id !== sourceId);
