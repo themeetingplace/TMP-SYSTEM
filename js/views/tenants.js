@@ -146,12 +146,20 @@ export function renderTenants() {
                     <button class="filter-tab" data-filter-value="待入住">待入住 (${pendingTenants})</button>
                     <button class="filter-tab" data-filter-value="已退租">已退租 (${inactiveTenants})</button>
                 </div>
-                ${activeUnboundCount > 0 ? `
-                    <button class="filter-chip" data-filter-value="unbound" data-filter-group="line" title="只顯示尚未綁定 LINE 的居住中租客 (點擊切換)">
-                        <i class="ph ph-warning"></i> 只看未綁 LINE
-                        <span class="filter-chip-count">${activeUnboundCount}</span>
-                    </button>
-                ` : ''}
+                <div class="filter-chip-group" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    ${activeUnboundCount > 0 ? `
+                        <button class="filter-chip" data-filter-value="unbound" data-filter-group="line" title="只顯示尚未綁定 LINE 的居住中租客 (點擊切換)">
+                            <i class="ph ph-warning"></i> 只看未綁 LINE
+                            <span class="filter-chip-count">${activeUnboundCount}</span>
+                        </button>
+                    ` : ''}
+                    ${activeBoundCount > 0 ? `
+                        <button class="filter-chip" data-filter-value="bound" data-filter-group="line" title="只顯示已綁定 LINE 的居住中租客 (點擊切換)">
+                            <i class="ph ph-check-circle"></i> 只看已綁 LINE
+                            <span class="filter-chip-count">${activeBoundCount}</span>
+                        </button>
+                    ` : ''}
+                </div>
             </div>
 
             <div class="table-container">
