@@ -962,14 +962,10 @@ Just paste your replies right here. Let us know your preferred viewing times, an
                 await lineReply(event.replyToken, [{ type: 'text', text: '⚠ 目前沒有可選館別, 請聯絡小編' }]);
                 return;
             }
-            const items = cohousing.slice(0, 12).map((b: any) => ({
+            const items = cohousing.slice(0, 13).map((b: any) => ({
                 type: 'action',
                 action: { type: 'postback', label: b.name, data: `action=maint_pick_building&value=${encodeURIComponent(b.name)}`, displayText: `📍 ${b.name}` }
             }));
-            items.push({
-                type: 'action',
-                action: { type: 'postback', label: '公共區/其他', data: `action=maint_pick_building&value=${encodeURIComponent('公共區/其他')}`, displayText: '📍 公共區/其他' }
-            });
             await lineReply(event.replyToken, [
                 { type: 'text', text: '🔧 維修申報\n\n請先選擇要報修的館別或位置：', quickReply: { items } }
             ]);
