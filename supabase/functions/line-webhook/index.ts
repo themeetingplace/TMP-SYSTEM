@@ -161,10 +161,12 @@ function isRateLimited(userId: string): boolean {
 // 「管理員會回覆您…」之類的自動回覆，同 userId 24 小時內只回一次
 // ⚠ Edge Function 是 serverless，in-memory 狀態會在 cold start 後消失，所以改存 DB
 // 用 line_messages 表記錄 direction='out' + message_type='canned'，下次查最近一筆判斷
-const CANNED_COOLDOWN_MIN = 24 * 60;  // 24 小時
+const CANNED_COOLDOWN_MIN = 24 * 60;  // 24 小時 (預設)
+const IMAGE_ACK_COOLDOWN_SEC = 30;    // 圖片/檔案 ack: 30 秒 (防止一次傳多張圖 spam)
 
-async function shouldSendCanned(userId: string): Promise<boolean> {
-    const cutoff = new Date(Date.now() - CANNED_COOLDOWN_MIN * 60_000).toISOString();
+async function shouldSendCanned(userId: string, cooldownSeconds?: number): Promise<boolean> {
+    const seconds = cooldownSeconds ?? CANNED_COOLDOWN_MIN * 60;
+    const cutoff = new Date(Date.now() - seconds * 1000).toISOString();
     const { data, error } = await supabase
         .from('line_messages')
         .select('id')
@@ -176,7 +178,6 @@ async function shouldSendCanned(userId: string): Promise<boolean> {
     if (error) {
         console.error('[shouldSendCanned] DB error:', error);
         // ⚠ DB 故障時改回傳 false (不發) — 寧可漏發也不轟炸客戶
-        // (audit: 原本 return true 會在 Supabase 故障時雪崩式 spam, 客戶連續收罐頭)
         return false;
     }
     return !data || data.length === 0;
@@ -551,10 +552,14 @@ async function handleMessage(event: any) {
             } catch (e: any) {
                 console.error('[file upload other] failed:', e);
             }
-            await lineReply(event.replyToken, [{
-                type: 'text', text: `${bound.name} 您好, 收到您的訊息 🙂 小編會盡快回覆您。`,
-                quickReply: tenantServiceQuickReply()
-            }]);
+            // 30 秒 dedup: 一次傳多張圖只回一次 ack (audit: 用戶反映跳兩次)
+            if (await shouldSendCanned(userId, IMAGE_ACK_COOLDOWN_SEC)) {
+                await lineReply(event.replyToken, [{
+                    type: 'text', text: `${bound.name} 您好, 收到您的訊息 🙂 小編會盡快回覆您。`,
+                    quickReply: tenantServiceQuickReply()
+                }]);
+                await logCannedSent(userId, '收到您的訊息');
+            }
         }
         return;
     }
@@ -944,6 +949,10 @@ Just paste your replies right here. Let us know your preferred viewing times, an
             const lastNum = max ? parseInt(String(max.id).replace(/\D/g, ''), 10) || 0 : 0;
             const newId = 'M' + String(lastNum + 1).padStart(3, '0');
             const today = new Date().toISOString().split('T')[0];
+            // 取館別: 從 property_name 解析 "聚空間 - 松山館 R5-B" 中「松山館」的部分
+            const buildingName = (bound.current_property || '')
+                .replace(/^聚空間\s*[-–]\s*/, '')
+                .split(/\s+/)[0] || '(未指定館別)';
             await supabase.from('maintenances').insert({
                 id: newId,
                 property_name: bound.current_property || '(未指定)',
@@ -953,9 +962,16 @@ Just paste your replies right here. Let us know your preferred viewing times, an
                 status: '待處理',
                 cost: null
             });
+            // 回租客: 加上館別方便住客確認
             await lineReply(event.replyToken, [
-                { type: 'text', text: `✅ 已收到維修申報 (${newId})\n\n位置：${bound.current_property || '未指定'}\n問題：${issue}\n\n小編會盡快聯絡您。`, quickReply: tenantServiceQuickReply() }
+                { type: 'text', text: `✅ 已收到維修申報 (${newId})\n\n館別：${buildingName}\n位置：${bound.current_property || '未指定'}\n問題：${issue}\n\n小編會盡快聯絡您。`, quickReply: tenantServiceQuickReply() }
             ]);
+            // 通知 admin: 帶館別 + 租客 + 問題
+            try {
+                await notifyAdmin(`🔧 新維修申報 (${newId})\n\n館別：${buildingName}\n位置：${bound.current_property || '未指定'}\n租客：${bound.name}\n問題：${issue}\n\n請至 PMS 維修管理處理。`);
+            } catch (e) {
+                console.error('[notifyAdmin maintenance] failed:', e);
+            }
             return;
         }
 
