@@ -289,9 +289,35 @@ async function handlePostback(event: any) {
         webhook_event_id: event.webhookEventId
     });
 
-    if (!action || !contractId) return;
+    if (!action) return;
 
-    // 續租意願 mapping
+    // === 維修申報 - 客人選了館別 → 記 pending state, 等下一則 text 當作問題描述 ===
+    if (action === 'maint_pick_building') {
+        const buildingName = params.get('value') || '';
+        if (!buildingName) {
+            await lineReply(event.replyToken, [{ type: 'text', text: '⚠ 沒收到館別資訊, 請重新點「維修」再試一次' }]);
+            return;
+        }
+        const { data: bound } = await supabase
+            .from('tenants').select('id, name').eq('line_user_id', userId).maybeSingle();
+        if (!bound) {
+            await lineReply(event.replyToken, [{ type: 'text', text: '⚠ 您的 LINE 未綁定，請先到「住客登記」完成綁定' }]);
+            return;
+        }
+        // 記 pending state — content 存 building name, 10 min 內下則 text 會被視為問題描述
+        await supabase.from('line_messages').insert({
+            line_user_id: userId, direction: 'out',
+            message_type: 'maint_pending', content: buildingName
+        });
+        await lineReply(event.replyToken, [
+            { type: 'text', text: `📍 已選: ${buildingName}\n\n請描述問題狀況 (例: 冷氣不冷會滴水 / 樓梯燈壞掉 / 廁所水管漏水)` }
+        ]);
+        return;
+    }
+
+    // 續租意願之後的動作都需 contractId
+    if (!contractId && action !== 'classify_file') return;
+
     // === 檔案分類 postback (用戶傳檔後選用途) ===
     if (action === 'classify_file') {
         const tempKey = params.get('key');
@@ -925,12 +951,71 @@ Just paste your replies right here. Let us know your preferred viewing times, an
             return;
         }
 
-        // 維修申報 (引導格式)
-        if (text === '維修申報') {
+        // === 維修申報 - 兩步引導 (館別選擇 → 描述問題) ===
+        // 步驟 1: 客人打「維修」/「維修申報」/「報修」→ 跳館別 quickReply
+        if (text === '維修申報' || text === '維修' || text === '報修') {
+            const { data: buildings } = await supabase
+                .from('buildings').select('name, mode, status')
+                .eq('status', 'active').order('name');
+            const cohousing = (buildings || []).filter((b: any) => (b.mode || 'cohousing') === 'cohousing');
+            if (cohousing.length === 0) {
+                await lineReply(event.replyToken, [{ type: 'text', text: '⚠ 目前沒有可選館別, 請聯絡小編' }]);
+                return;
+            }
+            const items = cohousing.slice(0, 12).map((b: any) => ({
+                type: 'action',
+                action: { type: 'postback', label: b.name, data: `action=maint_pick_building&value=${encodeURIComponent(b.name)}`, displayText: `📍 ${b.name}` }
+            }));
+            items.push({
+                type: 'action',
+                action: { type: 'postback', label: '公共區/其他', data: `action=maint_pick_building&value=${encodeURIComponent('公共區/其他')}`, displayText: '📍 公共區/其他' }
+            });
             await lineReply(event.replyToken, [
-                { type: 'text', text: `🔧 維修申報\n\n請以「維修：問題描述」格式傳訊息\n\n例如：\n維修：冷氣不冷會滴水\n維修：浴室水管堵塞\n\n小編收到後會盡快安排處理。`, quickReply: tenantServiceQuickReply() }
+                { type: 'text', text: '🔧 維修申報\n\n請先選擇要報修的館別或位置：', quickReply: { items } }
             ]);
             return;
+        }
+
+        // 步驟 2: 若最近 10 分鐘剛選過館別 → 這則 text 當作問題描述, 建 maintenance
+        {
+            const pendingCutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+            const { data: pendingRows } = await supabase
+                .from('line_messages').select('id, content, created_at')
+                .eq('line_user_id', userId).eq('message_type', 'maint_pending')
+                .gte('created_at', pendingCutoff).order('created_at', { ascending: false }).limit(1);
+            const pending = pendingRows?.[0];
+            let alreadyConsumed = false;
+            if (pending) {
+                const { data: consumed } = await supabase
+                    .from('line_messages').select('id')
+                    .eq('line_user_id', userId).eq('message_type', 'maint_consumed')
+                    .gt('created_at', pending.created_at).limit(1);
+                alreadyConsumed = !!consumed?.length;
+            }
+            if (pending && !alreadyConsumed) {
+                const buildingName = pending.content;
+                const issue = text.trim();
+                const { data: max, error: maxErr } = await supabase
+                    .from('maintenances').select('id').order('id', { ascending: false }).limit(1).maybeSingle();
+                if (maxErr) throw new Error(`maintenances lookup failed: ${maxErr.message}`);
+                const lastNum = max ? parseInt(String(max.id).replace(/\D/g, ''), 10) || 0 : 0;
+                const newId = 'M' + String(lastNum + 1).padStart(3, '0');
+                const today = new Date().toISOString().split('T')[0];
+                await supabase.from('maintenances').insert({
+                    id: newId, property_name: buildingName, issue,
+                    reporter: bound.name, report_date: today, status: '待處理', cost: null
+                });
+                await supabase.from('line_messages').insert({
+                    line_user_id: userId, direction: 'out', message_type: 'maint_consumed', content: newId
+                });
+                await lineReply(event.replyToken, [
+                    { type: 'text', text: `✅ 已收到維修申報 (${newId})\n\n館別/位置：${buildingName}\n回報人：${bound.name}\n問題：${issue}\n\n小編會盡快聯絡您。`, quickReply: tenantServiceQuickReply() }
+                ]);
+                try {
+                    await notifyAdmin(`🔧 新維修申報 (${newId})\n\n館別/位置：${buildingName}\n回報人：${bound.name}\n問題：${issue}\n\n請至 PMS 維修管理處理。`);
+                } catch (e) { console.error('[notifyAdmin maintenance] failed:', e); }
+                return;
+            }
         }
 
         // 直接以「維修：xxx」格式報修
@@ -938,7 +1023,7 @@ Just paste your replies right here. Let us know your preferred viewing times, an
             const issue = text.replace(/^維修[:：]\s*/, '').trim();
             if (!issue) {
                 await lineReply(event.replyToken, [
-                    { type: 'text', text: '請描述問題內容，例如：「維修：冷氣不冷」' }
+                    { type: 'text', text: '請描述問題內容，或直接打「維修」用按鈕選館別' }
                 ]);
                 return;
             }
