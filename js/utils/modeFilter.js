@@ -41,18 +41,33 @@ export function filterInvoicesByMode(invoices, mode = getMode()) {
 
 export function filterMaintenancesByMode(maintenances, mode = getMode()) {
     const ids = currentModeBuildingIdSet(mode);
-    // maintenance 可能有 buildingId / 完整床位 propertyName / 純館別 propertyName
-    // (audit: LINE bot 建的 maintenance 只存館別如「松山館」, 沒床位路徑, 原本會被誤 filter)
     const allowedPropNames = new Set(
         mockData.properties.filter(p => ids.has(p.buildingId)).map(p => p.name)
     );
     const allowedBuildingNames = new Set(
         mockData.buildings.filter(b => ids.has(b.id)).map(b => b.name)
     );
+    // 「managed 模式」對應反面: 判斷是否屬於代管
+    const oppositeMode = mode === 'managed' ? 'cohousing' : 'managed';
+    const oppositePropNames = new Set(
+        mockData.properties.filter(p => currentModeBuildingIdSet(oppositeMode).has(p.buildingId)).map(p => p.name)
+    );
+    const oppositeBuildingNames = new Set(
+        mockData.buildings.filter(b => currentModeBuildingIdSet(oppositeMode).has(b.id)).map(b => b.name)
+    );
+
     return maintenances.filter(m => {
+        // 有 buildingId → 精準判斷
         if (m.buildingId) return ids.has(m.buildingId);
-        if (!m.propertyName) return true;  // 沒指定 → 顯示 (助人判斷)
-        return allowedPropNames.has(m.propertyName) || allowedBuildingNames.has(m.propertyName);
+        // propertyName 對到本 mode 的床位/館 → 顯示
+        if (m.propertyName) {
+            if (allowedPropNames.has(m.propertyName) || allowedBuildingNames.has(m.propertyName)) return true;
+            // 對到另一 mode → 不顯示 (避免代管房子的維修出現在共居 tab)
+            if (oppositePropNames.has(m.propertyName) || oppositeBuildingNames.has(m.propertyName)) return false;
+        }
+        // 無法判斷歸屬 (LINE bot 舊資料如「(未指定)」「公共區/其他」, 或空 propertyName)
+        // → 預設歸共居 (實務上 LINE 綁定客戶都是共居), 讓 admin 看得到
+        return mode !== 'managed';
     });
 }
 
