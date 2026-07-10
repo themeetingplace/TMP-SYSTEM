@@ -41,13 +41,18 @@ export function filterInvoicesByMode(invoices, mode = getMode()) {
 
 export function filterMaintenancesByMode(maintenances, mode = getMode()) {
     const ids = currentModeBuildingIdSet(mode);
-    // maintenance 可能有 buildingId 或只有 propertyName
+    // maintenance 可能有 buildingId / 完整床位 propertyName / 純館別 propertyName
+    // (audit: LINE bot 建的 maintenance 只存館別如「松山館」, 沒床位路徑, 原本會被誤 filter)
     const allowedPropNames = new Set(
         mockData.properties.filter(p => ids.has(p.buildingId)).map(p => p.name)
     );
+    const allowedBuildingNames = new Set(
+        mockData.buildings.filter(b => ids.has(b.id)).map(b => b.name)
+    );
     return maintenances.filter(m => {
         if (m.buildingId) return ids.has(m.buildingId);
-        return allowedPropNames.has(m.propertyName);
+        if (!m.propertyName) return true;  // 沒指定 → 顯示 (助人判斷)
+        return allowedPropNames.has(m.propertyName) || allowedBuildingNames.has(m.propertyName);
     });
 }
 
