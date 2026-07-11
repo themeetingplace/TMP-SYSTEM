@@ -425,6 +425,12 @@ function showLineMergePicker(targetTenantId) {
                                 return;
                             }
                             refreshView();
+                            // 順帶關掉背後還開著的租客詳細 modal (該筆資料已合併變動)
+                            setTimeout(() => {
+                                document.querySelectorAll('.modal-overlay:not(.is-closing)').forEach(m => {
+                                    m.querySelector('.modal-close')?.click();
+                                });
+                            }, 50);
                             showUndoToast({
                                 message: `已合併 ${source.name} → ${target.name}`,
                                 durationMs: 10000,
