@@ -19,7 +19,7 @@
 //   'bms:data-changed'        資料變動 → app.js 重新渲染當前頁
 
 import { supabase } from './supabase.js';
-import { mockData, runMigration } from './data.js';
+import { mockData, runMigration, dirtyRows, clearDirty } from './data.js';
 import { TABLES, SMALL_TABLES, LARGE_TABLES } from './db-mapping.js';
 
 const LAST_SYNC_KEY = 'pms-last-sync';
@@ -192,27 +192,40 @@ async function pushSmall() {
             for (const t of SMALL_TABLES) {
                 // ⚠ 防呆: 本機 mockData 若有同 ID 重複 row → upsert batch 內同 PK 多筆會被 PostgreSQL 拒收 (ON CONFLICT DO UPDATE cannot affect row a second time)
                 // 推之前先 dedupe + 同步修正 mockData 本身
+                // === Dirty-row filter: 只推有標記的 row (payload 從整表縮到只推改過的幾筆) ===
+                const dirtySet = dirtyRows[t.src];
                 const dedupeBeforePush = dedupeById(mockData[t.src] || [], t.src);
-                const rows = dedupeBeforePush.map(t.toDb);
+                let rows;
+                let dirtyIds = [];
+                if (dirtySet && dirtySet.size > 0) {
+                    dirtyIds = Array.from(dirtySet);
+                    const dirtyRowObjects = dedupeBeforePush.filter(r => dirtyIds.includes(r.id));
+                    rows = dirtyRowObjects.map(t.toDb);
+                    console.log(`[sync] ${t.key} dirty push: ${rows.length}/${dedupeBeforePush.length} rows`);
+                } else {
+                    // dirty set 為空 → 這輪不 push 這張表
+                    continue;
+                }
                 if (rows.length === 0) continue;
-                // sanity check: 雲端 0 筆但本機很多 → 強烈懷疑是 zombie restore，拒絕推
+                // sanity check zombie restore 只在大量 push 時檢查 (dirty 通常 <5 筆, 大部分跳過)
                 if (rows.length > 5) {
                     const { count: remoteCount } = await supabase.from(t.key).select('*', { count: 'exact', head: true });
                     if (remoteCount === 0) {
-                        const msg = `偵測到 zombie restore: 雲端 ${t.key} 是 0 筆但本機有 ${rows.length} 筆，拒絕 push 避免覆蓋雲端刪除。請先「清空本機快取」`;
+                        const msg = `偵測到 zombie restore: 雲端 ${t.key} 是 0 筆但本機有 ${rows.length} 筆，拒絕 push`;
                         console.warn(`[sync] ${msg}`);
                         if (window.showToast) window.showToast(msg, 'danger', 12000);
                         setStatus('error', msg);
                         return;
                     }
                 }
-                // ⚠ 用 .select() 拿回 DB trigger 寫的 updated_at, 用來標記 per-row push timestamp
-                //   讓 handleRealtimeChange 能精準分辨「自家剛 push」vs「別 tab 改動」
                 const { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
-                if (error) throw new Error(`${t.key}: ${error.message}`);
-                // 每張表成功也續杯 markJustPushed, 讓 3s echo window 持續覆蓋
+                if (error) {
+                    // 失敗 → dirty 不清除, 下次 push 會 retry
+                    throw new Error(`${t.key}: ${error.message}`);
+                }
+                // 成功 → 清 dirty
+                clearDirty(t.src, dirtyIds);
                 markJustPushed();
-                // mark per-row 用 DB 回來的 updated_at
                 (returned || []).forEach(r => {
                     if (r?.[t.pk] && r?.updated_at) markRowPushed(t.key, r[t.pk], r.updated_at);
                 });
@@ -236,11 +249,22 @@ async function pushLarge() {
     markJustPushed();  // 防 partial push echo 被誤判
     try {
         for (const t of LARGE_TABLES) {
+            const dirtySet = dirtyRows[t.src];
             const dedupeBeforePush = dedupeById(mockData[t.src] || [], t.src);
-            const rows = dedupeBeforePush.map(t.toDb);
+            let rows;
+            let dirtyIds = [];
+            if (dirtySet && dirtySet.size > 0) {
+                dirtyIds = Array.from(dirtySet);
+                const dirtyRowObjects = dedupeBeforePush.filter(r => dirtyIds.includes(r.id));
+                rows = dirtyRowObjects.map(t.toDb);
+                console.log(`[sync] ${t.key} dirty push: ${rows.length}/${dedupeBeforePush.length} rows`);
+            } else {
+                continue;
+            }
             if (rows.length === 0) continue;
             const { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
             if (error) throw new Error(`${t.key}: ${error.message}`);
+            clearDirty(t.src, dirtyIds);
             markJustPushed();
             (returned || []).forEach(r => {
                 if (r?.[t.pk] && r?.updated_at) markRowPushed(t.key, r[t.pk], r.updated_at);

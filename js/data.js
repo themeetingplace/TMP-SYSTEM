@@ -114,6 +114,38 @@ export const EXPECTED_5MAY_OPENING = {
     }
 };
 
+// === Dirty-row tracking ===
+// 每個 store mutation 呼叫 markDirty(table, id) 標記該 row 需要 sync
+// sync.js pushSmall/pushLarge 只推 dirty 的 row (payload 從整表 262 筆縮到 1-3 筆)
+// 大幅減少 RLS check 開銷 + 衝突機率, 也解決多項更新時同步失敗
+// (audit: 每次改一筆推 262 筆, cascade 100 筆改動觸發 100 次 push, 容易 rate limit / timeout)
+export const dirtyRows = {
+    tenants: new Set(),
+    contracts: new Set(),
+    invoices: new Set(),
+    properties: new Set(),
+    buildings: new Set(),
+    maintenances: new Set(),
+    owners: new Set(),
+    checkins: new Set(),
+    deposits: new Set(),
+    settlements: new Set(),
+    invoiceTypes: new Set(),
+    tenantSources: new Set(),
+    paymentMethods: new Set(),
+    contractTemplates: new Set()
+};
+
+export function markDirty(table, id) {
+    if (dirtyRows[table] && id != null) dirtyRows[table].add(id);
+}
+
+export function clearDirty(table, ids) {
+    if (!dirtyRows[table]) return;
+    if (ids === undefined) { dirtyRows[table].clear(); return; }
+    (ids instanceof Set ? ids : Array.from(ids)).forEach(id => dirtyRows[table].delete(id));
+}
+
 // P1-15: contractTemplates (PDF base64) 不寫 localStorage，避免一個樣板就撐爆 5MB
 // 雲端 Supabase 已是 source of truth (contract_templates table)
 function persist() {
@@ -1160,6 +1192,7 @@ export const store = {
     addProperty(payload) {
         const item = { id: nextId('P', mockData.properties), ...payload };
         mockData.properties.push(item);
+        markDirty('properties', item.id);
         recalcMetrics();
         return item;
     },
@@ -1169,22 +1202,23 @@ export const store = {
         const before = mockData.properties[i];
         mockData.properties[i] = { ...before, ...patch };
         const after = mockData.properties[i];
+        markDirty('properties', id);
         // === cascade: 改 name → contracts/invoices/maintenances/checkins/tenants.currentProperty 同步 ===
-        // (audit: updateProperty 之前完全沒 cascade, 改名後 contract.propertyName 變孤兒)
         if (patch.name && before.name && before.name !== after.name) {
             const oldName = before.name;
             const newName = after.name;
-            mockData.contracts.forEach(c => { if (c.propertyName === oldName) c.propertyName = newName; });
-            mockData.invoices.forEach(inv => { if (inv.propertyName === oldName) inv.propertyName = newName; });
-            (mockData.maintenances || []).forEach(m => { if (m.propertyName === oldName) m.propertyName = newName; });
-            (mockData.checkins || []).forEach(ci => { if (ci.propertyName === oldName) ci.propertyName = newName; });
-            mockData.tenants.forEach(t => { if (t.currentProperty === oldName) t.currentProperty = newName; });
+            mockData.contracts.forEach(c => { if (c.propertyName === oldName) { c.propertyName = newName; markDirty('contracts', c.id); } });
+            mockData.invoices.forEach(inv => { if (inv.propertyName === oldName) { inv.propertyName = newName; markDirty('invoices', inv.id); } });
+            (mockData.maintenances || []).forEach(m => { if (m.propertyName === oldName) { m.propertyName = newName; markDirty('maintenances', m.id); } });
+            (mockData.checkins || []).forEach(ci => { if (ci.propertyName === oldName) { ci.propertyName = newName; markDirty('checkins', ci.id); } });
+            mockData.tenants.forEach(t => { if (t.currentProperty === oldName) { t.currentProperty = newName; markDirty('tenants', t.id); } });
         }
         recalcMetrics();
         return after;
     },
     deleteProperty(id) {
         mockData.properties = mockData.properties.filter(p => p.id !== id);
+        clearDirty('properties', [id]);
         recalcMetrics();
         window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'properties', id } }));
     },
@@ -1193,6 +1227,7 @@ export const store = {
     addTenant(payload) {
         const item = { id: nextId('T', mockData.tenants), ...payload };
         mockData.tenants.push(item);
+        markDirty('tenants', item.id);
         persist();
         return item;
     },
@@ -1202,14 +1237,14 @@ export const store = {
         const before = mockData.tenants[i];
         mockData.tenants[i] = { ...before, ...patch };
         const after = mockData.tenants[i];
+        markDirty('tenants', id);
         // === cascade: 改 name → contracts.tenant / invoices.tenant 全部同步 ===
-        // (audit: name 被當 denormalized key 卻沒同步, 改名後 contract 查不到原 tenant)
         if (patch.name && before.name && before.name !== after.name) {
             const oldName = before.name;
             const newName = after.name;
-            mockData.contracts.forEach(c => { if (c.tenant === oldName) c.tenant = newName; });
-            mockData.invoices.forEach(inv => { if (inv.tenant === oldName) inv.tenant = newName; });
-            (mockData.deposits || []).forEach(d => { if (d.tenantName === oldName) d.tenantName = newName; });
+            mockData.contracts.forEach(c => { if (c.tenant === oldName) { c.tenant = newName; markDirty('contracts', c.id); } });
+            mockData.invoices.forEach(inv => { if (inv.tenant === oldName) { inv.tenant = newName; markDirty('invoices', inv.id); } });
+            (mockData.deposits || []).forEach(d => { if (d.tenantName === oldName) { d.tenantName = newName; markDirty('deposits', d.id); } });
         }
         persist();
         return after;
@@ -1277,16 +1312,19 @@ export const store = {
             note: [target.note, source.note ? `[合併自 ${source.id}] ${source.note}` : '', nicknameNote].filter(Boolean).join('\n')
         };
 
+        // target 資料改了 → 標 dirty
+        markDirty('tenants', targetId);
         // cascade: 兩邊名字都要指向 finalName (可能是 source 或 target 的名字)
         [source.name, target.name].forEach(oldName => {
             if (!oldName || oldName === finalName) return;
-            mockData.contracts.forEach(c => { if (c.tenant === oldName) c.tenant = finalName; });
-            mockData.invoices.forEach(inv => { if (inv.tenant === oldName) inv.tenant = finalName; });
-            (mockData.deposits || []).forEach(d => { if (d.tenantName === oldName) d.tenantName = finalName; });
+            mockData.contracts.forEach(c => { if (c.tenant === oldName) { c.tenant = finalName; markDirty('contracts', c.id); } });
+            mockData.invoices.forEach(inv => { if (inv.tenant === oldName) { inv.tenant = finalName; markDirty('invoices', inv.id); } });
+            (mockData.deposits || []).forEach(d => { if (d.tenantName === oldName) { d.tenantName = finalName; markDirty('deposits', d.id); } });
         });
 
         // 從本機 mockData 移除 source (但不立即 push DELETE 到雲端, 留給 caller 決定 — 例如 undo 視窗)
         mockData.tenants = mockData.tenants.filter(t => t.id !== sourceId);
+        clearDirty('tenants', [sourceId]);
 
         persist();
         return {
@@ -1326,6 +1364,7 @@ export const store = {
     },
     deleteTenant(id) {
         mockData.tenants = mockData.tenants.filter(t => t.id !== id);
+        clearDirty('tenants', [id]);
         persist();
         window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'tenants', id } }));
     },
@@ -1338,6 +1377,7 @@ export const store = {
         if (!contractFields.contractType) contractFields.contractType = 'cohousing';
         const item = { id: nextId('C', mockData.contracts), ...contractFields };
         mockData.contracts.push(item);
+        markDirty('contracts', item.id);
         // 一份合約 = 一張帳單：自動建立全期房租應收
         // 例外:
         //   1. bundle 主合約 invoice 已含所有額外床位月租 → 額外合約傳 __skipInvoice 不開帳單
@@ -1357,17 +1397,17 @@ export const store = {
         const before = mockData.contracts[i];
         mockData.contracts[i] = { ...before, ...patch };
         const after = mockData.contracts[i];
+        markDirty('contracts', id);
 
         // === cascade: 改 tenant / propertyName → 同步該合約的 invoices 對應欄位 ===
-        // (audit: name 改了但 invoice 留舊值 → 帳單查不到、報表搜尋失敗)
         if ('tenant' in patch && before.tenant !== after.tenant && before.tenant) {
             mockData.invoices.forEach(inv => {
-                if (inv.contractId === after.id) inv.tenant = after.tenant;
+                if (inv.contractId === after.id) { inv.tenant = after.tenant; markDirty('invoices', inv.id); }
             });
         }
         if ('propertyName' in patch && before.propertyName !== after.propertyName && before.propertyName) {
             mockData.invoices.forEach(inv => {
-                if (inv.contractId === after.id) inv.propertyName = after.propertyName;
+                if (inv.contractId === after.id) { inv.propertyName = after.propertyName; markDirty('invoices', inv.id); }
             });
         }
 
@@ -1593,9 +1633,16 @@ export const store = {
         const tenantName = c.tenant;
         const propertyName = c.propertyName;
 
-        // 1. 刪除合約 + 對應已產的房租 invoice
+        // 1. 收集要刪的 invoice ids 供 dirty 清除
+        const invoiceIdsToDelete = mockData.invoices.filter(inv => inv.contractId === id).map(inv => inv.id);
         mockData.contracts = mockData.contracts.filter(x => x.id !== id);
         mockData.invoices = mockData.invoices.filter(inv => inv.contractId !== id);
+        clearDirty('contracts', [id]);
+        clearDirty('invoices', invoiceIdsToDelete);
+        // 逐筆 push 雲端刪除 (sync 層負責 DELETE)
+        invoiceIdsToDelete.forEach(iid => {
+            window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'invoices', id: iid } }));
+        });
 
         // 2. 清掉物件上的 denormalized 欄位（若指向這份合約）
         const prop = mockData.properties.find(p => p.name === propertyName && p.contractId === id);
@@ -1604,6 +1651,7 @@ export const store = {
             prop.contractId = null;
             prop.contractEnd = null;
             prop.status = '待租';
+            markDirty('properties', prop.id);
         }
 
         // 3. 若該租客沒有任何其他 active 合約 → 清掉 currentProperty + 變待入住
@@ -1614,6 +1662,7 @@ export const store = {
                 if (t) {
                     t.currentProperty = null;
                     t.status = '待入住';
+                    markDirty('tenants', t.id);
                 }
             }
         }
@@ -1992,6 +2041,7 @@ export const store = {
     addInvoice(payload) {
         const item = { id: nextId('INV-', mockData.invoices), ...payload };
         mockData.invoices.push(item);
+        markDirty('invoices', item.id);
         recalcMetrics();
         return item;
     },
@@ -2114,6 +2164,7 @@ export const store = {
             const before = mockData.invoices[i];
             mockData.invoices[i] = { ...before, ...patch };
             const after = mockData.invoices[i];
+            markDirty('invoices', id);
 
             // amount / discount / paidAmount 任一改 → 自動 derive status
             // 之前漏這段，cascade 改 amount 後 status 還停在「已繳清」變謊話
@@ -2165,6 +2216,7 @@ export const store = {
     },
     deleteInvoice(id) {
         mockData.invoices = mockData.invoices.filter(inv => inv.id !== id);
+        clearDirty('invoices', [id]);
         recalcMetrics();
         window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'invoices', id } }));
     },
@@ -2173,6 +2225,7 @@ export const store = {
     addMaintenance(payload) {
         const item = { id: nextId('M', mockData.maintenances), ...payload };
         mockData.maintenances.push(item);
+        markDirty('maintenances', item.id);
         recalcMetrics();
         return item;
     },
@@ -2180,6 +2233,7 @@ export const store = {
         const i = mockData.maintenances.findIndex(m => m.id === id);
         if (i >= 0) {
             mockData.maintenances[i] = { ...mockData.maintenances[i], ...patch };
+            markDirty('maintenances', id);
             recalcMetrics();
             return mockData.maintenances[i];
         }
@@ -2187,16 +2241,17 @@ export const store = {
     },
     deleteMaintenance(id) {
         mockData.maintenances = mockData.maintenances.filter(m => m.id !== id);
+        clearDirty('maintenances', [id]);
         recalcMetrics();
         window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'maintenances', id } }));
     },
 
     // ----- buildings (館別) — 禁刪，可停用 -----
     addBuilding(payload) {
-        // 編號分流: 共居 = B001+, 代管 = M001+ (nextId 用 regex ^prefix\d+ 篩，互不干擾)
         const prefix = payload?.mode === 'managed' ? 'M' : 'B';
         const item = { id: nextId(prefix, mockData.buildings), status: 'active', note: '', ...payload };
         mockData.buildings.push(item);
+        markDirty('buildings', item.id);
         persist();
         return item;
     },
@@ -2206,17 +2261,19 @@ export const store = {
             const before = mockData.buildings[i];
             mockData.buildings[i] = { ...before, ...patch };
             const after = mockData.buildings[i];
+            markDirty('buildings', id);
             if (patch.name && patch.name !== before.name) {
                 mockData.properties.forEach(p => {
                     if (p.buildingId === id) {
                         const oldName = p.name;
                         p.name = `聚空間 - ${after.name} R${p.roomNumber}-${p.bedLetter}`;
+                        markDirty('properties', p.id);
                         if (oldName) {
-                            mockData.contracts.forEach(c => { if (c.propertyName === oldName) c.propertyName = p.name; });
-                            mockData.invoices.forEach(inv => { if (inv.propertyName === oldName) inv.propertyName = p.name; });
-                            mockData.maintenances.forEach(m => { if (m.propertyName === oldName) m.propertyName = p.name; });
-                            mockData.checkins.forEach(ci => { if (ci.propertyName === oldName) ci.propertyName = p.name; });
-                            mockData.tenants.forEach(t => { if (t.currentProperty === oldName) t.currentProperty = p.name; });
+                            mockData.contracts.forEach(c => { if (c.propertyName === oldName) { c.propertyName = p.name; markDirty('contracts', c.id); } });
+                            mockData.invoices.forEach(inv => { if (inv.propertyName === oldName) { inv.propertyName = p.name; markDirty('invoices', inv.id); } });
+                            mockData.maintenances.forEach(m => { if (m.propertyName === oldName) { m.propertyName = p.name; markDirty('maintenances', m.id); } });
+                            mockData.checkins.forEach(ci => { if (ci.propertyName === oldName) { ci.propertyName = p.name; markDirty('checkins', ci.id); } });
+                            mockData.tenants.forEach(t => { if (t.currentProperty === oldName) { t.currentProperty = p.name; markDirty('tenants', t.id); } });
                         }
                     }
                 });
@@ -2272,6 +2329,7 @@ export const store = {
     addInvoiceType(payload) {
         const item = { id: nextId('IT', mockData.invoiceTypes), note: '', ...payload };
         mockData.invoiceTypes.push(item);
+        markDirty('invoiceTypes', item.id);
         persist();
         return item;
     },
@@ -2281,9 +2339,10 @@ export const store = {
             const before = mockData.invoiceTypes[i];
             mockData.invoiceTypes[i] = { ...before, ...patch };
             const after = mockData.invoiceTypes[i];
+            markDirty('invoiceTypes', id);
             if (patch.name && patch.name !== before.name) {
                 mockData.invoices.forEach(inv => {
-                    if (inv.type === before.name) inv.type = after.name;
+                    if (inv.type === before.name) { inv.type = after.name; markDirty('invoices', inv.id); }
                 });
             }
             persist();
@@ -2297,6 +2356,7 @@ export const store = {
         const inUse = mockData.invoices.some(inv => inv.type === t.name);
         if (inUse) return { error: 'in_use' };
         mockData.invoiceTypes = mockData.invoiceTypes.filter(it => it.id !== id);
+        clearDirty('invoiceTypes', [id]);
         persist();
         window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'invoice_types', id } }));
         return { ok: true };
@@ -2306,6 +2366,7 @@ export const store = {
     addTenantSource(payload) {
         const item = { id: nextId('TS', mockData.tenantSources), note: '', ...payload };
         mockData.tenantSources.push(item);
+        markDirty('tenantSources', item.id);
         persist();
         return item;
     },
@@ -2314,10 +2375,10 @@ export const store = {
         if (i < 0) return null;
         const before = mockData.tenantSources[i];
         mockData.tenantSources[i] = { ...before, ...patch };
-        // 改名 → 連動更新所有租客的 source
+        markDirty('tenantSources', id);
         if (patch.name && patch.name !== before.name) {
             mockData.tenants.forEach(t => {
-                if (t.source === before.name) t.source = patch.name;
+                if (t.source === before.name) { t.source = patch.name; markDirty('tenants', t.id); }
             });
         }
         persist();
@@ -2329,6 +2390,7 @@ export const store = {
         const inUse = mockData.tenants.some(t => t.source === s.name);
         if (inUse) return { error: 'in_use' };
         mockData.tenantSources = mockData.tenantSources.filter(x => x.id !== id);
+        clearDirty('tenantSources', [id]);
         persist();
         window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'tenant_sources', id } }));
         return { ok: true };
@@ -2338,6 +2400,7 @@ export const store = {
     addPaymentMethod(payload) {
         const item = { id: nextId('PM', mockData.paymentMethods), note: '', ...payload };
         mockData.paymentMethods.push(item);
+        markDirty('paymentMethods', item.id);
         persist();
         return item;
     },
@@ -2346,9 +2409,10 @@ export const store = {
         if (i < 0) return null;
         const before = mockData.paymentMethods[i];
         mockData.paymentMethods[i] = { ...before, ...patch };
+        markDirty('paymentMethods', id);
         if (patch.name && patch.name !== before.name) {
             mockData.invoices.forEach(inv => {
-                if (inv.paymentMethod === before.name) inv.paymentMethod = patch.name;
+                if (inv.paymentMethod === before.name) { inv.paymentMethod = patch.name; markDirty('invoices', inv.id); }
             });
         }
         persist();
@@ -2360,6 +2424,7 @@ export const store = {
         const inUse = mockData.invoices.some(inv => inv.paymentMethod === p.name);
         if (inUse) return { error: 'in_use' };
         mockData.paymentMethods = mockData.paymentMethods.filter(x => x.id !== id);
+        clearDirty('paymentMethods', [id]);
         persist();
         window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'payment_methods', id } }));
         return { ok: true };
@@ -2373,6 +2438,7 @@ export const store = {
             ...payload
         };
         mockData.checkins.push(item);
+        markDirty('checkins', item.id);
         persist();
         return item;
     },
@@ -2380,6 +2446,7 @@ export const store = {
         const i = mockData.checkins.findIndex(ci => ci.id === id);
         if (i >= 0) {
             mockData.checkins[i] = { ...mockData.checkins[i], ...patch };
+            markDirty('checkins', id);
             persist();
             return mockData.checkins[i];
         }
@@ -2387,6 +2454,7 @@ export const store = {
     },
     deleteCheckin(id) {
         mockData.checkins = mockData.checkins.filter(ci => ci.id !== id);
+        clearDirty('checkins', [id]);
         persist();
     },
 
@@ -2413,6 +2481,7 @@ export const store = {
             ...payload
         };
         mockData.owners.push(item);
+        markDirty('owners', item.id);
         persist();
         window.dispatchEvent(new CustomEvent('bms:create', { detail: { table: 'owners', id: item.id } }));
         return item;
@@ -2421,6 +2490,7 @@ export const store = {
         const i = mockData.owners.findIndex(o => o.id === id);
         if (i < 0) return null;
         mockData.owners[i] = { ...mockData.owners[i], ...patch };
+        markDirty('owners', id);
         persist();
         window.dispatchEvent(new CustomEvent('bms:update', { detail: { table: 'owners', id } }));
         return mockData.owners[i];
@@ -2457,6 +2527,7 @@ export const store = {
             ...payload
         };
         mockData.deposits.push(item);
+        markDirty('deposits', item.id);
         persist();
         return item;
     },
@@ -2468,6 +2539,7 @@ export const store = {
             holder: 'owner',
             transferredDate: transferDate || new Date().toISOString().slice(0, 10)
         };
+        markDirty('deposits', id);
         persist();
         return mockData.deposits[i];
     },
@@ -2498,6 +2570,7 @@ export const store = {
             ...payload
         };
         mockData.settlements.push(item);
+        markDirty('settlements', item.id);
         persist();
         return item;
     },
@@ -2505,11 +2578,13 @@ export const store = {
         const i = mockData.settlements.findIndex(s => s.id === id);
         if (i < 0) return null;
         mockData.settlements[i] = { ...mockData.settlements[i], ...patch };
+        markDirty('settlements', id);
         persist();
         return mockData.settlements[i];
     },
     deleteSettlement(id) {
         mockData.settlements = mockData.settlements.filter(s => s.id !== id);
+        clearDirty('settlements', [id]);
         persist();
     }
 };
