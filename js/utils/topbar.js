@@ -142,6 +142,15 @@ function escapeRegex(s) {
 }
 
 // === 通知中心 ===
+const NOTIF_DISMISS_KEY = 'pms-notif-dismissed';
+function getDismissedIds() {
+    try { return new Set(JSON.parse(localStorage.getItem(NOTIF_DISMISS_KEY) || '[]')); }
+    catch { return new Set(); }
+}
+function saveDismissedIds(set) {
+    try { localStorage.setItem(NOTIF_DISMISS_KEY, JSON.stringify([...set])); } catch {}
+}
+
 export function initNotifications() {
     const btn = document.querySelector('.notification-btn');
     if (!btn) return;
@@ -154,22 +163,25 @@ export function initNotifications() {
     }
 
     function buildNotifications() {
+        const dismissed = getDismissedIds();
         const notifications = [];
         // 逾期帳單
         mockData.invoices.filter(inv =>
             inv.status === '欠繳' && new Date(inv.dueDate) < new Date(TODAY)
         ).forEach(inv => {
             notifications.push({
+                id: `inv-overdue-${inv.id}`,
                 icon: 'ph-warning-circle',
                 color: 'var(--color-danger)',
                 title: `帳單逾期：${inv.tenant} · ${inv.type}`,
                 meta: `$${(inv.amount ?? 0).toLocaleString()} · 應繳 ${inv.dueDate}`,
-                link: 'finance'
+                link: 'unsettled'
             });
         });
         // 待簽合約
         mockData.contracts.filter(c => c.status === '待簽署').forEach(c => {
             notifications.push({
+                id: `contract-pending-${c.id}`,
                 icon: 'ph-signature',
                 color: 'var(--color-warning)',
                 title: `待簽合約：${c.tenant}`,
@@ -180,6 +192,7 @@ export function initNotifications() {
         // 待處理維修
         mockData.maintenances.filter(m => m.status === '待處理').forEach(m => {
             notifications.push({
+                id: `maint-todo-${m.id}`,
                 icon: 'ph-wrench',
                 color: 'var(--color-danger)',
                 title: `待處理維修：${m.issue}`,
@@ -190,6 +203,7 @@ export function initNotifications() {
         // 即將到期合約
         mockData.contracts.filter(c => c.status === '即將到期').forEach(c => {
             notifications.push({
+                id: `contract-expiring-${c.id}`,
                 icon: 'ph-clock',
                 color: 'var(--color-warning)',
                 title: `合約即將到期：${c.tenant}`,
@@ -197,7 +211,7 @@ export function initNotifications() {
                 link: 'contracts'
             });
         });
-        return notifications;
+        return notifications.filter(n => !dismissed.has(n.id));
     }
 
     function open() {
@@ -215,18 +229,20 @@ export function initNotifications() {
             `;
         } else {
             panel.innerHTML = `
-                <div class="notification-header">
+                <div class="notification-header" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
                     <span>通知 (${items.length})</span>
+                    <button type="button" data-action="clear-all" style="background: transparent; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.25rem 0.6rem; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer;">全部清除</button>
                 </div>
                 ${items.map(n => `
-                    <div class="notification-item" data-link="${n.link}">
-                        <div style="display: flex; gap: 0.75rem;">
+                    <div class="notification-item" data-link="${n.link}" data-notif-id="${escapeHtml(n.id)}" style="position: relative;">
+                        <div style="display: flex; gap: 0.75rem; padding-right: 1.5rem;">
                             <i class="ph-fill ${n.icon}" style="color: ${n.color}; font-size: 1.25rem; flex-shrink: 0;"></i>
                             <div style="flex: 1; min-width: 0;">
                                 <div class="notification-item-title">${escapeHtml(n.title)}</div>
                                 <div class="notification-item-meta">${escapeHtml(n.meta)}</div>
                             </div>
                         </div>
+                        <button type="button" data-action="dismiss" data-dismiss-id="${escapeHtml(n.id)}" title="清除這條" style="position: absolute; top: 0.4rem; right: 0.4rem; background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 0.25rem; line-height: 1; border-radius: 3px; font-size: 1rem;"><i class="ph ph-x"></i></button>
                     </div>
                 `).join('')}
             `;
@@ -235,11 +251,36 @@ export function initNotifications() {
 
         // 更新 badge 數字
         const badge = btn.querySelector('.badge');
-        if (badge) badge.textContent = items.length;
+        if (badge) {
+            badge.textContent = items.length;
+            badge.style.display = items.length > 0 ? '' : 'none';
+        }
 
-        panel.querySelectorAll('[data-link]').forEach(item => {
-            item.addEventListener('click', () => {
-                window.location.hash = item.dataset.link;
+        // 個別 dismiss (X 鈕)
+        panel.querySelectorAll('[data-action="dismiss"]').forEach(dbtn => {
+            dbtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = dbtn.dataset.dismissId;
+                const dismissed = getDismissedIds();
+                dismissed.add(id);
+                saveDismissedIds(dismissed);
+                open();  // 重新 render
+            });
+        });
+        // 全部清除
+        panel.querySelector('[data-action="clear-all"]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const dismissed = getDismissedIds();
+            items.forEach(n => dismissed.add(n.id));
+            saveDismissedIds(dismissed);
+            open();
+        });
+        // 點 item 進頁面 (X 鈕排除)
+        panel.querySelectorAll('.notification-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('[data-action="dismiss"]')) return;
+                const link = item.dataset.link;
+                if (link) window.location.hash = link;
                 close();
             });
         });
