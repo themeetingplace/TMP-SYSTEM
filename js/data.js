@@ -974,7 +974,10 @@ export function createInvoiceForContract(contract, payment = {}) {
     );
     if (exists) return null;
     const inv = buildContractInvoice(contract, payment);
-    if (inv) mockData.invoices.push(inv);
+    if (inv) {
+        mockData.invoices.push(inv);
+        markDirty('invoices', inv.id);
+    }
     return inv;
 }
 
@@ -1533,10 +1536,9 @@ export const store = {
             mockData.contracts[ci] = {
                 ...mockData.contracts[ci],
                 bundleParentContractId: parentId,
-                // 記錄原始 amount, unbundle 時可還原
                 bundleOriginalAmount: mockData.contracts[ci].bundleOriginalAmount ?? mockData.contracts[ci].amount
             };
-            // 子合約 invoice 歸零 + 標已結清 + 註明併入哪份
+            markDirty('contracts', c.id);
             const childInvoices = mockData.invoices.filter(inv =>
                 inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租'
             );
@@ -1551,7 +1553,7 @@ export const store = {
             });
         });
 
-        // 2. parent invoice 重算: amount = (parent.amount + sum(children.amount)) * term
+        markDirty('contracts', parentId);
         const term = parent.termMonths || 1;
         const childRentSum = children.reduce((s, c) => s + (Number(c.amount) || 0), 0);
         const newAmount = Math.round((Number(parent.amount) + childRentSum) * term);
@@ -1563,10 +1565,12 @@ export const store = {
                 this.updateInvoice(inv.id, { amount: newAmount });
             }
         });
-        // parent 沒 invoice (e.g. 也是 bundle 子) → 給一張新的
         if (parentInvoices.length === 0) {
             const newInv = buildContractInvoice(parent, { __bundleExtraRents: children.map(c => Number(c.amount) || 0) });
-            if (newInv) mockData.invoices.push(newInv);
+            if (newInv) {
+                mockData.invoices.push(newInv);
+                markDirty('invoices', newInv.id);
+            }
         }
         recalcMetrics();
         return { ok: true, parentId, childIds: children.map(c => c.id), newAmount };
@@ -1588,6 +1592,7 @@ export const store = {
                 amount: restoreAmount,
                 bundleOriginalAmount: undefined
             };
+            markDirty('contracts', c.id);
             // 子合約原本歸零的 invoice → 還原金額
             const childInvoices = mockData.invoices.filter(inv =>
                 inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租'
@@ -1614,6 +1619,7 @@ export const store = {
         affectedParents.forEach(pId => {
             const parent = mockData.contracts.find(c => c.id === pId);
             if (!parent) return;
+            markDirty('contracts', pId);
             const term = parent.termMonths || 1;
             const remainingChildren = mockData.contracts.filter(c => c.bundleParentContractId === pId);
             const childRentSum = remainingChildren.reduce((s, c) => s + (Number(c.amount) || 0), 0);
@@ -1708,10 +1714,12 @@ export const store = {
             platformName: oldContract.platformName || null
         };
         mockData.contracts.push(newContract);
+        markDirty('contracts', newContract.id);
 
         // 舊合約標 renewed
         const idx = mockData.contracts.findIndex(c => c.id === oldContractId);
         mockData.contracts[idx] = { ...mockData.contracts[idx], renewalState: 'renewed' };
+        markDirty('contracts', oldContractId);
 
         // 同步床位的合約引用
         const property = mockData.properties.find(p => p.name === oldContract.propertyName);
@@ -1721,6 +1729,7 @@ export const store = {
                 contractId: newContract.id,
                 contractEnd: newEndISO
             };
+            markDirty('properties', property.id);
         }
 
         // 自動為新合約建立全期帳單；續約預設「未繳」(等租客 LINE 回報末5碼)
@@ -1942,6 +1951,7 @@ export const store = {
                 ...mockData.contracts[idx],
                 pendingTerminationDate: effectiveDate
             };
+            markDirty('contracts', contractId);
             recalcMetrics();
             return { ok: true, pending: true, effectiveDate };
         }
@@ -1962,6 +1972,7 @@ export const store = {
             status: '已終止',
             pendingTerminationDate: null
         };
+        markDirty('contracts', contractId);
 
         // 釋放床位 (僅當床位仍指向此合約)
         const property = mockData.properties.find(p => p.name === c.propertyName && p.contractId === contractId);
@@ -1974,6 +1985,7 @@ export const store = {
                 contractId: null,
                 contractEnd: null
             };
+            markDirty('properties', property.id);
         }
 
         // 租客標記 (僅當該租客沒其他 active 合約)
@@ -1989,26 +2001,29 @@ export const store = {
                     status: '已退租',
                     currentProperty: null
                 };
+                markDirty('tenants', tenant.id);
             }
         }
 
-        // === 清掉終止日之後的預排 invoice (audit: terminated 合約留未來預排單會繼續寄催繳) ===
-        // 規則: dueDate > effectiveDate 且 paidAmount == 0 → 直接刪除 (預排但未繳)
-        //       paidAmount > 0 (部分繳款) → 不刪, 留給管理員手動處理
-        let cleanedCount = 0;
+        // === 清掉終止日之後的預排 invoice (dispatched delete + clear dirty) ===
+        const invoicesToDelete = [];
         mockData.invoices = mockData.invoices.filter(inv => {
             if (inv.contractId !== contractId) return true;
             if (!inv.dueDate || inv.dueDate <= effectiveDate) return true;
-            if ((inv.paidAmount || 0) > 0) return true;  // 有實收的留下
-            cleanedCount++;
+            if ((inv.paidAmount || 0) > 0) return true;
+            invoicesToDelete.push(inv.id);
             return false;
         });
-        if (cleanedCount > 0) {
-            console.log(`[terminate] ${contractId} 清掉 ${cleanedCount} 筆終止日後預排 invoice`);
+        if (invoicesToDelete.length > 0) {
+            console.log(`[terminate] ${contractId} 清掉 ${invoicesToDelete.length} 筆終止日後預排 invoice`);
+            clearDirty('invoices', invoicesToDelete);
+            invoicesToDelete.forEach(iid => {
+                window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'invoices', id: iid } }));
+            });
         }
 
         recalcMetrics();
-        return { ok: true, cleanedFutureInvoices: cleanedCount };
+        return { ok: true, cleanedFutureInvoices: invoicesToDelete.length };
     },
 
     // 掃描 pendingTerminationDate <= today 的合約, 一律執行 _finalizeTermination
@@ -2033,6 +2048,7 @@ export const store = {
             ...mockData.contracts[idx],
             snoozeUntil: target.toISOString().split('T')[0]
         };
+        markDirty('contracts', contractId);
         persist();
         return { ok: true, until: mockData.contracts[idx].snoozeUntil };
     },
@@ -2287,6 +2303,7 @@ export const store = {
         const b = mockData.buildings.find(x => x.id === id);
         if (b) {
             b.status = b.status === 'active' ? 'inactive' : 'active';
+            markDirty('buildings', id);
             persist();
         }
         return b;
@@ -2304,14 +2321,15 @@ export const store = {
         };
         if (idx >= 0) mockData.contractTemplates[idx] = item;
         else mockData.contractTemplates.push(item);
+        markDirty('contractTemplates', buildingId);
         try { persist(); } catch (e) { /* base64 太大時可能失敗 */ }
-        // 觸發 sync.js 額外推大欄位 (PDF) — 避免每次小寫入都帶 PDF 上傳
         window.dispatchEvent(new CustomEvent('bms:template-changed'));
         return item;
     },
     removeContractTemplate(buildingId) {
         if (!Array.isArray(mockData.contractTemplates)) return;
         mockData.contractTemplates = mockData.contractTemplates.filter(t => t.buildingId !== buildingId);
+        clearDirty('contractTemplates', [buildingId]);
         try { persist(); } catch (e) {}
         // 重要: 觸發雲端 DELETE — pushLarge 只跑 upsert，不會清孤兒列；
         // 沒這個事件刪完下次 pull 又會把樣板從 Supabase 拉回來

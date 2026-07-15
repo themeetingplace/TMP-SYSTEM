@@ -44,9 +44,34 @@ const state = {
 };
 
 // ⚠ 防資料復活: 首次 pull 完成才允許 push 上雲
-// 沒這個 gate, stale localStorage 可能在 pull 還沒拉到雲端 truth 之前就 blind upsert
-// (forensic 確認 2026-06-16 用戶昨晚的資料復活就是這個 race)
 let firstPullDone = false;
+
+// === Auto-retry on push failure ===
+// 3 次指數 backoff (5s → 10s → 20s), 3 次都失敗就停止 (避免無限 spam)
+let retryAttempt = 0;
+const RETRY_MAX = 3;
+let retryTimer = null;
+function scheduleAutoRetry() {
+    if (retryAttempt >= RETRY_MAX) {
+        console.warn(`[sync] 已重試 ${RETRY_MAX} 次仍失敗, 停止自動重試 (請手動重整或按重試)`);
+        if (window.showToast) window.showToast(`同步失敗多次, 請 F5 重整或看 console 錯誤`, 'danger', 8000);
+        return;
+    }
+    clearTimeout(retryTimer);
+    const delay = 5000 * Math.pow(2, retryAttempt);
+    retryAttempt++;
+    console.log(`[sync] 自動重試 ${retryAttempt}/${RETRY_MAX} in ${delay/1000}s...`);
+    retryTimer = setTimeout(() => {
+        pushAll().then(() => {
+            if (state.status === 'idle') retryAttempt = 0;  // 成功 → 重置計數
+        });
+    }, delay);
+}
+// 成功 push 後重置重試計數 (外部觸發)
+function resetRetryCounter() {
+    retryAttempt = 0;
+    clearTimeout(retryTimer);
+}
 
 // ⚠ Dedupe helper: 移除本機 mockData[src] 內同 ID 重複 row
 //    PostgreSQL upsert batch 內同 PK 兩筆會回 "ON CONFLICT DO UPDATE cannot affect row a second time"
@@ -192,18 +217,28 @@ async function pushSmall() {
             for (const t of SMALL_TABLES) {
                 // ⚠ 防呆: 本機 mockData 若有同 ID 重複 row → upsert batch 內同 PK 多筆會被 PostgreSQL 拒收 (ON CONFLICT DO UPDATE cannot affect row a second time)
                 // 推之前先 dedupe + 同步修正 mockData 本身
-                // === Dirty-row filter: 只推有標記的 row (payload 從整表縮到只推改過的幾筆) ===
+                // === Dirty-row filter: 只推有標記的 row ===
+                // 每個 row 的 PK field 不同 (contractTemplates 用 buildingId, 其他用 id)
+                const pkJs = t.src === 'contractTemplates' ? 'buildingId' : 'id';
                 const dirtySet = dirtyRows[t.src];
                 const dedupeBeforePush = dedupeById(mockData[t.src] || [], t.src);
                 let rows;
                 let dirtyIds = [];
                 if (dirtySet && dirtySet.size > 0) {
                     dirtyIds = Array.from(dirtySet);
-                    const dirtyRowObjects = dedupeBeforePush.filter(r => dirtyIds.includes(r.id));
+                    const dirtyRowObjects = dedupeBeforePush.filter(r => dirtyIds.includes(r[pkJs]));
                     rows = dirtyRowObjects.map(t.toDb);
-                    console.log(`[sync] ${t.key} dirty push: ${rows.length}/${dedupeBeforePush.length} rows`);
+                    console.log(`[sync] ${t.key} dirty push: ${rows.length}/${dedupeBeforePush.length} rows (${dirtyIds.length} marked)`);
+                    // 若 dirty 有 id 但 mockData 找不到對應 row → 該 row 已被刪, 清 dirty (避免 leak)
+                    if (rows.length < dirtyIds.length) {
+                        const foundIds = new Set(dirtyRowObjects.map(r => r[pkJs]));
+                        const missingIds = dirtyIds.filter(id => !foundIds.has(id));
+                        if (missingIds.length > 0) {
+                            console.log(`[sync] ${t.key} clear leaked dirty:`, missingIds);
+                            clearDirty(t.src, missingIds);
+                        }
+                    }
                 } else {
-                    // dirty set 為空 → 這輪不 push 這張表
                     continue;
                 }
                 if (rows.length === 0) continue;
@@ -220,10 +255,16 @@ async function pushSmall() {
                 }
                 const { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
                 if (error) {
-                    // 失敗 → dirty 不清除, 下次 push 會 retry
+                    // 失敗 → 印出具體是哪些 row + 錯誤細節, 方便診斷 (dirty 保留下次 retry)
+                    console.error(`[sync] ${t.key} push 失敗:`, error);
+                    console.error(`  失敗的 rows (${rows.length} 筆):`, rows);
+                    console.error(`  dirtyIds:`, dirtyIds);
+                    // 若 batch 失敗且只有 1 筆 → 該筆有問題, 印詳細內容
+                    if (rows.length === 1) {
+                        console.error(`  ⚠ 這筆 row 內容有問題 (可能: 欄位缺 required / FK 對不到 / RLS 阻擋):`, JSON.stringify(rows[0], null, 2));
+                    }
                     throw new Error(`${t.key}: ${error.message}`);
                 }
-                // 成功 → 清 dirty
                 clearDirty(t.src, dirtyIds);
                 markJustPushed();
                 (returned || []).forEach(r => {
@@ -231,9 +272,11 @@ async function pushSmall() {
                 });
             }
             setStatus('idle');
+            resetRetryCounter();  // 成功 → 停止 auto-retry backoff
         } catch (e) {
             setStatus('error', e.message);
             console.error('[sync] push 失敗:', e);
+            scheduleAutoRetry();
         }
     })().finally(() => { pushInFlight = null; });
     return pushInFlight;
@@ -249,21 +292,34 @@ async function pushLarge() {
     markJustPushed();  // 防 partial push echo 被誤判
     try {
         for (const t of LARGE_TABLES) {
+            const pkJs = t.src === 'contractTemplates' ? 'buildingId' : 'id';
             const dirtySet = dirtyRows[t.src];
             const dedupeBeforePush = dedupeById(mockData[t.src] || [], t.src);
             let rows;
             let dirtyIds = [];
             if (dirtySet && dirtySet.size > 0) {
                 dirtyIds = Array.from(dirtySet);
-                const dirtyRowObjects = dedupeBeforePush.filter(r => dirtyIds.includes(r.id));
+                const dirtyRowObjects = dedupeBeforePush.filter(r => dirtyIds.includes(r[pkJs]));
                 rows = dirtyRowObjects.map(t.toDb);
-                console.log(`[sync] ${t.key} dirty push: ${rows.length}/${dedupeBeforePush.length} rows`);
+                console.log(`[sync] ${t.key} dirty push: ${rows.length}/${dedupeBeforePush.length} rows (${dirtyIds.length} marked)`);
+                if (rows.length < dirtyIds.length) {
+                    const foundIds = new Set(dirtyRowObjects.map(r => r[pkJs]));
+                    const missingIds = dirtyIds.filter(id => !foundIds.has(id));
+                    if (missingIds.length > 0) clearDirty(t.src, missingIds);
+                }
             } else {
                 continue;
             }
             if (rows.length === 0) continue;
             const { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
-            if (error) throw new Error(`${t.key}: ${error.message}`);
+            if (error) {
+                console.error(`[sync] ${t.key} push 失敗:`, error);
+                console.error(`  失敗的 rows (${rows.length} 筆):`, rows);
+                if (rows.length === 1) {
+                    console.error(`  ⚠ 這筆 row 內容:`, JSON.stringify(rows[0], null, 2));
+                }
+                throw new Error(`${t.key}: ${error.message}`);
+            }
             clearDirty(t.src, dirtyIds);
             markJustPushed();
             (returned || []).forEach(r => {
@@ -271,9 +327,11 @@ async function pushLarge() {
             });
         }
         setStatus('idle');
+        resetRetryCounter();
     } catch (e) {
         setStatus('error', e.message);
         console.error('[sync] push 大表失敗:', e);
+        scheduleAutoRetry();
     }
 }
 
@@ -619,5 +677,21 @@ listeners.add(renderSyncIndicator);
 window.syncStatus = syncStatus;
 window.pullFromSupabase = pullAll;
 window.pushToSupabase = pushAll;
+
+// === 對外: 強制全推 (所有 mockData 都當 dirty), 給「同步錯誤重試」按鈕 或 console 手動修復用 ===
+window.forceFullPush = function() {
+    console.log('[sync] forceFullPush: 標記所有 row 為 dirty, 下輪 push 會全推');
+    // 對每張表: 把所有 mockData row 的 id 全部塞進 dirty set
+    Object.keys(dirtyRows).forEach(src => {
+        const rows = mockData[src] || [];
+        const pkJs = src === 'contractTemplates' ? 'buildingId' : 'id';
+        rows.forEach(r => {
+            if (r?.[pkJs] != null) dirtyRows[src].add(r[pkJs]);
+        });
+        console.log(`  ${src}: +${rows.length} dirty`);
+    });
+    retryAttempt = 0;
+    return pushAll();
+};
 
 console.log('[sync] 已就緒 (雲端優先 + Realtime)');
