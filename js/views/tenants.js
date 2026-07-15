@@ -448,10 +448,7 @@ function showLineMergePicker(targetTenantId) {
                                     }
                                 },
                                 onCommit: () => {
-                                    // 10 秒過後才真的推 DELETE 到雲端
-                                    window.dispatchEvent(new CustomEvent('bms:delete', {
-                                        detail: { table: 'tenants', id: r.removed }
-                                    }));
+                                    // DELETE 已在 mergeTenant 內立即 fire (unique constraint 需要), 這裡不重複
                                 }
                             });
                         }

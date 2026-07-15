@@ -1325,9 +1325,13 @@ export const store = {
             (mockData.deposits || []).forEach(d => { if (d.tenantName === oldName) { d.tenantName = finalName; markDirty('deposits', d.id); } });
         });
 
-        // 從本機 mockData 移除 source (但不立即 push DELETE 到雲端, 留給 caller 決定 — 例如 undo 視窗)
+        // 從本機 mockData 移除 source + 立即推 DELETE 到雲端
+        //   ⚠ 不能 defer DELETE: line_user_id 有 unique constraint,
+        //   若 source 還在雲端而 target 也帶 source 的 line_user_id → duplicate key 錯
+        //   undo 走「重新 INSERT source」路線 (unmergeTenant 會 markDirty)
         mockData.tenants = mockData.tenants.filter(t => t.id !== sourceId);
         clearDirty('tenants', [sourceId]);
+        window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'tenants', id: sourceId } }));
 
         persist();
         return {
@@ -1340,27 +1344,33 @@ export const store = {
         };
     },
     // === undo merge: 依 snapshot 還原兩筆租客 + 反向 cascade ===
+    // 順序: 先把 target 還原 (line_user_id 清回 pre-merge = null 通常), push 掉 unique constraint,
+    // 然後才 INSERT source 回來 (帶回 line_user_id) 避免 duplicate key
     unmergeTenant({ targetSnapshot, sourceSnapshot, mergedTargetId }) {
         if (!targetSnapshot || !sourceSnapshot || !mergedTargetId) {
             return { ok: false, msg: '缺少快照資料' };
         }
-        // 1. 還原 target 到 pre-merge 樣貌
+        // 1. 還原 target 到 pre-merge 樣貌 (line_user_id 通常會清回 null)
         const ti = mockData.tenants.findIndex(t => t.id === mergedTargetId);
         if (ti >= 0) mockData.tenants[ti] = targetSnapshot;
         else mockData.tenants.push(targetSnapshot);
-        // 2. 復活 source
+        markDirty('tenants', mergedTargetId);
+        // 2. 復活 source (帶回原本的 line_user_id 等)
         if (!mockData.tenants.some(t => t.id === sourceSnapshot.id)) {
             mockData.tenants.push(sourceSnapshot);
         }
+        markDirty('tenants', sourceSnapshot.id);
         // 3. cascade: 曾被改掛的 contract/invoice/deposit 改回 source 名
         if (sourceSnapshot.name !== targetSnapshot.name) {
             mockData.contracts.forEach(c => {
-                if (c.tenant === targetSnapshot.name && c._preMergeSourceName === sourceSnapshot.name) {
-                    c.tenant = sourceSnapshot.name;
-                    delete c._preMergeSourceName;
-                }
+                if (c.tenant === targetSnapshot.name) { c.tenant = sourceSnapshot.name; markDirty('contracts', c.id); }
             });
-            // 沒有 _preMergeSourceName 標記, 保守: 只提示無法自動反轉 cascade
+            mockData.invoices.forEach(inv => {
+                if (inv.tenant === targetSnapshot.name) { inv.tenant = sourceSnapshot.name; markDirty('invoices', inv.id); }
+            });
+            (mockData.deposits || []).forEach(d => {
+                if (d.tenantName === targetSnapshot.name) { d.tenantName = sourceSnapshot.name; markDirty('deposits', d.id); }
+            });
         }
         persist();
         return { ok: true, restored: [targetSnapshot.name, sourceSnapshot.name] };
