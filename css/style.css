@@ -8156,6 +8156,12 @@ button.omn-card { font-family: inherit; }
 .data-table tr.row-mobile-card {
     display: none;
 }
+
+/* filter/search 隱藏用 — 用 class 才能贏過 mobile-card 的 display: block !important */
+.data-table tr.is-filter-hidden,
+.data-table.cards-with-hero tbody tr.row-mobile-card.is-filter-hidden {
+    display: none !important;
+}
 @media (min-width: 601px) {
     .data-table.cards-with-hero tbody tr.row-mobile-card { display: none !important; }
 }

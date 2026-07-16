@@ -126,11 +126,14 @@ export function initTableInteractions({ scope, rowsPerPage: initRpp = 10 } = {})
 
         allRows.forEach(r => {
             const show = visibleSet.has(r);
-            r.style.display = show ? '' : 'none';
-            // 同步 row-mobile-card sibling (dual-row 結構，桌面行隱手機卡也要跟著隱)
+            // 用 class 而非 inline style, 才能贏過 CSS `display: block !important` (mobile card 那條)
+            r.classList.toggle('is-filter-hidden', !show);
+            // 清掉可能殘留的 inline style (舊版本用 style.display)
+            if (r.style.display) r.style.removeProperty('display');
             const next = r.nextElementSibling;
             if (next && next.classList.contains('row-mobile-card')) {
-                next.style.display = show ? '' : 'none';
+                next.classList.toggle('is-filter-hidden', !show);
+                if (next.style.display) next.style.removeProperty('display');
             }
         });
 
