@@ -77,6 +77,66 @@ export const FINANCE_CUTOFF_DATE = '2026-06-01';
 // 用 paidDate (已結) 優先, 沒有就用 dueDate (未結)
 // 已結 + paidDate < cutoff → 排除
 // 未結 + dueDate  < cutoff → 通常房租查帳會顯示, 別處排除
+// === 以特定日期為基準計算共居實際在住人數 ===
+// 規則 (用戶定案):
+//   1. contractType 為 cohousing (或 null 預設共居)
+//   2. startDate <= dateISO (入住日 = 15 也算)
+//   3. 未終止 OR terminatedDate > dateISO (退租日 = 15 那天不算住)
+//   4. 排除 bundle 子合約 (主合約已含所有床位)
+// 回傳: { occupied, total, rate }
+export function occupiedOn(dateISO) {
+    if (!dateISO) return { occupied: 0, total: 0, rate: 0 };
+    const occupied = mockData.contracts.filter(c => {
+        if (c.contractType && c.contractType !== 'cohousing') return false;
+        if (c.bundleParentContractId) return false;  // bundle 子合約, 已算在主合約
+        if (!c.startDate || c.startDate > dateISO) return false;
+        if (c.terminatedDate && c.terminatedDate <= dateISO) return false;
+        return true;
+    }).length;
+    const cohousingBuildingIds = new Set(
+        mockData.buildings.filter(b => (b.mode || 'cohousing') === 'cohousing').map(b => b.id)
+    );
+    const total = mockData.properties.filter(p => cohousingBuildingIds.has(p.buildingId)).length;
+    return { occupied, total, rate: total > 0 ? occupied / total : 0 };
+}
+
+// 取「當月 15 號」的統計快照
+// 今天 >= 15 → 用本月 15 號
+// 今天 <  15 → 用上月 15 號 (最近一次已定案的基準)
+export function occupiedAtCurrent15th() {
+    const today = new Date();
+    let y = today.getFullYear();
+    let m = today.getMonth() + 1;  // 1-12
+    if (today.getDate() < 15) {
+        m -= 1;
+        if (m < 1) { m = 12; y -= 1; }
+    }
+    const dateISO = `${y}-${String(m).padStart(2, '0')}-15`;
+    return { ...occupiedOn(dateISO), date: dateISO };
+}
+
+// 過去 N 個月每月 15 號的入住快照 (最新在最右)
+export function occupied15thTrend(monthCount = 6) {
+    const result = [];
+    const today = new Date();
+    let anchorY = today.getFullYear();
+    let anchorM = today.getMonth() + 1;
+    // 從當前月往回 monthCount 個月, 每個月 15 號
+    for (let i = monthCount - 1; i >= 0; i--) {
+        let y = anchorY, m = anchorM - i;
+        while (m < 1) { m += 12; y -= 1; }
+        const dateISO = `${y}-${String(m).padStart(2, '0')}-15`;
+        // 未來月不算 (例如今天 7/10, 本月 15 還沒到 → skip)
+        if (new Date(dateISO) > today) continue;
+        result.push({
+            date: dateISO,
+            label: `${m}月`,
+            ...occupiedOn(dateISO)
+        });
+    }
+    return result;
+}
+
 export function isPreCutoff(inv) {
     if (!inv) return false;
     const d = inv.paidDate || inv.dueDate || '';
