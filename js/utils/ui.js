@@ -607,7 +607,7 @@ function renderField(field, currentValue) {
 }
 
 // 確認對話框
-export function openConfirm({ title = '確認操作', message, confirmLabel = '確認', cancelLabel = '取消', danger = false, onConfirm, maxWidth = 420, hideCancel = false }) {
+export function openConfirm({ title = '確認操作', message, confirmLabel = '確認', cancelLabel = '取消', danger = false, onConfirm, maxWidth = 420, hideCancel = false, onMount }) {
     const bodyHtml = `<div style="margin: 0; color: var(--text-main); line-height: 1.6;">${message}</div>`;
     const footerHtml = `
         ${hideCancel ? '' : `<button type="button" class="btn btn-outline" data-action="cancel">${cancelLabel}</button>`}
@@ -626,6 +626,8 @@ export function openConfirm({ title = '確認操作', message, confirmLabel = '�
                     if (result !== false) close();
                 });
             });
+            // caller 可傳 onMount 掛額外的 checkbox / search 事件
+            if (typeof onMount === 'function') onMount(overlay, close);
         }
     });
 }

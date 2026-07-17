@@ -595,7 +595,7 @@ function backfillContractInvoices() {
             const checks = () => overlay.querySelectorAll('.backfill-pick');
             const countEl = overlay.querySelector('#backfill-count');
             const headerCheck = overlay.querySelector('#backfill-header-check');
-            const confirmBtn = overlay.querySelector('.modal-footer .btn-primary, .modal-footer button:last-child');
+            const confirmBtn = overlay.querySelector('[data-action="confirm"]');
             const updateCount = () => {
                 const total = wouldCreate.length;
                 const picked = Array.from(checks()).filter(c => c.checked).length;

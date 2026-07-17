@@ -1622,7 +1622,7 @@ export function initContractActions(scope) {
             onMount: (overlay) => {
                 const checks = () => overlay.querySelectorAll('.ask-pick:not(:disabled)');
                 const countEl = overlay.querySelector('#ask-count');
-                const confirmBtn = overlay.querySelector('.modal-footer .btn-primary, .modal-footer button:last-child');
+                const confirmBtn = overlay.querySelector('[data-action="confirm"]');
                 const updateCount = () => {
                     const picked = Array.from(checks()).filter(c => c.checked).length;
                     if (countEl) countEl.textContent = `已選 ${picked} 筆`;
