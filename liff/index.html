@@ -330,8 +330,8 @@ const STRINGS = {
         errWatermarkFailed: '圖片處理失敗：{msg}',
         errLiffInit: 'LIFF 初始化失敗：{msg}\n\ncode: {code}\nURL: {url}\n\n請聯絡小編並附上這段訊息',
         errLineAuth: '{msg}',
-        btnRelogin: '🔄 重新登入我的 LINE 帳號',
-        reloginHint: '這是把「你目前的 LINE 帳號」重新登入這個網頁 (不是登入後台 / 不用密碼)。按下後 LINE 會跳認證確認, 完成後回到本頁, 表單需要重填一次 (證件照也要重拍上傳)。'
+        btnRelogin: '🔄 幫我重新驗證 LINE',
+        reloginHint: '因為你目前 LINE 已登入, 系統會自動幫你拿新的驗證憑證 (不會要求你重打密碼、也不會跳到 LINE 登入畫面)。按下後畫面會閃一下重載, 表單需要重填 (證件照也要重拍)。若一直失敗請截圖聯絡小編。'
     },
     en: {
         htmlLang: 'en',
@@ -375,8 +375,8 @@ const STRINGS = {
         errWatermarkFailed: 'Image processing failed: {msg}',
         errLiffInit: 'LIFF init failed: {msg}\n\ncode: {code}\nURL: {url}\n\nPlease contact the admin with this message.',
         errLineAuth: '{msg}',
-        btnRelogin: '🔄 Re-login with my LINE account',
-        reloginHint: 'This re-authenticates your current LINE account for this page (no password / not the admin dashboard). LINE will show a confirmation prompt, then bring you back — you will need to fill the form and re-upload ID photos again.'
+        btnRelogin: '🔄 Refresh my LINE credentials',
+        reloginHint: 'Since you are already logged into LINE, the system will silently fetch fresh credentials for you (no password required, no LINE login screen). The page will briefly reload — you will need to re-fill the form (ID photos also need re-upload). If this keeps failing, please screenshot and contact the admin.'
     }
 };
 
@@ -433,6 +433,42 @@ function initLangSwitch() {
     applyLangChrome();
 }
 
+// 解 JWT payload 拿 exp (不驗簽, 只讀時間) — 給 silent refresh 用
+function decodeJwtPayload(token) {
+    try {
+        const parts = String(token || '').split('.');
+        if (parts.length !== 3) return null;
+        const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+        return JSON.parse(atob(padded));
+    } catch { return null; }
+}
+
+// Silent refresh: token 快過期就 logout+login 拿新的 (在 form render 前做, 用戶不會 lose input)
+// 也支援 URL hash `#force-relogin` 觸發手動 (從錯誤畫面按鈕來)
+function ensureFreshTokenOrRedirect() {
+    if (location.hash === '#force-relogin') {
+        history.replaceState(null, '', location.pathname + location.search); // 清 hash 避免重跳
+        try { liff.logout(); } catch (_) {}
+        liff.login({ redirectUri: location.href });
+        return true; // login() 會 redirect, 不 return
+    }
+    const token = liff.getIDToken();
+    if (!token) return false;
+    const payload = decodeJwtPayload(token);
+    if (!payload || !payload.exp) return false; // 解不出 exp 就交給後端 verify 兜底
+    const nowSec = Math.floor(Date.now() / 1000);
+    const secLeft = payload.exp - nowSec;
+    // 剩不到 15 分鐘 → 立即 silent refresh (用戶還沒開始填, 不會 lose data)
+    if (secLeft < 15 * 60) {
+        console.log('[liff] ID token expires in', secLeft, 's — silent refresh');
+        try { liff.logout(); } catch (_) {}
+        liff.login({ redirectUri: location.href });
+        return true;
+    }
+    return false;
+}
+
 async function main() {
     initLangSwitch();
     try {
@@ -450,6 +486,8 @@ async function main() {
             liff.login();
             return;
         }
+        // ⚠ 進 form 前先確保 token 至少還有 15 分鐘可活 — 不然填完送出時剛好過期
+        if (ensureFreshTokenOrRedirect()) return; // silent refresh 會 redirect
         const profile = await liff.getProfile();
         renderForm(profile);
     } catch (e) {
@@ -758,9 +796,17 @@ async function handleSubmit(profile) {
             `;
             const rb = document.getElementById('btn-relogin');
             if (rb) rb.addEventListener('click', () => {
-                try { liff.logout(); } catch(_) {}
-                // logout 後直接重 login, LIFF SDK 會 redirect 回 LINE oauth → 拿新 token
-                liff.login({ redirectUri: location.href });
+                // 顯示 loading 讓用戶看到「有事發生」(silent refresh 過程只有 redirect 閃一下)
+                document.getElementById('root').innerHTML = `
+                    <div class="loading" style="padding: 4rem 1rem;">
+                        <div class="spinner"></div>
+                        <div style="margin-top: 0.75rem;">${LANG === 'zh' ? '重新取得 LINE 驗證中…' : 'Refreshing LINE credentials…'}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">${LANG === 'zh' ? '(不會要求你重打密碼)' : '(no password required)'}</div>
+                    </div>
+                `;
+                // 走 hash 進 main() → ensureFreshTokenOrRedirect 會 logout+login 拿新 token
+                //   這樣 refresh 流程走「頁面重載」路徑, 用戶看得到 loading 畫面
+                setTimeout(() => { location.href = location.pathname + location.search + '#force-relogin'; location.reload(); }, 150);
             });
             btn.disabled = false;
             btn.textContent = t('btnRetry');
