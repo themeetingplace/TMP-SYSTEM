@@ -1343,41 +1343,53 @@ export function confirmRenew(id) {
                 <button type="button" class="btn btn-outline" data-action="cancel">取消</button>
                 <button type="button" class="btn btn-outline" data-action="edit-renew" style="color: var(--color-primary); border-color: var(--color-primary); margin-left: auto;"><i class="ph ph-pencil"></i> 編輯續租資訊</button>
                 <button type="button" class="btn btn-outline" data-action="renew-only" style="color: var(--color-primary); border-color: var(--color-primary);"><i class="ph ph-file-plus"></i> 直接續租</button>
-                <button type="button" class="btn btn-primary" data-action="renew-and-send" ${hasLine ? '' : 'disabled title="租客未綁 LINE, 無法自動寄"'}><i class="ph ph-paper-plane-tilt"></i> 續租並寄出合約</button>
+                <button type="button" class="btn btn-primary" data-action="renew-and-notify" ${hasLine ? '' : 'disabled title="租客未綁 LINE, 無法自動推繳款通知"'}><i class="ph ph-bell"></i> 續租並發繳款通知</button>
             `;
         })(),
         lockOutsideClose: true,
         onMount: (overlay, close) => {
             overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
 
-            const doRenew = (sendContract) => {
+            // 建續租合約 (不寄合約 — 寄合約走「入帳後自動觸發」路線, maybeAutoSendContract)
+            // notify: true → 建約後 LINE 推繳款通知; false → 純建約靜默
+            const doRenew = (notify) => {
                 const result = store.renewContract(id);
                 if (result.error) {
                     showToast(`續租失敗：${result.error}`, 'danger');
                     return;
                 }
-                showToast(`已續租，新合約 ${result.newContract.id}`, 'success');
+                const newC = result.newContract;
+                showToast(`已建立續租合約 ${newC.id}`, 'success');
                 close();
                 refreshView();
-                if (!sendContract) return;
-                const newC = result.newContract;
+                if (!notify) return;
                 const t = mockData.tenants.find(x => x.name === newC.tenant && x.lineUserId)
                        || mockData.tenants.find(x => x.name === newC.tenant);
                 if (!t?.lineUserId) {
-                    showToast(`${newC.tenant} 未綁 LINE, 無法自動寄合約`, 'warning', 5000);
+                    showToast(`${newC.tenant} 未綁 LINE, 無法自動推繳款通知`, 'warning', 5000);
                     return;
                 }
+                // 找新合約的房租 invoice, 用其金額 + 到期日組訊息
+                const rentInv = mockData.invoices.find(inv =>
+                    inv.contractId === newC.id && inv.direction === 'in' && inv.type === '房租'
+                );
+                const dueAmount = rentInv ? (rentInv.amount || 0) - (rentInv.discount || 0) : (newC.amount || 0);
+                const dueDate = rentInv?.dueDate || newC.startDate;
+                const propertyShort = String(newC.propertyName || '').replace('聚空間 - ', '');
+                const message = `${newC.tenant} 您好 ☺️\n\n🔄 已為您建立續租合約 ${newC.id}\n📍 ${propertyShort}\n📅 新期間：${newC.startDate} ~ ${newC.endDate}\n\n🔔 續期租金：NT$${dueAmount.toLocaleString()}\n應繳日：${dueDate}\n\n繳款完成後, 請回傳「銀行帳戶末 5 碼」(5 位數字), 系統會自動記錄 ✨\n入帳後合約 PDF 會自動寄給您。`;
                 setTimeout(() => {
-                    showToast(`寄新合約 ${newC.id} 給 ${newC.tenant}…`, 'info', 3000);
-                    sendContractToLine(newC.id).catch(e => {
-                        console.warn('[auto-send-after-renew]', e);
-                        showToast(`自動寄合約失敗: ${e.message} (可到合約頁手動寄)`, 'warning', 6000);
-                    });
+                    showToast(`推繳款通知給 ${newC.tenant}…`, 'info', 3000);
+                    pushToTenant(t.id, { message, invoiceId: rentInv?.id })
+                        .then(() => showToast(`✅ 已推繳款通知給 ${newC.tenant}`, 'success', 4000))
+                        .catch(e => {
+                            console.warn('[auto-notify-after-renew]', e);
+                            showToast(`推繳款通知失敗：${e.message}`, 'warning', 6000);
+                        });
                 }, 800);
             };
 
             overlay.querySelector('[data-action="renew-only"]')?.addEventListener('click', () => doRenew(false));
-            overlay.querySelector('[data-action="renew-and-send"]')?.addEventListener('click', () => doRenew(true));
+            overlay.querySelector('[data-action="renew-and-notify"]')?.addEventListener('click', () => doRenew(true));
 
             overlay.querySelector('[data-action="edit-renew"]')?.addEventListener('click', () => {
                 const result = store.renewContract(id);

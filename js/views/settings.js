@@ -6,6 +6,7 @@ import { downloadBackup, getLastBackupAt } from '../backup.js';
 import { getMode } from '../utils/appMode.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { emptyState } from '../utils/emptyState.js';
+import { escapeHtml } from '../utils/escape.js';
 
 const GENDER_OPTIONS = ['男', '女', '不限'];
 const STATUS_OPTIONS = [
@@ -27,6 +28,9 @@ export function renderSettings() {
             </button>
             <button class="settings-tab" data-settings-tab="paymentMethods">
                 <i class="ph ph-credit-card"></i> 付款方式
+            </button>
+            <button class="settings-tab" data-settings-tab="rentRules">
+                <i class="ph ph-plus-minus"></i> 租金加項規則
             </button>
             <button class="settings-tab" data-settings-tab="contractTemplates">
                 <i class="ph ph-file-pdf"></i> 合約範本
@@ -724,6 +728,133 @@ function deleteSimpleListItem(kind, id) {
     });
 }
 
+// === Tab: 租金加項規則 ===
+// 依月份 / 館別自動 apply 加收 (夏季能源費) 或折扣 (優惠) 到新建 invoice
+function renderRentRulesTab() {
+    const rules = mockData.rentRules || [];
+    const buildingById = new Map(mockData.buildings.map(b => [b.id, b.name]));
+    const rowsHtml = rules.length === 0
+        ? `<tr><td colspan="6" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+             <i class="ph ph-plus-minus" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i>
+             <div>尚無租金加項規則</div>
+             <div style="font-size: var(--text-xs); margin-top: 0.5rem;">點右上「+ 新增規則」建立第一筆<br>例如「夏季能源費 $500, 適用 6-10 月」</div>
+           </td></tr>`
+        : rules.map(r => {
+            const isAdd = Number(r.amount) > 0;
+            const amountLabel = isAdd
+                ? `<span style="color: var(--color-danger); font-weight: 600;">+$${Math.abs(r.amount).toLocaleString()}</span>`
+                : `<span style="color: var(--color-success); font-weight: 600;">-$${Math.abs(r.amount).toLocaleString()}</span>`;
+            const monthsLabel = Array.isArray(r.months) && r.months.length
+                ? r.months.sort((a, b) => a - b).map(m => `${m}月`).join(', ')
+                : '<span style="color:var(--text-muted);">未設</span>';
+            const buildingsLabel = !Array.isArray(r.buildingIds) || r.buildingIds.length === 0
+                ? '<span class="status-badge info" style="font-size: var(--text-2xs);">全部館</span>'
+                : r.buildingIds.map(id => `<span class="status-badge info" style="font-size: var(--text-2xs); margin-right: 0.25rem;">${buildingById.get(id) || id}</span>`).join('');
+            const statusChip = r.enabled === false
+                ? '<span class="status-badge" style="font-size: var(--text-xs); background: var(--color-background); color: var(--text-muted);">停用</span>'
+                : '<span class="status-badge success" style="font-size: var(--text-xs);">啟用中</span>';
+            return `
+                <tr>
+                    <td><strong>${escapeHtml(r.name)}</strong>${r.note ? `<div style="font-size:var(--text-xs);color:var(--text-muted);">${escapeHtml(r.note)}</div>` : ''}</td>
+                    <td style="text-align: right;">${amountLabel}</td>
+                    <td>${monthsLabel}</td>
+                    <td>${buildingsLabel}</td>
+                    <td>${statusChip}</td>
+                    <td>
+                        <button class="btn btn-outline btn-xs rentrule-action" data-action="edit" data-id="${r.id}"><i class="ph ph-pencil"></i></button>
+                        <button class="btn btn-outline btn-xs btn-danger rentrule-action" data-action="delete" data-id="${r.id}"><i class="ph ph-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    return `
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div>
+                    <h2 class="card-title" style="margin-bottom: 0.25rem;"><i class="ph ph-plus-minus"></i> 租金加項規則</h2>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted);">建合約時系統會自動掃描規則, 依合約起訖月份 + 館別 apply 加收/折扣 (例: 夏季能源費 6-10月 每月加 $500)</div>
+                </div>
+                <button class="btn btn-primary" id="btn-new-rentrule"><i class="ph ph-plus"></i> 新增規則</button>
+            </div>
+            <table class="data-table">
+                <thead><tr>
+                    <th>規則名稱</th>
+                    <th style="text-align: right;">金額</th>
+                    <th>適用月份</th>
+                    <th>適用館別</th>
+                    <th>狀態</th>
+                    <th>操作</th>
+                </tr></thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function showRentRuleForm(rule = null) {
+    const isEdit = !!rule;
+    const buildingOptions = getSortedBuildings({ activeOnly: true })
+        .filter(b => (b.mode || 'cohousing') === 'cohousing')
+        .map(b => ({ value: b.id, label: b.name }));
+    const monthOptions = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${i + 1} 月` }));
+
+    openFormModal({
+        title: isEdit ? `編輯規則：${rule.name}` : '新增租金加項規則',
+        maxWidth: 640,
+        fields: [
+            { name: 'name', label: '規則名稱', type: 'text', required: true, span: 2, placeholder: '例：夏季能源費、冬季暖氣、電熱水器', hint: '這個名字會出現在 invoice 的加項備註' },
+            { name: 'amount', label: '每月金額', type: 'number', required: true, hint: '正數 = 加收 (例 500); 負數 = 折扣 (例 -200)' },
+            { name: 'enabled', label: '啟用', type: 'checkbox', value: rule?.enabled !== false, hint: '取消勾選 = 暫停使用但保留規則' },
+            { name: 'months', label: '適用月份 (可複選)', type: 'checkbox-group', span: 2, options: monthOptions, value: rule?.months || [], hint: '合約起訖跨到勾選的月份就 apply 一次' },
+            { name: 'buildingIds', label: '適用館別 (可複選, 不勾 = 全部館)', type: 'checkbox-group', span: 2, options: buildingOptions, value: rule?.buildingIds || [] },
+            { name: 'note', label: '備註', type: 'textarea', rows: 2, span: 2, placeholder: '選填, 給自己備忘' }
+        ],
+        values: rule || {},
+        submitLabel: isEdit ? '儲存變更' : '建立規則',
+        onSubmit: (values) => {
+            // number-array 轉型
+            const months = Array.isArray(values.months) ? values.months.map(Number).filter(m => m >= 1 && m <= 12) : [];
+            const buildingIds = Array.isArray(values.buildingIds) ? values.buildingIds.filter(Boolean) : [];
+            const payload = {
+                name: String(values.name || '').trim(),
+                amount: Number(values.amount) || 0,
+                months,
+                buildingIds,
+                enabled: values.enabled !== false,
+                note: String(values.note || '').trim()
+            };
+            if (!payload.name) { showToast('請填規則名稱', 'danger'); return false; }
+            if (payload.amount === 0) { showToast('金額不能是 0', 'danger'); return false; }
+            if (months.length === 0) { showToast('至少要勾一個月份', 'danger'); return false; }
+            if (isEdit) {
+                store.updateRentRule(rule.id, payload);
+                showToast(`已更新規則：${payload.name}`, 'success');
+            } else {
+                store.addRentRule(payload);
+                showToast(`已新增規則：${payload.name}`, 'success');
+            }
+            refreshView();
+        }
+    });
+}
+
+function deleteRentRule(id) {
+    const r = mockData.rentRules.find(x => x.id === id);
+    if (!r) return;
+    openConfirm({
+        title: '刪除規則',
+        message: `確定要刪除規則「<strong>${escapeHtml(r.name)}</strong>」嗎？<br><br>已產生的 invoice 不受影響, 只影響之後新建的合約。`,
+        danger: true,
+        confirmLabel: '確定刪除',
+        onConfirm: () => {
+            store.deleteRentRule(id);
+            showToast(`已刪除規則：${r.name}`, 'success');
+            refreshView();
+        }
+    });
+}
+
 // === Tab: 合約範本 ===
 function renderContractTemplatesTab() {
     // #10: 合約範本不跨模式 — 依當前 mode 篩
@@ -1001,6 +1132,19 @@ function rebindActions(scope) {
             showSimpleListForm(e.currentTarget.dataset.kind);
         });
     });
+
+    // 租金加項規則
+    scope.querySelector('#btn-new-rentrule')?.addEventListener('click', () => showRentRuleForm());
+    scope.querySelectorAll('.rentrule-action').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const action = e.currentTarget.dataset.action;
+            const id = e.currentTarget.dataset.id;
+            const r = mockData.rentRules.find(x => x.id === id);
+            if (!r) return;
+            if (action === 'edit') showRentRuleForm(r);
+            if (action === 'delete') deleteRentRule(id);
+        });
+    });
     scope.querySelectorAll('.simplelist-action').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const action = e.currentTarget.dataset.action;
@@ -1204,6 +1348,7 @@ export function initSettingsActions(scope) {
         if (name === 'invoiceTypes') content.innerHTML = renderInvoiceTypesTab();
         if (name === 'tenantSources') content.innerHTML = renderSimpleListTab('tenantSource');
         if (name === 'paymentMethods') content.innerHTML = renderSimpleListTab('paymentMethod');
+        if (name === 'rentRules') content.innerHTML = renderRentRulesTab();
         if (name === 'contractTemplates') content.innerHTML = renderContractTemplatesTab();
         if (name === 'sync') { content.innerHTML = renderSyncTab(); bindSyncActions(content); }
         rebindActions(content);

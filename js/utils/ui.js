@@ -180,6 +180,12 @@ export function openFormModal({ title, fields = [], values = {}, submitLabel = '
                 let firstInvalid = null;
                 let firstInvalidLabel = '';
                 fields.forEach(f => {
+                    // checkbox-group 特殊: 收集所有 name=同名的 checked value
+                    if (f.type === 'checkbox-group') {
+                        const els = form.querySelectorAll(`input[type="checkbox"][name="${f.name}"]`);
+                        data[f.name] = Array.from(els).filter(cb => cb.checked).map(cb => cb.value);
+                        return;
+                    }
                     const el = form.querySelector(`[name="${f.name}"]`);
                     if (!el) return;
                     let val = f.type === 'checkbox' ? el.checked : el.value.trim();
@@ -565,6 +571,28 @@ function renderField(field, currentValue) {
                 <input type="checkbox" name="${name}" ${checked}>
                 <span>${label}</span>
             </label>
+            ${hintHtml}
+        </div>`;
+    }
+
+    if (type === 'checkbox-group') {
+        // 多選 checkbox group. currentValue = array of selected values
+        const selected = new Set(Array.isArray(currentValue) ? currentValue.map(String) : []);
+        const opts = Array.isArray(field.options) ? field.options : [];
+        return `<div class="form-group" ${wrapStyle}>
+            ${labelHtml}
+            <div class="checkbox-group" style="display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; padding: 0.5rem 0;">
+                ${opts.map(o => {
+                    const val = String(o.value);
+                    const isChecked = selected.has(val) ? 'checked' : '';
+                    return `
+                        <label style="display: flex; align-items: center; gap: 0.35rem; cursor: pointer; user-select: none;">
+                            <input type="checkbox" name="${name}" value="${escapeAttr(val)}" ${isChecked}>
+                            <span>${o.label}</span>
+                        </label>
+                    `;
+                }).join('')}
+            </div>
             ${hintHtml}
         </div>`;
     }

@@ -57,7 +57,11 @@ export const mockData = {
     paymentMethods: [],
 
     // 帳單類型主檔 (預設清空 — 從 Supabase 拉，避免本機 hardcode 在「清空後又被默默載回」)
-    invoiceTypes: []
+    invoiceTypes: [],
+
+    // 租金加收規則 — 依月份 / 館別自動 apply 加收 or 折扣到新建 invoice
+    // { id, name, amount (正=加收/負=折扣), months: [6,7,8,...], buildingIds: [...空=全部館], enabled, note }
+    rentRules: []
 };
 
 // === localStorage 持久化（避免重整時遺失修改） ===
@@ -193,7 +197,8 @@ export const dirtyRows = {
     invoiceTypes: new Set(),
     tenantSources: new Set(),
     paymentMethods: new Set(),
-    contractTemplates: new Set()
+    contractTemplates: new Set(),
+    rentRules: new Set()
 };
 
 export function markDirty(table, id) {
@@ -225,6 +230,7 @@ function persist() {
             invoiceTypes: mockData.invoiceTypes,
             tenantSources: mockData.tenantSources,
             paymentMethods: mockData.paymentMethods,
+            rentRules: mockData.rentRules,
             metrics: mockData.metrics
             // contractTemplates 不存：base64 太大會撐爆，需要時從雲端拉
         };
@@ -898,7 +904,24 @@ function buildContractInvoice(contract, payment = {}) {
         : '';
     const today = new Date().toISOString().slice(0, 10);
 
-    const discount = Number(payment.discount) || 0;
+    // 自動 apply rentRules (夏季能源費 / 冬季暖氣 etc) → 產生 adjustments
+    //   規則 amount > 0 = 加收 (kind='add' → discount 變負), < 0 = 折扣 (kind='sub' → discount 變正)
+    //   跟現有 discount widget 語意一致: 收入 invoice 中 discount>0=折扣, discount<0=加收
+    const autoAdjustments = applyRentRules(contract);
+    const autoNet = autoAdjustments.reduce((s, a) => s + (a.kind === 'add' ? -a.amount : a.amount), 0);
+    // 合併 payment 傳入的 discount + 自動規則
+    const userDiscount = Number(payment.discount) || 0;
+    const discount = userDiscount + autoNet;
+    // 若有 autoAdjustments 且沒帶 discountReason → 用自動的組成 JSON reason
+    // 若已有 discountReason (使用者手打) → 併起來
+    let discountReason = payment.discountReason || null;
+    if (autoAdjustments.length > 0) {
+        const combined = [...autoAdjustments];
+        if (typeof discountReason === 'string' && discountReason.trim().startsWith('[')) {
+            try { combined.push(...JSON.parse(discountReason)); } catch {}
+        }
+        discountReason = JSON.stringify(combined);
+    }
     const due = totalAmount - discount;
     // 已收：留空 / null / '' 都當作「未收 (0)」 — 要明確輸入金額才視為已收
     const paidAmount = (payment.paidAmount == null || payment.paidAmount === '')
@@ -924,7 +947,7 @@ function buildContractInvoice(contract, payment = {}) {
         bankLast5: null,
         bankVerified: paidAmount >= due,
         discount,
-        discountReason: payment.discountReason || null,
+        discountReason,
         paidAmount,
         paymentMethod: method
     };
@@ -1027,6 +1050,52 @@ export function previewContractInvoices() {
 
 // 建合約後自動建 1 張全期房租 invoice，預設已繳清
 // payment: { discount, discountReason, paidAmount, paymentMethod } — 可選，預設視為簽約全額收款
+// === 依合約起訖期間 + 館別, 自動 apply rentRules 產生 adjustments 陣列 ===
+// 合約 6/1-8/31 命中「夏季能源費 6-10月, $500」→ 6+7+8 各 apply 一次, 共 3 筆加項
+// 若合約橫跨 8/1-10/31 命中 → 8+9+10 = 3 筆
+// 每筆 adjustment: {kind: 'add' or 'sub', label: 'XX (N月)', amount: N}
+// 正金額 = add (加收), 負金額 = sub (折扣)
+export function applyRentRules(contract) {
+    if (!contract || !contract.startDate || !contract.endDate) return [];
+    const rules = (mockData.rentRules || []).filter(r => r.enabled !== false);
+    if (rules.length === 0) return [];
+
+    const start = new Date(contract.startDate);
+    const end = new Date(contract.endDate);
+    // 掃 contract 起訖跨到的所有 (year, month) 對, endDate 那天不含
+    const coveredMonths = new Set();  // key = "YYYY-M"
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (cursor < end) {
+        coveredMonths.add(`${cursor.getFullYear()}-${cursor.getMonth() + 1}`);
+        cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    const adjustments = [];
+    rules.forEach(rule => {
+        // 館別 filter (空 = 全部館)
+        if (Array.isArray(rule.buildingIds) && rule.buildingIds.length > 0) {
+            if (!rule.buildingIds.includes(contract.buildingId)) return;
+        }
+        // 月份 filter (哪幾月適用)
+        const applyMonths = Array.isArray(rule.months) ? rule.months : [];
+        if (applyMonths.length === 0) return;
+        // 掃合約橫跨的每個月, 若該月在規則範圍內 → apply 一筆
+        coveredMonths.forEach(ym => {
+            const [, mStr] = ym.split('-');
+            const m = parseInt(mStr, 10);
+            if (!applyMonths.includes(m)) return;
+            const amt = Number(rule.amount) || 0;
+            if (amt === 0) return;
+            adjustments.push({
+                kind: amt > 0 ? 'add' : 'sub',
+                label: `${rule.name} (${m}月)`,
+                amount: Math.abs(amt)
+            });
+        });
+    });
+    return adjustments;
+}
+
 export function createInvoiceForContract(contract, payment = {}) {
     if (!contract) return null;
     const exists = mockData.invoices.some(inv =>
@@ -2674,6 +2743,40 @@ export const store = {
         mockData.settlements = mockData.settlements.filter(s => s.id !== id);
         clearDirty('settlements', [id]);
         persist();
+    },
+
+    // ----- rentRules (租金加收規則) -----
+    // { id, name, amount (正=加收/負=折扣), months: [1..12], buildingIds: [空=全館], enabled, note }
+    addRentRule(payload) {
+        if (!Array.isArray(mockData.rentRules)) mockData.rentRules = [];
+        const item = {
+            id: nextId('RR', mockData.rentRules),
+            name: '',
+            amount: 0,
+            months: [],
+            buildingIds: [],
+            enabled: true,
+            note: '',
+            ...payload
+        };
+        mockData.rentRules.push(item);
+        markDirty('rentRules', item.id);
+        persist();
+        return item;
+    },
+    updateRentRule(id, patch) {
+        const i = mockData.rentRules.findIndex(r => r.id === id);
+        if (i < 0) return null;
+        mockData.rentRules[i] = { ...mockData.rentRules[i], ...patch };
+        markDirty('rentRules', id);
+        persist();
+        return mockData.rentRules[i];
+    },
+    deleteRentRule(id) {
+        mockData.rentRules = mockData.rentRules.filter(r => r.id !== id);
+        clearDirty('rentRules', [id]);
+        persist();
+        window.dispatchEvent(new CustomEvent('bms:delete', { detail: { table: 'rent_rules', id } }));
     }
 };
 

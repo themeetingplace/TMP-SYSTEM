@@ -159,6 +159,15 @@ export const toDb = {
         pdf_base64: ct.pdfBase64 ?? null,
         uploaded_at: ct.uploadedAt ?? null
     }),
+    rentRule: r => ({
+        id: r.id,
+        name: r.name ?? '',
+        amount: Number(r.amount) || 0,
+        months: Array.isArray(r.months) ? r.months : [],
+        building_ids: Array.isArray(r.buildingIds) ? r.buildingIds : [],
+        enabled: r.enabled !== false,
+        note: r.note ?? ''
+    }),
     // === 代管模式 ===
     owner: o => ({
         id: o.id,
@@ -352,6 +361,15 @@ export const fromDb = {
         name: r.name,
         note: r.note
     }),
+    rentRule: r => ({
+        id: r.id,
+        name: r.name,
+        amount: Number(r.amount) || 0,
+        months: Array.isArray(r.months) ? r.months : [],
+        buildingIds: Array.isArray(r.building_ids) ? r.building_ids : [],
+        enabled: r.enabled !== false,
+        note: r.note ?? ''
+    }),
     contractTemplate: r => ({
         buildingId: r.building_id,
         fileName: r.file_name,
@@ -416,6 +434,7 @@ export const TABLES = [
     { key: 'invoice_types',      src: 'invoiceTypes',      pk: 'id',          toDb: toDb.invoiceType,      fromDb: fromDb.invoiceType,      large: false },
     { key: 'tenant_sources',     src: 'tenantSources',     pk: 'id',          toDb: toDb.tenantSource,     fromDb: fromDb.tenantSource,     large: false },
     { key: 'payment_methods',    src: 'paymentMethods',    pk: 'id',          toDb: toDb.paymentMethod,    fromDb: fromDb.paymentMethod,    large: false },
+    { key: 'rent_rules',         src: 'rentRules',         pk: 'id',          toDb: toDb.rentRule,         fromDb: fromDb.rentRule,         large: false },
     { key: 'contract_templates', src: 'contractTemplates', pk: 'building_id', toDb: toDb.contractTemplate, fromDb: fromDb.contractTemplate, large: true  },
     // === 代管模式 (sql/20-managed-mode-schema-2026-06-17.sql) ===
     { key: 'owners',             src: 'owners',            pk: 'id',          toDb: toDb.owner,            fromDb: fromDb.owner,            large: false },
