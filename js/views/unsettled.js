@@ -644,8 +644,11 @@ function backfillContractInvoices() {
             });
         },
         onConfirm: () => {
-            const picked = Array.from(document.querySelectorAll('.backfill-pick'))
-                .filter(c => c.checked).map(c => c.dataset.cid);
+            // 只掃還開著的 modal 內的 checkbox (避免抓到別的 modal 的同 class)
+            const openOverlay = document.querySelector('.modal-overlay:not(.is-closing)');
+            const picked = openOverlay
+                ? Array.from(openOverlay.querySelectorAll('.backfill-pick')).filter(c => c.checked).map(c => c.dataset.cid)
+                : [];
             if (picked.length === 0) {
                 showToast('沒選任何合約, 未補產', 'info');
                 return;

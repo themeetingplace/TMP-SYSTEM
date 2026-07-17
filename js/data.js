@@ -1,5 +1,6 @@
 // Data Service - Switch between mock data and Supabase
 import { supabase } from './supabase.js';
+import { RENEWAL_THRESHOLDS } from './constants.js';
 
 // Mock Data simulating Supabase responses (fallback)
 export const mockData = {
@@ -819,13 +820,13 @@ export function getContractLifecycle(contract, today = new Date()) {
     const end = new Date(contract.endDate);
     const diffDays = Math.ceil((end - today) / 86400000);
 
-    // 三段時間軸 (2026-06-15 確認):
-    //   > 10 天 = active
-    //   6 ~ 10 天 = expiring_soon (此區間 renewal-poll cron 會發 LINE 詢問)
-    //   0 ~ 5 天 = awaiting_decision (該管理者下決定了，不能再等)
+    // 三段時間軸 (2026-07-17 改成 14/7, 從單一設定源讀取):
+    //   > expiringSoonDays 天 = active
+    //   awaitingDecisionDays+1 ~ expiringSoonDays 天 = expiring_soon (renewal-poll cron 發 LINE 詢問)
+    //   0 ~ awaitingDecisionDays 天 = awaiting_decision (該管理者下決定了)
     //   < 0 天 = expired
-    if (diffDays > 10) return 'active';
-    if (diffDays > 5) return 'expiring_soon';
+    if (diffDays > RENEWAL_THRESHOLDS.expiringSoonDays) return 'active';
+    if (diffDays > RENEWAL_THRESHOLDS.awaitingDecisionDays) return 'expiring_soon';
     if (diffDays >= 0) return 'awaiting_decision';
     return 'expired';
 }

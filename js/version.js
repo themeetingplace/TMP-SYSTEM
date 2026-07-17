@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.3.0';
-export const APP_BUILD_DATE = '2026-06-13';
+export const APP_VERSION = '1.4.0';
+export const APP_BUILD_DATE = '2026-07-17';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.4.0', date: '2026-07-17', notes: '續租全自動化 (LINE 回「續租」→ 系統自動建續租合約 + 發繳款通知 含 rentRules 加項細項) / 續租提醒天數 10/5 → 14/7 天 (更充裕的回覆窗口) / 補產缺帳單 + 詢問續住 兩處改成勾選 modal (搜尋 / 全選 / 智慧預設) / 15 號結算入住率修正 (Set 去重防重疊合約算兩次 + endDate 排除退房日) + drill-down 明細 modal / 租金加項規則 (夏季能源費等自動加減) / LIFF 綁定 silent refresh + 錯誤引導更清楚 / 合併綁定 picker 加搜尋 / 手機版頁面內搜尋欄修回可見' },
     { version: '1.3.0', date: '2026-06-13', notes: '系統改名 BMS → PMS (Property Management System，業界標準命名，BMS 一般指 Building Management = 樓宇機電) / localStorage 自動遷移 (老用戶資料不會消失) / 報表折線圖風格統一 dashboard / 視覺一致性 audit' },
     { version: '1.2.5', date: '2026-06-12', notes: '小幫手角色 (read-only 物件/住房/租客) / 報表 3 tab (總覽 / 各館 / 財務分析) + NOI / OpEx / 出租率傳統燈 / LINE 自動詢問續租 (Quick Reply Postback) / LIFF 身分證上傳 + Canvas 浮水印 (私有 bucket + 5 分鐘 signed URL)' },
     { version: '1.2.0', date: '2026-06-11', notes: '報表大改版 — 4 tab hub (總覽 / 各館 / 交叉 / 對帳單) + 共用區間 picker (本月/本季/本年/自訂) / 帳務管理只留 總收支 + 房租查帳 / 收支分析搬到報表 / 合約 PDF 加 total_amount + monthly_amount / 多床位合約只開 1 張 invoice / 帳單編輯折扣加收正負號修正' },

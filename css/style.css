@@ -3337,14 +3337,9 @@ select.inline-edit-input { cursor: pointer; }
 
 @media (max-width: 560px) {
     /* 只藏 topbar 的搜尋 (螢幕太窄) — 頁面內的搜尋欄 (租客/合約清單) 保留 */
+    /* 頁面內搜尋欄手機板寬 100% 的規則在檔案下方 (要放後面才會贏過 900px rule) */
     .topbar .search-bar {
         display: none;
-    }
-    /* 頁面內搜尋欄手機板讓寬 100% 好按 */
-    .card > .flex.justify-between .search-bar {
-        width: 100% !important;
-        min-width: 0;
-        flex: 1 1 100%;
     }
 }
 
@@ -6493,6 +6488,15 @@ select.form-input {
         width: auto !important;
         flex: 1 1 180px;
         min-width: 160px;
+    }
+}
+
+/* 進一步 ≤ 560 縮到單欄, 讓搜尋欄整條寬 100% 好按 (放這裡才會贏過上面 900px 的 rule) */
+@media (max-width: 560px) {
+    .card > .flex.justify-between .search-bar {
+        width: 100% !important;
+        min-width: 0;
+        flex: 1 1 100%;
     }
 }
 

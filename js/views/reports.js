@@ -1,7 +1,7 @@
 ﻿// 報表 hub — 頂部區間 picker + 4 tab：總覽 / 各館報表 / 交叉分析 / 對帳單
 //
 // 區間狀態:  reportState.viewRange = { start, end, preset }
-// 切換 tab:  reportState.activeTab = 'overview' | 'buildings' | 'analysis' | 'statement'
+// 切換 tab:  reportState.activeTab = 'buildings' | 'analysis' (overview / statement 已移除, 舊值會 redirect)
 // 跟舊版差異：所有計算都改用「區間」聚合，不再寫死月份；分析 / 各館報表都依區間切片
 
 import {
@@ -66,63 +66,11 @@ function rangeMonthCount(range = reportState.viewRange) {
     return Math.min(12, months);      // 多月區間 → 跟區間一致 (上限 12)
 }
 
-// ───────────────────── Tab 1: 總覽 (老闆視角: NOI / 收款率 / 出租率 / 到期) ─────────────────────
-function computeOverviewKPIs(range) {
-    const allIncome = _md().invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
-    const settledOnly = settledInRange(range);
-    const receivableTotal = allIncome.reduce((s, i) => s + ((Number(i.amount) || 0) - (Number(i.discount) || 0)), 0);
-    const paidTotal = allIncome.reduce((s, i) => s + (Number(i.paidAmount) || 0), 0);
-    const outstanding = Math.max(0, receivableTotal - paidTotal);
-    const collectionRate = receivableTotal > 0 ? paidTotal / receivableTotal : 0;
-    const expenseTotal = settledOnly.filter(i => i.direction === 'out').reduce((s, i) => s + actualAmount(i), 0);
-    // NOI = 已收 − 已付支出 (Net Operating Income)
-    const noi = paidTotal - expenseTotal;
-
-    // 整體出租率 (snapshot)
-    const allBeds = _md().properties || [];
-    const rentedBeds = allBeds.filter(p => bedOccupied(p.name)).length;
-    const occRate = allBeds.length ? rentedBeds / allBeds.length : 0;
-
-    // 30 天內到期合約數
-    const today = new Date().toISOString().slice(0, 10);
-    const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-    const expiringCount = _md().contracts.filter(c =>
-        c.renewalState === 'active' && c.endDate && c.endDate >= today && c.endDate <= in30
-    ).length;
-
-    return {
-        receivableTotal, paidTotal, outstanding, collectionRate,
-        expenseTotal, noi,
-        occRate, totalBeds: allBeds.length, rentedBeds,
-        expiringCount,
-        unpaidCount: allIncome.filter(i => (Number(i.paidAmount) || 0) < ((Number(i.amount) || 0) - (Number(i.discount) || 0))).length
-    };
-}
-
 // 紅黃綠燈狀態
 function statusLight(rate, healthy, warn) {
     if (rate >= healthy) return { color: 'var(--color-success)', light: '🟢', label: '健康' };
     if (rate >= warn) return { color: 'var(--color-warning-text)', light: '🟡', label: '注意' };
     return { color: 'var(--color-danger)', light: '🔴', label: '警示' };
-}
-
-// 各館 應收/已收/待收 (取代收入結構 donut — 更有意義)
-function computeReceivableByBuilding(range) {
-    const buildings = _modeBuildings();
-    const allIncome = _md().invoices.filter(i => i.direction === 'in' && invoiceInRange(i, range));
-    return buildings.map(b => {
-        const rows = allIncome.filter(i => i.buildingId === b.id);
-        const receivable = rows.reduce((s, i) => s + ((Number(i.amount) || 0) - (Number(i.discount) || 0)), 0);
-        const paid = rows.reduce((s, i) => s + (Number(i.paidAmount) || 0), 0);
-        const outstanding = Math.max(0, receivable - paid);
-        return {
-            label: b.name,
-            receivable,
-            paid,
-            outstanding,
-            collectionRate: receivable > 0 ? paid / receivable : 0
-        };
-    }).sort((a, b) => b.receivable - a.receivable);
 }
 
 // 月度趨勢 — monthCount 由區間動態決定 (6 / 6~12 / 12)
@@ -150,39 +98,6 @@ function computeMonthlyTrend(range, buildingId = null) {
         months.push({ label: labelTxt, monthKey, income, expense, net: income - expense });
     }
     return months;
-}
-
-// 各館 應收 vs 已收 stacked bar (取代 donut — 顯示現金流缺口)
-function renderReceivableStackedBars(items) {
-    if (items.length === 0 || items.every(it => it.receivable === 0)) {
-        return emptyState({ mode: 'block', icon: 'ph-coin', title: '區間內無應收資料', hint: '調整上方區間試試' });
-    }
-    const maxReceivable = Math.max(...items.map(it => it.receivable), 1);
-    return `
-        <div class="stacked-bar-list">
-            ${items.map(it => {
-                const paidPct = it.receivable > 0 ? (it.paid / it.receivable) * 100 : 0;
-                const totalW = (it.receivable / maxReceivable) * 100;
-                const collectionPct = (it.collectionRate * 100).toFixed(0);
-                return `
-                    <div class="stacked-bar-row">
-                        <div class="stacked-bar-head">
-                            <span class="stacked-bar-label">${it.label}</span>
-                            <span class="stacked-bar-rate ${it.collectionRate >= 0.95 ? 'good' : it.collectionRate >= 0.85 ? 'mid' : 'bad'}">收款 ${collectionPct}%</span>
-                        </div>
-                        <div class="stacked-bar-track" style="width: ${totalW}%;">
-                            <div class="stacked-bar-paid" style="width: ${paidPct}%;"></div>
-                        </div>
-                        <div class="stacked-bar-vals">
-                            <span class="sb-val-paid">已收 ${moneyAmount(it.paid)}</span>
-                            ${it.outstanding > 0 ? `<span class="sb-val-out">待收 ${moneyAmount(it.outstanding)}</span>` : ''}
-                            <span class="sb-val-total">/ 應收 ${moneyAmount(it.receivable)}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('')}
-        </div>
-    `;
 }
 
 // ───────────────────── Chart.js 工廠 (取代手寫 SVG，跟 dashboard 同套渲染) ─────────────────────
@@ -279,57 +194,6 @@ function renderTrendChart(months) {
         }
     });
     return `<div class="trend-chart-wrap"><canvas id="${id}"></canvas></div>`;
-}
-
-function renderOverviewTab() {
-    const range = reportState.viewRange;
-    const k = computeOverviewKPIs(range);
-    const byBuilding = computeReceivableByBuilding(range);
-    const trend = computeMonthlyTrend(range);
-    const collection = statusLight(k.collectionRate, 0.95, 0.85);
-    const occupancy = statusLight(k.occRate, 0.95, 0.80);
-    const expiringStatus = k.expiringCount === 0
-        ? { color: 'var(--color-success)', light: '🟢' }
-        : k.expiringCount <= 3 ? { color: 'var(--color-warning-text)', light: '🟡' }
-        : { color: 'var(--color-danger)', light: '🔴' };
-
-    return `
-        <div class="stat-tile-grid">
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-trend-up"></i> NOI 淨營運收入</div>
-                <div class="stat-tile-value" style="color: ${k.noi >= 0 ? 'var(--text-main)' : 'var(--color-danger)'};">${moneyAmount(k.noi)}</div>
-                <div class="stat-tile-sub">已收 ${moneyAmount(k.paidTotal)} − 已付 ${moneyAmount(k.expenseTotal)}</div>
-            </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-percent"></i> 收款率 <span style="margin-left: auto; font-size: 0.85em;">${collection.light}</span></div>
-                <div class="stat-tile-value" style="color: ${collection.color};">${(k.collectionRate * 100).toFixed(1)}%</div>
-                <div class="stat-tile-sub">待收 ${moneyAmount(k.outstanding)} · 目標 ≥ 95%</div>
-            </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率 <span style="margin-left: auto; font-size: 0.85em;">${occupancy.light}</span></div>
-                <div class="stat-tile-value" style="color: ${occupancy.color};">${pct(k.occRate)}</div>
-                <div class="stat-tile-sub">${k.rentedBeds} / ${k.totalBeds} 床 · 目標 ≥ 95%</div>
-            </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-clock-countdown"></i> 30 天內到期 <span style="margin-left: auto; font-size: 0.85em;">${expiringStatus.light}</span></div>
-                <div class="stat-tile-value" style="color: ${expiringStatus.color};">${k.expiringCount}</div>
-                <div class="stat-tile-sub">${k.expiringCount > 0 ? `<a href="#contracts" style="color: var(--color-primary-text); text-decoration: none;">前往合約管理 →</a>` : '無需追蹤'}</div>
-            </div>
-        </div>
-
-        <div class="report-chart-card">
-            <div class="report-chart-title">
-                <span><i class="ph ph-buildings"></i> 各館應收 vs 已收</span>
-                <span style="font-size: var(--text-2xs); color: var(--text-muted); font-weight: 500;">深色=已收 · 淺色=待收</span>
-            </div>
-            ${renderReceivableStackedBars(byBuilding)}
-        </div>
-
-        <div class="report-chart-card">
-            <div class="report-chart-title"><span><i class="ph ph-chart-line"></i> 月度趨勢 · 近 ${trend.length} 個月</span></div>
-            ${renderTrendChart(trend)}
-        </div>
-    `;
 }
 
 // ───────────────────── Tab 2: 營運分析 ─────────────────────

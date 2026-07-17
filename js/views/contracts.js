@@ -418,7 +418,7 @@ export function renderContracts() {
         <div class="metrics-grid">
             <div class="card metric-card"><div class="metric-header"><span>進行中合約</span><div class="metric-icon success"><i class="ph ph-file-text"></i></div></div><div class="metric-value">${activeCount}</div><div class="metric-subtext">含即將到期/待決策</div></div>
             <div class="card metric-card ${decisionCount > 0 ? 'highlight-danger' : ''}"><div class="metric-header"><span>待決策</span><div class="metric-icon danger"><i class="ph ph-warning-circle"></i></div></div><div class="metric-value" style="color: ${decisionCount > 0 ? 'var(--color-danger)' : 'var(--text-main)'};">${decisionCount}</div><div class="metric-subtext">需要續租 / 退租決定</div></div>
-            <div class="card metric-card"><div class="metric-header"><span>即將到期</span><div class="metric-icon warning"><i class="ph ph-clock"></i></div></div><div class="metric-value">${expiringSoonCount}</div><div class="metric-subtext">10 天內到期</div></div>
+            <div class="card metric-card"><div class="metric-header"><span>即將到期</span><div class="metric-icon warning"><i class="ph ph-clock"></i></div></div><div class="metric-value">${expiringSoonCount}</div><div class="metric-subtext">14 天內到期</div></div>
             <div class="card metric-card"><div class="metric-header"><span>歷史合約</span><div class="metric-icon primary"><i class="ph ph-archive"></i></div></div><div class="metric-value">${archivedCount}</div><div class="metric-subtext">已續約 / 已終止</div></div>
         </div>
 
@@ -430,7 +430,7 @@ export function renderContracts() {
                         <i class="ph ph-magnifying-glass"></i>
                         <input type="text" placeholder="搜尋合約編號或租客..." style="font-size: var(--text-base);">
                     </div>
-                    <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 10 天內到期的合約，自動發 LINE 問租客要不要續租">
+                    <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 14 天內到期的合約，可勾選要問誰">
                         <i class="ph ph-chat-circle-dots"></i> 詢問續租
                     </button>
                     <button class="btn btn-primary" id="btn-new-contract" data-fab="ph-file-plus">
@@ -1650,8 +1650,11 @@ export function initContractActions(scope) {
                 updateCount();
             },
             onConfirm: async () => {
-                const picked = Array.from(document.querySelectorAll('.ask-pick'))
-                    .filter(c => c.checked && !c.disabled).map(c => c.dataset.cid);
+                // 只掃還開著的 modal 內的 checkbox
+                const openOverlay = document.querySelector('.modal-overlay:not(.is-closing)');
+                const picked = openOverlay
+                    ? Array.from(openOverlay.querySelectorAll('.ask-pick')).filter(c => c.checked && !c.disabled).map(c => c.dataset.cid)
+                    : [];
                 if (picked.length === 0) {
                     showToast('沒選任何合約, 未發送', 'info');
                     return;
