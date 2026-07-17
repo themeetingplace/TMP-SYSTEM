@@ -58,7 +58,7 @@ export function renderPropertiesHub() {
 
 export function initPropertiesHubActions(scope) {
     const tabsEl = scope.querySelector('.hub-tabs');
-    const contentEl = scope.querySelector('.hub-content');
+    let contentEl = scope.querySelector('.hub-content'); // let: 換 tab 時整個 replace
     if (!tabsEl || !contentEl) return;
 
     // 初次掛載：呼叫當前 active tab 的 init
@@ -84,9 +84,17 @@ export function initPropertiesHubActions(scope) {
         tabsEl.querySelectorAll('[data-hub-tab]').forEach(b => b.classList.toggle('active', b === btn));
 
         // 重 render 內容區
+        // ⚠ 直接 innerHTML= 只換子元素, contentEl 本身的 listener 仍在,
+        //   下次 meta.init 又掛一個 → listener 累加 → 一個 click 觸發 N 次
+        //   (2026-07-17 修: 住房一覽點入住彈 4 次的 bug)
+        //   解法: contentEl 整個換新 node, 老的 listener 隨 GC 一起收
         const meta = TABS.find(t => t.key === target);
-        contentEl.dataset.hubActive = target;
-        contentEl.innerHTML = meta.render();
+        const newContentEl = document.createElement('div');
+        newContentEl.className = contentEl.className;
+        newContentEl.dataset.hubActive = target;
+        newContentEl.innerHTML = meta.render();
+        contentEl.replaceWith(newContentEl);
+        contentEl = newContentEl; // 更新閉包參考
         if (meta.init) meta.init(contentEl);
         if (!meta.skipTableInteractions) {
             initTableInteractions({ scope: contentEl, rowsPerPage: 10 });
