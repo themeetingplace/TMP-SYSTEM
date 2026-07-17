@@ -328,7 +328,10 @@ const STRINGS = {
         errIdFrontMissing: '請至少上傳證件正面照片',
         errSubmitFailed: '送出失敗：{msg}',
         errWatermarkFailed: '圖片處理失敗：{msg}',
-        errLiffInit: 'LIFF 初始化失敗：{msg}\n\ncode: {code}\nURL: {url}\n\n請聯絡小編並附上這段訊息'
+        errLiffInit: 'LIFF 初始化失敗：{msg}\n\ncode: {code}\nURL: {url}\n\n請聯絡小編並附上這段訊息',
+        errLineAuth: '{msg}',
+        btnRelogin: '🔄 重新登入 LINE',
+        reloginHint: '按下按鈕會登出後重新登入 LINE, 之前填的資料需要重填一次 (但拍好的證件照要重新上傳)。若一直失敗請截圖聯絡小編。'
     },
     en: {
         htmlLang: 'en',
@@ -370,7 +373,10 @@ const STRINGS = {
         errIdFrontMissing: 'Please upload the front of your ID at minimum.',
         errSubmitFailed: 'Submit failed: {msg}',
         errWatermarkFailed: 'Image processing failed: {msg}',
-        errLiffInit: 'LIFF init failed: {msg}\n\ncode: {code}\nURL: {url}\n\nPlease contact the admin with this message.'
+        errLiffInit: 'LIFF init failed: {msg}\n\ncode: {code}\nURL: {url}\n\nPlease contact the admin with this message.',
+        errLineAuth: '{msg}',
+        btnRelogin: '🔄 Re-login to LINE',
+        reloginHint: 'This will log out and re-open LINE login. Your form entries will need to be filled again (ID photos also need re-upload). If this keeps failing, please screenshot and contact the admin.'
     }
 };
 
@@ -679,7 +685,17 @@ async function handleSubmit(profile) {
     msg.innerHTML = '';
 
     try {
+        // ⚠ 每次 submit 前檢查登入狀態 — LIFF token 有 TTL, 停留頁面超過 1h 會過期
+        //    這裡拿不到 token 就強制 re-login (login 會 redirect, 不會 return)
+        if (!liff.isLoggedIn()) {
+            liff.login();
+            return;
+        }
         const idToken = liff.getIDToken();
+        if (!idToken) {
+            // 通常是在外部瀏覽器 (非 LINE 內建瀏覽器) 開的 URL, 或 SDK 沒 init 完
+            throw Object.assign(new Error('無法取得 LINE 登入憑證 (請確認是從 LINE 開啟連結)'), { authFail: true });
+        }
         btn.textContent = t('btnProcessing');
         const idCardFrontB64 = await blobToBase64(idCardImages.front);
         const idCardBackB64  = idCardImages.back ? await blobToBase64(idCardImages.back) : null;
@@ -709,7 +725,12 @@ async function handleSubmit(profile) {
         btn.textContent = t('btnUploading');
         const { resp, body: result } = await callEdge();
         if (!resp.ok || result.error) {
-            throw new Error(result.error || `HTTP ${resp.status}`);
+            // 特殊處理 LINE 驗證失敗 — 這類錯誤重試同一顆 cached token 沒用, 要 logout+login 拿新 token
+            const isAuthFail = resp.status === 401
+                || ['expired', 'invalid', 'user_mismatch', 'missing_token'].includes(result.errorCode || '');
+            const err = new Error(result.error || `HTTP ${resp.status}`);
+            if (isAuthFail) err.authFail = true;
+            throw err;
         }
         // 多筆同名 → 客戶選哪一份合約是自己的
         if (result.needsClaim) {
@@ -727,9 +748,27 @@ async function handleSubmit(profile) {
         }
         renderDone(profile, data);
     } catch (e) {
-        msg.innerHTML = `<div class="msg error">${t('errSubmitFailed', { msg: e.message })}</div>`;
-        btn.disabled = false;
-        btn.textContent = t('btnRetry');
+        if (e && e.authFail) {
+            // LINE 驗證失敗 — 顯示「重新登入 LINE」按鈕 (清 cached token → 拿新的)
+            //   若 retry 用同一顆 idToken, 過期的還是過期, 永遠失敗 (這就是用戶回報的死循環)
+            msg.innerHTML = `
+                <div class="msg error">${t('errLineAuth', { msg: e.message })}</div>
+                <button type="button" id="btn-relogin" class="submit" style="margin-top: 0.5rem;">${t('btnRelogin')}</button>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.6rem; line-height: 1.5;">${t('reloginHint')}</div>
+            `;
+            const rb = document.getElementById('btn-relogin');
+            if (rb) rb.addEventListener('click', () => {
+                try { liff.logout(); } catch(_) {}
+                // logout 後直接重 login, LIFF SDK 會 redirect 回 LINE oauth → 拿新 token
+                liff.login({ redirectUri: location.href });
+            });
+            btn.disabled = false;
+            btn.textContent = t('btnRetry');
+        } else {
+            msg.innerHTML = `<div class="msg error">${t('errSubmitFailed', { msg: e.message })}</div>`;
+            btn.disabled = false;
+            btn.textContent = t('btnRetry');
+        }
     }
 }
 

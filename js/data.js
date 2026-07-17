@@ -99,7 +99,9 @@ export function occupiedOn(dateISO, buildingId = null) {
         if (c.contractType && c.contractType !== 'cohousing') return;
         if (c.bundleParentContractId) return;
         if (!c.startDate || c.startDate > dateISO) return;
+        // 退房日語意: 退房當天不算在住 (endDate=7/15 → 7/15 不算; terminatedDate=7/15 也一樣)
         if (c.terminatedDate && c.terminatedDate <= dateISO) return;
+        if (c.endDate && c.endDate <= dateISO) return;
         if (c.buildingId) {
             if (!allowedBuildingIds.has(c.buildingId)) return;
         } else if (c.propertyName) {
@@ -132,6 +134,7 @@ export function occupiedContractsOn(dateISO, buildingId = null) {
         if (c.bundleParentContractId) return;
         if (!c.startDate || c.startDate > dateISO) return;
         if (c.terminatedDate && c.terminatedDate <= dateISO) return;
+        if (c.endDate && c.endDate <= dateISO) return;
         if (c.buildingId) {
             if (!allowedBuildingIds.has(c.buildingId)) return;
         } else if (c.propertyName) {

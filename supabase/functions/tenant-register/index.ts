@@ -24,23 +24,58 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// 驗證 LINE ID Token — 確認 idToken 是 LINE 簽發、且 userId 跟 token 內的 sub 吻合
-async function verifyLineIdToken(idToken: string, expectedUserId: string): Promise<boolean> {
+// 驗證 LINE ID Token — 回細節: {ok, reason?, code?}
+// code: 'expired' | 'invalid' | 'user_mismatch' | 'network' | 'server_config'
+async function verifyLineIdToken(idToken: string, expectedUserId: string):
+    Promise<{ ok: boolean; reason?: string; code?: string }> {
+    if (!LINE_CHANNEL_ID) {
+        console.error('[verify] LINE_CHANNEL_ID env not set');
+        return { ok: false, code: 'server_config', reason: '伺服器未設定 LINE_CHANNEL_ID' };
+    }
     const body = new URLSearchParams({
         id_token: idToken,
         client_id: LINE_CHANNEL_ID
     });
-    const r = await fetch('https://api.line.me/oauth2/v2.1/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body
-    });
-    if (!r.ok) {
-        console.error('LINE verify failed', r.status, await r.text());
-        return false;
+    let r: Response;
+    try {
+        r = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        });
+    } catch (e) {
+        console.error('[verify] fetch error', e);
+        return { ok: false, code: 'network', reason: `連線到 LINE 失敗: ${(e as Error).message}` };
     }
-    const data = await r.json();
-    return data.sub === expectedUserId;
+    const rawText = await r.text();
+    if (!r.ok) {
+        // LINE verify 400 通常有 JSON: { error, error_description }
+        let errCode: string | undefined; let errDesc: string | undefined;
+        try {
+            const j = JSON.parse(rawText);
+            errCode = j.error; errDesc = j.error_description;
+        } catch { /* not JSON */ }
+        console.error('[verify] LINE reject', r.status, rawText);
+        // LINE 常見 error: "invalid_request" + description "The IDToken expired." / "IDToken verification failed."
+        const isExpired = /expired|expire/i.test(errDesc || rawText);
+        return {
+            ok: false,
+            code: isExpired ? 'expired' : 'invalid',
+            reason: errDesc || errCode || `HTTP ${r.status}`
+        };
+    }
+    let data: any;
+    try { data = JSON.parse(rawText); }
+    catch { return { ok: false, code: 'invalid', reason: 'LINE 回覆非 JSON' }; }
+    // aud 應該等於 LINE_CHANNEL_ID (防別的 channel token 混用)
+    if (data.aud && data.aud !== LINE_CHANNEL_ID) {
+        console.error('[verify] aud mismatch', data.aud, 'vs', LINE_CHANNEL_ID);
+        return { ok: false, code: 'invalid', reason: 'Token audience 不符 (LIFF/channel 設定錯配)' };
+    }
+    if (data.sub !== expectedUserId) {
+        return { ok: false, code: 'user_mismatch', reason: 'Token userId 不符 (可能切換過 LINE 帳號)' };
+    }
+    return { ok: true };
 }
 
 function nextId(prefix: string, existingIds: string[]): string {
@@ -116,9 +151,30 @@ serve(async (req) => {
         const { idToken, userId, displayName, pictureUrl, form, idCardFront, idCardBack, claimTenantId } = await req.json();
 
         // 1. 驗 LINE ID Token
-        if (!idToken || !userId) throw new Error('缺少 idToken / userId');
-        const valid = await verifyLineIdToken(idToken, userId);
-        if (!valid) throw new Error('LINE 身份驗證失敗，請重新整理再試');
+        if (!idToken || !userId) {
+            return new Response(JSON.stringify({
+                error: '缺少 LINE 登入資訊, 請重新登入 LINE 後再送出',
+                errorCode: 'missing_token'
+            }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders() } });
+        }
+        const verify = await verifyLineIdToken(idToken, userId);
+        if (!verify.ok) {
+            // 依錯誤類型給更明確訊息 — 前端會依 errorCode 提示「重新登入 LINE」按鈕
+            const humanMsg = verify.code === 'expired'
+                ? 'LINE 登入已過期 (通常是頁面停留太久), 請按下方「重新登入 LINE」再送出'
+                : verify.code === 'user_mismatch'
+                    ? 'LINE 帳號與登入紀錄不符 (可能切換了 LINE 帳號), 請重新登入 LINE'
+                    : verify.code === 'server_config'
+                        ? '伺服器 LINE 設定異常, 請聯絡小編'
+                        : verify.code === 'network'
+                            ? '網路連線 LINE 失敗, 請確認網路後再試'
+                            : `LINE 身分驗證失敗 (${verify.reason || '未知原因'}), 請重新登入 LINE`;
+            return new Response(JSON.stringify({
+                error: humanMsg,
+                errorCode: verify.code || 'invalid',
+                lineDetail: verify.reason
+            }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders() } });
+        }
 
         // 2. 表單欄位檢查
         const required = ['name', 'phone'];
