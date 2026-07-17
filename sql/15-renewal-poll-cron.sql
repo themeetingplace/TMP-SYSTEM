@@ -32,7 +32,7 @@ SELECT cron.schedule(
             'Content-Type', 'application/json',
             'Authorization', 'Bearer <YOUR-SERVICE-ROLE-KEY>'
         ),
-        body := jsonb_build_object('daysAhead', 15)
+        body := jsonb_build_object('daysAhead', 14)
     );
     $$
 );

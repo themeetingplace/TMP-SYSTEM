@@ -20,11 +20,14 @@ export async function pushToTenant(tenantId, opts = {}) {
 }
 
 // 觸發續租詢問掃描 — 後端找 N 天內到期的 active 合約，發 LINE Quick Reply 給租客
-// opts.daysAhead: 預設 15；opts.force: 即使 7 天內問過也再問一次 (測試用)
+// opts.daysAhead: 預設 14; opts.force: 即使 5 天內問過也再問一次 (測試用)
+// opts.contractIds: 只發指定合約 (勾選 UI 用); opts.dryRun: 只回列表, 不真的發
 export async function triggerRenewalPoll(opts = {}) {
-    const { data, error } = await supabase.functions.invoke('renewal-poll', {
-        body: { daysAhead: opts.daysAhead || 15, force: !!opts.force }
-    });
+    const body = { daysAhead: opts.daysAhead || 14 };
+    if (opts.force) body.force = true;
+    if (opts.dryRun) body.dryRun = true;
+    if (Array.isArray(opts.contractIds) && opts.contractIds.length) body.contractIds = opts.contractIds;
+    const { data, error } = await supabase.functions.invoke('renewal-poll', { body });
     if (error) throw new Error(error.message);
     if (data && data.ok === false) throw new Error(data.error || '續租詢問失敗');
     return data; // { ok, sent, skipped_no_line, skipped_already_asked, failed, contracts: [...] }

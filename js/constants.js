@@ -6,14 +6,14 @@ export const MS_PER_DAY = 86_400_000;
 export const MS_PER_HOUR = 3_600_000;
 
 // === 續租決策時間軸 (天) ===
-// 用戶 2026-06-15 確認: 詢問 10 天前發 LINE / 決策 5 天前進待決策狀態
+// 用戶 2026-07-17 更新: 詢問 14 天前發 LINE / 決策 7 天前進待決策狀態
 export const RENEWAL_THRESHOLDS = {
     /** 進入「即將到期 expiring_soon」狀態，renewal-poll cron 在這區間發 LINE 詢問 */
-    expiringSoonDays: 10,
+    expiringSoonDays: 14,
     /** 進入「待決策 awaiting_decision」狀態，管理者需要下決定 */
-    awaitingDecisionDays: 5,
-    /** 詢問續租 cron 排程的窗口 (10 天內到期) */
-    askRenewalDays: 10,
+    awaitingDecisionDays: 7,
+    /** 詢問續租 cron 排程的窗口 (14 天內到期) */
+    askRenewalDays: 14,
     /** 重複詢問 cooldown (避免 spam，距上次詢問 < 5 天不重發) */
     reAskCooldownDays: 5
 };

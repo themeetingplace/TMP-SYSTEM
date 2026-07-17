@@ -26,6 +26,7 @@ import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
 import { bootstrap as syncBootstrap } from './sync.js'; // 雲端同步引擎
+import { scheduleAutoRenewalProcess } from './utils/autoRenewalProcessor.js'; // LINE 回續租 → 自動發繳款通知
 import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole } from './auth.js';
 import { showLogin, showAccessDenied, bindPasswordToggles } from './views/login.js';
 import { applyAvatar, getAvatar, AVATAR_ICONS, AVATAR_COLORS } from './utils/avatar.js';
@@ -482,12 +483,19 @@ window.refreshCurrentView = handleRoute;
 // 雲端同步拉完資料後重新渲染當前頁面 (靜默 — 由 sidebar 指示燈呈現狀態)
 // debounce：一次「+入住」可能連續觸發 4-8 個 realtime 事件，全部合併成 1 次 re-render，避免畫面狂閃
 let _dataChangedTimer = null;
-window.addEventListener('bms:data-changed', () => {
+window.addEventListener('bms:data-changed', (e) => {
+    // sync pull 完 → 觸發自動續租處理 (檢查 renewIntent='renew' 的合約)
+    if (e.detail?.source === 'pull' || e.detail?.source === 'realtime') {
+        scheduleAutoRenewalProcess(e.detail.source);
+    }
     // 若 modal 開著就跳過渲染 — 避免 input focus 跳掉、表單清空之類
     if (document.querySelector('.modal-overlay')) return;
     clearTimeout(_dataChangedTimer);
     _dataChangedTimer = setTimeout(() => handleRoute(), 150);
 });
+
+// 初次載入完成後也跑一次 (以防第一次 pull 前 event listener 還沒掛上)
+setTimeout(() => scheduleAutoRenewalProcess('bootstrap'), 3000);
 
 // 關於系統 — 點 sidebar footer 的版本號開啟
 window.showAboutApp = function() {

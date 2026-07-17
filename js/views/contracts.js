@@ -1530,41 +1530,146 @@ export function initContractActions(scope) {
         if (banner) banner.style.display = 'none';
     });
 
-    // 詢問續租 — 觸發 Edge Function renewal-poll (10 天前發)
+    // 詢問續租 — 觸發 Edge Function renewal-poll (14 天前發)
+    // UI: 列出符合條件的合約, 讓 admin 勾選要問誰
     scope.querySelector('#btn-ask-renewal')?.addEventListener('click', async () => {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const in14 = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
         const expiringSoon = filterContractsByMode(mockData.contracts).filter(c => {
             if (c.renewalState !== 'active') return false;
             if (!c.endDate) return false;
-            const today = new Date().toISOString().slice(0, 10);
-            const in15 = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10);
-            return c.endDate >= today && c.endDate <= in15;
+            return c.endDate >= todayStr && c.endDate <= in14;
         });
         if (expiringSoon.length === 0) {
-            showToast('10 天內沒有要到期的合約，不用發', 'info', 3000);
+            showToast('14 天內沒有要到期的合約, 不用發', 'info', 3000);
             return;
         }
+        // 帶租客 LINE 綁定狀態 + 5 天內問過標記
+        const enriched = expiringSoon.map(c => {
+            const t = mockData.tenants.find(x => x.name === c.tenant);
+            const hasLine = !!(t && t.lineUserId);
+            const askedAt = c.renewAskedAt ? new Date(c.renewAskedAt) : null;
+            const askedRecently = askedAt && (Date.now() - askedAt.getTime()) < 5 * 86400000;
+            const daysLeft = Math.ceil((new Date(c.endDate).getTime() - Date.now()) / 86400000);
+            return { c, hasLine, askedRecently, daysLeft, tenantId: t?.id };
+        }).sort((a, b) => a.daysLeft - b.daysLeft);
+
+        const rowsHtml = enriched.map(({ c, hasLine, askedRecently, daysLeft }) => {
+            const badges = [];
+            if (!hasLine) badges.push('<span class="status-badge danger" style="font-size: var(--text-2xs);">未綁 LINE</span>');
+            if (askedRecently) badges.push('<span class="status-badge warning" style="font-size: var(--text-2xs);">5天內問過</span>');
+            if (c.renewIntent === 'renew') badges.push('<span class="status-badge success" style="font-size: var(--text-2xs);">已回續租</span>');
+            if (c.renewIntent === 'decline') badges.push('<span class="status-badge info" style="font-size: var(--text-2xs);">已回不續</span>');
+            const propShort = String(c.propertyName || '').replace('聚空間 - ', '');
+            const disabled = !hasLine || c.renewIntent === 'renew' || c.renewIntent === 'decline';
+            const defaultChecked = !disabled && !askedRecently;
+            return `
+                <tr data-row-cid="${c.id}">
+                    <td style="padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-color); text-align: center;">
+                        <input type="checkbox" class="ask-pick" data-cid="${c.id}" ${defaultChecked ? 'checked' : ''} ${disabled ? 'disabled' : ''} style="cursor: ${disabled ? 'not-allowed' : 'pointer'}; width: 16px; height: 16px;">
+                    </td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-family: monospace; font-size: var(--text-xs);">${c.id}</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); font-weight: 600;">${c.tenant || '—'}</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${propShort}</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); color: var(--text-muted);">
+                        ${c.endDate || '—'} <span style="color: ${daysLeft <= 7 ? 'var(--color-warning)' : 'var(--text-muted)'}; font-weight: ${daysLeft <= 7 ? '600' : '400'};">(${daysLeft} 天後)</span>
+                    </td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">
+                        ${badges.join(' ') || '<span style="color:var(--text-muted);">—</span>'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        const defaultPickedCount = enriched.filter(x => x.hasLine && !x.askedRecently && x.c.renewIntent !== 'renew' && x.c.renewIntent !== 'decline').length;
+
         openConfirm({
-            title: '詢問續租意願',
-            message: `將自動掃描 <strong>10 天內到期</strong>的合約，發 LINE 問租客是否續租。<br><br>` +
-                     `目前符合條件的合約有 <strong>${expiringSoon.length}</strong> 筆。<br>` +
-                     `<small style="color: var(--text-muted);">注意：5 天內已問過的會自動跳過。租客未綁 LINE 的也會跳過。</small>`,
-            confirmLabel: `🚀 開始發送`,
+            title: '📮 詢問續租意願 — 選擇要發送的合約',
+            confirmLabel: '🚀 發送給打勾的',
+            maxWidth: 900,
+            message: `
+                <div style="margin-bottom: 0.75rem; padding: 0.65rem 0.8rem; background: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--color-primary); font-size: var(--text-sm); line-height: 1.5;">
+                    <div><strong>14 天內到期</strong>的合約共 <strong style="color: var(--color-primary);">${enriched.length}</strong> 筆.</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.25rem;">
+                        預設打勾: 已綁 LINE + 5 天內未問過 + 尚未表態的 (${defaultPickedCount} 筆). 你可自行調整.
+                    </div>
+                </div>
+                <div class="search-bar" style="margin-bottom: 0.5rem; width: 100%;">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="ask-search" placeholder="搜尋合約/租客/床位..." autocomplete="off" style="font-size: var(--text-base);">
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; font-size: var(--text-xs);">
+                    <button type="button" class="btn btn-outline" id="ask-select-all" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">全選 (可選)</button>
+                    <button type="button" class="btn btn-outline" id="ask-select-none" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">全不選</button>
+                    <span id="ask-count" style="margin-left: auto; color: var(--text-muted);">已選 ${defaultPickedCount} 筆</span>
+                </div>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: var(--text-sm);">
+                        <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 1;">
+                            <tr>
+                                <th style="padding: 0.5rem 0.5rem; width: 32px;"></th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">合約</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">租客</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">床位</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">到期日</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">狀態</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            `,
+            onMount: (overlay) => {
+                const checks = () => overlay.querySelectorAll('.ask-pick:not(:disabled)');
+                const countEl = overlay.querySelector('#ask-count');
+                const confirmBtn = overlay.querySelector('.modal-footer .btn-primary, .modal-footer button:last-child');
+                const updateCount = () => {
+                    const picked = Array.from(checks()).filter(c => c.checked).length;
+                    if (countEl) countEl.textContent = `已選 ${picked} 筆`;
+                    if (confirmBtn) {
+                        confirmBtn.textContent = picked === 0 ? '沒選就沒發' : `🚀 發送給 ${picked} 位租客`;
+                        confirmBtn.disabled = (picked === 0);
+                    }
+                };
+                overlay.addEventListener('change', (e) => {
+                    if (e.target.classList?.contains('ask-pick')) updateCount();
+                });
+                overlay.querySelector('#ask-select-all')?.addEventListener('click', () => {
+                    checks().forEach(c => { c.checked = true; }); updateCount();
+                });
+                overlay.querySelector('#ask-select-none')?.addEventListener('click', () => {
+                    checks().forEach(c => { c.checked = false; }); updateCount();
+                });
+                overlay.querySelector('#ask-search')?.addEventListener('input', (e) => {
+                    const kw = e.target.value.trim().toLowerCase();
+                    overlay.querySelectorAll('tr[data-row-cid]').forEach(row => {
+                        if (!kw) { row.style.display = ''; return; }
+                        row.style.display = row.textContent.toLowerCase().includes(kw) ? '' : 'none';
+                    });
+                });
+                updateCount();
+            },
             onConfirm: async () => {
-                showToast('掃描中…', 'info', 2000);
+                const picked = Array.from(document.querySelectorAll('.ask-pick'))
+                    .filter(c => c.checked && !c.disabled).map(c => c.dataset.cid);
+                if (picked.length === 0) {
+                    showToast('沒選任何合約, 未發送', 'info');
+                    return;
+                }
+                showToast(`發送 ${picked.length} 筆中…`, 'info', 2000);
                 try {
-                    const result = await triggerRenewalPoll({ daysAhead: 15 });
+                    const result = await triggerRenewalPoll({ daysAhead: 14, contractIds: picked, force: true });
                     const lines = [
                         `✅ 發送完成`,
                         `· 已發 ${result.sent || 0} 筆`,
-                        `· 未綁 LINE 跳過 ${result.skipped_no_line || 0} 筆`,
-                        `· 近期問過跳過 ${result.skipped_already_asked || 0} 筆`,
-                        ...((result.failed || 0) > 0 ? [`· ⚠ 失敗 ${result.failed} 筆 (見 console)`] : [])
+                        ...((result.skipped_no_line || 0) > 0 ? [`· 未綁 LINE 跳過 ${result.skipped_no_line}`] : []),
+                        ...((result.failed || 0) > 0 ? [`· ⚠ 失敗 ${result.failed} (見 console)`] : [])
                     ];
                     showToast(lines.join('  '), result.failed > 0 ? 'warning' : 'success', 6000);
                     console.log('[renewal-poll] 結果:', result);
-                    setTimeout(() => refreshView(), 1500); // 等 realtime 同步回來
+                    setTimeout(() => refreshView(), 1500);
                 } catch (e) {
-                    showToast(`發送失敗：${e.message}`, 'danger', 6000);
+                    showToast(`發送失敗: ${e.message}`, 'danger', 6000);
                     console.error('[renewal-poll]', e);
                 }
             }

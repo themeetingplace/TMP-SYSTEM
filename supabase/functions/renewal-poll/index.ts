@@ -102,8 +102,11 @@ serve(async (req) => {
 
     try {
         const body = await req.json().catch(() => ({}));
-        const daysAhead = Math.max(1, Math.min(90, Number(body.daysAhead) || 15));
+        const daysAhead = Math.max(1, Math.min(90, Number(body.daysAhead) || 14));
         const force = !!body.force; // 即使最近問過也再問一次 (測試用)
+        const dryRun = !!body.dryRun; // 只回列表, 不真的發 (給前端 preview 用)
+        const onlyContractIds: string[] | null = Array.isArray(body.contractIds) && body.contractIds.length
+            ? body.contractIds.map((s: any) => String(s)) : null; // 只發指定合約 (勾選 UI 用)
 
         const today = new Date();
         const todayIso = today.toISOString().slice(0, 10);
@@ -127,10 +130,12 @@ serve(async (req) => {
         };
 
         for (const c of (contracts || [])) {
-            // 跳過已問過的 (除非 force)
+            // onlyContractIds 過濾 (勾選 UI 用): 若指定則只處理清單內的
+            if (onlyContractIds && !onlyContractIds.includes(c.id)) continue;
+            // 跳過已問過的 (除非 force / 勾選 / dryRun)
             const askedAt = c.renew_asked_at ? new Date(c.renew_asked_at) : null;
-            if (!force && askedAt) {
-                // 5 天內問過就跳過 (對齊 awaiting_decision threshold)
+            if (!force && !onlyContractIds && !dryRun && askedAt) {
+                // 5 天內問過就跳過 (對齊 reAskCooldownDays)
                 const ageDays = (Date.now() - askedAt.getTime()) / 86400000;
                 if (ageDays < 5) {
                     result.skipped_already_asked++;
@@ -151,6 +156,13 @@ serve(async (req) => {
             }
             // 計算還剩幾天
             const daysLeft = Math.ceil((new Date(c.end_date).getTime() - today.getTime()) / 86400000);
+
+            // dryRun: 只回列表 (preview 用), 不真的發
+            if (dryRun) {
+                result.contracts.push({ id: c.id, tenant: c.tenant, status: 'would_send', reason: `${daysLeft} 天後到期` });
+                continue;
+            }
+
             const msg = buildRenewalMessage(c, daysLeft);
 
             try {

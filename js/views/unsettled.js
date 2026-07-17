@@ -538,45 +538,119 @@ function backfillContractInvoices() {
         });
         return;
     }
-    // 有要新增 → preview 列出每一筆
-    const previewRows = wouldCreate.slice(0, 50).map(({ invoice, contract }) => `
-        <tr>
+    // 有要新增 → preview 列出每一筆 (每筆可勾選, 只補打勾的)
+    const previewRows = wouldCreate.map(({ invoice, contract }) => `
+        <tr data-row-cid="${contract.id}">
+            <td style="padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-color); text-align: center;">
+                <input type="checkbox" class="backfill-pick" data-cid="${contract.id}" checked style="cursor: pointer; width: 16px; height: 16px;">
+            </td>
             <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-family: monospace; font-size: var(--text-xs);">${contract.id}</td>
             <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${contract.tenant || '—'}</td>
             <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${(contract.propertyName || '').replace('聚空間 - ', '')}</td>
+            <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); color: var(--text-muted);">${contract.startDate || '—'} ~ ${contract.endDate || '—'}</td>
             <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); text-align: right; font-weight: 600; color: var(--color-primary);">$${(invoice.amount || 0).toLocaleString()}</td>
         </tr>
     `).join('');
     const previewHtml = `
-        <div style="margin-bottom: 1rem; padding: 0.75rem; background-color: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--color-warning); font-size: var(--text-sm); line-height: 1.7;">
-            <div style="font-weight: 600; color: var(--text-main); margin-bottom: 0.4rem;">
-                <i class="ph ph-info"></i> 將建立 <strong style="color: var(--color-primary);">${wouldCreate.length}</strong> 筆帳單${wouldSkip.length > 0 ? `（已跳過 ${wouldSkip.length} 筆已存在）` : ''}：
+        <div style="margin-bottom: 0.75rem; padding: 0.65rem 0.8rem; background-color: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--color-warning); font-size: var(--text-sm); line-height: 1.5;">
+            <div style="font-weight: 600; color: var(--text-main);">
+                <i class="ph ph-info"></i> 找到 <strong style="color: var(--color-primary);">${wouldCreate.length}</strong> 筆可補${wouldSkip.length > 0 ? `（跳過 ${wouldSkip.length} 筆已存在）` : ''}
+            </div>
+            <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.25rem;">
+                預設全選, 可取消勾不想補的; 只補打勾的.
             </div>
         </div>
-        <div style="max-height: 320px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px;">
+        <div class="search-bar" style="margin-bottom: 0.5rem; width: 100%;">
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="backfill-search" placeholder="搜尋合約/租客/床位..." autocomplete="off" style="font-size: var(--text-base);">
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; font-size: var(--text-xs);">
+            <button type="button" class="btn btn-outline" id="backfill-select-all" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">全選</button>
+            <button type="button" class="btn btn-outline" id="backfill-select-none" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">全不選</button>
+            <button type="button" class="btn btn-outline" id="backfill-select-visible" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">只選當前顯示</button>
+            <span id="backfill-count" style="margin-left: auto; color: var(--text-muted);">已選 ${wouldCreate.length} / ${wouldCreate.length}</span>
+        </div>
+        <div style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px;">
             <table style="width: 100%; border-collapse: collapse; font-size: var(--text-sm);">
-                <thead style="position: sticky; top: 0; background: var(--bg-secondary);">
+                <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 1;">
                     <tr>
+                        <th style="padding: 0.5rem 0.5rem; width: 32px;"><input type="checkbox" id="backfill-header-check" checked style="cursor: pointer;"></th>
                         <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">合約</th>
                         <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">租客</th>
                         <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">床位</th>
+                        <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">合約期間</th>
                         <th style="padding: 0.5rem 0.6rem; text-align: right; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">金額</th>
                     </tr>
                 </thead>
-                <tbody>${previewRows}${wouldCreate.length > 50 ? `<tr><td colspan="4" style="padding: 0.5rem; text-align: center; color: var(--text-muted); font-size: var(--text-xs);">… 還有 ${wouldCreate.length - 50} 筆未列出</td></tr>` : ''}</tbody>
+                <tbody>${previewRows}</tbody>
             </table>
-        </div>
-        <div style="margin-top: 0.75rem; font-size: var(--text-xs); color: var(--text-muted); line-height: 1.6;">
-            一份合約 = 一張全期帳單。已存在的不重複建立。如果列表有不該補產的，請取消、先去合約頁調整再來。
         </div>
     `;
     openConfirm({
         title: '🛡️ 補產缺漏帳單 — 預覽',
         message: previewHtml,
-        confirmLabel: `確認新增 ${wouldCreate.length} 筆`,
-        maxWidth: 720,
+        confirmLabel: `確認補產`,
+        maxWidth: 800,
+        onMount: (overlay) => {
+            const checks = () => overlay.querySelectorAll('.backfill-pick');
+            const countEl = overlay.querySelector('#backfill-count');
+            const headerCheck = overlay.querySelector('#backfill-header-check');
+            const confirmBtn = overlay.querySelector('.modal-footer .btn-primary, .modal-footer button:last-child');
+            const updateCount = () => {
+                const total = wouldCreate.length;
+                const picked = Array.from(checks()).filter(c => c.checked).length;
+                if (countEl) countEl.textContent = `已選 ${picked} / ${total}`;
+                if (confirmBtn) {
+                    confirmBtn.textContent = picked === 0 ? '沒選就沒得補' : `確認補產 ${picked} 筆`;
+                    confirmBtn.disabled = (picked === 0);
+                }
+                // Header check: 若全打勾 → 打勾; 若全不勾 → 不勾; 部分 → indeterminate
+                if (headerCheck) {
+                    if (picked === total) { headerCheck.checked = true; headerCheck.indeterminate = false; }
+                    else if (picked === 0) { headerCheck.checked = false; headerCheck.indeterminate = false; }
+                    else { headerCheck.indeterminate = true; }
+                }
+            };
+            overlay.addEventListener('change', (e) => {
+                if (e.target.classList?.contains('backfill-pick')) updateCount();
+            });
+            overlay.querySelector('#backfill-select-all')?.addEventListener('click', () => {
+                checks().forEach(c => { c.checked = true; }); updateCount();
+            });
+            overlay.querySelector('#backfill-select-none')?.addEventListener('click', () => {
+                checks().forEach(c => { c.checked = false; }); updateCount();
+            });
+            overlay.querySelector('#backfill-select-visible')?.addEventListener('click', () => {
+                checks().forEach(c => {
+                    const row = c.closest('tr');
+                    c.checked = row && row.style.display !== 'none';
+                });
+                updateCount();
+            });
+            headerCheck?.addEventListener('change', () => {
+                checks().forEach(c => {
+                    const row = c.closest('tr');
+                    if (!row || row.style.display !== 'none') c.checked = headerCheck.checked;
+                });
+                updateCount();
+            });
+            // 搜尋過濾
+            overlay.querySelector('#backfill-search')?.addEventListener('input', (e) => {
+                const kw = e.target.value.trim().toLowerCase();
+                overlay.querySelectorAll('tr[data-row-cid]').forEach(row => {
+                    if (!kw) { row.style.display = ''; return; }
+                    row.style.display = row.textContent.toLowerCase().includes(kw) ? '' : 'none';
+                });
+            });
+        },
         onConfirm: () => {
-            const { created, skipped } = ensureContractInvoices();
+            const picked = Array.from(document.querySelectorAll('.backfill-pick'))
+                .filter(c => c.checked).map(c => c.dataset.cid);
+            if (picked.length === 0) {
+                showToast('沒選任何合約, 未補產', 'info');
+                return;
+            }
+            const { created, skipped } = ensureContractInvoices({ contractIds: picked });
             if (created.length === 0) {
                 showToast('沒有需要補產的帳單', 'info');
             } else {

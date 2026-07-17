@@ -1039,18 +1039,19 @@ export function applyPayment(inv, { amount, method, last5, date } = {}) {
 
 // 補產所有 active 合約缺少的帳單（一合約一帳單模式）
 // 用於：使用者手動觸發、修復資料、初次匯入
-export function ensureContractInvoices() {
+// opts.contractIds — 只補這幾個 (勾選 UI 傳入); 空/undefined = 掃全部符合條件的
+export function ensureContractInvoices(opts = {}) {
     const created = [];
     let skipped = 0;
+    const onlyIds = Array.isArray(opts.contractIds) && opts.contractIds.length
+        ? new Set(opts.contractIds) : null;
 
     mockData.contracts.forEach(c => {
+        if (onlyIds && !onlyIds.has(c.id)) return;  // 勾選過濾
         if (c.renewalState !== 'active') return;
         if (!c.startDate) return;
         // 排除: 外部平台代收 / 代管合約 / bundle 子合約 (主合約 invoice 已含)
         if (c.paymentChannel === 'platform') { skipped++; return; }
-        // 只有明確 cohousing 才產生房租 invoice;
-        // contractType=null/undefined 預設為 cohousing (跟現有共居合約相容)
-        // 若是 managed-owner / managed-tenant 等明確標 managed 類 → skip
         if (c.contractType && c.contractType !== 'cohousing') { skipped++; return; }
         if (c.bundleParentContractId) { skipped++; return; }
 
