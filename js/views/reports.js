@@ -467,7 +467,8 @@ function renderStatTile(opts) {
 }
 
 // 5 個營運 KPI tiles 共用渲染 (含 15 號結算入住率)
-function renderOperationalKpiTiles(k) {
+// buildingId: 傳單館 id → 15 號快照只算該館; 傳 null → 全部館合計
+function renderOperationalKpiTiles(k, buildingId = null) {
     const occ = statusLight(k.occRate, 0.95, 0.80);
     const renewalRateColor = k.renewalRate == null
         ? 'var(--text-main)'
@@ -478,8 +479,8 @@ function renderOperationalKpiTiles(k) {
         : k.avgVacancyDays <= 30 ? 'var(--color-success)'
         : k.avgVacancyDays <= 60 ? 'var(--color-warning-text)'
         : 'var(--color-danger)';
-    // 15 號結算入住率
-    const snap15 = occupiedAtCurrent15th();
+    // 15 號結算入住率 (單館 or 全館)
+    const snap15 = occupiedAtCurrent15th(buildingId);
     const snap15Status = statusLight(snap15.rate, 0.95, 0.80);
     const snap15DateLabel = (() => {
         const [y, m, d] = snap15.date.split('-');
@@ -601,7 +602,7 @@ function renderBuildingsTab() {
             </button>
         </div>
 
-        ${renderOperationalKpiTiles(k)}
+        ${renderOperationalKpiTiles(k, building.id)}
 
         ${k.expiringSoonCount > 0 ? `
             <div class="connector-card">
