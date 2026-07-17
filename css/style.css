@@ -3336,8 +3336,15 @@ select.inline-edit-input { cursor: pointer; }
 }
 
 @media (max-width: 560px) {
-    .search-bar {
+    /* 只藏 topbar 的搜尋 (螢幕太窄) — 頁面內的搜尋欄 (租客/合約清單) 保留 */
+    .topbar .search-bar {
         display: none;
+    }
+    /* 頁面內搜尋欄手機板讓寬 100% 好按 */
+    .card > .flex.justify-between .search-bar {
+        width: 100% !important;
+        min-width: 0;
+        flex: 1 1 100%;
     }
 }
 

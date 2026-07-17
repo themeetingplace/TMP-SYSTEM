@@ -375,6 +375,11 @@ function showLineMergePicker(targetTenantId) {
         <div style="margin-bottom: 0.75rem; color: var(--text-secondary); font-size: var(--text-sm);">
             把「<strong>${target.name}</strong>」跟以下已註冊 LINE 的紀錄合併，會把 LINE 綁定 + 身分證資料轉過來，然後<strong style="color: var(--color-danger);">刪掉來源那筆</strong>。
         </div>
+        <div class="search-bar" style="margin-bottom: 0.75rem; width: 100%;">
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="merge-picker-search" placeholder="搜尋姓名 / 電話 / LINE 顯示名..." autocomplete="off" style="font-size: var(--text-base);">
+        </div>
+        <div id="merge-picker-count" style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 0.35rem;">共 ${candidates.length} 筆</div>
         <div class="merge-candidate-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 400px; overflow-y: auto;">
             ${candidates.map(c => {
                 const nameMatch = c.name === target.name;
@@ -386,8 +391,9 @@ function showLineMergePicker(targetTenantId) {
                         : phoneMatch
                             ? '<span class="status-badge warning" style="font-size: var(--text-2xs);">同電話</span>'
                             : '<span class="status-badge info" style="font-size: var(--text-2xs);">名字/電話不同</span>';
+                const searchBlob = [c.name, c.phone, c.email, c.lineDisplayName, c.id].filter(Boolean).join(' ').toLowerCase().replace(/"/g, '&quot;');
                 return `
-                    <button class="btn btn-outline" data-source-id="${c.id}" style="text-align: left; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; height: auto;">
+                    <button class="btn btn-outline merge-candidate" data-source-id="${c.id}" data-search="${searchBlob}" style="text-align: left; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; height: auto;">
                         <div style="display: flex; justify-content: space-between; gap: 0.5rem;">
                             <strong>${c.name}</strong>
                             ${matchBadge}
@@ -398,6 +404,9 @@ function showLineMergePicker(targetTenantId) {
                     </button>
                 `;
             }).join('')}
+            <div id="merge-picker-empty" style="display:none; padding: 1rem; text-align: center; color: var(--text-muted); font-size: var(--text-sm);">
+                <i class="ph ph-magnifying-glass"></i> 沒有相符結果
+            </div>
         </div>
     `;
 
@@ -406,6 +415,25 @@ function showLineMergePicker(targetTenantId) {
         maxWidth: 520,
         bodyHtml,
         onMount: (overlay, close) => {
+            // 即時過濾候選 — 姓名/電話/email/LINE 顯示名/id
+            const searchInput = overlay.querySelector('#merge-picker-search');
+            const countEl = overlay.querySelector('#merge-picker-count');
+            const emptyEl = overlay.querySelector('#merge-picker-empty');
+            const cardEls = overlay.querySelectorAll('.merge-candidate');
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    const kw = searchInput.value.trim().toLowerCase();
+                    let shown = 0;
+                    cardEls.forEach(el => {
+                        const hit = !kw || (el.dataset.search || '').includes(kw);
+                        el.style.display = hit ? '' : 'none';
+                        if (hit) shown++;
+                    });
+                    if (countEl) countEl.textContent = kw ? `符合 ${shown} / ${cardEls.length} 筆` : `共 ${cardEls.length} 筆`;
+                    if (emptyEl) emptyEl.style.display = (shown === 0 ? 'block' : 'none');
+                });
+                setTimeout(() => searchInput.focus(), 100);
+            }
             overlay.querySelectorAll('[data-source-id]').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const sourceId = btn.dataset.sourceId;
