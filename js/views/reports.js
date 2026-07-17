@@ -292,13 +292,6 @@ function renderOverviewTab() {
         ? { color: 'var(--color-success)', light: '🟢' }
         : k.expiringCount <= 3 ? { color: 'var(--color-warning-text)', light: '🟡' }
         : { color: 'var(--color-danger)', light: '🔴' };
-    // 15 號結算入住率
-    const snap15 = occupiedAtCurrent15th();
-    const snap15Status = statusLight(snap15.rate, 0.95, 0.80);
-    const snap15DateLabel = (() => {
-        const [y, m, d] = snap15.date.split('-');
-        return `${y}/${parseInt(m,10)}/${parseInt(d,10)}`;
-    })();
 
     return `
         <div class="stat-tile-grid">
@@ -316,11 +309,6 @@ function renderOverviewTab() {
                 <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率 <span style="margin-left: auto; font-size: 0.85em;">${occupancy.light}</span></div>
                 <div class="stat-tile-value" style="color: ${occupancy.color};">${pct(k.occRate)}</div>
                 <div class="stat-tile-sub">${k.rentedBeds} / ${k.totalBeds} 床 · 目標 ≥ 95%</div>
-            </div>
-            <div class="stat-tile">
-                <div class="stat-tile-label"><i class="ph ph-calendar-check"></i> 15 號結算入住率 <span style="margin-left: auto; font-size: 0.85em;">${snap15Status.light}</span></div>
-                <div class="stat-tile-value" style="color: ${snap15Status.color};">${pct(snap15.rate)}</div>
-                <div class="stat-tile-sub">${snap15.occupied} / ${snap15.total} 床 · ${snap15DateLabel} 快照</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-clock-countdown"></i> 30 天內到期 <span style="margin-left: auto; font-size: 0.85em;">${expiringStatus.light}</span></div>
@@ -478,7 +466,7 @@ function renderStatTile(opts) {
     `;
 }
 
-// 4 個營運 KPI tiles 共用渲染
+// 5 個營運 KPI tiles 共用渲染 (含 15 號結算入住率)
 function renderOperationalKpiTiles(k) {
     const occ = statusLight(k.occRate, 0.95, 0.80);
     const renewalRateColor = k.renewalRate == null
@@ -490,12 +478,24 @@ function renderOperationalKpiTiles(k) {
         : k.avgVacancyDays <= 30 ? 'var(--color-success)'
         : k.avgVacancyDays <= 60 ? 'var(--color-warning-text)'
         : 'var(--color-danger)';
+    // 15 號結算入住率
+    const snap15 = occupiedAtCurrent15th();
+    const snap15Status = statusLight(snap15.rate, 0.95, 0.80);
+    const snap15DateLabel = (() => {
+        const [y, m, d] = snap15.date.split('-');
+        return `${y}/${parseInt(m, 10)}/${parseInt(d, 10)}`;
+    })();
     return `
         <div class="stat-tile-grid">
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-house-line"></i> 出租率 <span style="margin-left: auto; font-size: 0.85em;">${occ.light}</span></div>
                 <div class="stat-tile-value" style="color: ${occ.color};">${pct(k.occRate)}</div>
                 <div class="stat-tile-sub">${k.rentedBeds} / ${k.totalBeds} 床 · 目標 ≥ 95%</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-tile-label"><i class="ph ph-calendar-check"></i> 15 號結算入住率 <span style="margin-left: auto; font-size: 0.85em;">${snap15Status.light}</span></div>
+                <div class="stat-tile-value" style="color: ${snap15Status.color};">${pct(snap15.rate)}</div>
+                <div class="stat-tile-sub">${snap15.occupied} / ${snap15.total} 床 · ${snap15DateLabel} 快照</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-bed"></i> 平均空置天數</div>
