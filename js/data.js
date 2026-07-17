@@ -84,31 +84,76 @@ export const FINANCE_CUTOFF_DATE = '2026-06-01';
 // === 以特定日期為基準計算實際在住人數 ===
 // buildingId: 傳單一 id → 只算該館; 傳 null / 不傳 → 算全部共居
 // 規則: startDate<=D, terminatedDate>D (退租當天不算), 排除代管+bundle 子合約
+// ⚠ 用「唯一床位數」計 — 若同一床位有 2 個重疊合約 (舊約未 terminate + 新約已開始),
+//   只算 1 床. 避免入住數超過總床數
 export function occupiedOn(dateISO, buildingId = null) {
     if (!dateISO) return { occupied: 0, total: 0, rate: 0 };
-    // 先算允許的 buildingId 範圍
     const allowedBuildingIds = buildingId
         ? new Set([buildingId])
         : new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === 'cohousing').map(b => b.id));
-    // 屬於這些館的床位 (從 property.buildingId 判斷)
     const relevantPropertyNames = new Set(
         mockData.properties.filter(p => allowedBuildingIds.has(p.buildingId)).map(p => p.name)
     );
-    const occupied = mockData.contracts.filter(c => {
-        if (c.contractType && c.contractType !== 'cohousing') return false;
-        if (c.bundleParentContractId) return false;
-        if (!c.startDate || c.startDate > dateISO) return false;
-        if (c.terminatedDate && c.terminatedDate <= dateISO) return false;
-        // 建物 filter: 優先用 contract.buildingId, 沒有就靠 propertyName 反查
+    const occupiedBeds = new Set();  // 用 Set 存唯一床位 propertyName
+    mockData.contracts.forEach(c => {
+        if (c.contractType && c.contractType !== 'cohousing') return;
+        if (c.bundleParentContractId) return;
+        if (!c.startDate || c.startDate > dateISO) return;
+        if (c.terminatedDate && c.terminatedDate <= dateISO) return;
         if (c.buildingId) {
-            if (!allowedBuildingIds.has(c.buildingId)) return false;
+            if (!allowedBuildingIds.has(c.buildingId)) return;
         } else if (c.propertyName) {
-            if (!relevantPropertyNames.has(c.propertyName)) return false;
+            if (!relevantPropertyNames.has(c.propertyName)) return;
         }
-        return true;
-    }).length;
+        // 沒 propertyName 的合約無法對應到床位, 不算 (避免虛數)
+        if (!c.propertyName) return;
+        // 該床位必須確實存在 (不是漂移的孤兒名) — relevantPropertyNames 就是所有合法床位名
+        if (!relevantPropertyNames.has(c.propertyName)) return;
+        occupiedBeds.add(c.propertyName);
+    });
     const total = mockData.properties.filter(p => allowedBuildingIds.has(p.buildingId)).length;
-    return { occupied, total, rate: total > 0 ? occupied / total : 0 };
+    return { occupied: occupiedBeds.size, total, rate: total > 0 ? occupiedBeds.size / total : 0 };
+}
+
+// 回傳「該日在住」的合約 array (給明細列表用)
+// 規則同 occupiedOn — 每個床位只回 1 個合約 (若重疊, 取 startDate 最新者); 附 _conflictCount 供 UI 標記
+export function occupiedContractsOn(dateISO, buildingId = null) {
+    if (!dateISO) return [];
+    const allowedBuildingIds = buildingId
+        ? new Set([buildingId])
+        : new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === 'cohousing').map(b => b.id));
+    const relevantPropertyNames = new Set(
+        mockData.properties.filter(p => allowedBuildingIds.has(p.buildingId)).map(p => p.name)
+    );
+    // 先蒐集所有符合條件的合約, 依 propertyName group
+    const byBed = new Map();
+    mockData.contracts.forEach(c => {
+        if (c.contractType && c.contractType !== 'cohousing') return;
+        if (c.bundleParentContractId) return;
+        if (!c.startDate || c.startDate > dateISO) return;
+        if (c.terminatedDate && c.terminatedDate <= dateISO) return;
+        if (c.buildingId) {
+            if (!allowedBuildingIds.has(c.buildingId)) return;
+        } else if (c.propertyName) {
+            if (!relevantPropertyNames.has(c.propertyName)) return;
+        }
+        if (!c.propertyName) return;
+        if (!relevantPropertyNames.has(c.propertyName)) return;
+        if (!byBed.has(c.propertyName)) byBed.set(c.propertyName, []);
+        byBed.get(c.propertyName).push(c);
+    });
+    // 每床挑 1 個: startDate 最新者
+    const result = [];
+    byBed.forEach((list, propName) => {
+        list.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+        const winner = { ...list[0] };
+        if (list.length > 1) {
+            winner._conflictCount = list.length;
+            winner._conflictOthers = list.slice(1).map(c => ({ id: c.id, tenant: c.tenant, startDate: c.startDate, endDate: c.endDate }));
+        }
+        result.push(winner);
+    });
+    return result;
 }
 
 // 取「當月 15 號」的統計快照 (支援指定館別)

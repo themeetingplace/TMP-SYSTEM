@@ -11,10 +11,10 @@ import {
     bedOccupied,
     isSettled, isPreCutoff, FINANCE_CUTOFF_DATE,
     invoiceActualAmount as actualAmount,
-    occupiedAtCurrent15th, occupied15thTrend
+    occupiedAtCurrent15th, occupied15thTrend, occupiedContractsOn
 } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
-import { refreshView } from '../utils/ui.js';
+import { refreshView, openModal } from '../utils/ui.js';
 import { renderRangePicker, initRangePicker } from '../utils/dateRangePicker.js';
 import { reportState, invoiceInRange, getRangeLabel } from './report-state.js';
 import { exportLandlordReport } from './report-export.js';
@@ -466,6 +466,104 @@ function renderStatTile(opts) {
     `;
 }
 
+// === 15 號結算明細 modal — 列出當日在住的每一份合約 (依館別/床位排) ===
+function show15thDetailModal(dateISO, buildingId) {
+    const contracts = occupiedContractsOn(dateISO, buildingId);
+    const buildingById = new Map(mockData.buildings.map(b => [b.id, b.name]));
+
+    // 該館(或全部館)的所有床位, 用於顯示未占用
+    const allowedBuildingIds = buildingId
+        ? new Set([buildingId])
+        : new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === 'cohousing').map(b => b.id));
+    const totalBeds = mockData.properties.filter(p => allowedBuildingIds.has(p.buildingId)).length;
+
+    // 依 propertyName 快取合約 → 判斷該床位有沒有在住
+    const occupiedByPropName = new Map();
+    contracts.forEach(c => { if (c.propertyName) occupiedByPropName.set(c.propertyName, c); });
+
+    // 依館別 group
+    const allBeds = mockData.properties
+        .filter(p => allowedBuildingIds.has(p.buildingId))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const byBuilding = new Map();
+    allBeds.forEach(p => {
+        const bName = buildingById.get(p.buildingId) || '(未知館)';
+        if (!byBuilding.has(bName)) byBuilding.set(bName, []);
+        byBuilding.get(bName).push(p);
+    });
+
+    const [y, m, d] = dateISO.split('-');
+    const dateLabel = `${y}/${parseInt(m,10)}/${parseInt(d,10)}`;
+    const scopeLabel = buildingId ? (buildingById.get(buildingId) || '該館') : '全部共居館';
+
+    const tableRows = [];
+    byBuilding.forEach((beds, bName) => {
+        const occupiedInThisBuilding = beds.filter(p => occupiedByPropName.has(p.name)).length;
+        tableRows.push(`
+            <tr class="detail-building-header">
+                <td colspan="4" style="background: var(--color-background); padding: 0.5rem 0.75rem; font-weight: 600; color: var(--text-main); border-top: 1px solid var(--border-color);">
+                    <i class="ph ph-building"></i> ${bName}
+                    <span style="margin-left: 0.75rem; font-size: 0.8em; color: var(--text-muted); font-weight: 500;">在住 ${occupiedInThisBuilding} / ${beds.length} 床</span>
+                </td>
+            </tr>
+        `);
+        beds.forEach(p => {
+            const c = occupiedByPropName.get(p.name);
+            const shortName = (p.name || '').replace(/^聚空間\s*[-–]\s*[^\s]+\s+/, '');
+            if (c) {
+                const conflictBadge = c._conflictCount ? `<span title="⚠ 此床有 ${c._conflictCount} 份重疊合約 — 已取最新的一份 (資料需清理)" style="display:inline-block; margin-left:.35rem; padding:.05rem .35rem; background:var(--color-warning); color:#fff; border-radius:8px; font-size:.7em; font-weight:600;">重疊×${c._conflictCount}</span>` : '';
+                tableRows.push(`
+                    <tr>
+                        <td style="padding: 0.4rem 0.75rem;">${shortName}</td>
+                        <td style="padding: 0.4rem 0.75rem;"><strong>${(c.tenant || '')}</strong>${conflictBadge}</td>
+                        <td style="padding: 0.4rem 0.75rem; color: var(--text-muted); font-size: 0.85em;">${c.startDate || '—'}</td>
+                        <td style="padding: 0.4rem 0.75rem; color: var(--text-muted); font-size: 0.85em;">${c.endDate || '—'}${c.terminatedDate ? ` <span style="color: var(--color-warning);">(將退 ${c.terminatedDate})</span>` : ''}</td>
+                    </tr>
+                `);
+            } else {
+                tableRows.push(`
+                    <tr style="opacity: 0.4;">
+                        <td style="padding: 0.4rem 0.75rem;">${shortName}</td>
+                        <td colspan="3" style="padding: 0.4rem 0.75rem; color: var(--text-muted); font-style: italic;">— 空床 (未列入計算) —</td>
+                    </tr>
+                `);
+            }
+        });
+    });
+
+    const bodyHtml = `
+        <div style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: var(--color-background); border-radius: var(--radius-md); font-size: 0.9rem; line-height: 1.6;">
+            <div><strong>📅 快照日期：</strong>${dateLabel}</div>
+            <div><strong>🏠 統計範圍：</strong>${scopeLabel}</div>
+            <div><strong>✅ 列入計算：</strong><span style="color: var(--color-success); font-weight: 700; font-size: 1.1em;">${contracts.length}</span> / ${totalBeds} 床 (占用率 ${totalBeds > 0 ? ((contracts.length/totalBeds)*100).toFixed(1) : 0}%)</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">計算規則: startDate ≤ ${dateLabel} 且 終止日 > ${dateLabel} (或未終止), 排除代管/bundle 子合約</div>
+        </div>
+        <div style="max-height: 60vh; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                <thead style="position: sticky; top: 0; background: var(--color-surface); z-index: 1;">
+                    <tr>
+                        <th style="text-align: left; padding: 0.55rem 0.75rem; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); font-size: 0.85em;">床位</th>
+                        <th style="text-align: left; padding: 0.55rem 0.75rem; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); font-size: 0.85em;">租客</th>
+                        <th style="text-align: left; padding: 0.55rem 0.75rem; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); font-size: 0.85em;">入住日</th>
+                        <th style="text-align: left; padding: 0.55rem 0.75rem; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); font-size: 0.85em;">到期日</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows.join('')}</tbody>
+            </table>
+        </div>
+    `;
+
+    openModal({
+        title: `📊 ${dateLabel} 15 號結算明細 · ${scopeLabel}`,
+        maxWidth: 800,
+        bodyHtml,
+        footerHtml: `<button class="btn btn-primary" data-action="close">關閉</button>`,
+        onMount: (overlay, close) => {
+            overlay.querySelector('[data-action="close"]')?.addEventListener('click', close);
+        }
+    });
+}
+
 // 5 個營運 KPI tiles 共用渲染 (含 15 號結算入住率)
 // buildingId: 傳單館 id → 15 號快照只算該館; 傳 null → 全部館合計
 function renderOperationalKpiTiles(k, buildingId = null) {
@@ -493,10 +591,10 @@ function renderOperationalKpiTiles(k, buildingId = null) {
                 <div class="stat-tile-value" style="color: ${occ.color};">${pct(k.occRate)}</div>
                 <div class="stat-tile-sub">${k.rentedBeds} / ${k.totalBeds} 床 · 目標 ≥ 95%</div>
             </div>
-            <div class="stat-tile">
+            <div class="stat-tile" data-action="show-15th-detail" data-building-id="${buildingId || ''}" data-date="${snap15.date}" style="cursor: pointer;" title="點擊查看列入計算的合約明細">
                 <div class="stat-tile-label"><i class="ph ph-calendar-check"></i> 15 號結算入住率 <span style="margin-left: auto; font-size: 0.85em;">${snap15Status.light}</span></div>
                 <div class="stat-tile-value" style="color: ${snap15Status.color};">${pct(snap15.rate)}</div>
-                <div class="stat-tile-sub">${snap15.occupied} / ${snap15.total} 床 · ${snap15DateLabel} 快照</div>
+                <div class="stat-tile-sub">${snap15.occupied} / ${snap15.total} 床 · ${snap15DateLabel} 快照 <i class="ph ph-arrow-square-out" style="font-size: 0.7em; margin-left: 0.2rem; color: var(--text-muted);"></i></div>
             </div>
             <div class="stat-tile">
                 <div class="stat-tile-label"><i class="ph ph-bed"></i> 平均空置天數</div>
@@ -1767,6 +1865,15 @@ export function initReportsActions(scope) {
             e.preventDefault();
             reportState.activeBuilding = el.dataset.buildingSub;
             refreshView();
+        });
+    });
+
+    // 15 號結算入住率 — 點卡片開明細
+    scope.querySelectorAll('[data-action="show-15th-detail"]').forEach(el => {
+        el.addEventListener('click', () => {
+            const bid = el.dataset.buildingId || null;
+            const date = el.dataset.date;
+            show15thDetailModal(date, bid);
         });
     });
 
