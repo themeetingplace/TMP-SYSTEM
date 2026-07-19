@@ -1103,24 +1103,34 @@ export function previewContractInvoices() {
 
 // 建合約後自動建 1 張全期房租 invoice，預設已繳清
 // payment: { discount, discountReason, paidAmount, paymentMethod } — 可選，預設視為簽約全額收款
-// === 依合約起訖期間 + 館別, 自動 apply rentRules 產生 adjustments 陣列 ===
-// 合約 6/1-8/31 命中「夏季能源費 6-10月, $500」→ 6+7+8 各 apply 一次, 共 3 筆加項
-// 若合約橫跨 8/1-10/31 命中 → 8+9+10 = 3 筆
+// === 依合約「租金期數」× 館別, 自動 apply rentRules 產生 adjustments 陣列 ===
+// ⚠ 2026-07-19 修 bug: 之前用「合約橫跨日曆月」→ 1 個月租的 6/29-7/29 會被算成
+//    6+7 兩期能源費, 雙倍收. 改用「租金期數 (termMonths)」為單位, 每期看該期起始月.
+//
+// 邏輯:
+//   1 筆 termMonths=N 的合約 → 產生 N 期租金 → 對每期看「起始月」是否在規則月份內
+//   起始月定義: 第 i 期 (i 從 0 開始) 起始日 = contract.startDate + i 個月
+//
+// 範例:
+//   合約 6/29-7/29 (termMonths=1) → 1 期, 起始月 6 → 若 6 在規則月份 → apply 1 筆
+//   合約 7/29-8/29 (termMonths=1) → 1 期, 起始月 7 → 若 7 在規則月份 → apply 1 筆
+//   合約 6/29-9/29 (termMonths=3, 季繳) → 3 期 [6/29 起, 7/29 起, 8/29 起]
+//                                        → 6+7+8 月, 各 apply 1 筆
+//
 // 每筆 adjustment: {kind: 'add' or 'sub', label: 'XX (N月)', amount: N}
 // 正金額 = add (加收), 負金額 = sub (折扣)
 export function applyRentRules(contract) {
-    if (!contract || !contract.startDate || !contract.endDate) return [];
+    if (!contract || !contract.startDate) return [];
     const rules = (mockData.rentRules || []).filter(r => r.enabled !== false);
     if (rules.length === 0) return [];
 
+    const term = Math.max(1, Number(contract.termMonths) || 1);
+    // 算出每期的「起始月」
     const start = new Date(contract.startDate);
-    const end = new Date(contract.endDate);
-    // 掃 contract 起訖跨到的所有 (year, month) 對, endDate 那天不含
-    const coveredMonths = new Set();  // key = "YYYY-M"
-    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-    while (cursor < end) {
-        coveredMonths.add(`${cursor.getFullYear()}-${cursor.getMonth() + 1}`);
-        cursor.setMonth(cursor.getMonth() + 1);
+    const periodStartMonths = [];  // 1..12 陣列 (每期一個)
+    for (let i = 0; i < term; i++) {
+        const d = new Date(start.getFullYear(), start.getMonth() + i, start.getDate());
+        periodStartMonths.push(d.getMonth() + 1);
     }
 
     const adjustments = [];
@@ -1132,13 +1142,11 @@ export function applyRentRules(contract) {
         // 月份 filter (哪幾月適用)
         const applyMonths = Array.isArray(rule.months) ? rule.months : [];
         if (applyMonths.length === 0) return;
-        // 掃合約橫跨的每個月, 若該月在規則範圍內 → apply 一筆
-        coveredMonths.forEach(ym => {
-            const [, mStr] = ym.split('-');
-            const m = parseInt(mStr, 10);
+        const amt = Number(rule.amount) || 0;
+        if (amt === 0) return;
+        // 每期看「起始月」是否在規則月份內, 命中就 apply 1 筆
+        periodStartMonths.forEach(m => {
             if (!applyMonths.includes(m)) return;
-            const amt = Number(rule.amount) || 0;
-            if (amt === 0) return;
             adjustments.push({
                 kind: amt > 0 ? 'add' : 'sub',
                 label: `${rule.name} (${m}月)`,
