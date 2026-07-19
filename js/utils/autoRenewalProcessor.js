@@ -9,6 +9,7 @@
 
 import { mockData, store } from '../data.js';
 import { pushToTenant } from './line.js';
+import { buildPaymentNoticeMessage } from './paymentNoticeMessage.js';
 
 let lastRunTs = 0;
 let running = false;
@@ -59,20 +60,11 @@ async function processAutoRenewals(reasonTag) {
                 continue;
             }
             const newC = r.newContract;
-            // 找該合約的房租 invoice — buildContractInvoice 內部已 apply rentRules
             const rentInv = mockData.invoices.find(inv =>
                 inv.contractId === newC.id && inv.direction === 'in' && inv.type === '房租'
             );
-            const dueAmount = rentInv ? (rentInv.amount || 0) - (rentInv.discount || 0) : (newC.amount || 0);
-            const dueDate = rentInv?.dueDate || newC.startDate;
-            const propertyShort = String(newC.propertyName || '').replace('聚空間 - ', '');
-
-            // 列出 rentRules adjustments (如夏季能源費) — 讓租客看到細項
-            const adjLines = (rentInv?.adjustments || [])
-                .map(a => `　　${a.kind === 'sub' ? '折抵' : '加項'}: ${a.label} $${Math.abs(a.amount).toLocaleString()}`)
-                .join('\n');
-
-            const message = `${newC.tenant} 您好 ☺️\n\n感謝您回覆續租!\n\n🔄 已為您建立續租合約 ${newC.id}\n📍 ${propertyShort}\n📅 新期間: ${newC.startDate} ~ ${newC.endDate}\n\n🔔 續期租金合計: NT$${dueAmount.toLocaleString()}\n應繳日: ${dueDate}${adjLines ? '\n\n細項:\n' + adjLines : ''}\n\n繳款完成後, 請回傳「銀行帳戶末 5 碼」(5 位數字), 系統會自動記錄 ✨\n入帳後合約 PDF 會自動寄給您.`;
+            // ⚠ 一律用合約當下的資料組訊息 (不再吃 rentInv.dueDate 免得吃到舊值)
+            const { message } = buildPaymentNoticeMessage(newC, { includeRenewalGreeting: true });
 
             try {
                 await pushToTenant(tenant.id, { message, invoiceId: rentInv?.id });

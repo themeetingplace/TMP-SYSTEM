@@ -10,6 +10,7 @@ import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { fillContractPdf, downloadPdfBytes, formatRentalPeriod } from '../utils/pdfGen.js';
 import { showCheckinAssignmentForm } from './properties.js';
 import { pushToTenant, uploadPdfToStorage, resolveSignedPdfUrl, triggerRenewalPoll } from '../utils/line.js';
+import { buildPaymentNoticeMessage } from '../utils/paymentNoticeMessage.js';
 import { filterContractsByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
@@ -985,17 +986,44 @@ export function showContractDetails(id) {
             ...(c.renewalState === 'terminated' ? [{ label: '終止日', value: c.terminatedDate || '—' }] : []),
             ...(c.snoozeUntil ? [{ label: '暫緩至', value: c.snoozeUntil }] : [])
         ],
-        footerHtml: `
-            <button class="btn btn-outline" data-action="close-detail" type="button">關閉</button>
-            <button class="btn btn-primary" data-action="edit-from-detail" type="button" data-write>
-                <i class="ph ph-pencil"></i> 編輯合約
-            </button>
-        `,
+        footerHtml: (() => {
+            const t = mockData.tenants.find(x => x.name === c.tenant && x.lineUserId);
+            const hasLine = !!t?.lineUserId;
+            return `
+                <button class="btn btn-outline" data-action="close-detail" type="button">關閉</button>
+                ${hasLine ? `<button class="btn btn-outline" data-action="resend-notice" type="button" data-write title="用當下合約資料重發 LINE 繳款通知 (修 date 錯掉的 case)"><i class="ph ph-arrow-clockwise"></i> 重發繳款通知</button>` : ''}
+                <button class="btn btn-primary" data-action="edit-from-detail" type="button" data-write>
+                    <i class="ph ph-pencil"></i> 編輯合約
+                </button>
+            `;
+        })(),
         onMount: (overlay, closeModal) => {
             overlay.querySelector('[data-action="close-detail"]')?.addEventListener('click', closeModal);
             overlay.querySelector('[data-action="edit-from-detail"]')?.addEventListener('click', () => {
                 closeModal();
                 showContractForm(c);
+            });
+            overlay.querySelector('[data-action="resend-notice"]')?.addEventListener('click', () => {
+                const t = mockData.tenants.find(x => x.name === c.tenant && x.lineUserId);
+                if (!t?.lineUserId) { showToast('租客未綁 LINE, 無法重發', 'warning'); return; }
+                const { message, dueAmount, dueDate } = buildPaymentNoticeMessage(c, { includeRenewalGreeting: false });
+                openConfirm({
+                    title: '重發繳款通知？',
+                    message: `即將用「合約當下」資料重發 LINE 給 <strong>${c.tenant}</strong>:<br><br>
+                        <div style="background: var(--bg-secondary); padding: 0.75rem; border-radius: 6px; font-size: var(--text-sm); white-space: pre-wrap; max-height: 300px; overflow-y: auto;">${message.replace(/</g, '&lt;')}</div>`,
+                    confirmLabel: '確認重發',
+                    maxWidth: 640,
+                    onConfirm: async () => {
+                        try {
+                            const rentInv = mockData.invoices.find(inv => inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租');
+                            await pushToTenant(t.id, { message, invoiceId: rentInv?.id });
+                            showToast(`✅ 已重發繳款通知給 ${c.tenant}`, 'success', 4000);
+                        } catch (e) {
+                            showToast(`重發失敗: ${e.message}`, 'danger', 6000);
+                            console.error('[resend-notice]', e);
+                        }
+                    }
+                });
             });
             // 時間軸圓圈可點 → 開手動編輯 modal
             overlay.querySelectorAll('[data-step-edit]').forEach(el => {
@@ -1369,14 +1397,11 @@ export function confirmRenew(id) {
                     showToast(`${newC.tenant} 未綁 LINE, 無法自動推繳款通知`, 'warning', 5000);
                     return;
                 }
-                // 找新合約的房租 invoice, 用其金額 + 到期日組訊息
+                // 一律用合約當下資料組訊息 (見 utils/paymentNoticeMessage.js)
                 const rentInv = mockData.invoices.find(inv =>
                     inv.contractId === newC.id && inv.direction === 'in' && inv.type === '房租'
                 );
-                const dueAmount = rentInv ? (rentInv.amount || 0) - (rentInv.discount || 0) : (newC.amount || 0);
-                const dueDate = rentInv?.dueDate || newC.startDate;
-                const propertyShort = String(newC.propertyName || '').replace('聚空間 - ', '');
-                const message = `${newC.tenant} 您好 ☺️\n\n🔄 已為您建立續租合約 ${newC.id}\n📍 ${propertyShort}\n📅 新期間：${newC.startDate} ~ ${newC.endDate}\n\n🔔 續期租金：NT$${dueAmount.toLocaleString()}\n應繳日：${dueDate}\n\n繳款完成後, 請回傳「銀行帳戶末 5 碼」(5 位數字), 系統會自動記錄 ✨\n入帳後合約 PDF 會自動寄給您。`;
+                const { message } = buildPaymentNoticeMessage(newC, { includeRenewalGreeting: true });
                 setTimeout(() => {
                     showToast(`推繳款通知給 ${newC.tenant}…`, 'info', 3000);
                     pushToTenant(t.id, { message, invoiceId: rentInv?.id })
