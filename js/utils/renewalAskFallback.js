@@ -43,26 +43,31 @@ export function checkPendingRenewalAsks() {
     console.log(`[renewalAskPrompt] 有 ${candidates.length} 筆待詢問:`,
         candidates.map(c => `${c.id} (${c.tenant}, 到期 ${c.endDate})`));
 
-    // 彈一個 sticky toast 提醒, 點擊跳去合約頁 auto-open 勾選 modal
+    // 彈一個 toast 提醒, 點擊跳去合約頁 auto-open 勾選 modal
     import('./ui.js').then(({ showToast }) => {
         const toast = showToast(
-            `🔔 有 ${candidates.length} 位租客的合約 14 天內到期尚未詢問, 點此前往確認發送`,
+            `🔔 有 ${candidates.length} 位租客待詢問續租, 點此前往`,
             'info',
-            15000  // 15 秒
+            30000  // 30 秒 (讓 user 有時間反應)
         );
-        if (toast && typeof toast === 'object') {
+        if (toast && toast.addEventListener) {
             toast.style.cursor = 'pointer';
+            toast.title = '點擊前往合約管理 → 詢問續租 (勾選 modal)';
+            // 稍微高亮, 提示可點
+            toast.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.35), 0 0 0 2px rgba(59, 130, 246, 0.15)';
             toast.addEventListener('click', () => {
                 sessionStorage.setItem(SESSION_KEY, '1');
+                toast.remove();
                 // 導向合約管理 + 觸發詢問續租 modal
                 if (window.location.hash !== '#contracts') {
                     window.location.hash = 'contracts';
                 }
                 setTimeout(() => {
                     document.querySelector('#btn-ask-renewal')?.click();
-                }, 400);
-                toast.remove();
+                }, 500);
             });
+        } else {
+            console.warn('[renewalAskPrompt] showToast 沒回 element, 點擊功能無法啟用');
         }
         sessionStorage.setItem(SESSION_KEY, '1');
     });

@@ -679,6 +679,7 @@ export function showToast(message, type = 'success', duration = 2500) {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 260);
     }, duration);
+    return toast;  // 回傳 element 讓 caller 可加 click / cursor 等額外行為
 }
 
 // === Loading toast — 給 async 操作 (寄合約 / push line / PDF 匯出 / 批次結帳) 用 ===
