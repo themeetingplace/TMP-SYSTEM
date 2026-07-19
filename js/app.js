@@ -27,7 +27,7 @@ import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseCo
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
 import { bootstrap as syncBootstrap } from './sync.js'; // 雲端同步引擎
 import { scheduleAutoRenewalProcess } from './utils/autoRenewalProcessor.js'; // LINE 回續租 → 自動發繳款通知
-import { scheduleRenewalAskFallback } from './utils/renewalAskFallback.js'; // pg_cron 掛掉時的 fallback: 每天登入自動 trigger renewal-poll
+import { checkPendingRenewalAsks } from './utils/renewalAskFallback.js'; // 登入時提醒有多少待詢問合約 (不自動發, 只彈 toast 讓 admin 手動確認)
 import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole } from './auth.js';
 import { showLogin, showAccessDenied, bindPasswordToggles } from './views/login.js';
 import { applyAvatar, getAvatar, AVATAR_ICONS, AVATAR_COLORS } from './utils/avatar.js';
@@ -498,9 +498,9 @@ window.addEventListener('bms:data-changed', (e) => {
 // 初次載入完成後也跑一次 (以防第一次 pull 前 event listener 還沒掛上)
 setTimeout(() => scheduleAutoRenewalProcess('bootstrap'), 3000);
 
-// 續租詢問前端 fallback: 每天登入時自動觸發 renewal-poll (若 pg_cron 掛了也還有救)
-//   跟 auto-renewal 分開: auto-renewal = 處理租客的回覆; fallback = 主動問租客
-setTimeout(() => scheduleRenewalAskFallback().catch(e => console.warn('[renewalFallback bootstrap]', e)), 8000);
+// 續租詢問登入提醒: 登入後掃「待詢問」數量, 有就彈 toast 讓 admin 主動去確認發送
+//   不自動發 (避免錯訊息直接飛到租客 LINE 沒得救), 每次 session 只提示一次
+setTimeout(() => { try { checkPendingRenewalAsks(); } catch(e) { console.warn('[renewalAskPrompt]', e); } }, 8000);
 
 // 關於系統 — 點 sidebar footer 的版本號開啟
 window.showAboutApp = function() {

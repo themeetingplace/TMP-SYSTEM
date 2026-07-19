@@ -44,12 +44,13 @@ async function linePush(toUserId: string, messages: any[]) {
 }
 
 // 組合續租詢問訊息 (含 Quick Reply 按鈕)
-function buildRenewalMessage(contract: any, daysLeft: number) {
+function buildRenewalMessage(contract: any, _daysLeft: number) {
     const propertyShort = String(contract.property_name || '').replace('聚空間 - ', '');
     const fmtDate = (iso: string) => iso ? iso.replace(/-/g, '/') : '';
+    const tenantName = contract.tenant || '';
     return {
         type: 'text',
-        text: `聚空間 您好 😊\n\n您在 ${propertyShort} 的合約將於 ${fmtDate(contract.end_date)} (${daysLeft} 天後) 到期。\n請問是否續租？\n\n👇 點下方按鈕回覆`,
+        text: `${tenantName} 您好 ☺️\n\n📮 這是聚空間自動推播訊息\n\n您在 ${propertyShort} 的合約將於 ${fmtDate(contract.end_date)} 到期\n\n🔄 請問是否續住？\n👇 請點下方按鈕回覆\n\n💬 若有任何問題請直接回應告知, 將有小編為您服務`,
         quickReply: {
             items: [
                 {
