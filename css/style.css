@@ -5483,9 +5483,11 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     margin-top: 0;
 }
 
-/* 續租待處理 — 獨立區域, 跟下面的 3-col todo grid 隔開一點呼吸空間 */
+/* 續租待處理 — 獨立區域, 跟上下的卡片都隔開一點呼吸空間
+   (todo-cards-grid 本身 margin-top:0, 這裡沒補 margin-bottom 的話兩張卡會直接貼在一起) */
 .dashboard-renewal-pending {
     margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
 }
 
 @media (max-width: 1024px) {
