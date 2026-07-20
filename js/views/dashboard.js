@@ -1,4 +1,4 @@
-﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, isUnsettled, currentMonth, getSortedBuildings, bedOccupied, isPreCutoff } from '../data.js';
+﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, isUnsettled, currentMonth, getSortedBuildings, bedOccupied, isPreCutoff, leaseEndISO } from '../data.js';
 import { emptyState } from '../utils/emptyState.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { getChartColors } from '../utils/chartTheme.js';
@@ -6,7 +6,20 @@ import { modeFilteredData } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { findRenewalAskCandidates } from '../utils/renewalAskFallback.js';
 import { findRenewalConfirmCandidates, findDeclinePendingCandidates } from '../utils/autoRenewalProcessor.js';
+import { buildPaymentNoticeMessage } from '../utils/paymentNoticeMessage.js';
 import { confirmTerminate } from './contracts.js';
+
+// 假設「現在確認續約」會產生的新合約期間 + 應繳金額 — 借用跟實際發送通知
+// 完全同一套算法 (buildPaymentNoticeMessage), 確保這裡預覽的數字跟之後真的
+// 按「確認續約」送出時 100% 一致, 不會有兩套算法對不上的風險.
+function previewRenewalFor(oldContract) {
+    const term = oldContract.termMonths || 1;
+    const newStart = oldContract.endDate;
+    const newEnd = leaseEndISO(newStart, term);
+    const virtualContract = { ...oldContract, startDate: newStart, endDate: newEnd };
+    const { dueAmount } = buildPaymentNoticeMessage(virtualContract, {});
+    return { newStart, newEnd, dueAmount };
+}
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
 function extractAreaName(fullName) {
@@ -134,24 +147,41 @@ function buildRenewalPipelineCard(invoices) {
     // 步驟卡片內容
     const renderPreviewLine = (text) => `<div style="font-size: var(--text-xs); color: var(--text-main); padding: 0.1rem 0;">${text}</div>`;
 
-    const askItemsHtml = askCandidates.slice(0, 3).map(c =>
-        renderPreviewLine(`${c.tenant} · ${extractAreaName(c.propertyName)}`)
-    ).join('') + (askCandidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">還有 ${askCandidates.length - 3} 筆…</div>` : '');
+    // 步驟① 待發通知 — 顯示現有合約期間 (還沒變, 只是要問了)
+    const askItemsHtml = askCandidates.slice(0, 3).map(c => `
+        <div style="padding: 0.2rem 0; border-bottom: 1px dashed var(--border-color);">
+            <div style="font-size: var(--text-xs); color: var(--text-main); font-weight: 600;">${c.tenant} · ${extractAreaName(c.propertyName)}</div>
+            <div style="font-size: var(--text-2xs); color: var(--text-muted);">${c.startDate || '—'} ~ ${c.endDate || '—'}</div>
+        </div>
+    `).join('') + (askCandidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.2rem;">還有 ${askCandidates.length - 3} 筆…</div>` : '');
 
+    // 步驟② 回覆處理 — 「要續」的顯示假設現在確認, 新合約會是什麼期間/金額
+    //   (跟 confirmAndProcessRenewals 實際送出時同一套算法, 保證數字一致)
     const replyItemsHtml = [
-        ...renewCandidates.slice(0, 3).map(c =>
-            `<div style="font-size: var(--text-xs); padding: 0.1rem 0; display:flex; align-items:center; gap:0.3rem;">
-                <span style="color: var(--color-success); font-weight:700;">✅要續</span>
-                <span style="color: var(--text-main);">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
-            </div>`
-        ),
-        ...declineCandidates.slice(0, 3).map(c =>
-            `<button type="button" class="renewal-decline-item" data-contract-id="${c.id}" style="all: unset; cursor: pointer; display:flex; align-items:center; gap:0.3rem; font-size: var(--text-xs); padding: 0.1rem 0; width: 100%;">
-                <span style="color: var(--color-danger); font-weight:700;">❌不續</span>
-                <span style="color: var(--text-main);">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
-                <span style="color: var(--text-muted); margin-left: auto; text-decoration: underline;">辦退租 →</span>
-            </button>`
-        )
+        ...renewCandidates.slice(0, 3).map(c => {
+            const { newStart, newEnd, dueAmount } = previewRenewalFor(c);
+            return `
+                <div style="padding: 0.2rem 0; border-bottom: 1px dashed var(--border-color);">
+                    <div style="font-size: var(--text-xs); display:flex; align-items:center; gap:0.3rem;">
+                        <span style="color: var(--color-success); font-weight:700;">✅要續</span>
+                        <span style="color: var(--text-main); font-weight: 600;">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
+                    </div>
+                    <div style="font-size: var(--text-2xs); color: var(--text-muted);">
+                        新期間 ${newStart} ~ ${newEnd} · 應繳 <strong style="color: var(--color-success);">$${dueAmount.toLocaleString()}</strong>
+                    </div>
+                </div>
+            `;
+        }),
+        ...declineCandidates.slice(0, 3).map(c => `
+            <button type="button" class="renewal-decline-item" data-contract-id="${c.id}" style="all: unset; cursor: pointer; display:block; width: 100%; padding: 0.2rem 0; border-bottom: 1px dashed var(--border-color);">
+                <div style="font-size: var(--text-xs); display:flex; align-items:center; gap:0.3rem;">
+                    <span style="color: var(--color-danger); font-weight:700;">❌不續</span>
+                    <span style="color: var(--text-main); font-weight: 600;">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
+                    <span style="color: var(--text-muted); margin-left: auto; text-decoration: underline;">辦退租 →</span>
+                </div>
+                <div style="font-size: var(--text-2xs); color: var(--text-muted);">原到期 ${c.endDate || '—'}</div>
+            </button>
+        `)
     ].join('');
 
     const verifyItemsHtml = verifyCandidates.slice(0, 3).map(inv => {
@@ -400,25 +430,25 @@ export function renderDashboard() {
                 `;
             }
 
-            // admin / owner 版: 維持原樣 (收支圖表 + 各館空床 + 3 個 todo)
+            // admin / owner 版: 收支圖表 (獨立整行) → 續租與收款流程 (獨立整行, 主要待辦) →
+            //   各館空床 + 維修事項 並排 (兩個都是「隨手看一眼現況」的小卡, 湊一排剛好平衡,
+            //   維修事項不再孤零零吊在最下面)
             return `
-                <div class="dashboard-grid">
-                    <div class="card chart-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-chart-line-up"></i> 近半年收支概況</h2>
-                            <div class="chart-mode-toggle" role="group" aria-label="圖表模式">
-                                <button type="button" class="chart-mode-btn active" data-chart-mode="total">總和</button>
-                                <button type="button" class="chart-mode-btn" data-chart-mode="byBuilding">各館</button>
-                            </div>
-                        </div>
-                        <div style="height: 300px; width: 100%;">
-                            <canvas id="incomeChart"></canvas>
+                <div class="card chart-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-chart-line-up"></i> 近半年收支概況</h2>
+                        <div class="chart-mode-toggle" role="group" aria-label="圖表模式">
+                            <button type="button" class="chart-mode-btn active" data-chart-mode="total">總和</button>
+                            <button type="button" class="chart-mode-btn" data-chart-mode="byBuilding">各館</button>
                         </div>
                     </div>
-                    ${vacancyCardHtml}
+                    <div style="height: 300px; width: 100%;">
+                        <canvas id="incomeChart"></canvas>
+                    </div>
                 </div>
                 ${renewalPipelineHtml ? `<div class="dashboard-renewal-pending">${renewalPipelineHtml}</div>` : ''}
-                <div class="dashboard-maint-row">
+                <div class="dashboard-glance-row">
+                    ${vacancyCardHtml}
                     ${maintTodoHtml}
                 </div>
             `;

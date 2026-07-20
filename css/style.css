@@ -3697,8 +3697,10 @@ select.inline-edit-input { cursor: pointer; }
     margin-bottom: 1.5rem;
 }
 
-.dashboard-grid .chart-card {
-    grid-column: span 2;
+/* admin/owner 版收支圖表已改成獨立整行 (2026-07-20), 不再是 .dashboard-grid 子元素,
+   自己補上跟其他區塊一致的間距 */
+.chart-card {
+    margin-bottom: 1.5rem;
 }
 
 /* helper 版本: 3-col 整齊 (帳款 / 維修 / 各館空床), 不含 chart-card */
@@ -5489,14 +5491,17 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     margin-bottom: 1.5rem;
 }
 
-/* 維修事項改成單獨一張卡 (2026-07-20 合約/帳款事項併入續租流程後, 維修是
-   唯一剩下的 todo 卡, 不再用 3-col grid 撐版, 限制寬度避免看起來像忘了填內容) */
-.dashboard-maint-row {
-    max-width: 420px;
+/* 各館空床 + 維修事項 並排一行 (2026-07-20 合約/帳款事項併入續租流程後,
+   維修事項單獨一張卡吊在最下面會很孤立, 改跟空床卡湊一排 — 兩者都是
+   「隨手看一眼現況」的次要資訊, 份量也相近, 湊一起視覺上比較平衡) */
+.dashboard-glance-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
 }
-@media (max-width: 640px) {
-    .dashboard-maint-row {
-        max-width: 100%;
+@media (max-width: 900px) {
+    .dashboard-glance-row {
+        grid-template-columns: 1fr;
     }
 }
 
