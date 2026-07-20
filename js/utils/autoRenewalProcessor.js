@@ -27,13 +27,26 @@ async function processAutoRenewals(reasonTag) {
     lastRunTs = Date.now();
     try {
         // 找有回「續租」且還沒建續租合約的
+        // ⚠ 2026-07-19 修 bug: 只認 parentContractId 連結會漏掉「admin 手動用建立合約
+        //   (非續租按鈕) 建的接續合約」— 因為那條路徑不會設 parentContractId, 系統仍
+        //   以為該合約沒人接手, 自動又建一份重複的 (陳品佑 C007→C205 vs 手動建的 C175).
+        //   加一層「日期連續性」判斷當備援: 同租客+同床位+下一份合約 startDate===這份 endDate
+        //   且狀態 active/renewed → 視為已有接續, 不再自動建.
         const successorSet = new Set(
             mockData.contracts.filter(c => c.parentContractId).map(c => c.parentContractId)
+        );
+        const hasImplicitSuccessor = (c) => mockData.contracts.some(other =>
+            other.id !== c.id &&
+            other.tenant === c.tenant &&
+            other.propertyName === c.propertyName &&
+            other.startDate === c.endDate &&
+            (other.renewalState === 'active' || other.renewalState === 'renewed')
         );
         const candidates = mockData.contracts.filter(c => {
             if (c.renewIntent !== 'renew') return false;
             if (c.renewalState !== 'active') return false; // 已續 (renewed) 或決策完 (declined) 跳過
-            if (successorSet.has(c.id)) return false; // 已有後續合約
+            if (successorSet.has(c.id)) return false; // 已有後續合約 (parentContractId 連結)
+            if (hasImplicitSuccessor(c)) return false; // 已有後續合約 (日期連續, 手動建的也算)
             if (c.contractType && c.contractType !== 'cohousing') return false;
             if (c.bundleParentContractId) return false;
             // 排除 renew_processed 標記過的 (避免重跑失敗 case 造成 spam)

@@ -382,7 +382,7 @@ async function handlePostback(event: any) {
     }
 
     const { data: contract } = await supabase
-        .from('contracts').select('id, tenant, end_date, property_name, renew_intent')
+        .from('contracts').select('id, tenant, end_date, property_name, renew_intent, term_months')
         .eq('id', contractId).maybeSingle();
     if (!contract || contract.tenant !== tenant.name) {
         await lineReply(event.replyToken, [
@@ -399,9 +399,12 @@ async function handlePostback(event: any) {
 
     // 回覆對應訊息
     const propertyShort = String(contract.property_name || '').replace('聚空間 - ', '');
+    // 續約期數 (新合約沿用舊合約的 termMonths) — 讓租客知道這次續約是幾個月
+    const termMonths = Number(contract.term_months) || 1;
+    const termLabel = termMonths === 3 ? '3 個月 (季繳)' : `${termMonths} 個月`;
     let replyText = '';
     if (intent === 'renew') {
-        replyText = `🎉 太好了！小編收到您的續租意願，會在合約到期前主動聯繫您處理續約。\n\n📍 ${propertyShort}\n📅 原合約到期：${contract.end_date}`;
+        replyText = `🎉 太好了！小編收到您的續租意願，會在合約到期前主動聯繫您處理續約。\n\n📍 ${propertyShort}\n📅 原合約到期：${contract.end_date}\n📆 續約期數：${termLabel}`;
     } else if (intent === 'decline') {
         replyText = `好的，小編已記下您不續租的意願。\n會在合約到期前再跟您確認退租手續 ☺️\n\n📍 ${propertyShort}\n📅 合約到期：${contract.end_date}`;
     } else {
@@ -834,10 +837,14 @@ Just paste your replies right here. Let us know your preferred viewing times, an
                     bank_last5: text,
                     bank_verified: false
                 }).eq('id', inv.id);
+                // ⚠ 應繳金額 = amount − discount (discount 負值代表加項, 如能源費)
+                //   之前直接用 inv.amount 沒扣加項/折扣, 造成金額跟原始繳款通知對不上
+                //   (2026-07-19 事故: 通知顯示 $10000, 這裡回報卻變 $9500, 就是少扣了 $500 加項)
+                const dueAmount = (Number(inv.amount) || 0) - (Number(inv.discount) || 0);
                 await lineReply(event.replyToken, [
                     {
                         type: 'text',
-                        text: `✅ ${bound.name} 您的繳款已記錄\n\n• 帳單：${inv.type} $${(inv.amount || 0).toLocaleString()}\n• 到期日：${inv.due_date || '未定'}\n• 末 5 碼：${text}\n\n小編核對銀行對帳單後會通知您 ✨`,
+                        text: `✅ ${bound.name} 您的繳款已記錄\n\n• 帳單：${inv.type} $${dueAmount.toLocaleString()}\n• 到期日：${inv.due_date || '未定'}\n• 末 5 碼：${text}\n\n小編核對銀行對帳單後會通知您 ✨`,
                         quickReply: tenantServiceQuickReply()
                     }
                 ]);
