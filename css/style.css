@@ -5491,6 +5491,78 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     margin-bottom: 1.5rem;
 }
 
+/* === 續租與收款流程 卡片內部 (2026-07-20 二版: 筆數/按鈕併入上排軌跡,
+   下方清單框不再重複標題, 明細改水平單行) === */
+.rp-track {
+    margin-bottom: 1.5rem;
+}
+/* 軌跡步驟本身不是可點擊區 (只有裡面的按鈕可點), 蓋掉 .ctl-step 原本給
+   合約 detail 時間軸用的 hover/pointer, 避免整格看起來像可點卻點不動 */
+.rp-track-step {
+    cursor: default !important;
+    min-width: 84px;
+}
+.rp-track-step:hover {
+    background: none;
+}
+.rp-track-count {
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    margin-top: 0.15rem;
+}
+
+.rp-cols {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.rp-col {
+    flex: 1;
+    min-width: 220px;
+    padding: 0.75rem 0.85rem;
+    border-radius: var(--radius-md);
+    background: var(--color-background);
+}
+.rp-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.4rem;
+    row-gap: 0.1rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px dashed var(--border-color);
+    font-size: var(--text-xs);
+}
+.rp-col > .rp-item:last-child,
+.rp-col > div:last-child.rp-item {
+    border-bottom: none;
+}
+.rp-item-main {
+    font-weight: 600;
+    color: var(--text-main);
+}
+.rp-item-sub {
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+}
+.rp-item-more {
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    padding-top: 0.25rem;
+}
+.rp-item-empty {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+@media (max-width: 720px) {
+    .rp-cols {
+        flex-direction: column;
+    }
+    .rp-col {
+        min-width: 0;
+    }
+}
+
 /* 各館空床 + 維修事項 並排一行 (2026-07-20 合約/帳款事項併入續租流程後,
    維修事項單獨一張卡吊在最下面會很孤立, 改跟空床卡湊一排 — 兩者都是
    「隨手看一眼現況」的次要資訊, 份量也相近, 湊一起視覺上比較平衡) */

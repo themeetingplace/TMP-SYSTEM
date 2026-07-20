@@ -124,91 +124,83 @@ function buildRenewalPipelineCard(invoices) {
     );
 
     const steps = [
-        { key: 'ask', num: 1, icon: 'ph-chat-circle-dots', label: '待發通知', count: askCandidates.length, color: 'var(--color-info)' },
-        { key: 'reply', num: 2, icon: 'ph-chats-circle', label: '回覆處理', count: renewCandidates.length + declineCandidates.length, color: 'var(--color-warning)' },
-        { key: 'verify', num: 3, icon: 'ph-shield-check', label: '待核對', count: verifyCandidates.length, color: 'var(--color-success)' }
+        { key: 'ask', num: 1, icon: 'ph-chat-circle-dots', label: '待發通知', count: askCandidates.length, color: 'var(--color-info)', actionLabel: '前往發送', actionId: 'btn-ask-renewal' },
+        { key: 'reply', num: 2, icon: 'ph-chats-circle', label: '回覆處理', count: renewCandidates.length + declineCandidates.length, color: 'var(--color-warning)', actionLabel: renewCandidates.length > 0 ? '前往確認' : '', actionId: renewCandidates.length > 0 ? 'btn-confirm-renewals' : '' },
+        { key: 'verify', num: 3, icon: 'ph-shield-check', label: '待核對', count: verifyCandidates.length, color: 'var(--color-success)', actionLabel: '前往核對', actionId: 'goto-unsettled' }
     ];
     const grandTotal = steps.reduce((s, st) => s + st.count, 0);
 
-    // 頂部連接的步驟指示 (沿用 .ctl-circle / .ctl-line 視覺, 這裡不分 done/current/future —
-    // 三步是平行佇列不是單一流程進度, 用「有沒有待辦」決定顏色深淺)
+    // 頂部步驟軌跡 — 唯一顯示「筆數 + 操作按鈕」的地方 (沿用 .ctl-circle/.ctl-line
+    // 視覺, 這裡不分 done/current/future — 三步是平行佇列不是單一流程進度,
+    // 用「有沒有待辦」決定顏色深淺). 下面的清單框只放明細, 不重複標題/筆數/按鈕.
     const trackHtml = `
-        <div class="ctl-track" style="margin-bottom: 1.25rem;">
+        <div class="ctl-track rp-track">
             ${steps.map((s, i) => `
                 ${i > 0 ? '<div class="ctl-line"></div>' : ''}
-                <div class="ctl-step" style="cursor: default;" tabindex="-1">
+                <div class="ctl-step rp-track-step" style="cursor: default;" tabindex="-1">
                     <div class="ctl-circle" style="${s.count > 0 ? `background:${s.color}; border-color:${s.color}; color:white;` : ''}">${s.num}</div>
                     <div class="ctl-label" style="${s.count > 0 ? `color:${s.color}; font-weight:700;` : ''}">${s.label}</div>
+                    ${s.count > 0 ? `<div class="rp-track-count" style="color:${s.color};">${s.count} 筆</div>` : ''}
+                    ${s.count > 0 && s.actionId ? `<button class="btn btn-outline renewal-pending-action" style="padding: 0.2rem 0.55rem; font-size: var(--text-2xs); margin-top: 0.3rem;" data-goto="${s.actionId}">${s.actionLabel} →</button>` : ''}
                 </div>
             `).join('')}
         </div>
     `;
 
-    // 步驟卡片內容
-    const renderPreviewLine = (text) => `<div style="font-size: var(--text-xs); color: var(--text-main); padding: 0.1rem 0;">${text}</div>`;
-
-    // 步驟① 待發通知 — 顯示現有合約期間 (還沒變, 只是要問了)
+    // 步驟① 待發通知 — 現有合約期間, 水平單行 (租客 · 館別 · 期間)
     const askItemsHtml = askCandidates.slice(0, 3).map(c => `
-        <div style="padding: 0.2rem 0; border-bottom: 1px dashed var(--border-color);">
-            <div style="font-size: var(--text-xs); color: var(--text-main); font-weight: 600;">${c.tenant} · ${extractAreaName(c.propertyName)}</div>
-            <div style="font-size: var(--text-2xs); color: var(--text-muted);">${c.startDate || '—'} ~ ${c.endDate || '—'}</div>
+        <div class="rp-item">
+            <span class="rp-item-main">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
+            <span class="rp-item-sub">${c.startDate || '—'} ~ ${c.endDate || '—'}</span>
         </div>
-    `).join('') + (askCandidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.2rem;">還有 ${askCandidates.length - 3} 筆…</div>` : '');
+    `).join('') + (askCandidates.length > 3 ? `<div class="rp-item-more">還有 ${askCandidates.length - 3} 筆…</div>` : '');
 
-    // 步驟② 回覆處理 — 「要續」的顯示假設現在確認, 新合約會是什麼期間/金額
+    // 步驟② 回覆處理 — 「要續」顯示假設現在確認, 新合約會是什麼期間/金額
     //   (跟 confirmAndProcessRenewals 實際送出時同一套算法, 保證數字一致)
     const replyItemsHtml = [
         ...renewCandidates.slice(0, 3).map(c => {
             const { newStart, newEnd, dueAmount } = previewRenewalFor(c);
             return `
-                <div style="padding: 0.2rem 0; border-bottom: 1px dashed var(--border-color);">
-                    <div style="font-size: var(--text-xs); display:flex; align-items:center; gap:0.3rem;">
-                        <span style="color: var(--color-success); font-weight:700;">✅要續</span>
-                        <span style="color: var(--text-main); font-weight: 600;">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
-                    </div>
-                    <div style="font-size: var(--text-2xs); color: var(--text-muted);">
-                        新期間 ${newStart} ~ ${newEnd} · 應繳 <strong style="color: var(--color-success);">$${dueAmount.toLocaleString()}</strong>
-                    </div>
+                <div class="rp-item">
+                    <span style="color: var(--color-success); font-weight:700;">✅要續</span>
+                    <span class="rp-item-main">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
+                    <span class="rp-item-sub">新期間 ${newStart}~${newEnd} · 應繳 <strong style="color: var(--color-success);">$${dueAmount.toLocaleString()}</strong></span>
                 </div>
             `;
         }),
         ...declineCandidates.slice(0, 3).map(c => `
-            <button type="button" class="renewal-decline-item" data-contract-id="${c.id}" style="all: unset; cursor: pointer; display:block; width: 100%; padding: 0.2rem 0; border-bottom: 1px dashed var(--border-color);">
-                <div style="font-size: var(--text-xs); display:flex; align-items:center; gap:0.3rem;">
-                    <span style="color: var(--color-danger); font-weight:700;">❌不續</span>
-                    <span style="color: var(--text-main); font-weight: 600;">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
-                    <span style="color: var(--text-muted); margin-left: auto; text-decoration: underline;">辦退租 →</span>
-                </div>
-                <div style="font-size: var(--text-2xs); color: var(--text-muted);">原到期 ${c.endDate || '—'}</div>
+            <button type="button" class="renewal-decline-item rp-item" style="all: unset; cursor: pointer; display:flex; flex-wrap:wrap; align-items:center; gap:0.4rem; width: 100%; padding: 0.3rem 0; border-bottom: 1px solid var(--border-color);" data-contract-id="${c.id}">
+                <span style="color: var(--color-danger); font-weight:700;">❌不續</span>
+                <span class="rp-item-main">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
+                <span class="rp-item-sub">原到期 ${c.endDate || '—'}</span>
+                <span style="color: var(--text-muted); margin-left: auto; text-decoration: underline; font-size: var(--text-2xs);">辦退租 →</span>
             </button>
         `)
     ].join('');
 
+    // 步驟③ 待核對 — 水平單行 (租客 金額 末5碼)
     const verifyItemsHtml = verifyCandidates.slice(0, 3).map(inv => {
         const due = (Number(inv.amount) || 0) - (Number(inv.discount) || 0);
-        return renderPreviewLine(`${inv.tenant || ''} $${due.toLocaleString()} 末5碼 ${inv.bankLast5}`);
-    }).join('') + (verifyCandidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">還有 ${verifyCandidates.length - 3} 筆…</div>` : '');
-
-    const stepColumn = (step, itemsHtml, actionLabel, actionId, emptyLabel) => `
-        <div style="flex: 1; min-width: 0; padding: 0.85rem; border-radius: var(--radius-md); background: var(--color-background);">
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                <div style="font-weight: 600; font-size: var(--text-sm); white-space: nowrap;">
-                    <i class="ph ${step.icon}" style="color: ${step.color};"></i> ${step.label}
-                    ${step.count > 0 ? `<span style="color: ${step.color}; font-weight: 700;">${step.count}</span> 筆` : ''}
-                </div>
-                ${step.count > 0 && actionId ? `<button class="btn btn-outline renewal-pending-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-2xs); flex-shrink: 0;" data-goto="${actionId}">${actionLabel} →</button>` : ''}
+        return `
+            <div class="rp-item">
+                <span class="rp-item-main">${inv.tenant || ''}</span>
+                <span class="rp-item-sub">$${due.toLocaleString()} · 末5碼 ${inv.bankLast5}</span>
             </div>
-            ${step.count > 0
-                ? `<div style="padding-top: 0.5rem; border-top: 1px dashed var(--border-color);">${itemsHtml}</div>`
-                : `<div style="font-size: var(--text-xs); color: var(--text-muted);">${emptyLabel}</div>`}
+        `;
+    }).join('') + (verifyCandidates.length > 3 ? `<div class="rp-item-more">還有 ${verifyCandidates.length - 3} 筆…</div>` : '');
+
+    // 下方清單框 — 只放明細, 沒有標題/筆數/按鈕 (那些都在上面軌跡了)
+    const stepColumn = (itemsHtml, hasItems, emptyLabel) => `
+        <div class="rp-col">
+            ${hasItems ? itemsHtml : `<div class="rp-item-empty">${emptyLabel}</div>`}
         </div>
     `;
 
     const columnsHtml = `
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            ${stepColumn(steps[0], askItemsHtml, '前往發送', 'btn-ask-renewal', '沒有待發送的通知')}
-            ${stepColumn(steps[1], replyItemsHtml, renewCandidates.length > 0 ? '前往確認' : '', renewCandidates.length > 0 ? 'btn-confirm-renewals' : '', '沒有待處理的回覆')}
-            ${stepColumn(steps[2], verifyItemsHtml, '前往核對', 'goto-unsettled', '沒有待核對的款項')}
+        <div class="rp-cols">
+            ${stepColumn(askItemsHtml, askCandidates.length > 0, '沒有待發送的通知')}
+            ${stepColumn(replyItemsHtml, (renewCandidates.length + declineCandidates.length) > 0, '沒有待處理的回覆')}
+            ${stepColumn(verifyItemsHtml, verifyCandidates.length > 0, '沒有待核對的款項')}
         </div>
     `;
 
