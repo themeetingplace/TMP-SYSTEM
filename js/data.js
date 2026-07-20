@@ -1897,7 +1897,8 @@ export const store = {
     },
 
     // 續租：基於舊合約自動產生新合約（同物件/租客/租金/termMonths，新期間 = 舊 endDate+1 ~ +30/+90 天）
-    renewContract(oldContractId) {
+    // opts.newAmount: 選填, 覆寫新合約月租 (沒傳就沿用舊合約金額, 原本的預設行為)
+    renewContract(oldContractId, opts = {}) {
         const oldContract = mockData.contracts.find(c => c.id === oldContractId);
         if (!oldContract) return { error: 'not_found' };
         if (oldContract.renewalState !== 'active') return { error: 'already_decided' };
@@ -1918,7 +1919,7 @@ export const store = {
             propertyId: oldContract.propertyId,
             propertyName: oldContract.propertyName,
             tenant: oldContract.tenant,
-            amount: oldContract.amount,
+            amount: opts.newAmount != null ? Number(opts.newAmount) : oldContract.amount,
             termMonths,
             signDate: newStartISO,
             startDate: newStartISO,

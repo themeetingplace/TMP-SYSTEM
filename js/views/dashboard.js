@@ -1,4 +1,4 @@
-﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, isUnsettled, currentMonth, getSortedBuildings, bedOccupied, isPreCutoff, leaseEndISO } from '../data.js';
+﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, isUnsettled, currentMonth, getSortedBuildings, bedOccupied, isPreCutoff } from '../data.js';
 import { emptyState } from '../utils/emptyState.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { getChartColors } from '../utils/chartTheme.js';
@@ -6,20 +6,8 @@ import { modeFilteredData } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { findRenewalAskCandidates, findRenewalAskCandidatesNoLine } from '../utils/renewalAskFallback.js';
 import { findRenewalConfirmCandidates, findDeclinePendingCandidates } from '../utils/autoRenewalProcessor.js';
-import { buildPaymentNoticeMessage } from '../utils/paymentNoticeMessage.js';
+import { previewRenewalFor } from '../utils/paymentNoticeMessage.js';
 import { confirmTerminate } from './contracts.js';
-
-// 假設「現在確認續約」會產生的新合約期間 + 應繳金額 — 借用跟實際發送通知
-// 完全同一套算法 (buildPaymentNoticeMessage), 確保這裡預覽的數字跟之後真的
-// 按「確認續約」送出時 100% 一致, 不會有兩套算法對不上的風險.
-function previewRenewalFor(oldContract) {
-    const term = oldContract.termMonths || 1;
-    const newStart = oldContract.endDate;
-    const newEnd = leaseEndISO(newStart, term);
-    const virtualContract = { ...oldContract, startDate: newStart, endDate: newEnd };
-    const { dueAmount } = buildPaymentNoticeMessage(virtualContract, {});
-    return { newStart, newEnd, dueAmount };
-}
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
 function extractAreaName(fullName) {

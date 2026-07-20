@@ -1827,9 +1827,15 @@ export function initContractActions(scope) {
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-family: monospace; font-size: var(--text-xs);">${c.id}</td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); font-weight: 600;">${c.tenant || '—'}</td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${propShort}</td>
+                    <td style="padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">
+                        <input type="number" class="confirm-amount" data-cid="${c.id}" value="${c.amount || 0}" ${disabled ? 'disabled' : ''} style="width: 80px; padding: 0.2rem 0.35rem; font-size: var(--text-xs); border: 1px solid var(--border-color); border-radius: 4px; background: var(--color-surface); color: var(--text-main);">
+                    </td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); color: var(--text-muted);">${c.endDate || '—'} 到期</td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">
                         ${!hasLine ? '<span class="status-badge danger" style="font-size: var(--text-2xs);">未綁 LINE</span>' : `<span style="color: var(--text-muted);">${respondedLabel}</span>`}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-color); text-align: center;">
+                        <button type="button" class="btn btn-outline confirm-edit-contract" data-cid="${c.id}" title="編輯這份原合約" style="padding: 0.2rem 0.4rem; font-size: var(--text-xs);"><i class="ph ph-pencil-simple"></i></button>
                     </td>
                 </tr>
             `;
@@ -1845,7 +1851,7 @@ export function initContractActions(scope) {
                 <div style="margin-bottom: 0.75rem; padding: 0.65rem 0.8rem; background: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--color-success); font-size: var(--text-sm); line-height: 1.5;">
                     <div>已在 LINE 回覆「續租」的合約共 <strong style="color: var(--color-success);">${enriched.length}</strong> 筆.</div>
                     <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.25rem;">
-                        勾選後按「建約並發送」會: 建立續租合約 → 套用租金加項規則 → LINE 發繳款通知. 請確認沒有跟你已手動建的合約重複再送出.
+                        勾選後按「建約並發送」會: 建立續租合約 → 套用租金加項規則 → LINE 發繳款通知. 租金可直接改, 需要調整其他細節請按 ✏ 編輯原合約. 請確認沒有跟你已手動建的合約重複再送出.
                     </div>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; font-size: var(--text-xs);">
@@ -1861,15 +1867,17 @@ export function initContractActions(scope) {
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">原合約</th>
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">租客</th>
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">床位</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">租金</th>
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">到期日</th>
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">回覆時間</th>
+                                <th style="padding: 0.5rem 0.5rem; width: 40px;"></th>
                             </tr>
                         </thead>
                         <tbody>${rowsHtml}</tbody>
                     </table>
                 </div>
             `,
-            onMount: (overlay) => {
+            onMount: (overlay, close) => {
                 const checks = () => overlay.querySelectorAll('.confirm-pick:not(:disabled)');
                 const countEl = overlay.querySelector('#confirm-count');
                 const confirmBtn = overlay.querySelector('[data-action="confirm"]');
@@ -1890,20 +1898,37 @@ export function initContractActions(scope) {
                 overlay.querySelector('#confirm-select-none')?.addEventListener('click', () => {
                     checks().forEach(c => { c.checked = false; }); updateCount();
                 });
+                // 編輯原合約 — 關掉這個 modal, 開合約編輯表單 (改完存檔後要重新點「確認續約」
+                // 才會看到新資料, 因為這個列表是點按鈕當下 snapshot 的)
+                overlay.querySelectorAll('.confirm-edit-contract').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const cid = btn.dataset.cid;
+                        const target = mockData.contracts.find(x => x.id === cid);
+                        if (!target) return;
+                        close();
+                        setTimeout(() => showContractForm(target), 200);
+                    });
+                });
                 updateCount();
             },
             onConfirm: async () => {
                 const openOverlay = document.querySelector('.modal-overlay:not(.is-closing)');
-                const picked = openOverlay
-                    ? Array.from(openOverlay.querySelectorAll('.confirm-pick')).filter(c => c.checked && !c.disabled).map(c => c.dataset.cid)
+                const renewals = openOverlay
+                    ? Array.from(openOverlay.querySelectorAll('.confirm-pick')).filter(c => c.checked && !c.disabled).map(chk => {
+                        const cid = chk.dataset.cid;
+                        const amountInput = openOverlay.querySelector(`.confirm-amount[data-cid="${cid}"]`);
+                        const parsed = amountInput ? Number(amountInput.value) : NaN;
+                        // 金額欄位被清空/打錯字 → 不傳 override, renewContract 自動 fallback 用舊合約金額
+                        return { id: cid, amount: (Number.isFinite(parsed) && parsed > 0) ? parsed : undefined };
+                    })
                     : [];
-                if (picked.length === 0) {
+                if (renewals.length === 0) {
                     showToast('沒選任何合約, 未建約', 'info');
                     return;
                 }
-                showToast(`建約中 (${picked.length} 筆)…`, 'info', 3000);
+                showToast(`建約中 (${renewals.length} 筆)…`, 'info', 3000);
                 try {
-                    const { successCount, failed } = await confirmAndProcessRenewals(picked);
+                    const { successCount, failed } = await confirmAndProcessRenewals(renewals);
                     if (successCount > 0) {
                         showToast(`✅ 已建立 ${successCount} 份續租合約並發送繳款通知`, 'success', 5000);
                     }

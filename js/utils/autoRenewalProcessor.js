@@ -52,10 +52,18 @@ export function findDeclinePendingCandidates() {
     });
 }
 
-// 對指定的合約 id 陣列執行: 建續租合約 + apply rentRules + 發繳款通知 LINE
+// 對指定的合約執行: 建續租合約 + apply rentRules + 發繳款通知 LINE
+// renewals: 陣列, 元素可以是純 id 字串 (沿用舊合約金額) 或 { id, amount } (admin 在
+//   確認 modal 調過月租, 用調整後的金額建約)
 // 回傳 { successCount, failed: [{id, tenant, reason}] }
-export async function confirmAndProcessRenewals(contractIds) {
-    const targets = mockData.contracts.filter(c => contractIds.includes(c.id));
+export async function confirmAndProcessRenewals(renewals) {
+    const amountOverrides = new Map();
+    const ids = renewals.map(r => {
+        if (typeof r === 'string') return r;
+        if (r.amount != null) amountOverrides.set(r.id, r.amount);
+        return r.id;
+    });
+    const targets = mockData.contracts.filter(c => ids.includes(c.id));
     let successCount = 0;
     const failed = [];
 
@@ -65,7 +73,8 @@ export async function confirmAndProcessRenewals(contractIds) {
             failed.push({ id: oldC.id, tenant: oldC.tenant, reason: '租客未綁 LINE' });
             continue;
         }
-        const r = store.renewContract(oldC.id);
+        const newAmount = amountOverrides.get(oldC.id);
+        const r = store.renewContract(oldC.id, newAmount != null ? { newAmount } : {});
         if (r.error) {
             failed.push({ id: oldC.id, tenant: oldC.tenant, reason: r.error });
             continue;

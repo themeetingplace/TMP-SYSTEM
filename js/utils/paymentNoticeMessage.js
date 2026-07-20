@@ -5,7 +5,7 @@
 // 為什麼要這個: 若用戶編輯合約日期後, invoice.dueDate/period 可能同步不及
 // (cascade 有 edge case), 造成 LINE 顯示舊值. 一律用 contract 當下值最安全.
 
-import { mockData, applyRentRules } from '../data.js';
+import { mockData, applyRentRules, leaseEndISO } from '../data.js';
 
 export function buildPaymentNoticeMessage(contract, opts = {}) {
     if (!contract) return { message: '', dueAmount: 0, dueDate: null };
@@ -54,4 +54,18 @@ ${greeting}
 入帳後合約 PDF 會自動寄給您.`;
 
     return { message, dueAmount, dueDate, period };
+}
+
+// 假設「現在確認續約」會產生的新合約期間 + 應繳金額 — 給續約前的預覽用
+// (首頁續租流程卡片 + 合約管理「確認續約」勾選 modal 共用, 保證兩處看到的
+// 數字跟之後真的按確認送出時 100% 一致, 不會有兩套算法對不上的風險)
+// opts.overrideAmount: 若 admin 在確認前調整了月租, 傳這個算出來的預覽才會反映新金額
+export function previewRenewalFor(oldContract, opts = {}) {
+    const term = oldContract.termMonths || 1;
+    const newStart = oldContract.endDate;
+    const newEnd = leaseEndISO(newStart, term);
+    const amount = opts.overrideAmount != null ? Number(opts.overrideAmount) : oldContract.amount;
+    const virtualContract = { ...oldContract, startDate: newStart, endDate: newEnd, amount };
+    const { dueAmount } = buildPaymentNoticeMessage(virtualContract, {});
+    return { newStart, newEnd, dueAmount };
 }
