@@ -1,11 +1,12 @@
-﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, getContractLifecycle, daysUntilExpiry, isUnsettled, currentMonth, getSortedBuildings, bedOccupied, isPreCutoff } from '../data.js';
+﻿import { mockData, monthlyChartData, invoiceMonth, lastNMonths, isUnsettled, currentMonth, getSortedBuildings, bedOccupied, isPreCutoff } from '../data.js';
 import { emptyState } from '../utils/emptyState.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { getChartColors } from '../utils/chartTheme.js';
 import { modeFilteredData } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { findRenewalAskCandidates } from '../utils/renewalAskFallback.js';
-import { findRenewalConfirmCandidates } from '../utils/autoRenewalProcessor.js';
+import { findRenewalConfirmCandidates, findDeclinePendingCandidates } from '../utils/autoRenewalProcessor.js';
+import { confirmTerminate } from './contracts.js';
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
 function extractAreaName(fullName) {
@@ -69,37 +70,8 @@ function buildEmptyBedsByProperty(properties, mode = getMode()) {
     return propertiesByArea;
 }
 
-// 構建合約類待辦：優先顯示「待決策」/ 「已過期」，其次「即將到期」/ 「待簽署」
-function buildContractTodos(contracts) {
-    const today = new Date();
-    const items = contracts
-        .map(c => ({ c, state: getContractLifecycle(c, today), days: daysUntilExpiry(c, today) }))
-        .filter(({ c, state }) => state === 'awaiting_decision' || state === 'expired' || state === 'expiring_soon' || c.status === '待簽署')
-        .sort((a, b) => {
-            const pri = { expired: 0, awaiting_decision: 1, expiring_soon: 2 };
-            return (pri[a.state] ?? 3) - (pri[b.state] ?? 3);
-        })
-        .slice(0, 3);
-
-    return items.map(({ c, state, days }) => {
-        let label, status;
-        if (state === 'expired')           { label = `已過期 ${-days} 天`; status = 'danger'; }
-        else if (state === 'awaiting_decision') { label = `${days} 天內到期`; status = 'danger'; }
-        else if (state === 'expiring_soon')     { label = `${days} 天後到期`; status = 'warning'; }
-        else                                    { label = '待簽署';          status = 'warning'; }
-
-        return {
-            status,
-            label,
-            text: `${extractAreaName(c.propertyName)} / ${c.tenant}`,
-            action: state === 'expired' || state === 'awaiting_decision' ? '決策' : '查看',
-            entityType: 'contract',
-            entityId: c.id
-        };
-    });
-}
-
-// 構建帳款類待辦（待結帳款：應收欠繳 + 應付未付）
+// 構建帳款類待辦（待結帳款：應收欠繳 + 應付未付）— 只有 helper 版還在用
+// (admin/owner 版的帳款可見度已併入下面的「續租與收款流程」步驟③)
 function buildFinanceTodos(invoices) {
     return invoices
         .filter(inv => inv.status === '欠繳' || inv.status === '未付')
@@ -108,7 +80,6 @@ function buildFinanceTodos(invoices) {
             const isIn = inv.direction === 'in';
             const sign = isIn ? '' : '-';
             const area = extractAreaName(inv.propertyName || '');
-            // 收入 (in): 顯示「館別 / 租客 / 類別」; 支出 (out): 顯示「館別 / 合約ID 或 整館 / 類別」
             const target = isIn
                 ? `${area}${inv.tenant ? ` / ${inv.tenant}` : ''}`
                 : `${area}${inv.contractId ? ` / ${inv.contractId}` : (inv.propertyName ? '' : ' / 整館')}`;
@@ -123,44 +94,99 @@ function buildFinanceTodos(invoices) {
         });
 }
 
-// 續租待處理卡片 — 常駐顯示 (不是會消失的 toast), 兩個子區塊:
-//   1. 📮 待發送續住詢問 (14 天內到期 + 未問過)
-//   2. ✅ 待確認續約 (租客已在 LINE 回覆續租, 但還沒建約發繳款通知)
-// 兩步都需要 admin 手動去合約管理按按鈕確認, 這裡只顯示「有多少筆在等」+ 快速入口
-function buildRenewalPendingCard() {
+// === 續租與收款流程 — 首頁主要待辦區 (2026-07-20 改版) ===
+// 用戶反饋舊版「合約事項/帳款事項」分類方式不直覺, 改成沿用合約 detail 的
+// 5 步驟時間軸視覺語言 (.ctl-circle / .ctl-line), 按實際操作動線排 3 步驟:
+//   ① 待發通知 — 14 天內到期 + 未問過 (findRenewalAskCandidates)
+//   ② 回覆處理 — 客人已在 LINE 回覆, 分「要續」(建約) / 「不續」(退租) 兩種
+//   ③ 待核對   — 客人已回報末 5 碼, 等小編核對入帳
+// 舊的「合約事項」(待簽署等) / 「帳款事項」(一般逾期) 已依用戶決定完全移除,
+// 這三步驟涵蓋首頁待辦的全部內容 (維修事項是獨立領域, 不屬於這個流程, 保留原樣).
+function buildRenewalPipelineCard(invoices) {
     const askCandidates = findRenewalAskCandidates();
-    const confirmCandidates = findRenewalConfirmCandidates();
-    const total = askCandidates.length + confirmCandidates.length;
+    const renewCandidates = findRenewalConfirmCandidates();
+    const declineCandidates = findDeclinePendingCandidates();
+    const verifyCandidates = invoices.filter(inv =>
+        inv.direction === 'in' && inv.bankLast5 && !inv.bankVerified
+    );
 
-    const renderRow = (icon, label, candidates, actionLabel, actionId, colorVar) => {
-        if (candidates.length === 0) return '';
-        const preview = candidates.slice(0, 3).map(c =>
-            `<div style="font-size: var(--text-xs); color: var(--text-main); padding: 0.1rem 0;">${c.tenant} · ${extractAreaName(c.propertyName)}</div>`
-        ).join('');
-        const more = candidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.15rem;">還有 ${candidates.length - 3} 筆…</div>` : '';
-        return `
-            <div style="padding: 0.75rem 0.85rem; border-radius: var(--radius-md); background: var(--color-background);">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                    <div style="font-weight: 600; font-size: var(--text-sm); white-space: nowrap;">
-                        <i class="ph ${icon}" style="color: ${colorVar};"></i> ${label}
-                        <span style="color: ${colorVar}; font-weight: 700;">${candidates.length}</span> 筆
-                    </div>
-                    <button class="btn btn-outline renewal-pending-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-2xs); flex-shrink: 0;" data-goto="${actionId}">${actionLabel} →</button>
+    const steps = [
+        { key: 'ask', num: 1, icon: 'ph-chat-circle-dots', label: '待發通知', count: askCandidates.length, color: 'var(--color-info)' },
+        { key: 'reply', num: 2, icon: 'ph-chats-circle', label: '回覆處理', count: renewCandidates.length + declineCandidates.length, color: 'var(--color-warning)' },
+        { key: 'verify', num: 3, icon: 'ph-shield-check', label: '待核對', count: verifyCandidates.length, color: 'var(--color-success)' }
+    ];
+    const grandTotal = steps.reduce((s, st) => s + st.count, 0);
+
+    // 頂部連接的步驟指示 (沿用 .ctl-circle / .ctl-line 視覺, 這裡不分 done/current/future —
+    // 三步是平行佇列不是單一流程進度, 用「有沒有待辦」決定顏色深淺)
+    const trackHtml = `
+        <div class="ctl-track" style="margin-bottom: 1.25rem;">
+            ${steps.map((s, i) => `
+                ${i > 0 ? '<div class="ctl-line"></div>' : ''}
+                <div class="ctl-step" style="cursor: default;" tabindex="-1">
+                    <div class="ctl-circle" style="${s.count > 0 ? `background:${s.color}; border-color:${s.color}; color:white;` : ''}">${s.num}</div>
+                    <div class="ctl-label" style="${s.count > 0 ? `color:${s.color}; font-weight:700;` : ''}">${s.label}</div>
                 </div>
-                <div style="padding-top: 0.5rem; border-top: 1px dashed var(--border-color);">${preview}${more}</div>
-            </div>
-        `;
-    };
+            `).join('')}
+        </div>
+    `;
 
-    const askHtml = renderRow('ph-chat-circle-dots', '待發送續住詢問', askCandidates, '前往發送', 'btn-ask-renewal', 'var(--color-info, #3b82f6)');
-    const confirmHtml = renderRow('ph-check-circle', '待確認續約', confirmCandidates, '前往確認', 'btn-confirm-renewals', 'var(--color-success)');
+    // 步驟卡片內容
+    const renderPreviewLine = (text) => `<div style="font-size: var(--text-xs); color: var(--text-main); padding: 0.1rem 0;">${text}</div>`;
+
+    const askItemsHtml = askCandidates.slice(0, 3).map(c =>
+        renderPreviewLine(`${c.tenant} · ${extractAreaName(c.propertyName)}`)
+    ).join('') + (askCandidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">還有 ${askCandidates.length - 3} 筆…</div>` : '');
+
+    const replyItemsHtml = [
+        ...renewCandidates.slice(0, 3).map(c =>
+            `<div style="font-size: var(--text-xs); padding: 0.1rem 0; display:flex; align-items:center; gap:0.3rem;">
+                <span style="color: var(--color-success); font-weight:700;">✅要續</span>
+                <span style="color: var(--text-main);">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
+            </div>`
+        ),
+        ...declineCandidates.slice(0, 3).map(c =>
+            `<button type="button" class="renewal-decline-item" data-contract-id="${c.id}" style="all: unset; cursor: pointer; display:flex; align-items:center; gap:0.3rem; font-size: var(--text-xs); padding: 0.1rem 0; width: 100%;">
+                <span style="color: var(--color-danger); font-weight:700;">❌不續</span>
+                <span style="color: var(--text-main);">${c.tenant} · ${extractAreaName(c.propertyName)}</span>
+                <span style="color: var(--text-muted); margin-left: auto; text-decoration: underline;">辦退租 →</span>
+            </button>`
+        )
+    ].join('');
+
+    const verifyItemsHtml = verifyCandidates.slice(0, 3).map(inv => {
+        const due = (Number(inv.amount) || 0) - (Number(inv.discount) || 0);
+        return renderPreviewLine(`${inv.tenant || ''} $${due.toLocaleString()} 末5碼 ${inv.bankLast5}`);
+    }).join('') + (verifyCandidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">還有 ${verifyCandidates.length - 3} 筆…</div>` : '');
+
+    const stepColumn = (step, itemsHtml, actionLabel, actionId, emptyLabel) => `
+        <div style="flex: 1; min-width: 0; padding: 0.85rem; border-radius: var(--radius-md); background: var(--color-background);">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <div style="font-weight: 600; font-size: var(--text-sm); white-space: nowrap;">
+                    <i class="ph ${step.icon}" style="color: ${step.color};"></i> ${step.label}
+                    ${step.count > 0 ? `<span style="color: ${step.color}; font-weight: 700;">${step.count}</span> 筆` : ''}
+                </div>
+                ${step.count > 0 && actionId ? `<button class="btn btn-outline renewal-pending-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-2xs); flex-shrink: 0;" data-goto="${actionId}">${actionLabel} →</button>` : ''}
+            </div>
+            ${step.count > 0
+                ? `<div style="padding-top: 0.5rem; border-top: 1px dashed var(--border-color);">${itemsHtml}</div>`
+                : `<div style="font-size: var(--text-xs); color: var(--text-muted);">${emptyLabel}</div>`}
+        </div>
+    `;
+
+    const columnsHtml = `
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            ${stepColumn(steps[0], askItemsHtml, '前往發送', 'btn-ask-renewal', '沒有待發送的通知')}
+            ${stepColumn(steps[1], replyItemsHtml, renewCandidates.length > 0 ? '前往確認' : '', renewCandidates.length > 0 ? 'btn-confirm-renewals' : '', '沒有待處理的回覆')}
+            ${stepColumn(steps[2], verifyItemsHtml, '前往核對', 'goto-unsettled', '沒有待核對的款項')}
+        </div>
+    `;
 
     return `
         <div class="card">
-            <h2 class="card-title"><i class="ph ph-arrows-clockwise"></i> 續租待處理</h2>
-            ${total > 0
-                ? `<div style="display: flex; flex-direction: column; gap: 0.75rem;">${askHtml}${confirmHtml}</div>`
-                : emptyState({ icon: 'ph-check-circle', title: '沒有待處理的續租事項', hint: '14 天內到期會自動出現在這裡' })}
+            <h2 class="card-title"><i class="ph ph-arrows-clockwise"></i> 續租與收款流程</h2>
+            ${trackHtml}
+            ${grandTotal > 0 ? columnsHtml : emptyState({ icon: 'ph-check-circle', title: '目前沒有待處理事項', hint: '通知/回覆/核對都清空了 ✓' })}
         </div>
     `;
 }
@@ -203,8 +229,7 @@ export function renderDashboard() {
     const propertyNames = Object.keys(emptyBedsByProperty);
     const firstProperty = propertyNames[0];
     
-    const contractTodos = buildContractTodos(contracts);
-    const financeTodos = buildFinanceTodos(invoices);
+    const financeTodos = buildFinanceTodos(invoices);  // helper 版用
     const maintenanceTodos = buildMaintenanceTodos(maintenances);
     
     const selectedPropertyData = emptyBedsByProperty[firstProperty] || { total: 0, active: 0, snoozed: 0, vacant: 0, vacantByGender: { '男': 0, '女': 0, '不限': 0 } };
@@ -358,11 +383,10 @@ export function renderDashboard() {
                 </div>
             `;
 
-            const contractTodoHtml = todoCardHtml('ph-file-text', '合約事項', contractTodos, { icon: 'ph-check-circle', title: '本月合約都安全', hint: '沒有即將到期 / 待簽 / 需決策的合約' });
             const financeTodoHtml = todoCardHtml('ph-wallet', '帳款事項', financeTodos, { icon: 'ph-coffee', title: '所有帳款都清光了', hint: '沒有待繳款或未對帳的項目' });
             const maintTodoHtml = todoCardHtml('ph-wrench', '維修事項', maintenanceTodos, { icon: 'ph-confetti', title: '沒有未處理的維修', hint: '所有報修都已完成或進行中' });
-            // 續租待處理 — 獨立常駐區域 (只在共居模式顯示, 代管沒有這套 LINE 續租流程)
-            const renewalPendingHtml = (!isHelper && mode !== 'managed') ? buildRenewalPendingCard() : '';
+            // 續租與收款流程 — 取代舊的「合約事項/帳款事項」, 只在共居模式顯示 (代管沒有這套 LINE 續租流程)
+            const renewalPipelineHtml = (!isHelper && mode !== 'managed') ? buildRenewalPipelineCard(invoices) : '';
 
             if (isHelper) {
                 // helper 版: 第二列 = 帳款事項 / 維修事項 / 各館空床 (3-col)
@@ -393,10 +417,8 @@ export function renderDashboard() {
                     </div>
                     ${vacancyCardHtml}
                 </div>
-                ${renewalPendingHtml ? `<div class="dashboard-renewal-pending">${renewalPendingHtml}</div>` : ''}
-                <div class="todo-cards-grid">
-                    ${contractTodoHtml}
-                    ${financeTodoHtml}
+                ${renewalPipelineHtml ? `<div class="dashboard-renewal-pending">${renewalPipelineHtml}</div>` : ''}
+                <div class="dashboard-maint-row">
                     ${maintTodoHtml}
                 </div>
             `;
@@ -687,15 +709,28 @@ window.initDashboardInteractions = function() {
         });
     });
 
-    // 續租待處理卡片 → 前往合約管理並自動點開對應的勾選 modal
+    // 續租與收款流程卡片 → 前往對應頁面並自動點開對應的勾選 modal
+    // (goto-unsettled 是特例: 直接導頁, 不是模擬點某顆按鈕)
     document.querySelectorAll('.renewal-pending-action').forEach(btn => {
         btn.addEventListener('click', () => {
             const targetBtnId = btn.dataset.goto;
             if (!targetBtnId) return;
+            if (targetBtnId === 'goto-unsettled') {
+                window.location.hash = 'unsettled';
+                return;
+            }
             window.location.hash = 'contracts';
             setTimeout(() => {
                 document.getElementById(targetBtnId)?.click();
             }, 400);
+        });
+    });
+
+    // 續租流程步驟②「不續」項目 → 直接開該合約的退租表單 (不用先跳頁)
+    document.querySelectorAll('.renewal-decline-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.contractId;
+            if (id) confirmTerminate(id);
         });
     });
 };

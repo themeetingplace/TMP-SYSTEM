@@ -5483,11 +5483,21 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     margin-top: 0;
 }
 
-/* 續租待處理 — 獨立區域, 跟上下的卡片都隔開一點呼吸空間
-   (todo-cards-grid 本身 margin-top:0, 這裡沒補 margin-bottom 的話兩張卡會直接貼在一起) */
+/* 續租與收款流程 — 獨立區域, 跟上下的卡片都隔開一點呼吸空間 */
 .dashboard-renewal-pending {
     margin-top: 1.5rem;
     margin-bottom: 1.5rem;
+}
+
+/* 維修事項改成單獨一張卡 (2026-07-20 合約/帳款事項併入續租流程後, 維修是
+   唯一剩下的 todo 卡, 不再用 3-col grid 撐版, 限制寬度避免看起來像忘了填內容) */
+.dashboard-maint-row {
+    max-width: 420px;
+}
+@media (max-width: 640px) {
+    .dashboard-maint-row {
+        max-width: 100%;
+    }
 }
 
 @media (max-width: 1024px) {

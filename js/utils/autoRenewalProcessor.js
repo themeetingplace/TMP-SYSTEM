@@ -36,6 +36,18 @@ export function findRenewalConfirmCandidates() {
     });
 }
 
+// 找出「已回覆不續租但還沒處理退租」的合約 (2026-07-20 補上的空隙:
+//   以前 decline 回覆完全沒有後續提醒, 系統只記了個 badge 就沒了)
+export function findDeclinePendingCandidates() {
+    return mockData.contracts.filter(c => {
+        if (c.renewIntent !== 'decline') return false;
+        if (c.renewalState !== 'active') return false;
+        if (c.contractType && c.contractType !== 'cohousing') return false;
+        if (c.bundleParentContractId) return false;
+        return true;
+    });
+}
+
 // 對指定的合約 id 陣列執行: 建續租合約 + apply rentRules + 發繳款通知 LINE
 // 回傳 { successCount, failed: [{id, tenant, reason}] }
 export async function confirmAndProcessRenewals(contractIds) {
