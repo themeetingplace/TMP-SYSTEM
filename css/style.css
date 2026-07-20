@@ -5491,75 +5491,161 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     margin-bottom: 1.5rem;
 }
 
-/* === 續租與收款流程 卡片內部 (2026-07-20 二版: 筆數/按鈕併入上排軌跡,
-   下方清單框不再重複標題, 明細改水平單行) === */
-.rp-track {
-    margin-bottom: 1.5rem;
+/* === 續租與收款流程 卡片內部 (2026-07-20 三版)
+   3 個獨立步驟區塊並排, 各自有橫排大標題 (編號圓圈+標題+筆數+按鈕), 下方
+   是按館分組、床號/租客對齊的明細表. 不用共用時間軸連接線 — 三步是平行
+   佇列不是單一流程的進度條, 各自獨立編號反而更誠實. === */
+.rp-steps {
+    display: flex;
+    align-items: stretch;
+    gap: 1.75rem;
 }
-/* 軌跡步驟本身不是可點擊區 (只有裡面的按鈕可點), 蓋掉 .ctl-step 原本給
-   合約 detail 時間軸用的 hover/pointer, 避免整格看起來像可點卻點不動 */
-.rp-track-step {
-    cursor: default !important;
-    min-width: 84px;
+.rp-step {
+    flex: 1;
+    min-width: 0;
 }
-.rp-track-step:hover {
-    background: none;
-}
-.rp-track-count {
-    font-size: var(--text-2xs);
-    font-weight: 700;
-    margin-top: 0.15rem;
+.rp-step + .rp-step {
+    padding-left: 1.75rem;
+    border-left: 1px solid var(--border-color);
 }
 
-.rp-cols {
+.rp-step-head {
     display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.9rem;
 }
-.rp-col {
-    flex: 1;
-    min-width: 220px;
-    padding: 0.75rem 0.85rem;
-    border-radius: var(--radius-md);
-    background: var(--color-background);
-}
-.rp-item {
+.rp-step-num {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    border: 2px solid var(--border-color);
+    background: var(--color-surface);
+    color: var(--text-muted);
+}
+.rp-step-title {
+    font-size: var(--text-md);
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
     align-items: baseline;
-    column-gap: 0.4rem;
-    row-gap: 0.1rem;
-    padding: 0.35rem 0;
-    border-bottom: 1px dashed var(--border-color);
-    font-size: var(--text-xs);
+    gap: 0.4rem;
+    white-space: nowrap;
 }
-.rp-col > .rp-item:last-child,
-.rp-col > div:last-child.rp-item {
+.rp-step-title i {
+    margin-right: 0.1rem;
+}
+.rp-step-count {
+    font-size: var(--text-xs);
+    font-weight: 700;
+}
+.rp-step-btn {
+    margin-left: auto;
+    padding: 0.3rem 0.65rem;
+    font-size: var(--text-2xs);
+    flex-shrink: 0;
+}
+
+.rp-building {
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+    margin: 0.7rem 0 0.3rem;
+}
+.rp-building:first-of-type {
+    margin-top: 0;
+}
+
+.rp-row {
+    display: grid;
+    grid-template-columns: 44px minmax(56px, auto) 1fr;
+    align-items: baseline;
+    column-gap: 0.6rem;
+    padding: 0.3rem 0;
+    font-size: var(--text-xs);
+    border-bottom: 1px solid var(--border-color);
+}
+.rp-row:last-child {
     border-bottom: none;
 }
-.rp-item-main {
+.rp-row--reply {
+    grid-template-columns: 40px 44px minmax(56px, auto) 1fr;
+}
+.rp-row--clickable {
+    all: unset;
+    display: grid;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition-fast);
+}
+.rp-row--clickable:hover {
+    background: var(--color-background);
+}
+.rp-bed {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+}
+.rp-tenant {
     font-weight: 600;
     color: var(--text-main);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.rp-item-sub {
+.rp-detail {
     color: var(--text-muted);
     font-size: var(--text-2xs);
 }
-.rp-item-more {
-    font-size: var(--text-2xs);
-    color: var(--text-muted);
-    padding-top: 0.25rem;
+.rp-intent {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+    text-align: center;
+    white-space: nowrap;
 }
-.rp-item-empty {
+.rp-intent--renew {
+    color: var(--color-success);
+    background: rgba(34, 148, 110, 0.12);
+}
+.rp-intent--decline {
+    color: var(--color-danger);
+    background: rgba(177, 53, 53, 0.1);
+}
+.rp-row-link {
+    grid-column: 1 / -1;
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    text-decoration: underline;
+    text-align: right;
+}
+
+.rp-empty {
     font-size: var(--text-xs);
     color: var(--text-muted);
+    padding: 0.5rem 0;
 }
-@media (max-width: 720px) {
-    .rp-cols {
+
+@media (max-width: 900px) {
+    .rp-steps {
         flex-direction: column;
+        gap: 1.25rem;
     }
-    .rp-col {
-        min-width: 0;
+    .rp-step + .rp-step {
+        padding-left: 0;
+        padding-top: 1.25rem;
+        border-left: none;
+        border-top: 1px solid var(--border-color);
     }
 }
 
