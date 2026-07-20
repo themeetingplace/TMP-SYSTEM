@@ -135,19 +135,19 @@ function buildRenewalPendingCard() {
     const renderRow = (icon, label, candidates, actionLabel, actionId, colorVar) => {
         if (candidates.length === 0) return '';
         const preview = candidates.slice(0, 3).map(c =>
-            `<div style="font-size: var(--text-xs); color: var(--text-main); padding: 0.15rem 0;">${c.tenant} · ${extractAreaName(c.propertyName)}</div>`
+            `<div style="font-size: var(--text-xs); color: var(--text-main); padding: 0.1rem 0;">${c.tenant} · ${extractAreaName(c.propertyName)}</div>`
         ).join('');
-        const more = candidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">還有 ${candidates.length - 3} 筆…</div>` : '';
+        const more = candidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.15rem;">還有 ${candidates.length - 3} 筆…</div>` : '';
         return `
-            <div style="padding: 0.75rem; border-radius: var(--radius-md); background: var(--color-background); margin-bottom: 0.75rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                    <div style="font-weight: 600; font-size: var(--text-sm);">
+            <div style="padding: 0.75rem 0.85rem; border-radius: var(--radius-md); background: var(--color-background);">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <div style="font-weight: 600; font-size: var(--text-sm); white-space: nowrap;">
                         <i class="ph ${icon}" style="color: ${colorVar};"></i> ${label}
                         <span style="color: ${colorVar}; font-weight: 700;">${candidates.length}</span> 筆
                     </div>
-                    <button class="btn btn-outline renewal-pending-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-2xs);" data-goto="${actionId}">${actionLabel} →</button>
+                    <button class="btn btn-outline renewal-pending-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-2xs); flex-shrink: 0;" data-goto="${actionId}">${actionLabel} →</button>
                 </div>
-                ${preview}${more}
+                <div style="padding-top: 0.5rem; border-top: 1px dashed var(--border-color);">${preview}${more}</div>
             </div>
         `;
     };
@@ -159,7 +159,7 @@ function buildRenewalPendingCard() {
         <div class="card">
             <h2 class="card-title"><i class="ph ph-arrows-clockwise"></i> 續租待處理</h2>
             ${total > 0
-                ? `${askHtml}${confirmHtml}`
+                ? `<div style="display: flex; flex-direction: column; gap: 0.75rem;">${askHtml}${confirmHtml}</div>`
                 : emptyState({ icon: 'ph-check-circle', title: '沒有待處理的續租事項', hint: '14 天內到期會自動出現在這裡' })}
         </div>
     `;
