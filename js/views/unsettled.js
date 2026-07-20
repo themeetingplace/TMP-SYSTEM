@@ -43,6 +43,10 @@ export function renderUnsettled() {
     const unsettled = filterInvoicesByMode(mockData.invoices)
         .filter(i => isUnsettled(i) && i.direction === 'in')
         .sort((a, b) => {
+            // 已回報末5碼待核對的排最前面 — 客戶已回應, 需要小編優先核對入帳
+            const av = (a.bankLast5 && !a.bankVerified) ? 0 : 1;
+            const bv = (b.bankLast5 && !b.bankVerified) ? 0 : 1;
+            if (av !== bv) return av - bv;
             const ao = isOverdue(a) ? 0 : 1;
             const bo = isOverdue(b) ? 0 : 1;
             if (ao !== bo) return ao - bo;
