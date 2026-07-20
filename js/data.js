@@ -1944,6 +1944,96 @@ export const store = {
         return { ok: true, newContract };
     },
 
+    // === 合約中途換床位 ===
+    // 用途: 房客住到一半換另一張床 (同租客, 不同物件). 把原合約在換床日「收尾」,
+    //   自動建一份新合約承接剩下的租期 (沿用 renewContract 的 parentContractId 連結
+    //   慣例, 讓住房一覽的「續N」badge 也認得出這是同一個租客的連續住宿).
+    //
+    // ⚠ 不自動產生新合約的帳單 — 因為換床通常落在月中, 期間是不規則的部分月,
+    //   用標準 termMonths × 月租 算會出錯 (今天已經因為類似的自動計算 bug 出過事故).
+    //   讓 admin 自己去帳務手動建那筆帳單 (物件+租客選好, 系統會自動帶出期間/月租
+    //   當起始值方便微調, 詳見 finance.js showInvoiceForm 的 syncFromContract).
+    //
+    // opts: { effectiveDate, newPropertyName, newAmount, note }
+    changeBed(oldContractId, opts = {}) {
+        const oldC = mockData.contracts.find(c => c.id === oldContractId);
+        if (!oldC) return { error: 'not_found' };
+        if (oldC.renewalState !== 'active') return { error: 'not_active' };
+
+        const { effectiveDate, newPropertyName, note } = opts;
+        if (!effectiveDate) return { error: 'missing_date' };
+        // 換床日必須嚴格介於起租日跟到期日之間 (不含頭尾 — 等於頭尾就該用續租/一般編輯)
+        if (!oldC.startDate || effectiveDate <= oldC.startDate) return { error: 'date_before_start' };
+        if (oldC.endDate && effectiveDate >= oldC.endDate) return { error: 'date_after_end' };
+
+        const newProp = mockData.properties.find(p => p.name === newPropertyName);
+        if (!newProp) return { error: 'property_not_found' };
+        if (newPropertyName === oldC.propertyName) return { error: 'same_property' };
+
+        // 新床位在換床日~原到期日這段不能已經有別的合約
+        const conflicts = findOverlappingBedContracts(newPropertyName, effectiveDate, oldC.endDate, {});
+        if (conflicts.length > 0) return { error: 'bed_conflict', conflict: conflicts[0] };
+
+        const newAmount = Number(opts.newAmount) || Number(oldC.amount) || 0;
+
+        // 1. 舊合約收尾在換床日 (renewalState='renewed' — 語意上這是「接續到別的合約」,
+        //    跟一般到期續租共用同一套狀態跟住房一覽的連續 chain 顯示邏輯)
+        // ⚠ contract 沒有通用 note 欄位存在 db-mapping (只有 renewNote 有 mapping),
+        //   用 renewNote 記換床備註, 避免寫進去的東西同步時被靜默丟掉
+        const oldIdx = mockData.contracts.findIndex(c => c.id === oldContractId);
+        const originalEndDate = oldC.endDate;
+        mockData.contracts[oldIdx] = {
+            ...mockData.contracts[oldIdx],
+            endDate: effectiveDate,
+            renewalState: 'renewed',
+            renewNote: [oldC.renewNote, `床位異動: ${effectiveDate} 轉到 ${newPropertyName}${note ? ` (${note})` : ''}`].filter(Boolean).join(' / ')
+        };
+        markDirty('contracts', oldContractId);
+
+        // 2. 舊床位釋放
+        const oldProp = mockData.properties.find(p => p.name === oldC.propertyName && p.contractId === oldContractId);
+        if (oldProp) {
+            mockData.properties[mockData.properties.indexOf(oldProp)] = {
+                ...oldProp, status: '待租', tenant: null, contractId: null, contractEnd: null
+            };
+            markDirty('properties', oldProp.id);
+        }
+
+        // 3. 新合約: 換床日 ~ 原到期日 (整個租期不變, 只是換了張床)
+        const newContract = {
+            id: nextId('C', mockData.contracts),
+            contractType: oldC.contractType || null,
+            buildingId: newProp.buildingId || null,
+            ownerId: oldC.ownerId || null,
+            lessorName: oldC.lessorName || null,
+            propertyId: newProp.id,
+            propertyName: newPropertyName,
+            tenant: oldC.tenant,
+            amount: newAmount,
+            termMonths: oldC.termMonths || 1,  // 顯示用 — 這份合約不會自動產生帳單, 不影響金額
+            signDate: effectiveDate,
+            startDate: effectiveDate,
+            endDate: originalEndDate,
+            status: '待簽署',
+            parentContractId: oldContractId,
+            renewalState: 'active',
+            paymentChannel: oldC.paymentChannel || 'self',
+            platformName: oldC.platformName || null,
+            renewNote: `床位異動 (原合約 ${oldContractId})`
+        };
+        mockData.contracts.push(newContract);
+        markDirty('contracts', newContract.id);
+
+        // 4. 新床位佔用
+        mockData.properties[mockData.properties.indexOf(newProp)] = {
+            ...newProp, status: '已出租', tenant: oldC.tenant, contractId: newContract.id, contractEnd: originalEndDate
+        };
+        markDirty('properties', newProp.id);
+
+        recalcMetrics();
+        return { ok: true, oldContract: mockData.contracts[oldIdx], newContract };
+    },
+
     // 歷史續租日期校正 — 舊邏輯多 +1 天，掃描所有 parentContractId != null 的合約
     //   exact pattern: startDate === addDaysISO(parent.endDate, 1)
     //   → 安全修：startDate := parent.endDate (endDate 不變)

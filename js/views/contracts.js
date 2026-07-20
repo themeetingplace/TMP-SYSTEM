@@ -966,6 +966,110 @@ function showContractForm(contract) {
     });
 }
 
+// 合約中途換床位 — 房客住到一半換另一張床 (租期不變, 只換物件)
+// 把原合約在換床日「收尾」, 自動建一份新合約承接剩下的租期 (見 store.changeBed)
+function showChangeBedForm(contract) {
+    const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const modeBuildingIds = new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === targetMode).map(b => b.id));
+    const buildingOptions = mockData.buildings
+        .filter(b => (b.mode || 'cohousing') === targetMode)
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(b => ({ value: b.id, label: b.name }));
+    const currentProperty = mockData.properties.find(p => p.name === contract.propertyName);
+    const initialBuildingId = currentProperty?.buildingId || buildingOptions[0]?.value || '';
+    const buildPropertyOptions = (buildingId) => mockData.properties
+        .filter(p => p.name !== contract.propertyName)
+        .filter(p => buildingId ? p.buildingId === buildingId : modeBuildingIds.has(p.buildingId))
+        .slice()
+        .sort((a, b) => {
+            const ra = Number(a.roomNumber ?? 999), rb = Number(b.roomNumber ?? 999);
+            if (ra !== rb) return ra - rb;
+            return (a.bedLetter || '').localeCompare(b.bedLetter || '');
+        })
+        .map(p => {
+            const active = activeContractFor(p.name);
+            const tag = active ? ` · ⚠ ${active.tenant}住至${active.endDate}` : ' · 空床';
+            return { value: p.name, label: `${p.name.replace('聚空間 - ', '')}${tag}` };
+        });
+    const newPropertyOptions = buildPropertyOptions(initialBuildingId);
+
+    openFormModal({
+        title: `🔀 更換床位 — ${contract.id}`,
+        maxWidth: 560,
+        headerHtml: `
+            <div style="margin-bottom: 1rem; padding: 0.75rem 1rem; background-color: var(--color-background); border-radius: var(--radius-md); font-size: var(--text-sm); line-height: 1.7;">
+                <div><strong>目前：</strong>${contract.tenant} · ${(contract.propertyName || '').replace('聚空間 - ', '')} · $${(contract.amount || 0).toLocaleString()}/月</div>
+                <div><strong>租期：</strong>${contract.startDate || '—'} ~ ${contract.endDate || '—'}</div>
+                <hr style="margin: 0.5rem 0; border: none; border-top: 1px dashed var(--border-color);">
+                <div style="color: var(--text-muted); font-size: var(--text-xs); line-height: 1.6;">
+                    送出後系統會自動: 舊床位收尾在換床日並釋放 (變回待租) → 新床位開一份接續合約 (租期到原到期日不變) 並佔用.
+                    <br>⚠ 帳單不會自動產生 (換床通常落在月中, 系統無法安全自動算部分月金額) — 請在確認後自行到帳務新增這段期間的房租.
+                </div>
+            </div>
+        `,
+        fields: [
+            { name: 'effectiveDate', label: '換床生效日', type: 'date', required: true, value: TODAY, hint: '須介於起租日跟到期日之間', span: 2 },
+            { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions, value: initialBuildingId },
+            { name: 'propertyName', label: '新床位', type: 'select', required: true, options: newPropertyOptions },
+            { name: 'newAmount', label: '新月租', type: 'number', required: true, value: contract.amount },
+            { name: 'note', label: '備註（選填）', type: 'textarea', span: 2, rows: 2 }
+        ],
+        values: {},
+        submitLabel: '確認換床',
+        onFormMount: (form) => {
+            const buildingHidden = form.querySelector('[name="buildingId"]');
+            const propertyWrap = form.querySelector('.custom-select[data-name="propertyName"]');
+            buildingHidden?.addEventListener('change', () => {
+                if (propertyWrap?.__setOptions) {
+                    propertyWrap.__setOptions(buildPropertyOptions(buildingHidden.value));
+                }
+            });
+        },
+        onSubmit: (values) => {
+            if (!values.propertyName) {
+                showToast('請選新床位', 'danger');
+                return false;
+            }
+            const conflict = findOverlappingBedContracts(values.propertyName, values.effectiveDate, contract.endDate, {});
+            if (conflict.length > 0) {
+                showToast(`床位衝突：${values.propertyName.replace('聚空間 - ', '')} 在這段期間已有合約 ${conflict[0].id}（${conflict[0].tenant}）`, 'danger', 6000);
+                return false;
+            }
+            const result = store.changeBed(contract.id, {
+                effectiveDate: values.effectiveDate,
+                newPropertyName: values.propertyName,
+                newAmount: values.newAmount,
+                note: values.note
+            });
+            if (result.error) {
+                const msgMap = {
+                    date_before_start: '換床日必須晚於起租日',
+                    date_after_end: '換床日必須早於到期日 (等於到期日請用一般編輯/續租)',
+                    bed_conflict: '新床位在這段期間已有其他合約',
+                    same_property: '新床位跟原床位相同, 不需要換床',
+                    not_active: '此合約目前非進行中狀態, 無法換床'
+                };
+                showToast(msgMap[result.error] || `換床失敗：${result.error}`, 'danger', 6000);
+                return false;
+            }
+            showToast(`✅ 已換床：${result.newContract.id} 承接到 ${result.newContract.endDate}`, 'success', 5000);
+            refreshView();
+            // 引導去帳務手動補這段期間的帳單
+            setTimeout(() => {
+                openConfirm({
+                    title: '記得手動補新床位這段期間的帳單',
+                    message: `新合約 <strong>${result.newContract.id}</strong> (${values.propertyName.replace('聚空間 - ', '')}) 沒有自動產生帳單.<br><br>
+                        前往 <strong>帳務管理 → 新增收入</strong>, 選物件「${values.propertyName.replace('聚空間 - ', '')}」+ 租客「${contract.tenant}」,
+                        系統會自動帶出期間 (${values.effectiveDate} ~ ${result.newContract.endDate}) 跟月租金額當起始值, 確認金額後存檔即可.`,
+                    confirmLabel: '前往帳務管理',
+                    cancelLabel: '稍後再說',
+                    onConfirm: () => { window.location.hash = 'finance'; }
+                });
+            }, 300);
+        }
+    });
+}
+
 export function showContractDetails(id) {
     const c = mockData.contracts.find(x => x.id === id);
     if (!c) return;
@@ -993,8 +1097,10 @@ export function showContractDetails(id) {
         footerHtml: (() => {
             const t = mockData.tenants.find(x => x.name === c.tenant && x.lineUserId);
             const hasLine = !!t?.lineUserId;
+            const canChangeBed = state === 'active' || state === 'expiring_soon' || state === 'awaiting_decision';
             return `
                 <button class="btn btn-outline" data-action="close-detail" type="button">關閉</button>
+                ${canChangeBed ? `<button class="btn btn-outline" data-action="change-bed" type="button" data-write title="房客住到一半換另一張床 (期間不變, 只換物件)"><i class="ph ph-arrows-left-right"></i> 更換床位</button>` : ''}
                 ${hasLine ? `<button class="btn btn-outline" data-action="resend-notice" type="button" data-write title="用當下合約資料重發 LINE 繳款通知 (修 date 錯掉的 case)"><i class="ph ph-arrow-clockwise"></i> 重發繳款通知</button>` : ''}
                 <button class="btn btn-primary" data-action="edit-from-detail" type="button" data-write>
                     <i class="ph ph-pencil"></i> 編輯合約
@@ -1006,6 +1112,10 @@ export function showContractDetails(id) {
             overlay.querySelector('[data-action="edit-from-detail"]')?.addEventListener('click', () => {
                 closeModal();
                 showContractForm(c);
+            });
+            overlay.querySelector('[data-action="change-bed"]')?.addEventListener('click', () => {
+                closeModal();
+                showChangeBedForm(c);
             });
             overlay.querySelector('[data-action="resend-notice"]')?.addEventListener('click', () => {
                 const t = mockData.tenants.find(x => x.name === c.tenant && x.lineUserId);
