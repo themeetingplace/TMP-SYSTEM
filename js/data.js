@@ -942,8 +942,13 @@ export function isSettled(inv) {
 //   額外床位合約呼叫 addContract 時不傳 __payment，就不會產生獨立 invoice (避免出現「主已收完、額外待繳」的怪狀態)
 function buildContractInvoice(contract, payment = {}) {
     if (!contract || !contract.startDate) return null;
+    // ⚠ 優先用 contract.buildingId (renewContract 等流程已經正確帶了這個值),
+    //   查床位表當備援即可 — 不要反過來. 之前這裡永遠重查床位表, 若查詢當下
+    //   (例如同步中途) 對不到 propertyName → buildingId=null → 該筆帳單在
+    //   filterInvoicesByMode 永遠被濾掉 (帳務/房租查帳/報表全部看不到, 但
+    //   資料庫裡其實好端端存在) — 2026-07-20 事故: C202 續租帳單消失.
     const property = mockData.properties.find(p => p.name === contract.propertyName);
-    const buildingId = property?.buildingId || null;
+    const buildingId = contract.buildingId || property?.buildingId || null;
     const term = contract.termMonths || 1;
     // 多床位 bundle：主合約 invoice 把額外床位月租一起算進去
     const extraRents = Array.isArray(payment.__bundleExtraRents) ? payment.__bundleExtraRents : [];

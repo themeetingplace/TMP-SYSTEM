@@ -36,7 +36,18 @@ export function filterContractsByMode(contracts, mode = getMode()) {
 
 export function filterInvoicesByMode(invoices, mode = getMode()) {
     const ids = currentModeBuildingIdSet(mode);
-    return invoices.filter(inv => ids.has(inv.buildingId));
+    // ⚠ 跟其他 filterXxxByMode 一致加 fallback — 之前這裡沒有,
+    //   若 invoice.buildingId 因任何原因是 null (見 buildContractInvoice 註解),
+    //   該筆帳單會在所有頁面永遠消失 (但資料庫裡其實存在), 誤導成「帳單不見了」
+    const allowedPropNames = new Set(
+        mockData.properties.filter(p => ids.has(p.buildingId)).map(p => p.name)
+    );
+    return invoices.filter(inv => {
+        if (inv.buildingId) return ids.has(inv.buildingId);
+        if (inv.propertyName) return allowedPropNames.has(inv.propertyName);
+        // 兩者都沒有 (整館共用支出等) → 預設歸共居, 跟其他 filter function 邏輯一致
+        return mode !== 'managed';
+    });
 }
 
 export function filterMaintenancesByMode(maintenances, mode = getMode()) {
