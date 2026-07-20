@@ -1271,6 +1271,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                     const contract = store.addContract({
                         propertyId: bed.id,
                         propertyName: bed.name,
+                        buildingId: bed.buildingId || null,
                         tenant: tenant.name,
                         signDate: startDate,
                         startDate,
@@ -1310,6 +1311,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                         const ec = store.addContract({
                             propertyId: eb.id,
                             propertyName: eb.name,
+                            buildingId: eb.buildingId || null,
                             tenant: tenant.name,
                             signDate: startDate,
                             startDate, endDate,

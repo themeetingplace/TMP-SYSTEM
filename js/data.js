@@ -1145,11 +1145,18 @@ export function applyRentRules(contract) {
         periodStartMonths.push(d.getMonth() + 1);
     }
 
+    // ⚠ 防禦性 fallback: contract.buildingId 若缺 (例如建立合約時忘了帶,
+    //   2026-07-20 抓到 properties.js 的建約流程就漏了這欄, 導致館別限定的
+    //   規則永遠對不到 undefined 而整條被跳過) → 用 propertyName 反查床位表
+    const effectiveBuildingId = contract.buildingId
+        || mockData.properties.find(p => p.name === contract.propertyName)?.buildingId
+        || null;
+
     const adjustments = [];
     rules.forEach(rule => {
         // 館別 filter (空 = 全部館)
         if (Array.isArray(rule.buildingIds) && rule.buildingIds.length > 0) {
-            if (!rule.buildingIds.includes(contract.buildingId)) return;
+            if (!rule.buildingIds.includes(effectiveBuildingId)) return;
         }
         // 月份 filter (哪幾月適用)
         const applyMonths = Array.isArray(rule.months) ? rule.months : [];
