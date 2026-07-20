@@ -5637,7 +5637,8 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 }
 
 /* 步驟①「未綁 LINE 需手動聯絡」子區塊 — 系統發不出去的那批, 用警示色跟
-   主清單區隔開, 不搶主清單的視覺份量 (它終究是次要/例外情況) */
+   主清單區隔開, 不搶主清單的視覺份量 (它終究是次要/例外情況).
+   用原生 <details>/<summary> 做收合, 預設收起來 (清單長時不會撐爆步驟①). */
 .rp-sub {
     margin-top: 0.75rem;
     padding-top: 0.65rem;
@@ -5650,10 +5651,27 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     font-size: var(--text-2xs);
     font-weight: 700;
     color: var(--color-warning-text);
-    margin-bottom: 0.4rem;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;  /* 拿掉瀏覽器預設的三角形 marker, 換自己的箭頭 icon */
+}
+.rp-sub-head::-webkit-details-marker {
+    display: none;
 }
 .rp-sub-count {
     margin-left: 0.15rem;
+}
+.rp-sub-caret {
+    margin-left: auto;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
+}
+.rp-sub[open] .rp-sub-caret {
+    transform: rotate(180deg);
+}
+.rp-sub .rp-building:first-of-type {
+    margin-top: 0.5rem;
 }
 
 @media (max-width: 900px) {

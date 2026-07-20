@@ -174,11 +174,12 @@ function buildRenewalPipelineCard(invoices) {
     // (以前這批人完全消失在待辦清單裡)
     const askNoLineGroups = groupByBuilding(askNoLineCandidates, c => c.propertyName);
     const askNoLineHtml = askNoLineCandidates.length > 0 ? `
-        <div class="rp-sub">
-            <div class="rp-sub-head">
+        <details class="rp-sub">
+            <summary class="rp-sub-head">
                 <i class="ph ph-warning-circle"></i> 未綁 LINE, 需手動聯絡
                 <span class="rp-sub-count">${askNoLineCandidates.length} 筆</span>
-            </div>
+                <i class="ph ph-caret-down rp-sub-caret"></i>
+            </summary>
             ${Array.from(askNoLineGroups.entries()).map(([building, items]) => `
                 <div class="rp-building">${building}</div>
                 ${items.map(c => {
@@ -193,7 +194,7 @@ function buildRenewalPipelineCard(invoices) {
                     `;
                 }).join('')}
             `).join('')}
-        </div>
+        </details>
     ` : '';
 
     // === 步驟② 回覆處理 — 要續 (預估新期間+金額, 跟真的送出時同算法) / 不續 (點了直接開退租) ===
