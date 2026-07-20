@@ -5636,6 +5636,26 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     padding: 0.5rem 0;
 }
 
+/* 步驟①「未綁 LINE 需手動聯絡」子區塊 — 系統發不出去的那批, 用警示色跟
+   主清單區隔開, 不搶主清單的視覺份量 (它終究是次要/例外情況) */
+.rp-sub {
+    margin-top: 0.75rem;
+    padding-top: 0.65rem;
+    border-top: 1px dashed var(--border-color);
+}
+.rp-sub-head {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    color: var(--color-warning-text);
+    margin-bottom: 0.4rem;
+}
+.rp-sub-count {
+    margin-left: 0.15rem;
+}
+
 @media (max-width: 900px) {
     .rp-steps {
         flex-direction: column;

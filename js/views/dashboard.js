@@ -4,7 +4,7 @@ import { moneyAmount } from '../utils/moneyDisplay.js';
 import { getChartColors } from '../utils/chartTheme.js';
 import { modeFilteredData } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
-import { findRenewalAskCandidates } from '../utils/renewalAskFallback.js';
+import { findRenewalAskCandidates, findRenewalAskCandidatesNoLine } from '../utils/renewalAskFallback.js';
 import { findRenewalConfirmCandidates, findDeclinePendingCandidates } from '../utils/autoRenewalProcessor.js';
 import { buildPaymentNoticeMessage } from '../utils/paymentNoticeMessage.js';
 import { confirmTerminate } from './contracts.js';
@@ -117,13 +117,14 @@ function buildFinanceTodos(invoices) {
 // 這三步驟涵蓋首頁待辦的全部內容 (維修事項是獨立領域, 不屬於這個流程, 保留原樣).
 function buildRenewalPipelineCard(invoices) {
     const askCandidates = findRenewalAskCandidates();
+    const askNoLineCandidates = findRenewalAskCandidatesNoLine();
     const renewCandidates = findRenewalConfirmCandidates();
     const declineCandidates = findDeclinePendingCandidates();
     const verifyCandidates = invoices.filter(inv =>
         inv.direction === 'in' && inv.bankLast5 && !inv.bankVerified
     );
 
-    const grandTotal = askCandidates.length + renewCandidates.length + declineCandidates.length + verifyCandidates.length;
+    const grandTotal = askCandidates.length + askNoLineCandidates.length + renewCandidates.length + declineCandidates.length + verifyCandidates.length;
 
     // 抓床號 (例: "聚空間 - 古亭2館 R2-B" → "R2-B")
     const bedCode = (propertyName) => (propertyName || '').match(/R\d+-[A-Z]/)?.[0] || '—';
@@ -140,7 +141,8 @@ function buildRenewalPipelineCard(invoices) {
     };
 
     // 一個步驟的完整區塊: 橫排大標題 (圓圈+標籤+筆數+按鈕) + 按館分組的明細表
-    const renderStep = ({ num, icon, label, color, count, actionLabel, actionId, groups, rowsHtml, emptyLabel }) => `
+    // extraHtml: 附加在主清單後面的額外區塊 (目前只有步驟①的「未綁LINE」子清單用到)
+    const renderStep = ({ num, icon, label, color, count, actionLabel, actionId, groups, rowsHtml, emptyLabel, extraHtml = '' }) => `
         <div class="rp-step">
             <div class="rp-step-head">
                 <div class="rp-step-num" style="${count > 0 ? `background:${color}; border-color:${color}; color:#fff;` : ''}">${num}</div>
@@ -150,7 +152,8 @@ function buildRenewalPipelineCard(invoices) {
                 </div>
                 ${count > 0 && actionId ? `<button class="btn btn-outline renewal-pending-action rp-step-btn" data-goto="${actionId}">${actionLabel} →</button>` : ''}
             </div>
-            ${count > 0 ? rowsHtml(groups) : `<div class="rp-empty">${emptyLabel}</div>`}
+            ${count > 0 ? rowsHtml(groups) : (extraHtml ? '' : `<div class="rp-empty">${emptyLabel}</div>`)}
+            ${extraHtml}
         </div>
     `;
 
@@ -166,6 +169,32 @@ function buildRenewalPipelineCard(invoices) {
             </div>
         `).join('')}
     `).join('');
+
+    // 沒綁 LINE 的候選 — 系統發不出去, 額外用警示子區塊列出讓 admin 手動聯絡
+    // (以前這批人完全消失在待辦清單裡)
+    const askNoLineGroups = groupByBuilding(askNoLineCandidates, c => c.propertyName);
+    const askNoLineHtml = askNoLineCandidates.length > 0 ? `
+        <div class="rp-sub">
+            <div class="rp-sub-head">
+                <i class="ph ph-warning-circle"></i> 未綁 LINE, 需手動聯絡
+                <span class="rp-sub-count">${askNoLineCandidates.length} 筆</span>
+            </div>
+            ${Array.from(askNoLineGroups.entries()).map(([building, items]) => `
+                <div class="rp-building">${building}</div>
+                ${items.map(c => {
+                    const t = mockData.tenants.find(x => x.name === c.tenant);
+                    const phone = t?.phone ? ` · ${t.phone}` : '';
+                    return `
+                        <div class="rp-row">
+                            <span class="rp-bed">${bedCode(c.propertyName)}</span>
+                            <span class="rp-tenant">${c.tenant}</span>
+                            <span class="rp-detail">${c.startDate || '—'} ~ ${c.endDate || '—'}${phone}</span>
+                        </div>
+                    `;
+                }).join('')}
+            `).join('')}
+        </div>
+    ` : '';
 
     // === 步驟② 回覆處理 — 要續 (預估新期間+金額, 跟真的送出時同算法) / 不續 (點了直接開退租) ===
     const replyItems = [
@@ -217,7 +246,7 @@ function buildRenewalPipelineCard(invoices) {
 
     const stepsHtml = `
         <div class="rp-steps">
-            ${renderStep({ num: 1, icon: 'ph-chat-circle-dots', label: '待發通知', color: 'var(--color-info)', count: askCandidates.length, actionLabel: '前往發送', actionId: 'btn-ask-renewal', groups: askGroups, rowsHtml: askRows, emptyLabel: '沒有待發送的通知' })}
+            ${renderStep({ num: 1, icon: 'ph-chat-circle-dots', label: '待發通知', color: 'var(--color-info)', count: askCandidates.length, actionLabel: '前往發送', actionId: 'btn-ask-renewal', groups: askGroups, rowsHtml: askRows, emptyLabel: '沒有待發送的通知', extraHtml: askNoLineHtml })}
             ${renderStep({ num: 2, icon: 'ph-chats-circle', label: '回覆處理', color: 'var(--color-warning)', count: renewCandidates.length + declineCandidates.length, actionLabel: '前往確認', actionId: renewCandidates.length > 0 ? 'btn-confirm-renewals' : '', groups: replyGroups, rowsHtml: replyRows, emptyLabel: '沒有待處理的回覆' })}
             ${renderStep({ num: 3, icon: 'ph-shield-check', label: '待核對', color: 'var(--color-success)', count: verifyCandidates.length, actionLabel: '前往核對', actionId: 'goto-unsettled', groups: verifyGroups, rowsHtml: verifyRows, emptyLabel: '沒有待核對的款項' })}
         </div>
