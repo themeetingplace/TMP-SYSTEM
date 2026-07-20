@@ -5483,6 +5483,11 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     margin-top: 0;
 }
 
+/* 續租待處理 — 獨立區域, 跟下面的 3-col todo grid 隔開一點呼吸空間 */
+.dashboard-renewal-pending {
+    margin-top: 1.5rem;
+}
+
 @media (max-width: 1024px) {
     .todo-cards-grid {
         grid-template-columns: 1fr;

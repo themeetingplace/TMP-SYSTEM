@@ -4,6 +4,8 @@ import { moneyAmount } from '../utils/moneyDisplay.js';
 import { getChartColors } from '../utils/chartTheme.js';
 import { modeFilteredData } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
+import { findRenewalAskCandidates } from '../utils/renewalAskFallback.js';
+import { findRenewalConfirmCandidates } from '../utils/autoRenewalProcessor.js';
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
 function extractAreaName(fullName) {
@@ -119,6 +121,48 @@ function buildFinanceTodos(invoices) {
                 entityId: inv.id
             };
         });
+}
+
+// 續租待處理卡片 — 常駐顯示 (不是會消失的 toast), 兩個子區塊:
+//   1. 📮 待發送續住詢問 (14 天內到期 + 未問過)
+//   2. ✅ 待確認續約 (租客已在 LINE 回覆續租, 但還沒建約發繳款通知)
+// 兩步都需要 admin 手動去合約管理按按鈕確認, 這裡只顯示「有多少筆在等」+ 快速入口
+function buildRenewalPendingCard() {
+    const askCandidates = findRenewalAskCandidates();
+    const confirmCandidates = findRenewalConfirmCandidates();
+    const total = askCandidates.length + confirmCandidates.length;
+
+    const renderRow = (icon, label, candidates, actionLabel, actionId, colorVar) => {
+        if (candidates.length === 0) return '';
+        const preview = candidates.slice(0, 3).map(c =>
+            `<div style="font-size: var(--text-xs); color: var(--text-main); padding: 0.15rem 0;">${c.tenant} · ${extractAreaName(c.propertyName)}</div>`
+        ).join('');
+        const more = candidates.length > 3 ? `<div style="font-size: var(--text-2xs); color: var(--text-muted);">還有 ${candidates.length - 3} 筆…</div>` : '';
+        return `
+            <div style="padding: 0.75rem; border-radius: var(--radius-md); background: var(--color-background); margin-bottom: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                    <div style="font-weight: 600; font-size: var(--text-sm);">
+                        <i class="ph ${icon}" style="color: ${colorVar};"></i> ${label}
+                        <span style="color: ${colorVar}; font-weight: 700;">${candidates.length}</span> 筆
+                    </div>
+                    <button class="btn btn-outline renewal-pending-action" style="padding: 0.25rem 0.6rem; font-size: var(--text-2xs);" data-goto="${actionId}">${actionLabel} →</button>
+                </div>
+                ${preview}${more}
+            </div>
+        `;
+    };
+
+    const askHtml = renderRow('ph-chat-circle-dots', '待發送續住詢問', askCandidates, '前往發送', 'btn-ask-renewal', 'var(--color-info, #3b82f6)');
+    const confirmHtml = renderRow('ph-check-circle', '待確認續約', confirmCandidates, '前往確認', 'btn-confirm-renewals', 'var(--color-success)');
+
+    return `
+        <div class="card">
+            <h2 class="card-title"><i class="ph ph-arrows-clockwise"></i> 續租待處理</h2>
+            ${total > 0
+                ? `${askHtml}${confirmHtml}`
+                : emptyState({ icon: 'ph-check-circle', title: '沒有待處理的續租事項', hint: '14 天內到期會自動出現在這裡' })}
+        </div>
+    `;
 }
 
 // 構建維修類待辦
@@ -317,6 +361,8 @@ export function renderDashboard() {
             const contractTodoHtml = todoCardHtml('ph-file-text', '合約事項', contractTodos, { icon: 'ph-check-circle', title: '本月合約都安全', hint: '沒有即將到期 / 待簽 / 需決策的合約' });
             const financeTodoHtml = todoCardHtml('ph-wallet', '帳款事項', financeTodos, { icon: 'ph-coffee', title: '所有帳款都清光了', hint: '沒有待繳款或未對帳的項目' });
             const maintTodoHtml = todoCardHtml('ph-wrench', '維修事項', maintenanceTodos, { icon: 'ph-confetti', title: '沒有未處理的維修', hint: '所有報修都已完成或進行中' });
+            // 續租待處理 — 獨立常駐區域 (只在共居模式顯示, 代管沒有這套 LINE 續租流程)
+            const renewalPendingHtml = (!isHelper && mode !== 'managed') ? buildRenewalPendingCard() : '';
 
             if (isHelper) {
                 // helper 版: 第二列 = 帳款事項 / 維修事項 / 各館空床 (3-col)
@@ -347,6 +393,7 @@ export function renderDashboard() {
                     </div>
                     ${vacancyCardHtml}
                 </div>
+                ${renewalPendingHtml ? `<div class="dashboard-renewal-pending">${renewalPendingHtml}</div>` : ''}
                 <div class="todo-cards-grid">
                     ${contractTodoHtml}
                     ${financeTodoHtml}
@@ -637,6 +684,18 @@ window.initDashboardInteractions = function() {
             const type = btn.dataset.entityType;
             const id = btn.dataset.entityId;
             if (window.openEntity && type && id) window.openEntity(type, id);
+        });
+    });
+
+    // 續租待處理卡片 → 前往合約管理並自動點開對應的勾選 modal
+    document.querySelectorAll('.renewal-pending-action').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetBtnId = btn.dataset.goto;
+            if (!targetBtnId) return;
+            window.location.hash = 'contracts';
+            setTimeout(() => {
+                document.getElementById(targetBtnId)?.click();
+            }, 400);
         });
     });
 };

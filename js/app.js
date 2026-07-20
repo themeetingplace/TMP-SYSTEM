@@ -26,7 +26,6 @@ import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
 import { bootstrap as syncBootstrap } from './sync.js'; // 雲端同步引擎
-import { checkPendingRenewalAsks, checkPendingRenewalConfirms } from './utils/renewalAskFallback.js'; // 登入時提醒: 待詢問續租 / 待確認建約 (兩者都不自動執行, 只彈 toast 讓 admin 手動確認)
 import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole } from './auth.js';
 import { showLogin, showAccessDenied, bindPasswordToggles } from './views/login.js';
 import { applyAvatar, getAvatar, AVATAR_ICONS, AVATAR_COLORS } from './utils/avatar.js';
@@ -490,12 +489,9 @@ window.addEventListener('bms:data-changed', (e) => {
     _dataChangedTimer = setTimeout(() => handleRoute(), 150);
 });
 
-// 續租流程登入提醒 (2026-07-19 全面改成手動確認, 不再自動執行任何寫入):
-//   1. 待詢問續租 (14 天內到期 + 未問過) → 提醒去「詢問續租」勾選送出
-//   2. 待確認建約 (已回覆續租但還沒建約) → 提醒去「確認續約」勾選送出
-// 每次 session 只提示一次 (sessionStorage), 都是「彈提醒, admin 主動點才動作」
-setTimeout(() => { try { checkPendingRenewalAsks(); } catch(e) { console.warn('[renewalAskPrompt]', e); } }, 8000);
-setTimeout(() => { try { checkPendingRenewalConfirms(); } catch(e) { console.warn('[renewalConfirmPrompt]', e); } }, 9500);
+// 續租流程「待詢問」/「待確認建約」提醒 (2026-07-19 改成手動確認) 已從
+// toast 改成首頁常駐卡片 (2026-07-20 用戶反饋 toast 點掉就消失), 見
+// js/views/dashboard.js 的「續租待處理」卡片, 不需要在這裡另外觸發.
 
 // 關於系統 — 點 sidebar footer 的版本號開啟
 window.showAboutApp = function() {

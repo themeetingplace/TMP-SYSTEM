@@ -1,27 +1,19 @@
 // renewalAskFallback.js
-// 登入時提醒 — 不自動發, 只彈 toast 提醒 admin 手動去確認發送
-//
-// 為什麼不自動: 自動發風險高 (時間點/合約狀態出錯 = 錯訊息直接飛到租客 LINE 沒得救).
-//              寧願讓 admin 每次登入看到「有 N 筆該問」→ 主動點按鈕 → 打開勾選 modal → 確認送.
-// 觸發時機: app.js bootstrap 完成後 (延遲 5s)
+// 純掃描函式 — 找出「待詢問續租」的候選合約, 不寫入任何資料, 不發任何訊息.
+// 給首頁「續租待處理」卡片用 (2026-07-20: 從 toast 提醒改成常駐卡片,
+// 用戶反饋 toast 點掉就消失, 想要一個固定看得到的獨立區域).
 
 import { mockData } from '../data.js';
-import { findRenewalConfirmCandidates } from './autoRenewalProcessor.js';
 
 const ASK_WINDOW_DAYS = 14;
 const COOLDOWN_DAYS = 5;
-const SESSION_KEY = 'pms-renewal-ask-prompt-shown';  // 每次 session 只提示一次 (sessionStorage)
-const CONFIRM_SESSION_KEY = 'pms-renewal-confirm-prompt-shown';
 
-export function checkPendingRenewalAsks() {
-    // 同一次 tab session 只提示一次 (避免頻繁刷 view 重跳)
-    if (sessionStorage.getItem(SESSION_KEY)) return;
-
+export function findRenewalAskCandidates() {
     const todayIso = new Date().toISOString().slice(0, 10);
     const cutoff = new Date(Date.now() + ASK_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
     const tenantByName = new Map(mockData.tenants.map(t => [t.name, t]));
 
-    const candidates = mockData.contracts.filter(c => {
+    return mockData.contracts.filter(c => {
         if (c.renewalState !== 'active') return false;
         if (!c.endDate || c.endDate < todayIso || c.endDate > cutoff) return false;
         if (c.contractType && c.contractType !== 'cohousing') return false;
@@ -34,84 +26,5 @@ export function checkPendingRenewalAsks() {
             if (Date.now() - askedMs < COOLDOWN_DAYS * 86400000) return false;
         }
         return true;
-    });
-
-    if (candidates.length === 0) {
-        console.log('[renewalAskPrompt] 沒有待詢問合約');
-        sessionStorage.setItem(SESSION_KEY, '1');
-        return;
-    }
-
-    console.log(`[renewalAskPrompt] 有 ${candidates.length} 筆待詢問:`,
-        candidates.map(c => `${c.id} (${c.tenant}, 到期 ${c.endDate})`));
-
-    // 彈一個 toast 提醒, 點擊跳去合約頁 auto-open 勾選 modal
-    import('./ui.js').then(({ showToast }) => {
-        const toast = showToast(
-            `🔔 有 ${candidates.length} 位租客待詢問續租, 點此前往`,
-            'info',
-            30000  // 30 秒 (讓 user 有時間反應)
-        );
-        if (toast && toast.addEventListener) {
-            toast.style.cursor = 'pointer';
-            toast.title = '點擊前往合約管理 → 詢問續租 (勾選 modal)';
-            // 稍微高亮, 提示可點
-            toast.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.35), 0 0 0 2px rgba(59, 130, 246, 0.15)';
-            toast.addEventListener('click', () => {
-                sessionStorage.setItem(SESSION_KEY, '1');
-                toast.remove();
-                // 導向合約管理 + 觸發詢問續租 modal
-                if (window.location.hash !== '#contracts') {
-                    window.location.hash = 'contracts';
-                }
-                setTimeout(() => {
-                    document.querySelector('#btn-ask-renewal')?.click();
-                }, 500);
-            });
-        } else {
-            console.warn('[renewalAskPrompt] showToast 沒回 element, 點擊功能無法啟用');
-        }
-        sessionStorage.setItem(SESSION_KEY, '1');
-    });
-}
-
-// 登入時提醒: 有租客已在 LINE 回覆「續租」但還沒建約 → 提醒 admin 去確認建約+發繳款通知
-// (2026-07-19: 這步驟從「全自動建約」改成「掃描+提醒, 手動確認」)
-export function checkPendingRenewalConfirms() {
-    if (sessionStorage.getItem(CONFIRM_SESSION_KEY)) return;
-
-    const candidates = findRenewalConfirmCandidates();
-    if (candidates.length === 0) {
-        sessionStorage.setItem(CONFIRM_SESSION_KEY, '1');
-        return;
-    }
-
-    console.log(`[renewalConfirmPrompt] 有 ${candidates.length} 筆已回續租待確認建約:`,
-        candidates.map(c => `${c.id} (${c.tenant})`));
-
-    import('./ui.js').then(({ showToast }) => {
-        const toast = showToast(
-            `✅ 有 ${candidates.length} 位租客已回覆續租, 點此確認建約+發繳款通知`,
-            'success',
-            30000
-        );
-        if (toast && toast.addEventListener) {
-            toast.style.cursor = 'pointer';
-            toast.title = '點擊前往合約管理 → 確認續約 (勾選 modal)';
-            toast.style.boxShadow = '0 4px 12px rgba(34, 148, 110, 0.35), 0 0 0 2px rgba(34, 148, 110, 0.15)';
-            toast.addEventListener('click', () => {
-                sessionStorage.setItem(CONFIRM_SESSION_KEY, '1');
-                toast.remove();
-                if (window.location.hash !== '#contracts') {
-                    window.location.hash = 'contracts';
-                }
-                setTimeout(() => {
-                    document.querySelector('#btn-confirm-renewals')?.click();
-                }, 500);
-            });
-        } else {
-            console.warn('[renewalConfirmPrompt] showToast 沒回 element, 點擊功能無法啟用');
-        }
-        sessionStorage.setItem(CONFIRM_SESSION_KEY, '1');
     });
 }
