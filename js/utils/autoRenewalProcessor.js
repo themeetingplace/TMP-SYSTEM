@@ -28,6 +28,8 @@ export function findRenewalConfirmCandidates() {
     return mockData.contracts.filter(c => {
         if (c.renewIntent !== 'renew') return false;
         if (c.renewalState !== 'active') return false;
+        // admin 已排定退租 (可能事後改主意/搬走) → 以退租為準, 不再提示確認續約
+        if (c.pendingTerminationDate) return false;
         if (successorSet.has(c.id)) return false;
         if (hasImplicitSuccessor(c)) return false;
         if (c.contractType && c.contractType !== 'cohousing') return false;
@@ -42,6 +44,8 @@ export function findDeclinePendingCandidates() {
     return mockData.contracts.filter(c => {
         if (c.renewIntent !== 'decline') return false;
         if (c.renewalState !== 'active') return false;
+        // 已經排定退租了 (admin 已處理過) → 不用再提醒去辦退租
+        if (c.pendingTerminationDate) return false;
         if (c.contractType && c.contractType !== 'cohousing') return false;
         if (c.bundleParentContractId) return false;
         return true;

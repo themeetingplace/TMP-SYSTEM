@@ -15,6 +15,9 @@ export function findRenewalAskCandidates() {
 
     return mockData.contracts.filter(c => {
         if (c.renewalState !== 'active') return false;
+        // 已排定退租 (admin 已手動處理過, 只是還沒到生效日) → 不用再問要不要續住,
+        // 人家已經確定要走了
+        if (c.pendingTerminationDate) return false;
         if (!c.endDate || c.endDate < todayIso || c.endDate > cutoff) return false;
         if (c.contractType && c.contractType !== 'cohousing') return false;
         if (c.bundleParentContractId) return false;

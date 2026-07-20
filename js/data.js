@@ -809,6 +809,12 @@ export function getContractLifecycle(contract, today = new Date()) {
     if (!contract) return 'unknown';
     if (contract.renewalState === 'renewed') return 'renewed';
     if (contract.renewalState === 'terminated') return 'terminated';
+    // 已排定退租 (退租生效日在未來, 見 store.terminateContract 的延後執行分支):
+    // 決策已經下了 (admin 點過退租, 只是還沒到生效日), 不要再讓日期倒數的
+    // 一般邏輯誤判成「待決策」/「即將到期」— 那些是還沒處理的狀態, 這筆已經處理了.
+    // 床位/住房一覽仍照常顯示到生效日 (occupancy.js 沒有動, 本來就只看 property/
+    // contract.endDate, pendingTerminationDate 不影響那邊).
+    if (contract.pendingTerminationDate) return 'pending_termination';
     if (!contract.endDate) return 'active';
 
     // snooze 期間內：當作正常進行中，不出決策卡
@@ -851,6 +857,7 @@ export function contractLifecycleLabel(state) {
         expiring_soon: { text: '即將到期', cls: 'warning' },
         awaiting_decision: { text: '待決策', cls: 'danger' },
         expired: { text: '已過期',     cls: 'danger' },
+        pending_termination: { text: '退租',  cls: 'warning' },
         snoozed: { text: '已暫緩',     cls: 'info' },
         renewed: { text: '已續約',     cls: 'info' },
         terminated: { text: '已終止',  cls: 'primary' }

@@ -262,14 +262,14 @@ export function renderContracts() {
         const cmp = SORT_COLS[currentSort.col].cmp;
         enriched.sort(currentSort.dir === 'desc' ? (a, b) => -cmp(a, b) : cmp);
     } else {
-        const priority = { awaiting_decision: 0, expired: 1, expiring_soon: 2, active: 3, snoozed: 4, renewed: 5, terminated: 6 };
+        const priority = { awaiting_decision: 0, expired: 1, expiring_soon: 2, active: 3, pending_termination: 4, snoozed: 5, renewed: 6, terminated: 7 };
         enriched.sort((a, b) => (priority[a._state] ?? 99) - (priority[b._state] ?? 99));
     }
 
     const totalContracts = enriched.length;
     const decisionCount = enriched.filter(c => needsDecision(c, TODAY_DATE)).length;
     const expiringSoonCount = enriched.filter(c => c._state === 'expiring_soon').length;
-    const activeCount = enriched.filter(c => c._state === 'active' || c._state === 'snoozed' || c._state === 'expiring_soon' || c._state === 'awaiting_decision' || c._state === 'expired').length;
+    const activeCount = enriched.filter(c => c._state === 'active' || c._state === 'snoozed' || c._state === 'expiring_soon' || c._state === 'awaiting_decision' || c._state === 'expired' || c._state === 'pending_termination').length;
     const archivedCount = enriched.filter(c => c._state === 'renewed' || c._state === 'terminated').length;
 
     // 續租意願計數 (LINE 自動詢問結果)
@@ -490,6 +490,7 @@ export function renderContracts() {
                 <button class="filter-tab" data-filter-value="expired">已過期 (${enriched.filter(c => c._state === 'expired').length})</button>
                 <button class="filter-tab" data-filter-value="expiring_soon">即將到期 (${expiringSoonCount})</button>
                 <button class="filter-tab" data-filter-value="active">進行中 (${enriched.filter(c => c._state === 'active').length})</button>
+                <button class="filter-tab" data-filter-value="pending_termination">退租中 (${enriched.filter(c => c._state === 'pending_termination').length})</button>
                 <button class="filter-tab" data-filter-value="snoozed">已暫緩 (${enriched.filter(c => c._state === 'snoozed').length})</button>
                 <button class="filter-tab" data-filter-value="renewed">已續約 (${enriched.filter(c => c._state === 'renewed').length})</button>
                 <button class="filter-tab" data-filter-value="terminated">已終止 (${enriched.filter(c => c._state === 'terminated').length})</button>
@@ -1054,7 +1055,11 @@ export function showContractDetails(id) {
         title: `合約 ${c.id}`,
         topHtml: contractProgressTimeline(c, state),
         items: [
-            { label: '生命週期', value: lifecycleBadge(state) + (days != null && state !== 'renewed' && state !== 'terminated' ? ` <span style="color: var(--text-muted); font-size: var(--text-sm);">${daysLabel(days)}</span>` : '') },
+            { label: '生命週期', value: lifecycleBadge(state) + (
+                state === 'pending_termination'
+                    ? ` <span style="color: var(--text-muted); font-size: var(--text-sm);">預計 ${c.pendingTerminationDate} 退租, 床位到那天前仍顯示在住</span>`
+                    : (days != null && state !== 'renewed' && state !== 'terminated' ? ` <span style="color: var(--text-muted); font-size: var(--text-sm);">${daysLabel(days)}</span>` : '')
+            ) },
             { label: '物件', value: c.propertyName },
             { label: '租客', value: c.tenant },
             { label: '租金', value: `$${(c.amount || 0).toLocaleString()} / 月` },
