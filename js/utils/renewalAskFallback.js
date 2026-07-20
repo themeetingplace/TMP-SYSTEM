@@ -6,10 +6,12 @@
 // 觸發時機: app.js bootstrap 完成後 (延遲 5s)
 
 import { mockData } from '../data.js';
+import { findRenewalConfirmCandidates } from './autoRenewalProcessor.js';
 
 const ASK_WINDOW_DAYS = 14;
 const COOLDOWN_DAYS = 5;
 const SESSION_KEY = 'pms-renewal-ask-prompt-shown';  // 每次 session 只提示一次 (sessionStorage)
+const CONFIRM_SESSION_KEY = 'pms-renewal-confirm-prompt-shown';
 
 export function checkPendingRenewalAsks() {
     // 同一次 tab session 只提示一次 (避免頻繁刷 view 重跳)
@@ -70,5 +72,46 @@ export function checkPendingRenewalAsks() {
             console.warn('[renewalAskPrompt] showToast 沒回 element, 點擊功能無法啟用');
         }
         sessionStorage.setItem(SESSION_KEY, '1');
+    });
+}
+
+// 登入時提醒: 有租客已在 LINE 回覆「續租」但還沒建約 → 提醒 admin 去確認建約+發繳款通知
+// (2026-07-19: 這步驟從「全自動建約」改成「掃描+提醒, 手動確認」)
+export function checkPendingRenewalConfirms() {
+    if (sessionStorage.getItem(CONFIRM_SESSION_KEY)) return;
+
+    const candidates = findRenewalConfirmCandidates();
+    if (candidates.length === 0) {
+        sessionStorage.setItem(CONFIRM_SESSION_KEY, '1');
+        return;
+    }
+
+    console.log(`[renewalConfirmPrompt] 有 ${candidates.length} 筆已回續租待確認建約:`,
+        candidates.map(c => `${c.id} (${c.tenant})`));
+
+    import('./ui.js').then(({ showToast }) => {
+        const toast = showToast(
+            `✅ 有 ${candidates.length} 位租客已回覆續租, 點此確認建約+發繳款通知`,
+            'success',
+            30000
+        );
+        if (toast && toast.addEventListener) {
+            toast.style.cursor = 'pointer';
+            toast.title = '點擊前往合約管理 → 確認續約 (勾選 modal)';
+            toast.style.boxShadow = '0 4px 12px rgba(34, 148, 110, 0.35), 0 0 0 2px rgba(34, 148, 110, 0.15)';
+            toast.addEventListener('click', () => {
+                sessionStorage.setItem(CONFIRM_SESSION_KEY, '1');
+                toast.remove();
+                if (window.location.hash !== '#contracts') {
+                    window.location.hash = 'contracts';
+                }
+                setTimeout(() => {
+                    document.querySelector('#btn-confirm-renewals')?.click();
+                }, 500);
+            });
+        } else {
+            console.warn('[renewalConfirmPrompt] showToast 沒回 element, 點擊功能無法啟用');
+        }
+        sessionStorage.setItem(CONFIRM_SESSION_KEY, '1');
     });
 }

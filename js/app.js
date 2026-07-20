@@ -26,8 +26,7 @@ import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
 import { bootstrap as syncBootstrap } from './sync.js'; // 雲端同步引擎
-import { scheduleAutoRenewalProcess } from './utils/autoRenewalProcessor.js'; // LINE 回續租 → 自動發繳款通知
-import { checkPendingRenewalAsks } from './utils/renewalAskFallback.js'; // 登入時提醒有多少待詢問合約 (不自動發, 只彈 toast 讓 admin 手動確認)
+import { checkPendingRenewalAsks, checkPendingRenewalConfirms } from './utils/renewalAskFallback.js'; // 登入時提醒: 待詢問續租 / 待確認建約 (兩者都不自動執行, 只彈 toast 讓 admin 手動確認)
 import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole } from './auth.js';
 import { showLogin, showAccessDenied, bindPasswordToggles } from './views/login.js';
 import { applyAvatar, getAvatar, AVATAR_ICONS, AVATAR_COLORS } from './utils/avatar.js';
@@ -485,22 +484,18 @@ window.refreshCurrentView = handleRoute;
 // debounce：一次「+入住」可能連續觸發 4-8 個 realtime 事件，全部合併成 1 次 re-render，避免畫面狂閃
 let _dataChangedTimer = null;
 window.addEventListener('bms:data-changed', (e) => {
-    // sync pull 完 → 觸發自動續租處理 (檢查 renewIntent='renew' 的合約)
-    if (e.detail?.source === 'pull' || e.detail?.source === 'realtime') {
-        scheduleAutoRenewalProcess(e.detail.source);
-    }
     // 若 modal 開著就跳過渲染 — 避免 input focus 跳掉、表單清空之類
     if (document.querySelector('.modal-overlay')) return;
     clearTimeout(_dataChangedTimer);
     _dataChangedTimer = setTimeout(() => handleRoute(), 150);
 });
 
-// 初次載入完成後也跑一次 (以防第一次 pull 前 event listener 還沒掛上)
-setTimeout(() => scheduleAutoRenewalProcess('bootstrap'), 3000);
-
-// 續租詢問登入提醒: 登入後掃「待詢問」數量, 有就彈 toast 讓 admin 主動去確認發送
-//   不自動發 (避免錯訊息直接飛到租客 LINE 沒得救), 每次 session 只提示一次
+// 續租流程登入提醒 (2026-07-19 全面改成手動確認, 不再自動執行任何寫入):
+//   1. 待詢問續租 (14 天內到期 + 未問過) → 提醒去「詢問續租」勾選送出
+//   2. 待確認建約 (已回覆續租但還沒建約) → 提醒去「確認續約」勾選送出
+// 每次 session 只提示一次 (sessionStorage), 都是「彈提醒, admin 主動點才動作」
 setTimeout(() => { try { checkPendingRenewalAsks(); } catch(e) { console.warn('[renewalAskPrompt]', e); } }, 8000);
+setTimeout(() => { try { checkPendingRenewalConfirms(); } catch(e) { console.warn('[renewalConfirmPrompt]', e); } }, 9500);
 
 // 關於系統 — 點 sidebar footer 的版本號開啟
 window.showAboutApp = function() {

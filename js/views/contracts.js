@@ -11,6 +11,7 @@ import { fillContractPdf, downloadPdfBytes, formatRentalPeriod } from '../utils/
 import { showCheckinAssignmentForm } from './properties.js';
 import { pushToTenant, uploadPdfToStorage, resolveSignedPdfUrl, triggerRenewalPoll } from '../utils/line.js';
 import { buildPaymentNoticeMessage } from '../utils/paymentNoticeMessage.js';
+import { findRenewalConfirmCandidates, confirmAndProcessRenewals } from '../utils/autoRenewalProcessor.js';
 import { filterContractsByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
@@ -433,6 +434,9 @@ export function renderContracts() {
                     </div>
                     <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 14 天內到期的合約，可勾選要問誰">
                         <i class="ph ph-chat-circle-dots"></i> 詢問續租
+                    </button>
+                    <button class="btn btn-outline" id="btn-confirm-renewals" title="已在 LINE 回覆續租但還沒建約的, 勾選確認後建約+發繳款通知">
+                        <i class="ph ph-check-circle"></i> 確認續約
                     </button>
                     <button class="btn btn-primary" id="btn-new-contract" data-fab="ph-file-plus">
                         <i class="ph ph-plus"></i> 建立合約
@@ -1699,6 +1703,128 @@ export function initContractActions(scope) {
                 } catch (e) {
                     showToast(`發送失敗: ${e.message}`, 'danger', 6000);
                     console.error('[renewal-poll]', e);
+                }
+            }
+        });
+    });
+
+    // 確認續約 — 列出「已在 LINE 回覆續租但還沒建約」的合約, 勾選確認後才建約+發繳款通知
+    // (2026-07-19: 從全自動建約改成手動確認, 避免跟手動建的合約重複衝突)
+    scope.querySelector('#btn-confirm-renewals')?.addEventListener('click', () => {
+        const candidates = findRenewalConfirmCandidates();
+        if (candidates.length === 0) {
+            showToast('目前沒有已回覆續租、待確認建約的合約', 'info', 3000);
+            return;
+        }
+        const enriched = candidates.map(c => {
+            const t = mockData.tenants.find(x => x.name === c.tenant);
+            const hasLine = !!(t && t.lineUserId);
+            const respondedAt = c.renewResponseAt ? new Date(c.renewResponseAt) : null;
+            return { c, hasLine, respondedAt };
+        }).sort((a, b) => (b.respondedAt?.getTime() || 0) - (a.respondedAt?.getTime() || 0));
+
+        const rowsHtml = enriched.map(({ c, hasLine, respondedAt }) => {
+            const propShort = String(c.propertyName || '').replace('聚空間 - ', '');
+            const respondedLabel = respondedAt
+                ? respondedAt.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                : '—';
+            const disabled = !hasLine;
+            return `
+                <tr data-row-cid="${c.id}">
+                    <td style="padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-color); text-align: center;">
+                        <input type="checkbox" class="confirm-pick" data-cid="${c.id}" ${disabled ? '' : 'checked'} ${disabled ? 'disabled' : ''} style="cursor: ${disabled ? 'not-allowed' : 'pointer'}; width: 16px; height: 16px;">
+                    </td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-family: monospace; font-size: var(--text-xs);">${c.id}</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); font-weight: 600;">${c.tenant || '—'}</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${propShort}</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); color: var(--text-muted);">${c.endDate || '—'} 到期</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">
+                        ${!hasLine ? '<span class="status-badge danger" style="font-size: var(--text-2xs);">未綁 LINE</span>' : `<span style="color: var(--text-muted);">${respondedLabel}</span>`}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        const defaultPickedCount = enriched.filter(x => x.hasLine).length;
+
+        openConfirm({
+            title: '✅ 確認續約 — 已回覆續租的合約',
+            confirmLabel: '🔄 建約並發送',
+            maxWidth: 900,
+            message: `
+                <div style="margin-bottom: 0.75rem; padding: 0.65rem 0.8rem; background: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--color-success); font-size: var(--text-sm); line-height: 1.5;">
+                    <div>已在 LINE 回覆「續租」的合約共 <strong style="color: var(--color-success);">${enriched.length}</strong> 筆.</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.25rem;">
+                        勾選後按「建約並發送」會: 建立續租合約 → 套用租金加項規則 → LINE 發繳款通知. 請確認沒有跟你已手動建的合約重複再送出.
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; font-size: var(--text-xs);">
+                    <button type="button" class="btn btn-outline" id="confirm-select-all" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">全選</button>
+                    <button type="button" class="btn btn-outline" id="confirm-select-none" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs);">全不選</button>
+                    <span id="confirm-count" style="margin-left: auto; color: var(--text-muted);">已選 ${defaultPickedCount} 筆</span>
+                </div>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: var(--text-sm);">
+                        <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 1;">
+                            <tr>
+                                <th style="padding: 0.5rem 0.5rem; width: 32px;"></th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">原合約</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">租客</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">床位</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">到期日</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">回覆時間</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            `,
+            onMount: (overlay) => {
+                const checks = () => overlay.querySelectorAll('.confirm-pick:not(:disabled)');
+                const countEl = overlay.querySelector('#confirm-count');
+                const confirmBtn = overlay.querySelector('[data-action="confirm"]');
+                const updateCount = () => {
+                    const picked = Array.from(checks()).filter(c => c.checked).length;
+                    if (countEl) countEl.textContent = `已選 ${picked} 筆`;
+                    if (confirmBtn) {
+                        confirmBtn.textContent = picked === 0 ? '沒選就不動作' : `🔄 建約並發送給 ${picked} 位`;
+                        confirmBtn.disabled = (picked === 0);
+                    }
+                };
+                overlay.addEventListener('change', (e) => {
+                    if (e.target.classList?.contains('confirm-pick')) updateCount();
+                });
+                overlay.querySelector('#confirm-select-all')?.addEventListener('click', () => {
+                    checks().forEach(c => { c.checked = true; }); updateCount();
+                });
+                overlay.querySelector('#confirm-select-none')?.addEventListener('click', () => {
+                    checks().forEach(c => { c.checked = false; }); updateCount();
+                });
+                updateCount();
+            },
+            onConfirm: async () => {
+                const openOverlay = document.querySelector('.modal-overlay:not(.is-closing)');
+                const picked = openOverlay
+                    ? Array.from(openOverlay.querySelectorAll('.confirm-pick')).filter(c => c.checked && !c.disabled).map(c => c.dataset.cid)
+                    : [];
+                if (picked.length === 0) {
+                    showToast('沒選任何合約, 未建約', 'info');
+                    return;
+                }
+                showToast(`建約中 (${picked.length} 筆)…`, 'info', 3000);
+                try {
+                    const { successCount, failed } = await confirmAndProcessRenewals(picked);
+                    if (successCount > 0) {
+                        showToast(`✅ 已建立 ${successCount} 份續租合約並發送繳款通知`, 'success', 5000);
+                    }
+                    if (failed.length > 0) {
+                        console.warn('[confirm-renewals] failed:', failed);
+                        showToast(`⚠ ${failed.length} 筆失敗 (見 console)`, 'warning', 6000);
+                    }
+                    refreshView();
+                } catch (e) {
+                    showToast(`建約失敗: ${e.message}`, 'danger', 6000);
+                    console.error('[confirm-renewals]', e);
                 }
             }
         });
