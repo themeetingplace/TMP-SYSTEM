@@ -551,7 +551,7 @@ export function renderContracts() {
 // 編輯既有合約 — 視覺對齊建立流程 (showCheckinAssignmentForm)
 // 區分 5 區: 床位 / 租客 / 合約期間 / 押金 / 簽署狀態 — 含 section 分隔
 // 額外: 連動更新租客主檔 (phone/email/緊急聯絡人)；提示帳單由總收支表反向同步
-function showContractForm(contract) {
+function showContractForm(contract, opts = {}) {
     // 編輯時 dropdown 依當前 mode 篩 (避免共居/代管 properties 混在一起)
     const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
     const modeBuildingIds = new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === targetMode).map(b => b.id));
@@ -963,6 +963,7 @@ function showContractForm(contract) {
                 });
             }
             refreshView();
+            if (typeof opts.onSaved === 'function') opts.onSaved(saved);
         }
     });
 }
@@ -1913,15 +1914,19 @@ export function initContractActions(scope) {
                         dueEl.textContent = `$${dueAmount.toLocaleString()}`;
                     });
                 });
-                // 編輯原合約 — 關掉這個 modal, 開合約編輯表單 (改完存檔後要重新點「確認續約」
-                // 才會看到新資料, 因為這個列表是點按鈕當下 snapshot 的)
+                // 編輯原合約 — 關掉這個 modal, 開合約編輯表單, 存檔後自動跳回「確認續約」
+                // (帶最新資料重開, 不會卡在編輯表單那邊要自己再點一次)
                 overlay.querySelectorAll('.confirm-edit-contract').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const cid = btn.dataset.cid;
                         const target = mockData.contracts.find(x => x.id === cid);
                         if (!target) return;
                         close();
-                        setTimeout(() => showContractForm(target), 200);
+                        setTimeout(() => showContractForm(target, {
+                            onSaved: () => {
+                                setTimeout(() => scope.querySelector('#btn-confirm-renewals')?.click(), 250);
+                            }
+                        }), 200);
                     });
                 });
                 updateCount();
