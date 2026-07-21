@@ -313,12 +313,23 @@ function showVerifyModal(id) {
     const inv = mockData.invoices.find(x => x.id === id);
     if (!inv) return;
 
+    const due = (inv.amount || 0) - (inv.discount || 0);
+    const alreadyPaid = inv.paidAmount || 0;
+    const remaining = Math.max(0, due - alreadyPaid);
+
     openFormModal({
         title: '🛡 核對銀行末 5 碼',
         maxWidth: 480,
+        headerHtml: `
+            <div style="margin-bottom: 1rem; padding: 0.65rem 0.85rem; background: var(--color-background); border-radius: var(--radius-md); font-size: var(--text-sm); line-height: 1.6;">
+                <div>應收金額: <strong>$${due.toLocaleString()}</strong>${alreadyPaid > 0 ? ` · 已收 $${alreadyPaid.toLocaleString()} · 尚欠 $${remaining.toLocaleString()}` : ''}</div>
+                ${inv.discount ? `<div style="font-size: var(--text-xs); color: var(--text-muted);">${formatDiscountReason(inv.discountReason) || (inv.discount < 0 ? `含加收 $${Math.abs(inv.discount).toLocaleString()}` : `含折扣 $${inv.discount.toLocaleString()}`)}</div>` : ''}
+            </div>
+        `,
         fields: [
             { name: 'bankLast5_displayed', label: '租客回報的末 5 碼', type: 'text', value: inv.bankLast5, hint: '⚠ 客戶宣稱的末 5 碼，下方填入銀行 App 顯示的對照', span: 2 },
             { name: 'bankActual', label: '請輸入銀行 App 顯示的末 5 碼', type: 'text', required: true, span: 2 },
+            { name: 'receivedAmount', label: '銀行 App 實際入帳金額', type: 'number', required: true, value: remaining, hint: '⚠ 請核對銀行 App 顯示的實際入帳金額 (預設帶應收金額, 金額不符請自行修改)', span: 2 },
             { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: TODAY, span: 2 }
         ],
         values: {},
@@ -340,17 +351,25 @@ function showVerifyModal(id) {
                 showToast(`末 5 碼不符！客戶提供 ${inv.bankLast5}，您輸入 ${actual}`, 'danger');
                 return false; // 不關閉 modal
             }
-            const due = (inv.amount || 0) - (inv.discount || 0);
-            const patched = { ...inv, paidAmount: due, paidDate: values.paidDate, bankVerified: true };
+            const receivedThisTime = Number(values.receivedAmount);
+            if (!Number.isFinite(receivedThisTime) || receivedThisTime < 0) {
+                showToast('入帳金額不正確', 'danger');
+                return false;
+            }
+            const newPaidAmount = alreadyPaid + receivedThisTime;
+            if (newPaidAmount !== due) {
+                showToast(`⚠ 入帳金額 $${newPaidAmount.toLocaleString()} 跟應收 $${due.toLocaleString()} 不一致, 請確認後再送出`, 'warning', 6000);
+            }
+            const patched = { ...inv, paidAmount: newPaidAmount, paidDate: values.paidDate, bankVerified: true };
             store.updateInvoice(id, {
-                paidAmount: due,
+                paidAmount: newPaidAmount,
                 paidDate: values.paidDate,
                 bankVerified: true,
                 status: deriveInvoiceStatus(patched)
             });
-            showToast(`✅ 核對通過：${inv.id} 已結帳`, 'success');
+            showToast(`✅ 核對通過：${inv.id} 已入帳 $${receivedThisTime.toLocaleString()}`, 'success');
             // Q4 入帳即發 — 跟 settleInvoice 共用 helper
-            maybeAutoSendContract({ ...inv, paidAmount: due, paidDate: values.paidDate, bankVerified: true });
+            maybeAutoSendContract(patched);
             refreshView();
         }
     });
