@@ -1,4 +1,4 @@
-﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, addMonthsISO, leaseEndISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts, bedOccupied } from '../data.js';
+﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, addMonthsISO, leaseEndISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts, bedOccupied, applyRentRules } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 import { openFormModal, openConfirm, openDetailModal, openModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
 import { showTenantDetails } from './tenants.js';
@@ -550,7 +550,7 @@ export function showCheckinAssignmentForm(opts = {}) {
         { name: 'discount', type: 'hidden', value: 0 },           // 自動計算：net (sub − add)
         { name: 'discountReason', type: 'hidden', value: '' },    // 自動編碼: JSON of adjustments
         { name: 'totalDue', label: '應收總額', type: 'number', value: '', span: 2, hint: '月租金 × 合約期 + 加項 − 折扣（自動計算）' },
-        { name: 'paidAmount', label: '已收金額', type: 'number', hint: '留空或 0 = 未收；全額收訖請填全部金額' },
+        { name: 'paidAmount', label: '已收金額', type: 'number', hint: '留空或 0 = 未收；全額收訖請填上面「應收總額」顯示的數字 (已含自動加項)' },
         { name: 'paymentMethod', label: '付款方式', type: 'select', options: (mockData.paymentMethods || []).map(p => ({ value: p.name, label: p.name })), value: (mockData.paymentMethods || [])[0]?.name || '匯款' }
     ];
     const fields = [...bedFields, ...tenantFields, ...contractFields, ...paymentFields];
@@ -757,12 +757,20 @@ export function showCheckinAssignmentForm(opts = {}) {
             // alias — 後面 setStep() 用這個名稱 forward 呼叫
             const syncCustomTermVisibility = () => termSelector?.syncCustomVisibility();
 
-            // 應收總額自動計算 = (月租金 + 額外床位月租加總) × 合約期 - 折扣 + 加項
+            // 應收總額自動計算 = (月租金 + 額外床位月租加總) × 合約期 - 折扣 + 加項 ± 租金加項規則
             const amountInput2 = form.querySelector('[name="amount"]');
             const termHidden = form.querySelector('[name="termMonths"]');  // custom-select 的 hidden input
             const discountInput = form.querySelector('[name="discount"]');
             const discountReasonInput = form.querySelector('[name="discountReason"]');
             const totalDueInput = form.querySelector('[name="totalDue"]');
+            const scheduledDateInput = form.querySelector('[name="scheduledDate"]');
+            const buildingIdHiddenForRules = form.querySelector('[name="buildingId"]');
+            // ⚠ 2026-07-21 修: 這裡以前完全不知道「租金加項規則」(能源費等) 的存在,
+            //   admin 填「已收金額」時看到的應收總額沒把自動加項算進去, 事後系統
+            //   建帳單時才套用規則, 導致 admin 收的錢跟系統算出來的應收對不上
+            //   (誤以為是部分繳款, 其實只是填表當下少看到規則要加的錢).
+            //   現在即時算一次規則預覽, 讓填表當下看到的總額就是最終真實金額.
+            let rentRulesPreviewHtml = null;  // 掛在 totalDue 欄位下方顯示細項, onFormMount 後面才建立 DOM ref
             // 額外床位的月租加總 — 在下方額外床位區塊更新；先宣告避免 TDZ
             let extraBedRentSum = 0;
 
@@ -779,7 +787,29 @@ export function showCheckinAssignmentForm(opts = {}) {
                     term = parseInt(termHidden?.value, 10) || 1;
                 }
                 const discount = Number(discountInput?.value) || 0;
-                totalDueInput.value = Math.max(0, (rent + extraBedRentSum) * term - discount);
+
+                // 用當下表單填的值組一個「虛擬合約」, 預覽套用租金加項規則會多/少多少錢
+                const virtualContract = {
+                    startDate: scheduledDateInput?.value || null,
+                    termMonths: term,
+                    buildingId: preselectBed ? preselectBed.buildingId : (buildingIdHiddenForRules?.value || null)
+                };
+                const ruleAdjustments = applyRentRules(virtualContract);
+                const ruleNet = ruleAdjustments.reduce((s, a) => s + (a.kind === 'add' ? a.amount : -a.amount), 0);
+
+                totalDueInput.value = Math.max(0, (rent + extraBedRentSum) * term - discount + ruleNet);
+
+                // 顯示規則細項 (有命中才顯示, 讓 admin 知道這筆錢從哪來)
+                if (rentRulesPreviewHtml) {
+                    if (ruleAdjustments.length > 0) {
+                        rentRulesPreviewHtml.innerHTML = ruleAdjustments.map(a =>
+                            `<div>· ${a.kind === 'add' ? '自動加項' : '自動折抵'}: ${a.label} $${a.amount.toLocaleString()}</div>`
+                        ).join('');
+                        rentRulesPreviewHtml.style.display = 'block';
+                    } else {
+                        rentRulesPreviewHtml.style.display = 'none';
+                    }
+                }
             };
 
             // === 加減項目子表單 — 收斂到 initAdjustmentsWidget (跟 finance 編輯帳目 / 編輯合約同源) ===
@@ -960,10 +990,19 @@ export function showCheckinAssignmentForm(opts = {}) {
                 totalDueInput.style.fontWeight = '700';
                 totalDueInput.style.color = 'var(--color-primary)';
 
+                // 租金加項規則的細項顯示 (插在 totalDue 欄位正下方, 預設隱藏, 有命中規則才顯示)
+                const previewDiv = document.createElement('div');
+                previewDiv.style.cssText = 'display:none; margin-top:0.35rem; font-size:var(--text-xs); color:var(--color-warning-text); line-height:1.5;';
+                totalDueInput.closest('.form-group')?.appendChild(previewDiv);
+                rentRulesPreviewHtml = previewDiv;
+
                 amountInput2?.addEventListener('input', recalcTotalDue);
                 amountInput2?.addEventListener('change', recalcTotalDue);  // 程式賦值/blur 也要 catch
                 // termMonths / termMonthsCustom 的變動已由 initTermSelector 的 onTermChange forward 呼叫 recalcTotalDue
                 // → 這裡不再重覆繫結，避免一次變動觸發兩次 recalc
+                // 入住日期 / 館別 也會影響租金加項規則命中與否, 一併觸發重算
+                scheduledDateInput?.addEventListener('change', recalcTotalDue);
+                buildingIdHiddenForRules?.addEventListener('change', recalcTotalDue);
                 recalcTotalDue();  // 初始算一次
             }
 
