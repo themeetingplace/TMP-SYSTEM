@@ -10,7 +10,7 @@ import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { fillContractPdf, downloadPdfBytes, formatRentalPeriod } from '../utils/pdfGen.js';
 import { showCheckinAssignmentForm } from './properties.js';
 import { pushToTenant, uploadPdfToStorage, resolveSignedPdfUrl, triggerRenewalPoll } from '../utils/line.js';
-import { buildPaymentNoticeMessage } from '../utils/paymentNoticeMessage.js';
+import { buildPaymentNoticeMessage, previewRenewalFor } from '../utils/paymentNoticeMessage.js';
 import { findRenewalConfirmCandidates, confirmAndProcessRenewals } from '../utils/autoRenewalProcessor.js';
 import { filterContractsByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
@@ -1819,6 +1819,7 @@ export function initContractActions(scope) {
                 ? respondedAt.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
                 : '—';
             const disabled = !hasLine;
+            const { dueAmount } = previewRenewalFor(c);
             return `
                 <tr data-row-cid="${c.id}">
                     <td style="padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-color); text-align: center;">
@@ -1828,7 +1829,8 @@ export function initContractActions(scope) {
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); font-weight: 600;">${c.tenant || '—'}</td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${propShort}</td>
                     <td style="padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">
-                        <input type="number" class="confirm-amount" data-cid="${c.id}" value="${c.amount || 0}" ${disabled ? 'disabled' : ''} style="width: 80px; padding: 0.2rem 0.35rem; font-size: var(--text-xs); border: 1px solid var(--border-color); border-radius: 4px; background: var(--color-surface); color: var(--text-main);">
+                        <input type="number" class="confirm-amount" data-cid="${c.id}" value="${c.amount || 0}" ${disabled ? 'disabled' : ''} style="width: 75px; padding: 0.2rem 0.35rem; font-size: var(--text-xs); border: 1px solid var(--border-color); border-radius: 4px; background: var(--color-surface); color: var(--text-main);">
+                        <div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.15rem; white-space: nowrap;">應繳 <strong class="confirm-due-preview" data-cid-due="${c.id}" style="color: var(--color-success);">$${dueAmount.toLocaleString()}</strong></div>
                     </td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); color: var(--text-muted);">${c.endDate || '—'} 到期</td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">
@@ -1867,7 +1869,7 @@ export function initContractActions(scope) {
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">原合約</th>
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">租客</th>
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">床位</th>
-                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">租金</th>
+                                <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">租金 <span style="font-weight: 400; text-transform: none;">(下方應繳含加項)</span></th>
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">到期日</th>
                                 <th style="padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; font-size: var(--text-xs); color: var(--text-muted);">回覆時間</th>
                                 <th style="padding: 0.5rem 0.5rem; width: 40px;"></th>
@@ -1897,6 +1899,19 @@ export function initContractActions(scope) {
                 });
                 overlay.querySelector('#confirm-select-none')?.addEventListener('click', () => {
                     checks().forEach(c => { c.checked = false; }); updateCount();
+                });
+                // 租金欄位改動 → 即時重算「應繳」預覽 (含租金加項規則), 避免 admin 誤以為
+                // 租金欄位本身該等於應繳總額 (兩者不同: 租金是月租基數, 應繳是套完規則後的總額)
+                overlay.querySelectorAll('.confirm-amount').forEach(input => {
+                    input.addEventListener('input', () => {
+                        const cid = input.dataset.cid;
+                        const target = enriched.find(x => x.c.id === cid)?.c;
+                        const dueEl = overlay.querySelector(`.confirm-due-preview[data-cid-due="${cid}"]`);
+                        if (!target || !dueEl) return;
+                        const overrideAmount = Number(input.value);
+                        const { dueAmount } = previewRenewalFor(target, { overrideAmount: Number.isFinite(overrideAmount) ? overrideAmount : undefined });
+                        dueEl.textContent = `$${dueAmount.toLocaleString()}`;
+                    });
                 });
                 // 編輯原合約 — 關掉這個 modal, 開合約編輯表單 (改完存檔後要重新點「確認續約」
                 // 才會看到新資料, 因為這個列表是點按鈕當下 snapshot 的)
