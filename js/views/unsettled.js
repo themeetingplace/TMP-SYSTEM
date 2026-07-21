@@ -322,7 +322,7 @@ function showVerifyModal(id) {
         maxWidth: 440,
         fields: [
             { name: 'bankLast5_displayed', label: '租客回報的末 5 碼', type: 'text', value: inv.bankLast5, hint: '對照銀行 App 用', span: 2 },
-            { name: 'receivedAmount', label: '銀行 App 實際入帳金額', type: 'number', required: true, value: remaining, span: 2 },
+            { name: 'receivedAmount', label: '銀行 App 實際入帳金額', type: 'number', required: true, value: remaining, hint: `應收 $${due.toLocaleString()}${alreadyPaid > 0 ? ` · 已收 $${alreadyPaid.toLocaleString()} · 尚欠 $${remaining.toLocaleString()}` : ''}`, span: 2 },
             { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: TODAY, span: 2 }
         ],
         values: {},
