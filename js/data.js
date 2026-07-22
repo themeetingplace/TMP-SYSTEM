@@ -971,7 +971,10 @@ function buildContractInvoice(contract, payment = {}) {
     // 自動 apply rentRules (夏季能源費 / 冬季暖氣 etc) → 產生 adjustments
     //   規則 amount > 0 = 加收 (kind='add' → discount 變負), < 0 = 折扣 (kind='sub' → discount 變正)
     //   跟現有 discount widget 語意一致: 收入 invoice 中 discount>0=折扣, discount<0=加收
-    const autoAdjustments = applyRentRules(contract);
+    // payment.excludeRuleLabels: 建立合約時 admin 手動點 X 取消掉的規則 (見 properties.js
+    // 收款步驟的即時預覽), 用 label 比對排除, 不讓那幾筆自動加項/折抵真的算進帳單
+    const excludeLabels = new Set(Array.isArray(payment.excludeRuleLabels) ? payment.excludeRuleLabels : []);
+    const autoAdjustments = applyRentRules(contract).filter(a => !excludeLabels.has(a.label));
     const autoNet = autoAdjustments.reduce((s, a) => s + (a.kind === 'add' ? -a.amount : a.amount), 0);
     // 合併 payment 傳入的 discount + 自動規則
     const userDiscount = Number(payment.discount) || 0;

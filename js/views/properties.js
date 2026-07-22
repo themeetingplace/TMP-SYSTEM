@@ -568,6 +568,11 @@ export function showCheckinAssignmentForm(opts = {}) {
     // bed-header banner 改成 form-grid 內部 placeholder 渲染 (span 2 撐滿整列)，不再用 headerHtml
     const headerHtml = '';
 
+    // admin 手動點 X 取消掉的租金加項規則 (用 label 記) — onFormMount 寫入/讀取(即時預覽),
+    // onSubmit 讀取(送出時排除). 兩者是同一個 openFormModal 呼叫的 sibling callback,
+    // 要宣告在這個外層作用域才能共用同一份 Set.
+    const cancelledRuleLabels = new Set();
+
     const formModal = openFormModal({
         title: preselectBed
             ? `新增入住 — ${preselectBuilding?.name || ''} R${preselectBed.roomNumber}-${preselectBed.bedLetter}`
@@ -771,6 +776,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             //   (誤以為是部分繳款, 其實只是填表當下少看到規則要加的錢).
             //   現在即時算一次規則預覽, 讓填表當下看到的總額就是最終真實金額.
             let rentRulesPreviewHtml = null;  // 掛在 totalDue 欄位下方顯示細項, onFormMount 後面才建立 DOM ref
+            // cancelledRuleLabels 宣告在外層 (跟 onSubmit 共用), 這裡直接用
             // 額外床位的月租加總 — 在下方額外床位區塊更新；先宣告避免 TDZ
             let extraBedRentSum = 0;
 
@@ -794,18 +800,43 @@ export function showCheckinAssignmentForm(opts = {}) {
                     termMonths: term,
                     buildingId: preselectBed ? preselectBed.buildingId : (buildingIdHiddenForRules?.value || null)
                 };
-                const ruleAdjustments = applyRentRules(virtualContract);
+                // 取消清單裡的 label → 從畫面上移除, 舊的取消紀錄若命中的規則已經不存在了 (改期間/館別)
+                // 就順便清掉, 避免累積用不到的殘留 label
+                const allRuleAdjustments = applyRentRules(virtualContract);
+                const stillValidLabels = new Set(allRuleAdjustments.map(a => a.label));
+                Array.from(cancelledRuleLabels).forEach(l => { if (!stillValidLabels.has(l)) cancelledRuleLabels.delete(l); });
+                const ruleAdjustments = allRuleAdjustments.filter(a => !cancelledRuleLabels.has(a.label));
                 const ruleNet = ruleAdjustments.reduce((s, a) => s + (a.kind === 'add' ? a.amount : -a.amount), 0);
 
                 totalDueInput.value = Math.max(0, (rent + extraBedRentSum) * term - discount + ruleNet);
 
-                // 顯示規則細項 (有命中才顯示, 讓 admin 知道這筆錢從哪來)
+                // 顯示規則細項 (有命中才顯示, 讓 admin 知道這筆錢從哪來; 每筆附 X 可取消)
+                // 取消掉的規則也列出來 (劃掉樣式 + 復原按鈕), 不是點了就整個消失讓人忘記有這回事
                 if (rentRulesPreviewHtml) {
-                    if (ruleAdjustments.length > 0) {
-                        rentRulesPreviewHtml.innerHTML = ruleAdjustments.map(a =>
-                            `<div>· ${a.kind === 'add' ? '自動加項' : '自動折抵'}: ${a.label} $${a.amount.toLocaleString()}</div>`
-                        ).join('');
+                    if (allRuleAdjustments.length > 0) {
+                        rentRulesPreviewHtml.innerHTML = allRuleAdjustments.map(a => {
+                            const isCancelled = cancelledRuleLabels.has(a.label);
+                            const escLabel = a.label.replace(/"/g, '&quot;');
+                            return `
+                                <div style="display:flex; align-items:center; gap:0.3rem; ${isCancelled ? 'opacity:0.55;' : ''}">
+                                    <span style="${isCancelled ? 'text-decoration: line-through;' : ''}">· ${a.kind === 'add' ? '自動加項' : '自動折抵'}: ${a.label} $${a.amount.toLocaleString()}</span>
+                                    <button type="button" class="rent-rule-cancel-btn" data-label="${escLabel}" data-cancelled="${isCancelled ? '1' : '0'}"
+                                        title="${isCancelled ? '恢復這筆加項' : '取消這筆加項 (這份合約不收)'}"
+                                        style="all:unset; cursor:pointer; font-size:0.9em; color:${isCancelled ? 'var(--color-success)' : 'var(--color-danger)'}; padding:0 0.2rem; font-weight:700;">
+                                        ${isCancelled ? '↺' : '✕'}
+                                    </button>
+                                </div>
+                            `;
+                        }).join('');
                         rentRulesPreviewHtml.style.display = 'block';
+                        rentRulesPreviewHtml.querySelectorAll('.rent-rule-cancel-btn').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                const label = btn.dataset.label;
+                                if (cancelledRuleLabels.has(label)) cancelledRuleLabels.delete(label);
+                                else cancelledRuleLabels.add(label);
+                                recalcTotalDue();
+                            });
+                        });
                     } else {
                         rentRulesPreviewHtml.style.display = 'none';
                     }
@@ -1331,7 +1362,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                             discountReason: values.discountReason || null,
                             paidAmount: values.paidAmount != null && values.paidAmount !== '' ? Number(values.paidAmount) : null,
                             paymentMethod: values.paymentMethod || '匯款',
-                            __bundleExtraRents: extraBedRentList   // ← 自動累加進首張 invoice
+                            __bundleExtraRents: extraBedRentList,  // ← 自動累加進首張 invoice
+                            excludeRuleLabels: Array.from(cancelledRuleLabels)  // 收款步驟裡被 X 掉的自動加項
                         }
                     });
                     // bed.rent 同步合約月租，避免 住房一覽 顯示舊金額
