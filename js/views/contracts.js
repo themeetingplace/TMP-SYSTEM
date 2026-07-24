@@ -106,6 +106,15 @@ function buildAdjustmentValues(contract) {
     };
 }
 
+// total_amount (租金總額) 是金額類重大欄位 — 樣板裡沒這個欄位, PDF 上「租金總額」
+// 的位置多半只能顯示跟 rent_amount (月租金) 共用/相同的值, 多期合約看起來會少收錢
+// 卻完全沒有錯誤訊息, 只會混在「已下載 (N 個欄位填入)」這種容易被忽略的小 toast 裡。
+// 2026-07-24 事故: 追了好幾輪才發現根因其實是樣板本身缺這個欄位, 不是算法錯。
+function warnMissingMoneyFields(missingFields) {
+    if (!Array.isArray(missingFields) || !missingFields.includes('total_amount')) return;
+    showToast('⚠ 合約樣板缺少「total_amount」(租金總額) 欄位！多期合約的 PDF 總額會誤植成跟月租金一樣，請用 PDF 編輯工具在樣板加上這個欄位後，到 系統設定 → 合約範本 重新上傳', 'warning', 10000);
+}
+
 // 每欄的排序 comparator (升冪)
 const SORT_COLS = {
     info:   { cmp: (a, b) => (a.id || '').localeCompare(b.id || '') },
@@ -1398,6 +1407,7 @@ async function downloadContractPdf(id) {
         downloadPdfBytes(bytes, filename);
 
         if (missingFields.length > 0) {
+            warnMissingMoneyFields(missingFields);
             showToast(`✅ 已下載 (${filledFields.length} 個欄位填入，${missingFields.length} 個未在樣板中)`, 'success');
         } else {
             showToast(`✅ 合約 PDF 已下載：${filename}`, 'success');
@@ -1445,7 +1455,8 @@ export async function sendContractToLine(id) {
             total_amount: adj.total_amount,
             monthly_amount: adj.monthly_amount
         };
-        const { bytes } = await fillContractPdf(tpl.pdfBase64, values);
+        const { bytes, missingFields } = await fillContractPdf(tpl.pdfBase64, values);
+        warnMissingMoneyFields(missingFields);
         const filename = `合約_${c.id}_${c.tenant}.pdf`;
 
         showToast('上傳到雲端…', 'info');
