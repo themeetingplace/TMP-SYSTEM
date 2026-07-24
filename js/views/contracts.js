@@ -42,12 +42,17 @@ function dismissRenewBanner() {
     } catch {}
 }
 
+// 合約的首張房租帳單 (money 相關欄位的唯一真相來源 — 建立當下算好存住的)
+function getContractInvoice(contract) {
+    if (!contract?.id) return null;
+    return mockData.invoices
+        .filter(i => i.contractId === contract.id)
+        .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))[0] || null;
+}
+
 // 從合約的首張帳單抓加減項目 (季繳優惠 / 能源費等)，給合約 PDF 填入用
 function getContractAdjustments(contract) {
-    if (!contract?.id) return [];
-    const invoice = mockData.invoices
-        .filter(i => i.contractId === contract.id)
-        .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))[0];
+    const invoice = getContractInvoice(contract);
     if (!invoice || !invoice.discountReason) return [];
     try {
         const arr = JSON.parse(invoice.discountReason);
@@ -55,18 +60,38 @@ function getContractAdjustments(contract) {
     } catch { return []; }
 }
 
+// 用起訖日反推真正的合約期數 (月) — 不依賴 contract.termMonths 這個欄位本身
+// (該欄位在部分建立/續約流程中曾經沒同步寫入, 但 startDate/endDate 一定準;
+// 系統「1 個月 = 30 天」的慣例讓這個反推是精確整數, 不會有進位誤差)
+function deriveTermMonths(contract) {
+    if (contract?.startDate && contract?.endDate) {
+        const days = (new Date(contract.endDate) - new Date(contract.startDate)) / 86400000;
+        const derived = Math.round(days / 30);
+        if (derived > 0) return derived;
+    }
+    return Number(contract?.termMonths) || 1;
+}
+
 // 把加減項目格式化成多行文字塞進 PDF (一行一項)，計算:
-//   total_amount   = 租金總額 (整個合約期，加減後)  = 月租 × term + 加 − 折
-//   monthly_amount = 月付金額                       = total_amount ÷ term
+//   total_amount   = 租金總額 (整個合約期，加減後)
+//   monthly_amount = 月付金額 = total_amount ÷ term
+// ⚠ 2026-07-24 修 bug: total_amount 之前用 contract.amount × contract.termMonths
+// 現算, 若 termMonths 欄位跟合約實際期數對不上 (帳單早就用正確期數建好了),
+// PDF 金額就會跟「編輯合約」應收總額 (直接讀帳單) 兜不起來 — C218 案例:
+// 3 個月合約 termMonths 欄位掉了, PDF 印出 1 個月的錢. 改成有帳單就直接讀帳單
+// 實際金額 (跟編輯合約 modal 同一個數字來源), 沒帳單 (平台代收) 才 fallback 公式算.
 function buildAdjustmentValues(contract) {
+    const invoice = getContractInvoice(contract);
     const adjustments = getContractAdjustments(contract);
     const base = Number(contract?.amount) || 0;
-    const term = Number(contract?.termMonths) || 1;
+    const term = deriveTermMonths(contract);
     const net = adjustments.reduce((s, a) => {
         const v = Number(a.amount) || 0;
         return s + (a.kind === 'add' ? v : -v);
     }, 0);
-    const termTotal = base * term + net;            // 整個合約期、加減後的總額
+    const termTotal = invoice
+        ? Math.max(0, (Number(invoice.amount) || 0) - (Number(invoice.discount) || 0))
+        : base * term + net;
     const monthlyAmount = Math.round(termTotal / term);  // 月付金額 (四捨五入到整數)
     const adjustmentsText = adjustments.length
         ? adjustments.map(a => {
