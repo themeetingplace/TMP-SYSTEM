@@ -46,7 +46,7 @@ function dismissRenewBanner() {
 function getContractInvoice(contract) {
     if (!contract?.id) return null;
     return mockData.invoices
-        .filter(i => i.contractId === contract.id)
+        .filter(i => i.contractId === contract.id && i.direction === 'in' && i.type === '房租')
         .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))[0] || null;
 }
 

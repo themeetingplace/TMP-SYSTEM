@@ -21,7 +21,7 @@ function getManualAdjustments(contract) {
     // 的 id 組一個「假想新期間」的 virtual contract, 那種情況下舊帳單的手動加項
     // (例如上一期的「多一天」) 不該被誤帶進這一期的預覽
     const invoice = mockData.invoices
-        .filter(i => i.contractId === contract.id && i.periodStart === contract.startDate)
+        .filter(i => i.contractId === contract.id && i.direction === 'in' && i.type === '房租' && i.periodStart === contract.startDate)
         .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))[0];
     if (!invoice || !invoice.discountReason) return [];
     let arr;
