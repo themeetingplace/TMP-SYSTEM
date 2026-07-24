@@ -653,7 +653,8 @@ async function handleMessage(event: any) {
 在台北打拼，回到冷冰冰的房間總覺得有點寂寞嗎？
 聚空間想成為你最有人情味的家 🏡
 
-請點下方按鈕填寫預約看房表單，填完後小編會盡快跟你聯繫約時間 ✨`,
+請點下方按鈕填寫表單讓我們了解您的需求，填寫完後請告知填表的名字！
+小編會盡快回復您~`,
                 quickReply: {
                     items: [
                         { type: 'action', action: { type: 'uri', label: '📝 預約看房表單', uri: 'https://forms.gle/p1HrmZtFQf5by1EU6' } },
@@ -675,7 +676,8 @@ async function handleMessage(event: any) {
 Hustling in Taipei and coming home to an empty room can feel lonely sometimes, right?
 We want The Meeting Place to be the warmest home you've ever had 🏡
 
-Please tap the button below to fill out our viewing request form. Our team will reach out shortly to schedule your visit ✨`,
+Please tap the button below to fill out the form so we can learn about your needs. After submitting, please let us know the name you used on the form!
+Our team will get back to you soon ~`,
                 quickReply: {
                     items: [
                         { type: 'action', action: { type: 'uri', label: '📝 Booking Form', uri: 'https://forms.gle/p1HrmZtFQf5by1EU6' } },
