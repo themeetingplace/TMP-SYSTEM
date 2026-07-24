@@ -79,10 +79,17 @@ function resetRetryCounter() {
 //    註: 所有表的 JS row PK 統一用 'id' (db-mapping.js 內 buildings.pk='id', tenants.pk='id' 等)
 function dedupeById(arr, srcKey) {
     if (!Array.isArray(arr) || arr.length === 0) return arr;
+    // ⚠ 2026-07-24 修 bug: 這裡原本寫死用 r.id 當主鍵, 但 contractTemplates
+    // 這張表的主鍵其實是 buildingId (沒有 id 欄位) — 導致每一列的 r.id 都是
+    // undefined, 被 `k == null` 整批當「沒有 id」跳過, seen 永遠是空的, 去重
+    // 完變成 0 筆, 直接把 mockData.contractTemplates 整個清空 (上傳合約範本
+    // 當下觸發同步, 在寫入完成、驗證讀回來之前的一瞬間清空記憶體, 導致
+    // 「本機儲存後驗證失敗」)。跟 pushSmall/pushLarge 裡已經在用的判斷方式對齊。
+    const pkField = srcKey === 'contractTemplates' ? 'buildingId' : 'id';
     const seen = new Map();
     arr.forEach(r => {
         if (!r) return;
-        const k = r.id;
+        const k = r[pkField];
         if (k == null) return;
         // 後寫的覆蓋前寫的 (最新 mutation 勝)
         seen.set(k, r);
