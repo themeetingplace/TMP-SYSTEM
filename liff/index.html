@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>聚空間 — 住客資料登記</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -469,10 +472,24 @@ function ensureFreshTokenOrRedirect() {
     return false;
 }
 
+// liff.init() / liff.getProfile() 都是打 LINE 伺服器的網路請求, SDK 本身沒有
+// 逾時機制 — 網路不穩 (電梯/地下室/訊號差) 時這兩個 await 可能永遠不 resolve
+// 也不 reject, 畫面就卡在最初的「載入中…」轉圈圈, 使用者看不到任何錯誤訊息也
+// 無法重試, 只能關掉重開 (用戶回報「一直在載入中進不去」的最可能原因)。
+// 用 Promise.race 包一層逾時, 保證最多卡 N 秒就會跳錯誤畫面 (有重試按鈕)。
+function withTimeout(promise, ms, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => {
+            reject(Object.assign(new Error(`${label} 逾時，請檢查網路連線後重試`), { code: 'timeout' }));
+        }, ms))
+    ]);
+}
+
 async function main() {
     initLangSwitch();
     try {
-        await liff.init({ liffId: LIFF_ID });
+        await withTimeout(liff.init({ liffId: LIFF_ID }), 12000, 'LIFF 初始化');
         // 用戶沒手動選過 → 用 LINE 系統語言當預設
         if (!localStorage.getItem('tmp-liff-lang')) {
             const liffLang = (liff.getLanguage() || '').toLowerCase();
@@ -488,7 +505,7 @@ async function main() {
         }
         // ⚠ 進 form 前先確保 token 至少還有 15 分鐘可活 — 不然填完送出時剛好過期
         if (ensureFreshTokenOrRedirect()) return; // silent refresh 會 redirect
-        const profile = await liff.getProfile();
+        const profile = await withTimeout(liff.getProfile(), 10000, '取得 LINE 個人資料');
         renderForm(profile);
     } catch (e) {
         const code = e.code || e.name || '(no code)';
