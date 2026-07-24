@@ -73,15 +73,15 @@ function deriveTermMonths(contract) {
 }
 
 // 把加減項目格式化成多行文字塞進 PDF (一行一項)，計算:
-//   total_amount   = 租金總額 (整個合約期，加減後)
-//   monthly_amount = 月付金額 = total_amount ÷ term
-// ⚠ 2026-07-24 修 bug: total_amount 之前用 contract.amount × contract.termMonths
-// 現算, 若 termMonths 欄位跟合約實際期數對不上 (帳單早就用正確期數建好了),
-// PDF 金額就會跟「編輯合約」應收總額 (直接讀帳單) 兜不起來 — C218 案例:
-// 3 個月合約 termMonths 欄位掉了, PDF 印出 1 個月的錢. 改成有帳單就直接讀帳單
-// 實際金額 (跟編輯合約 modal 同一個數字來源), 沒帳單 (平台代收) 才 fallback 公式算.
+//   total_amount   = 租金總額 (整個合約期，加減後) = 月租 × term + 加 − 折
+//   monthly_amount = 月付金額                       = total_amount ÷ term
+// ⚠ 2026-07-24: total_amount 一律用 contract.amount × term 現場算, 不要信任
+// invoice.amount — 曾試過改成直接讀帳單金額, 結果抓到另一個更早的真相: 「編輯
+// 合約」modal 改動租金 / 合約期時, 從來沒把重算後的總額寫回帳單 (下面 onSubmit
+// 已經補上這段同步), 導致舊帳單金額可能永遠停在建立當下的錯誤值 (C218 案例:
+// 續約當下用錯期數建了 1 個月的帳單金額). PDF 現場算才能保證跟 modal 看到的
+// 應收總額一致, 不受帳單裡可能過期的 amount 影響。
 function buildAdjustmentValues(contract) {
-    const invoice = getContractInvoice(contract);
     const adjustments = getContractAdjustments(contract);
     const base = Number(contract?.amount) || 0;
     const term = deriveTermMonths(contract);
@@ -89,9 +89,7 @@ function buildAdjustmentValues(contract) {
         const v = Number(a.amount) || 0;
         return s + (a.kind === 'add' ? v : -v);
     }, 0);
-    const termTotal = invoice
-        ? Math.max(0, (Number(invoice.amount) || 0) - (Number(invoice.discount) || 0))
-        : base * term + net;
+    const termTotal = base * term + net;
     const monthlyAmount = Math.round(termTotal / term);  // 月付金額 (四捨五入到整數)
     const adjustmentsText = adjustments.length
         ? adjustments.map(a => {
@@ -964,14 +962,24 @@ function showContractForm(contract, opts = {}) {
                     const newReason = adjReason || '';
                     const newPaidAmount = Number(values.paidAmount) || 0;
                     const newPaymentMethod = values.paymentMethod || rentInv.paymentMethod || '';
+                    // ⚠ 2026-07-24 修 bug: 月租金 / 合約期改了之後, 帳單的 amount (租金總額)
+                    // 之前完全沒跟著重算寫回去 — 「編輯合約」modal 的應收總額只是畫面即時
+                    // 算好看, 帳單本身金額沒同步更新, 之後 PDF / 房租查帳 / 報表全部還是
+                    // 看編輯前的舊金額 (C218 案例: 續約當下用錯期數建了 1 個月的帳單金額,
+                    // 之後合約期數改對了, 帳單金額卻永遠停在錯的那筆).
+                    const bundleChildRentSum = mockData.contracts
+                        .filter(c => c.bundleParentContractId === contract.id)
+                        .reduce((s, c) => s + (Number(c.amount) || 0), 0);
+                    const newAmount = Math.max(0, (Number(values.amount) || 0) + bundleChildRentSum) * (Number(values.termMonths) || 1);
                     const patch = {};
+                    if (newAmount !== (rentInv.amount || 0)) patch.amount = newAmount;
                     if (newDiscount !== (rentInv.discount || 0)) patch.discount = newDiscount;
                     if (newReason !== (rentInv.discountReason || '')) patch.discountReason = newReason;
                     if (newPaidAmount !== (rentInv.paidAmount || 0)) patch.paidAmount = newPaidAmount;
                     if (newPaymentMethod !== (rentInv.paymentMethod || '')) patch.paymentMethod = newPaymentMethod;
-                    // 已收金額 = 應收 → invoice status 自動轉「已繳清」
-                    if ('paidAmount' in patch) {
-                        const due = (Number(values.amount) || 0) * (contract.termMonths || 1) - newDiscount;
+                    // 應收 (租金總額 − 折扣) 有變、或已收金額有變 → invoice status 要重判
+                    if ('paidAmount' in patch || 'amount' in patch || 'discount' in patch) {
+                        const due = newAmount - newDiscount;
                         patch.status = newPaidAmount >= due && due > 0 ? '已繳清' : (newPaidAmount > 0 ? '部分繳' : '未繳');
                         if (newPaidAmount > 0 && !rentInv.paidDate) patch.paidDate = new Date().toISOString().slice(0, 10);
                     }
