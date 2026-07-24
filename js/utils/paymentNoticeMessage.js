@@ -75,7 +75,8 @@ ${greeting}
 📅 期間: ${period}
 
 🔔 應繳金額: NT$${dueAmount.toLocaleString()}
-應繳日: ${dueDate || '—'}${adjLines ? '\n\n細項:\n' + adjLines : ''}
+應繳日: ${dueDate || '—'}
+租金：$${baseRent.toLocaleString()}${adjLines ? '\n細項:\n' + adjLines : ''}
 
 繳款完成後, 請回傳「銀行帳戶末 5 碼」(5 位數字), 系統會自動記錄 ✨
 入帳後合約 PDF 會自動寄給您.`;
