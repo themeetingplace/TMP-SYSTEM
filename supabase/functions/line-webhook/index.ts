@@ -643,25 +643,8 @@ async function handleMessage(event: any) {
 
     if (/館別|關於/.test(text)) return;
 
-    // 「預約看房」第 1 步 — 跳語言選擇 Quick Reply
-    if (text === '預約看房' || text === 'Room Viewing' || text === 'Book a Visit') {
-        await lineReply(event.replyToken, [
-            {
-                type: 'text',
-                text: '請選擇語言 / Choose language',
-                quickReply: {
-                    items: [
-                        { type: 'action', action: { type: 'message', label: '🇹🇼 中文', text: '預約看房 中文' } },
-                        { type: 'action', action: { type: 'message', label: '🇬🇧 English', text: 'Room Viewing English' } }
-                    ]
-                }
-            }
-        ]);
-        return;
-    }
-
-    // 「預約看房」第 2 步 — 中文版完整填空模板
-    if (text === '預約看房 中文') {
+    // 「預約看房」— 中文版：直接給表單連結 (2026-07-25 起改掉需要複製填空模板貼回來的舊流程)
+    if (text === '預約看房') {
         await lineReply(event.replyToken, [
             {
                 type: 'text',
@@ -670,44 +653,20 @@ async function handleMessage(event: any) {
 在台北打拼，回到冷冰冰的房間總覺得有點寂寞嗎？
 聚空間想成為你最有人情味的家 🏡
 
-為了幫你找到合適的空間，請複製下方填好回傳給我～
-
-━━━━━━━━━
-📝 預約看房
-
-✨基本資訊
-1️⃣姓名：
-2️⃣性別：(男、女)
-3️⃣電話：
-4️⃣Email：
-
-✨需求資訊
-5️⃣欲入住館別：
-(松山 / 信義 / 中山 / 古亭1 / 古亭2 / 師大)
-6️⃣入住人數：(ex. 1人、4人...)
-7️⃣欲入住日期：
-8️⃣入住時長：(ex. 1個月、半年...)
-
-9️⃣方便看房的時段：
-(ex. 平日晚上 7 點後 / 週末下午)
-🔟怎麼知道我們的：
-(ex. 臉書 / 朋友介紹 / Google / 591 / 其他)
-
-✨最後讓我們了解認識一下你
-🔹簡單介紹一下你自己～職業、習慣、興趣都歡迎：
-
-🔹為什麼選擇聚空間呢😊：
-━━━━━━━━━
-
-填好直接貼回來就好，看房時段先告訴我們，後續會由小編聯繫與你約時間 ✨`,
-                quickReply: welcomeQuickReply()
+請點下方按鈕填寫預約看房表單，填完後小編會盡快跟你聯繫約時間 ✨`,
+                quickReply: {
+                    items: [
+                        { type: 'action', action: { type: 'uri', label: '📝 預約看房表單', uri: 'https://forms.gle/p1HrmZtFQf5by1EU6' } },
+                        { type: 'action', action: { type: 'message', label: '💬 找小編', text: '找小編' } }
+                    ]
+                }
             }
         ]);
         return;
     }
 
-    // 「預約看房」第 2 步 — English version
-    if (text === 'Room Viewing English') {
+    // 「預約看房」— English version：直接給表單連結
+    if (text === 'Room Viewing' || text === 'Book a Visit') {
         await lineReply(event.replyToken, [
             {
                 type: 'text',
@@ -716,37 +675,13 @@ async function handleMessage(event: any) {
 Hustling in Taipei and coming home to an empty room can feel lonely sometimes, right?
 We want The Meeting Place to be the warmest home you've ever had 🏡
 
-To help us find the right space for you, please copy the form below, fill it out, and send it back ~
-
-━━━━━━━━━
-📝 Room Viewing
-
-✨Basic Info
-1️⃣Name:
-2️⃣Gender: (Male / Female)
-3️⃣Phone:
-4️⃣Email:
-
-✨Preferences
-5️⃣Preferred Location:
-(Songshan / Xinyi / Zhongshan / Guting 1 / Guting 2 / Shida)
-6️⃣Number of People: (e.g. 1 person, 4 people...)
-7️⃣Desired Move-in Date:
-8️⃣Length of Stay: (e.g. 1 month, 6 months...)
-
-9️⃣Available Viewing Times:
-(e.g. weekday evenings after 7pm / weekend afternoons)
-🔟How did you hear about us?
-(e.g. Facebook / Friend / Google / 591 / Other)
-
-✨A bit about you
-🔹Tell us about yourself — job, lifestyle, hobbies all welcome:
-
-🔹Why The Meeting Place? 😊:
-━━━━━━━━━
-
-Just paste your replies right here. Let us know your preferred viewing times, and our team will reach out to schedule a visit ✨`,
-                quickReply: welcomeQuickReply()
+Please tap the button below to fill out our viewing request form. Our team will reach out shortly to schedule your visit ✨`,
+                quickReply: {
+                    items: [
+                        { type: 'action', action: { type: 'uri', label: '📝 Booking Form', uri: 'https://forms.gle/p1HrmZtFQf5by1EU6' } },
+                        { type: 'action', action: { type: 'message', label: '💬 Contact Us', text: '找小編' } }
+                    ]
+                }
             }
         ]);
         return;
