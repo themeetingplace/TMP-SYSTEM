@@ -7,6 +7,33 @@
 
 import { mockData, applyRentRules, leaseEndISO } from '../data.js';
 
+function escapeRegExp(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// 抓合約首張帳單存的加減項目, 過濾掉「跟目前 rentRules 規則同名」的項目
+// (那些交給 applyRentRules 現算, 避免用到帳單建立當下的舊月份標籤 / 舊金額)
+// 剩下的視為手動加項 (例如「多一天」這種一次性費用), 這種東西只存在帳單上,
+// 合約物件本身沒有欄位可以 fresh 算, 一定要從帳單撈
+function getManualAdjustments(contract) {
+    if (!contract?.id) return [];
+    // periodStart 要對到現在這個 contract.startDate — previewRenewalFor 會拿舊合約
+    // 的 id 組一個「假想新期間」的 virtual contract, 那種情況下舊帳單的手動加項
+    // (例如上一期的「多一天」) 不該被誤帶進這一期的預覽
+    const invoice = mockData.invoices
+        .filter(i => i.contractId === contract.id && i.periodStart === contract.startDate)
+        .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))[0];
+    if (!invoice || !invoice.discountReason) return [];
+    let arr;
+    try { arr = JSON.parse(invoice.discountReason); } catch { return []; }
+    if (!Array.isArray(arr)) return [];
+    const ruleNames = (mockData.rentRules || []).filter(r => r.enabled !== false).map(r => r.name);
+    return arr.filter(a => {
+        const label = String(a?.label || '');
+        return !ruleNames.some(name => new RegExp(`^${escapeRegExp(name)} \\(\\d{1,2}月\\)$`).test(label));
+    });
+}
+
 export function buildPaymentNoticeMessage(contract, opts = {}) {
     if (!contract) return { message: '', dueAmount: 0, dueDate: null };
 
@@ -25,8 +52,8 @@ export function buildPaymentNoticeMessage(contract, opts = {}) {
         .reduce((s, c) => s + (Number(c.amount) || 0), 0);
     const baseRent = ((Number(contract.amount) || 0) + childRents) * term;
 
-    // Apply rent rules → 產生 adjustments
-    const adjustments = applyRentRules(contract);
+    // Apply rent rules (fresh 算, 標籤月份永遠正確) + 帳單上的手動加項 (fresh 算不出來的部分)
+    const adjustments = [...applyRentRules(contract), ...getManualAdjustments(contract)];
     const adjNet = adjustments.reduce((s, a) => s + (a.kind === 'add' ? a.amount : -a.amount), 0);
     // discount = 負(=加收) or 正(=折扣); 應收 = base - discount
     // (跟 buildContractInvoice 同語意, 但這裡直接算應繳)
