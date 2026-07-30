@@ -28,9 +28,52 @@ function getManualAdjustments(contract) {
     try { arr = JSON.parse(invoice.discountReason); } catch { return []; }
     if (!Array.isArray(arr)) return [];
     const ruleNames = (mockData.rentRules || []).filter(r => r.enabled !== false).map(r => r.name);
+    // 月份可能是單月 "(8月)" 或帳單上被人工合併過的區間 "(8-10月)" / "(8~10月)" —
+    // 兩種都代表「這筆本來就是規則算出來的」, 都要濾掉, 不然會跟 applyRentRules
+    // 現算的月份項目疊加, 變成同一筆能源費多收一次 (2026-07-30 抓到 C202 多收 $1500).
     return arr.filter(a => {
         const label = String(a?.label || '');
-        return !ruleNames.some(name => new RegExp(`^${escapeRegExp(name)} \\(\\d{1,2}月\\)$`).test(label));
+        return !ruleNames.some(name => new RegExp(`^${escapeRegExp(name)} \\(\\d{1,2}(?:[-~～]\\d{1,2})?月\\)$`).test(label));
+    });
+}
+
+// 把同一條 rentRules 規則、跨連續月份的多筆加總合併成一行給訊息顯示用
+// (例如 3 筆「能源費 (8月)/(9月)/(10月)」→ 1 行「能源費 (8-10月) $1,500」),
+// 跟合約編輯畫面「折扣/加收項目」的呈現顆粒度對齊 —— 純顯示層合併, 不影響
+// dueAmount/adjNet 的實際計算 (那些一律用未合併的 adjustments 陣列算, 避免
+// 合併邏輯本身有 bug 時反而動到金額).
+function mergeMonthlyLabelsForDisplay(items) {
+    const groups = new Map();
+    const order = [];
+    items.forEach(a => {
+        const m = String(a?.label || '').match(/^(.+) \((\d{1,2})月\)$/);
+        if (!m) {
+            const key = `__raw__${order.length}`;
+            groups.set(key, { label: a.label, kind: a.kind, amount: Number(a.amount) || 0 });
+            order.push(key);
+            return;
+        }
+        const [, name, monthStr] = m;
+        const key = `${name}__${a.kind}`;
+        if (!groups.has(key)) {
+            groups.set(key, { name, kind: a.kind, amount: 0, months: [] });
+            order.push(key);
+        }
+        const g = groups.get(key);
+        g.amount += Number(a.amount) || 0;
+        g.months.push(Number(monthStr));
+    });
+    return order.map(key => {
+        const g = groups.get(key);
+        if (!g.months) return { label: g.label, kind: g.kind, amount: g.amount };
+        const sorted = [...new Set(g.months)].sort((x, y) => x - y);
+        const isConsecutive = sorted.every((m, i) => i === 0 || m === sorted[i - 1] + 1);
+        const monthLabel = sorted.length === 1
+            ? `${sorted[0]}月`
+            : isConsecutive
+                ? `${sorted[0]}-${sorted[sorted.length - 1]}月`
+                : `${sorted.join('、')}月`;
+        return { label: `${g.name} (${monthLabel})`, kind: g.kind, amount: g.amount };
     });
 }
 
@@ -59,7 +102,7 @@ export function buildPaymentNoticeMessage(contract, opts = {}) {
     // (跟 buildContractInvoice 同語意, 但這裡直接算應繳)
     const dueAmount = Math.max(0, Math.round(baseRent + adjNet));
 
-    const adjLines = adjustments
+    const adjLines = mergeMonthlyLabelsForDisplay(adjustments)
         .map(a => `　　${a.kind === 'sub' ? '折抵' : '加項'}: ${a.label} $${Math.abs(a.amount).toLocaleString()}`)
         .join('\n');
 
