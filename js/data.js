@@ -908,6 +908,44 @@ export function invoiceActualAmount(i) {
 // labelsOnly=true → 只回 label 文字 (e.g. "能源費 · 季繳優惠")
 //                   給已經有獨立 +$X / -$X 顯示欄的地方用 (e.g. finance list)
 //                   避免 +$500 能源費 跟外層 +$500 重複
+// 把同名、連續月份的多筆加減項合併成一筆顯示 (能源費 7月/8月/9月 → 能源費 (7-9月))
+// 純顯示用, 不動實際金額 — 收支列表 / 明細的加減項標籤逐月列會過長, 手機卡片
+// 甚至溢出蓋到隔壁欄 (2026-07-31 用戶回報)。跟繳款通知的顯示顆粒度對齊。
+function mergeAdjustmentMonths(items) {
+    const groups = new Map();
+    const order = [];
+    items.forEach(a => {
+        const m = String(a?.label || '').match(/^(.+) \((\d{1,2})月\)$/);
+        if (!m) {
+            const key = `__raw__${order.length}`;
+            groups.set(key, { label: a.label, kind: a.kind, amount: Number(a.amount) || 0 });
+            order.push(key);
+            return;
+        }
+        const [, name, monthStr] = m;
+        const key = `${name}__${a.kind}`;
+        if (!groups.has(key)) {
+            groups.set(key, { name, kind: a.kind, amount: 0, months: [] });
+            order.push(key);
+        }
+        const g = groups.get(key);
+        g.amount += Number(a.amount) || 0;
+        g.months.push(Number(monthStr));
+    });
+    return order.map(key => {
+        const g = groups.get(key);
+        if (!g.months) return { label: g.label, kind: g.kind, amount: g.amount };
+        const sorted = [...new Set(g.months)].sort((x, y) => x - y);
+        const consecutive = sorted.every((mm, i) => i === 0 || mm === sorted[i - 1] + 1);
+        const monthLabel = sorted.length === 1
+            ? `${sorted[0]}月`
+            : consecutive
+                ? `${sorted[0]}-${sorted[sorted.length - 1]}月`
+                : `${sorted.join('、')}月`;
+        return { label: `${g.name} (${monthLabel})`, kind: g.kind, amount: g.amount };
+    });
+}
+
 export function formatDiscountReason(raw, { labelsOnly = false } = {}) {
     if (!raw) return '';
     const s = String(raw).trim();
@@ -915,7 +953,7 @@ export function formatDiscountReason(raw, { labelsOnly = false } = {}) {
     try {
         const items = JSON.parse(s);
         if (!Array.isArray(items)) return '';
-        return items.map(x => {
+        return mergeAdjustmentMonths(items).map(x => {
             if (labelsOnly) return (x.label || '').trim();
             const sign = x.kind === 'add' ? '+' : '−';
             const amt = (x.amount || 0).toLocaleString();

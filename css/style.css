@@ -8542,6 +8542,7 @@ button.omn-card { font-family: inherit; }
     }
     .entity-mobile-card .c-meta-cell {
         text-align: left;
+        min-width: 0;  /* grid track 可收縮 — 長加減項標籤才不會溢出蓋到隔壁欄 (2026-07-31) */
     }
     .entity-mobile-card .c-meta-cap {
         display: block;
@@ -8557,6 +8558,7 @@ button.omn-card { font-family: inherit; }
         color: var(--text-main);
         font-weight: 600;
         text-align: left;
+        overflow-wrap: anywhere;  /* 長加減項標籤自動換行, 不撐破 cell */
     }
     .entity-mobile-card .c-meta-val-sub {
         font-size: 0.68rem;
