@@ -487,6 +487,7 @@ async function handleMessage(event: any) {
             return;
         }
         const isPdf = contentType.includes('pdf');
+        const isImage = contentType.includes('jpeg') || contentType.includes('jpg') || contentType.includes('png');
         const ext = isPdf ? 'pdf'
                  : contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg'
                  : contentType.includes('png') ? 'png'
@@ -503,27 +504,18 @@ async function handleMessage(event: any) {
         // 優先挑「最近寄出的」合約 (有 contract_sent_at)
         const pendingContract = contracts?.[0];
 
-        // 判定: 歸合約 or 一般訊息
-        // 規則 (放寬版, 避免 sync race 漏判):
-        //   1. PDF + 有 active 合約 (待簽署/已簽署) → 歸合約
-        //   2. image + 「待簽署」合約 + 還沒收過簽署檔 → 歸合約 (不要求 contract_sent_at)
-        //   3. image + 「已簽署」合約 + contract_sent_at 在 2 天內 → 歸合約 (補件)
-        //   4. 其他 → 一般訊息
+        // 判定: 歸合約 or 一般訊息 (2026-07-31 改版, 用戶定案)
+        // 規則: 圖片或 PDF, 只有在「合約發送後 24 小時內」(contract_sent_at 在 24h 內)
+        //   才視為合約簽署檔; 其他一律當一般訊息轉小編。
+        //   → 修掉舊 bug: 之前「有待簽署合約 + 傳任何圖」就當簽署檔, 完全沒看發送
+        //     時間, 導致租客剛入住傳的付款截圖被誤判成合約簽署檔, 還把合約錯標成
+        //     「已簽署」(2026-07-31 事故: C225 被一張付款截圖蓋成已簽署)。
+        //   PDF 原本無條件歸合約, 現在也一起收斂到 24h 窗口, 邏輯統一。
         let treatAsContract = false;
-        if (pendingContract) {
-            if (isPdf) {
-                treatAsContract = true;
-            } else if (pendingContract.status === '待簽署' && !pendingContract.signed_file_url) {
-                // 還沒簽好 → 客戶傳圖 = 簽合約 (主流程)
-                treatAsContract = true;
-            } else if (pendingContract.status === '已簽署' && pendingContract.contract_sent_at) {
-                // 已簽過, 但 2 天內可補件
-                const sentAt = new Date(pendingContract.contract_sent_at);
-                const twoDaysMs = 2 * 86400 * 1000;
-                if (Date.now() - sentAt.getTime() <= twoDaysMs) {
-                    treatAsContract = true;
-                }
-            }
+        if (pendingContract && pendingContract.contract_sent_at && (isPdf || isImage)) {
+            const sentAt = new Date(pendingContract.contract_sent_at);
+            const within24h = (Date.now() - sentAt.getTime()) < 24 * 3600 * 1000;
+            if (within24h) treatAsContract = true;
         }
 
         if (treatAsContract) {
