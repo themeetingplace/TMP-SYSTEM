@@ -2017,9 +2017,15 @@ export const store = {
         const newProp = mockData.properties.find(p => p.name === newPropertyName);
         if (!newProp) return { error: 'property_not_found' };
 
-        // 新床位在這份合約剩餘期間不能已經有別的合約
+        // 新床位在「這份合約會實際佔用的期間」內不能已經有別的合約
+        // 佔用期間 = [max(今天, 合約起始日), 合約到期日]:
+        //   合約若還沒開始入住 (起始日在未來) → 從起始日算佔用; 已入住 → 從今天搬過去算
+        // ⚠ bug (2026-07-31): 原本固定用 today 當佔用起點, 導致「未來才入住」的合約
+        //   (例 R2-A 9/1 才入住) 被硬算成從今天就佔用新床, 跟新床現住到 8/29 的房客
+        //   誤判衝突 — 明明期間沒重疊卻不給換
         const todayIso = new Date().toISOString().split('T')[0];
-        const conflicts = findOverlappingBedContracts(newPropertyName, todayIso, c.endDate, { excludeId: contractId });
+        const occupyStart = (c.startDate && c.startDate > todayIso) ? c.startDate : todayIso;
+        const conflicts = findOverlappingBedContracts(newPropertyName, occupyStart, c.endDate, { excludeId: contractId });
         if (conflicts.length > 0) return { error: 'bed_conflict', conflict: conflicts[0] };
 
         const oldPropertyName = c.propertyName;
@@ -2044,10 +2050,23 @@ export const store = {
         markDirty('contracts', contractId);
 
         // 3. 新床位佔用
-        mockData.properties[mockData.properties.indexOf(newProp)] = {
-            ...newProp, status: '已出租', tenant: c.tenant, contractId, contractEnd: c.endDate
-        };
-        markDirty('properties', newProp.id);
+        //   但「未來才入住的合約」搬進「現在還有人住的床」時, 不要覆蓋掉現住者的
+        //   property 關聯 (否則床位卡 / 空床統計會顯示成未來房客、現住者消失)。
+        //   住房一覽是讀合約算的, 兩份接續合約各自成列, 不受這裡影響。
+        const newBedCurrentOccupant = mockData.contracts.find(x =>
+            x.id !== contractId &&
+            x.propertyName === newPropertyName &&
+            x.renewalState === 'active' &&
+            x.startDate <= todayIso &&
+            (x.endDate == null || x.endDate >= todayIso)
+        );
+        const movedIsFuture = c.startDate && c.startDate > todayIso;
+        if (!(movedIsFuture && newBedCurrentOccupant)) {
+            mockData.properties[mockData.properties.indexOf(newProp)] = {
+                ...newProp, status: '已出租', tenant: c.tenant, contractId, contractEnd: c.endDate
+            };
+            markDirty('properties', newProp.id);
+        }
 
         // 4. 同步該合約的房租 invoice propertyName + buildingId (金額不動, 用戶要自己確認要不要改)
         mockData.invoices.forEach(inv => {
