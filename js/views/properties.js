@@ -1034,6 +1034,17 @@ export function showCheckinAssignmentForm(opts = {}) {
                 // 入住日期 / 館別 也會影響租金加項規則命中與否, 一併觸發重算
                 scheduledDateInput?.addEventListener('change', recalcTotalDue);
                 buildingIdHiddenForRules?.addEventListener('change', recalcTotalDue);
+
+                // 預選床位: mount 時用「當下最新的 preselectBed.rent」重新帶一次月租金。
+                // ⚠ bug (2026-07-31): 欄位 value 是 form 定義當下算的; 若那前後 bed.rent
+                //   被 realtime sync 更新過 (例: 剛在設定改了床位租金, 雲端 pull 進來),
+                //   欄位會停在舊值, 跟表頭 (mount 才畫, 讀到新值) 對不上 — 用戶回報
+                //   表頭 $6,650 但月租金欄位卻帶 9500。mount 時重讀床位租金保證一致。
+                //   只在初始同步 (此時用戶還沒動過欄位), 不影響 hint 說的「可調整」。
+                if (preselectBed && amountInput2 && preselectBed.rent != null
+                        && Number(amountInput2.value) !== Number(preselectBed.rent)) {
+                    amountInput2.value = preselectBed.rent;
+                }
                 recalcTotalDue();  // 初始算一次
             }
 
