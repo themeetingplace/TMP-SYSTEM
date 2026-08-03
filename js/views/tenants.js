@@ -202,8 +202,8 @@ export function showTenantForm(tenant = null, { onCreated } = {}) {
         fields: [
             { name: 'source', label: '顧客來源', type: 'select', required: true, span: 2, options: sourceOptions, value: tenant?.source ?? defaultSource, hint: '從哪邊聯絡我們的（系統設定可新增來源）' },
             { name: 'name', label: '姓名', type: 'text', required: true },
-            { name: 'phone', label: '電話', type: 'tel', required: true, placeholder: '例：0912-345-678' },
-            { name: 'email', label: '電子郵件', type: 'email', required: true, span: 2 },
+            { name: 'phone', label: '電話', type: 'tel', required: false, placeholder: '例：0912-345-678' },
+            { name: 'email', label: '電子郵件', type: 'email', required: false, span: 2 },
             { name: 'status', label: '狀態', type: 'select', required: true, options: TENANT_STATUSES, value: tenant?.status ?? '待入住' },
             { name: 'currentProperty', label: '目前物件', type: 'select', options: propertyOptions, hint: '可選擇住客所在物件' },
             { name: 'emergencyContact', label: '緊急聯絡人', type: 'text', span: 2, placeholder: '例：王小明 (0911-222-333)' },

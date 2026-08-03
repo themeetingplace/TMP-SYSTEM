@@ -631,6 +631,9 @@ export function renderOccupancy() {
             <div class="card occ-intro">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     <div class="occ-tabs">${tabs}</div>
+                    <button class="btn btn-primary btn-sm" id="occ-new-checkin" data-fab="ph-user-plus" title="新建入住 (可選任何床位, 含接在退租者後面的接續合約)">
+                        <i class="ph ph-user-plus"></i> 新建入住
+                    </button>
                 </div>
             </div>
             ${section}
@@ -645,6 +648,12 @@ export function initOccupancyActions(scope) {
             currentBuildingId = tab.dataset.building;
             if (window.refreshCurrentView) window.refreshCurrentView();
         });
+    });
+
+    // 全域「新建入住」— 開入住表單, 預設帶目前檢視的館別; 床位下拉本來就含占用中的床
+    // (標「⚠ 誰住至X」), 所以可以直接排「接在退租者後面」的接續合約
+    scope.querySelector('#occ-new-checkin')?.addEventListener('click', () => {
+        showCheckinAssignmentForm({ preselectBuildingId: currentBuildingId });
     });
 
     // 通用 data-action 委派 — 床位/租客/合約點擊 + 退房 checkbox (桌面矩陣用)

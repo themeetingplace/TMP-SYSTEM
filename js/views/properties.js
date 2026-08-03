@@ -500,7 +500,8 @@ export function showCheckinAssignmentForm(opts = {}) {
         ? mockData.buildings.find(b => b.id === preselectBed.buildingId)
         : null;
 
-    const initialBuildingId = preselectBed?.buildingId || activeBuildings[0]?.id || '';
+    // opts.preselectBuildingId: 從住房一覽「新建入住」進來時, 預設帶目前檢視的館別 (床位仍讓用戶選)
+    const initialBuildingId = preselectBed?.buildingId || opts.preselectBuildingId || activeBuildings[0]?.id || '';
 
     // 床位欄位（預選時跳過 building/bed select，但仍可加額外床位）
     // bedHeader = 入住床位摘要 banner (永遠顯示在 form-grid 第一列，span 2 撐滿整列)

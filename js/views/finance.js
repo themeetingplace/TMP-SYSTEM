@@ -365,9 +365,11 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
 
     // 依當前模式 filter (共居/代管) — 不讓代管館跑進共居 form 反之亦然
     const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
-    const buildingOptions = getSortedBuildings({ activeOnly: true })
+    // 含停用館 — 已收掉的館 (如溫州) 仍可能要補記歷史收支; 停用的標「(停用)」但仍可選
+    // (原本 activeOnly:true 會把停用館濾掉, 導致收掉的館無法記帳 — 2026-07-31 用戶回報)
+    const buildingOptions = getSortedBuildings()
         .filter(b => (b.mode || 'cohousing') === targetMode)
-        .map(b => ({ value: b.id, label: b.name }));
+        .map(b => ({ value: b.id, label: b.status === 'active' ? b.name : `${b.name} (停用)` }));
     // 物件下拉依館 filter (對齊 contracts 編輯模式)
     const buildPropertyOptions = (buildingId) => mockData.properties
         .filter(p => buildingId ? p.buildingId === buildingId : true)
@@ -407,7 +409,8 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions },
             { name: 'propertyName', label: '物件', type: 'select', options: propertyOptions, hint: '無對應床位可留空' },
             // 跟新增入住同款: text input + 輸入時跳建議列, 沒比對到舊客 → submit 自動建檔
-            { name: 'tenant', label: '租客', type: 'text', required: true, span: 2,
+            // required:false — 房租才需要租客 (在 onSubmit 檢查); 其他收入 (雜項) 可不填租客
+            { name: 'tenant', label: '租客', type: 'text', required: false, span: 2,
               placeholder: '輸入姓名搜尋舊資料 / 或輸入新姓名 (沒比對到會自動建檔)' },
             { name: 'periodStart', label: '租期起', type: 'date' },
             { name: 'periodEnd', label: '租期止', type: 'date' },
@@ -595,6 +598,25 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
                 const propertyHiddenInv = form.querySelector('[name="propertyName"]');
                 const amountInputInv = form.querySelector('[name="amount"]');
 
+                // === 依「項目」切換欄位: 房租 = 完整租金表單; 其他收入 (雜項) = 精簡 ===
+                // 用戶回報: 想記房租以外的其他收入, 但表單硬塞租客/租期/加減項, 記不了。
+                // 非房租時隱藏租金專用欄位 (租期/加減項/應收/已收) + 租客標成選填, 金額改中性標籤。
+                const typeHiddenInv = form.querySelector('[name="type"]');
+                const psGroupInv = psInput?.closest('.form-group');
+                const peGroupInv = peInput?.closest('.form-group');
+                const adjustGroupInv = form.querySelector('#ph-adjustments');
+                const totalDueGroupInv = form.querySelector('[name="totalDue"]')?.closest('.form-group');
+                const paidAmountGroupInv = form.querySelector('[name="paidAmount"]')?.closest('.form-group');
+                const amountLabelInv = amountInputInv?.closest('.form-group')?.querySelector('label');
+                const syncIncomeTypeFields = () => {
+                    const isRent = (typeHiddenInv?.value || '房租') === '房租';
+                    [psGroupInv, peGroupInv, adjustGroupInv, totalDueGroupInv, paidAmountGroupInv]
+                        .forEach(el => { if (el) el.style.display = isRent ? '' : 'none'; });
+                    if (amountLabelInv) amountLabelInv.textContent = isRent ? '租金金額' : '金額';
+                };
+                typeHiddenInv?.addEventListener('change', syncIncomeTypeFields);
+                syncIncomeTypeFields();
+
                 psInput?.addEventListener('change', () => {
                     if (psInput.value && !peInput.value) {
                         peInput.value = leaseEndISO(psInput.value, 1);
@@ -630,6 +652,11 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             }
         },
         onSubmit: (values) => {
+            // 房租收入必須有租客 (其他收入可不填) — tenant 已改 required:false, 這裡補檢查
+            if (!isExpense && values.type === '房租' && !String(values.tenant || '').trim()) {
+                showToast('房租收入請填租客姓名', 'danger');
+                return false;
+            }
             // 租客 (收入 form 才有): 打了新名字 → 自動建檔
             if (!isExpense && values.tenant) {
                 const tenantName = String(values.tenant).trim();

@@ -671,6 +671,7 @@ function showContractForm(contract, opts = {}) {
             { name: 'discountReason', type: 'hidden', value: '' },
             { name: 'paidAmount', label: '已收金額', type: 'number' },
             { name: 'paymentMethod', label: '付款方式', type: 'select', options: (mockData.paymentMethods || []).map(p => ({ value: p.name, label: p.name })) },
+            { name: 'paidDate', label: '入帳日', type: 'date', span: 2, hint: '實際收到款項的日期 (留空 = 有收款時預設今天)' },
 
             // 6. 押金 / 狀態
             { name: '__sep_misc', type: 'section', label: '押金 / 狀態' },
@@ -716,6 +717,7 @@ function showContractForm(contract, opts = {}) {
                 discountReason: initAdjItems.length ? JSON.stringify(initAdjItems) : '',
                 paidAmount: rentInv?.paidAmount ?? 0,
                 paymentMethod: rentInv?.paymentMethod || (mockData.paymentMethods || [])[0]?.name || '匯款',
+                paidDate: rentInv?.paidDate || '',
                 _isBundleParent: isBundleParent,
                 _childRentSum: childRentSum,
                 _bundleChildIds: bundleChildren.map(c => c.id)
@@ -910,10 +912,10 @@ function showContractForm(contract, opts = {}) {
                 endDate = leaseEndISO(values.startDate, values.termMonths);  // 起租 + N 月 − 1 天
             }
 
-            // 抽離 tenant 子欄位 + totalDue (顯示用) + adjustments + paidAmount/paymentMethod (寫到 invoice)
+            // 抽離 tenant 子欄位 + totalDue (顯示用) + adjustments + paidAmount/paymentMethod/paidDate (寫到 invoice)
             const { tenantPhone, tenantEmail, tenantEmergency, totalDue: _td,
                     discount: adjDiscount, discountReason: adjReason,
-                    paidAmount: _pa, paymentMethod: _pm,
+                    paidAmount: _pa, paymentMethod: _pm, paidDate: _pd,
                     ...contractValues } = values;
 
             const payload = {
@@ -971,6 +973,7 @@ function showContractForm(contract, opts = {}) {
                     const newReason = adjReason || '';
                     const newPaidAmount = Number(values.paidAmount) || 0;
                     const newPaymentMethod = values.paymentMethod || rentInv.paymentMethod || '';
+                    const newPaidDate = values.paidDate || '';
                     // ⚠ 2026-07-24 修 bug: 月租金 / 合約期改了之後, 帳單的 amount (租金總額)
                     // 之前完全沒跟著重算寫回去 — 「編輯合約」modal 的應收總額只是畫面即時
                     // 算好看, 帳單本身金額沒同步更新, 之後 PDF / 房租查帳 / 報表全部還是
@@ -986,11 +989,14 @@ function showContractForm(contract, opts = {}) {
                     if (newReason !== (rentInv.discountReason || '')) patch.discountReason = newReason;
                     if (newPaidAmount !== (rentInv.paidAmount || 0)) patch.paidAmount = newPaidAmount;
                     if (newPaymentMethod !== (rentInv.paymentMethod || '')) patch.paymentMethod = newPaymentMethod;
+                    // 使用者手選的入帳日 → 直接寫回 (2026-07-31: 合約端編輯收支也能改入帳日)
+                    if (newPaidDate && newPaidDate !== (rentInv.paidDate || '')) patch.paidDate = newPaidDate;
                     // 應收 (租金總額 − 折扣) 有變、或已收金額有變 → invoice status 要重判
                     if ('paidAmount' in patch || 'amount' in patch || 'discount' in patch) {
                         const due = newAmount - newDiscount;
                         patch.status = newPaidAmount >= due && due > 0 ? '已繳清' : (newPaidAmount > 0 ? '部分繳' : '未繳');
-                        if (newPaidAmount > 0 && !rentInv.paidDate) patch.paidDate = new Date().toISOString().slice(0, 10);
+                        // 沒手選入帳日、又有收款、原本也沒入帳日 → 預設今天
+                        if (newPaidAmount > 0 && !rentInv.paidDate && !patch.paidDate) patch.paidDate = new Date().toISOString().slice(0, 10);
                     }
                     if (Object.keys(patch).length) store.updateInvoice(rentInv.id, patch);
                 }
