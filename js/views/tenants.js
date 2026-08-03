@@ -434,53 +434,45 @@ function showLineMergePicker(targetTenantId) {
                 });
                 setTimeout(() => searchInput.focus(), 100);
             }
+            // 實際執行合併 + 復原 toast (fieldChoices 由欄位選擇器決定)
+            const runMerge = (source, fieldChoices) => {
+                const r = store.mergeTenant(targetTenantId, source.id, { fieldChoices });
+                if (!r.ok) { showToast(r.msg, 'danger', 5000); return; }
+                refreshView();
+                // 順帶關掉背後還開著的租客詳細 modal (該筆資料已合併變動)
+                setTimeout(() => {
+                    document.querySelectorAll('.modal-overlay:not(.is-closing)').forEach(m => {
+                        m.querySelector('.modal-close')?.click();
+                    });
+                }, 50);
+                showUndoToast({
+                    message: `已合併 ${source.name} → ${target.name}`,
+                    durationMs: 10000,
+                    onUndo: () => {
+                        const u = store.unmergeTenant({
+                            targetSnapshot: r.targetSnapshot,
+                            sourceSnapshot: r.sourceSnapshot,
+                            mergedTargetId: r.mergedTargetId
+                        });
+                        if (u.ok) {
+                            showToast(`已還原 ${u.restored.join(' / ')}`, 'success');
+                            refreshView();
+                        } else {
+                            showToast(`還原失敗: ${u.msg}`, 'danger', 5000);
+                        }
+                    },
+                    onCommit: () => {
+                        // DELETE 已在 mergeTenant 內立即 fire (unique constraint 需要), 這裡不重複
+                    }
+                });
+            };
             overlay.querySelectorAll('[data-source-id]').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const sourceId = btn.dataset.sourceId;
                     const source = mockData.tenants.find(t => t.id === sourceId);
                     if (!source) return;
                     close();
-                    openConfirm({
-                        title: '確認合併',
-                        message: `確定把「<strong>${source.name}</strong>」(${source.id}) 的資料合併到「<strong>${target.name}</strong>」(${target.id})？<br><br>
-                            策略：<strong>填空不覆寫</strong>（target 空的欄位才從 source 補進來），LINE 綁定會轉過來。<br><br>
-                            合併後有 <strong>10 秒</strong> 可按「復原」還原兩筆紀錄。`,
-                        confirmLabel: '確認合併',
-                        onConfirm: () => {
-                            const r = store.mergeTenant(targetTenantId, sourceId);
-                            if (!r.ok) {
-                                showToast(r.msg, 'danger', 5000);
-                                return;
-                            }
-                            refreshView();
-                            // 順帶關掉背後還開著的租客詳細 modal (該筆資料已合併變動)
-                            setTimeout(() => {
-                                document.querySelectorAll('.modal-overlay:not(.is-closing)').forEach(m => {
-                                    m.querySelector('.modal-close')?.click();
-                                });
-                            }, 50);
-                            showUndoToast({
-                                message: `已合併 ${source.name} → ${target.name}`,
-                                durationMs: 10000,
-                                onUndo: () => {
-                                    const u = store.unmergeTenant({
-                                        targetSnapshot: r.targetSnapshot,
-                                        sourceSnapshot: r.sourceSnapshot,
-                                        mergedTargetId: r.mergedTargetId
-                                    });
-                                    if (u.ok) {
-                                        showToast(`已還原 ${u.restored.join(' / ')}`, 'success');
-                                        refreshView();
-                                    } else {
-                                        showToast(`還原失敗: ${u.msg}`, 'danger', 5000);
-                                    }
-                                },
-                                onCommit: () => {
-                                    // DELETE 已在 mergeTenant 內立即 fire (unique constraint 需要), 這裡不重複
-                                }
-                            });
-                        }
-                    });
+                    showMergeFieldChooser(target, source, (fieldChoices) => runMerge(source, fieldChoices));
                 });
             });
         }
@@ -503,6 +495,81 @@ async function openIdCard(path, side) {
         const { showToast } = await import('../utils/ui.js');
         showToast(`無法開啟身分證${side}：${e.message}`, 'danger', 5000);
     }
+}
+
+// 合併前「逐欄選擇保留哪一邊」對照畫面 (2026-07-31 用戶需求)
+// 只列出兩邊「值不一樣 / 只有一邊有值」的欄位, 讓使用者逐欄決定留哪個;
+// 值相同的欄位自動處理不列出。選完 → 帶 fieldChoices 呼叫 onConfirm。
+function showMergeFieldChooser(target, source, onConfirm) {
+    const FIELDS = [
+        { key: 'name', label: '姓名', get: t => t.name || '' },
+        { key: 'phone', label: '電話', get: t => t.phone || '' },
+        { key: 'email', label: 'Email', get: t => t.email || '' },
+        { key: 'emergencyContact', label: '緊急聯絡人', get: t => t.emergencyContact || '' },
+        { key: 'source', label: '顧客來源', get: t => t.source || '' },
+        { key: 'idCard', label: '身分證照片', get: t => t.idCardFrontPath ? '已上傳' : '' }
+    ];
+    // 只列出兩邊不一樣的欄位 (含一邊空一邊有值)
+    const rows = FIELDS.map(f => {
+        const tv = String(f.get(target)).trim();
+        const sv = String(f.get(source)).trim();
+        if (tv === sv) return null;
+        // 預設: 只有一邊有值 → 選有值那邊; 兩邊都有 → 姓名看 source 有無 LINE, 其餘預設現有(target)
+        let def;
+        if (!tv) def = 'source';
+        else if (!sv) def = 'target';
+        else if (f.key === 'name') def = source.lineUserId ? 'source' : 'target';
+        else def = 'target';
+        return { f, tv, sv, def };
+    }).filter(Boolean);
+
+    const escv = (s) => esc(s || '（空白）');
+    const rowsHtml = rows.map(({ f, tv, sv, def }) => `
+        <div style="border:1px solid var(--border-color); border-radius:8px; padding:0.6rem 0.75rem; margin-bottom:0.5rem;">
+            <div style="font-size:var(--text-xs); color:var(--text-muted); font-weight:600; margin-bottom:0.4rem;">${f.label}</div>
+            <label style="display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0; cursor:pointer;">
+                <input type="radio" name="mf-${f.key}" value="target" ${def === 'target' ? 'checked' : ''}>
+                <span style="font-size:var(--text-sm);">${escv(tv)} <span style="color:var(--text-muted); font-size:var(--text-2xs);">(現有這筆)</span></span>
+            </label>
+            <label style="display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0; cursor:pointer;">
+                <input type="radio" name="mf-${f.key}" value="source" ${def === 'source' ? 'checked' : ''}>
+                <span style="font-size:var(--text-sm);">${escv(sv)} <span style="color:var(--text-muted); font-size:var(--text-2xs);">(來源 ${esc(source.id)})</span></span>
+            </label>
+        </div>
+    `).join('');
+
+    const lineFrom = target.lineUserId ? '現有這筆' : (source.lineUserId ? `來源 ${esc(source.id)}` : '—');
+    const bodyHtml = `
+        <div style="font-size:var(--text-sm); color:var(--text-secondary); margin-bottom:0.75rem; line-height:1.6;">
+            合併到「<strong>${esc(target.name)}</strong>」。下面欄位兩邊不一樣, 請選要保留哪個;
+            沒列出的欄位會自動保留有值的一邊。<strong style="color:var(--color-danger);">合併後會刪掉來源那筆</strong> (10 秒內可復原)。
+        </div>
+        <div style="font-size:var(--text-xs); color:var(--text-muted); margin-bottom:0.75rem;">
+            🔗 LINE 綁定保留自 <strong>${lineFrom}</strong> ・ 備註會兩邊合併保留
+        </div>
+        ${rows.length ? rowsHtml : '<div style="padding:1rem; text-align:center; color:var(--text-muted); font-size:var(--text-sm);">兩邊沒有衝突的欄位, 直接合併即可。</div>'}
+        <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:1rem;">
+            <button class="btn btn-outline" id="mf-cancel">取消</button>
+            <button class="btn btn-primary" id="mf-confirm">確認合併</button>
+        </div>
+    `;
+    openModal({
+        title: `🔗 選擇要保留的資料`,
+        maxWidth: 520,
+        bodyHtml,
+        onMount: (overlay, close) => {
+            overlay.querySelector('#mf-cancel')?.addEventListener('click', close);
+            overlay.querySelector('#mf-confirm')?.addEventListener('click', () => {
+                const fieldChoices = {};
+                rows.forEach(({ f }) => {
+                    const sel = overlay.querySelector(`input[name="mf-${f.key}"]:checked`);
+                    if (sel) fieldChoices[f.key] = sel.value;
+                });
+                close();
+                onConfirm(fieldChoices);
+            });
+        }
+    });
 }
 
 // 「編輯備註」focused modal — 點租客名字打開

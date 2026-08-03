@@ -1507,7 +1507,9 @@ export const store = {
     //   例如 admin 只打了名字, source 有電話/email/緊急聯絡人 → 通通填進 target
     //   例外: LINE 綁定, 一定要從 source 帶過來 (合併主要目的)
     // 回傳: 保留 source 完整快照, 可用於 undo 恢復
-    mergeTenant(targetId, sourceId) {
+    // opts.fieldChoices: { 欄位名: 'target' | 'source' } — 使用者逐欄指定保留哪一邊的值。
+    //   沒指定的欄位 → 維持原本「填空不覆寫」邏輯 (向後相容, 舊呼叫端不傳就照舊)。
+    mergeTenant(targetId, sourceId, opts = {}) {
         if (!targetId || !sourceId || targetId === sourceId) {
             return { ok: false, msg: 'target / source ID 不合法' };
         }
@@ -1533,35 +1535,50 @@ export const store = {
             return targetVal;
         };
 
-        // 姓名策略: source 有 LINE 綁定 → 假設 source 是 LIFF 走完流程的本名, 優先用 source.name
-        //   target 那筆是 admin 手打, 可能是暱稱 → 轉到 note 保留 (例: "[原後台備註名: Nicole]")
-        //   兩邊姓名相同 → 沒歧義, 直接用
-        const useSourceName = source.name && source.name !== target.name && source.lineUserId;
-        const finalName = useSourceName ? source.name : target.name;
-        const nicknameNote = useSourceName ? `[原後台備註名: ${target.name}]` : '';
+        // 逐欄取值: 使用者有指定 (fieldChoices) → 用那邊; 沒指定 → 填空不覆寫
+        const choices = opts.fieldChoices || {};
+        const pick = (field) => {
+            const c = choices[field];
+            if (c === 'source') return source[field] ?? '';
+            if (c === 'target') return target[field] ?? '';
+            return prefer(target[field], source[field]);
+        };
+
+        // 姓名策略:
+        //   使用者有選 → 直接用選的那邊; 被捨棄的名字轉到 note 保留
+        //   沒選 → 沿用舊預設: source 有 LINE 綁定 → 用 source 本名 (LIFF 本名優先)
+        let finalName, droppedName;
+        if (choices.name === 'source') { finalName = source.name; droppedName = target.name; }
+        else if (choices.name === 'target') { finalName = target.name; droppedName = source.name; }
+        else {
+            const useSourceName = source.name && source.name !== target.name && source.lineUserId;
+            finalName = useSourceName ? source.name : target.name;
+            droppedName = useSourceName ? target.name : source.name;
+        }
+        const nicknameNote = (droppedName && droppedName !== finalName) ? `[原名: ${droppedName}]` : '';
 
         const ti = mockData.tenants.findIndex(t => t.id === targetId);
         mockData.tenants[ti] = {
             ...target,
-            // 姓名: 本名優先
+            // 姓名: 依選擇 / 預設本名優先
             name: finalName,
             // LINE 綁定: 一定要有 (從 source 或 target 取)
             lineUserId: target.lineUserId || source.lineUserId,
             lineDisplayName: target.lineDisplayName || source.lineDisplayName || null,
             linePictureUrl: target.linePictureUrl || source.linePictureUrl || null,
             lineBoundAt: target.lineBoundAt || source.lineBoundAt || null,
-            // 一般欄位: 填空不覆寫
-            phone: prefer(target.phone, source.phone),
-            email: prefer(target.email, source.email),
-            emergencyContact: prefer(target.emergencyContact, source.emergencyContact),
-            currentProperty: prefer(target.currentProperty, source.currentProperty),
-            status: prefer(target.status, source.status),
-            source: prefer(target.source, source.source),
-            // 身分證: 填空不覆寫
-            idCardFrontPath: prefer(target.idCardFrontPath, source.idCardFrontPath),
-            idCardBackPath: prefer(target.idCardBackPath, source.idCardBackPath),
-            idCardUploadedAt: prefer(target.idCardUploadedAt, source.idCardUploadedAt),
-            // note 合併 (原兩邊 note + 暱稱備註)
+            // 一般欄位: 依 fieldChoices / 填空不覆寫
+            phone: pick('phone'),
+            email: pick('email'),
+            emergencyContact: pick('emergencyContact'),
+            currentProperty: pick('currentProperty'),
+            status: pick('status'),
+            source: pick('source'),
+            // 身分證: 依 fieldChoices / 填空不覆寫 (3 個欄位綁在一起, 用同一個選擇)
+            idCardFrontPath: choices.idCard === 'source' ? (source.idCardFrontPath ?? '') : choices.idCard === 'target' ? (target.idCardFrontPath ?? '') : prefer(target.idCardFrontPath, source.idCardFrontPath),
+            idCardBackPath: choices.idCard === 'source' ? (source.idCardBackPath ?? '') : choices.idCard === 'target' ? (target.idCardBackPath ?? '') : prefer(target.idCardBackPath, source.idCardBackPath),
+            idCardUploadedAt: choices.idCard === 'source' ? (source.idCardUploadedAt ?? '') : choices.idCard === 'target' ? (target.idCardUploadedAt ?? '') : prefer(target.idCardUploadedAt, source.idCardUploadedAt),
+            // note 合併 (原兩邊 note + 捨棄的姓名備註)
             note: [target.note, source.note ? `[合併自 ${source.id}] ${source.note}` : '', nicknameNote].filter(Boolean).join('\n')
         };
 
