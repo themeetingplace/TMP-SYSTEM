@@ -449,9 +449,23 @@ function decodeJwtPayload(token) {
 
 // Silent refresh: token 快過期就 logout+login 拿新的 (在 form render 前做, 用戶不會 lose input)
 // 也支援 URL hash `#force-relogin` 觸發手動 (從錯誤畫面按鈕來)
+//
+// ⚠ 2026-07-31 改版 — 修「進登記頁反覆顯示逾期」:
+//   「逾期」是 LINE 平台自己的 OAuth 授權過期錯誤頁, 每次 liff.login() 跳轉都可能
+//   撞到。原本門檻 15 分鐘太激進 → 幾乎每次進場都跳轉 → 常撞逾期; 而且沒有防迴圈,
+//   refresh 回來若還是舊 token 又會再跳一次, 就是用戶說的「馬上重開還是一樣」。
+//   改法: (1) 門檻收到「已過期 / 剩不到 2 分鐘」才跳; (2) 一次 session 只自動跳一次
+//   (sessionStorage flag), 跳完還是舊的就不再跳, 直接進表單、交給 submit 時再處理,
+//   不讓用戶卡在逾期迴圈。
 function ensureFreshTokenOrRedirect() {
+    const REFRESH_FLAG = 'tmp-liff-refreshed';
+    const wasRefreshed = () => { try { return sessionStorage.getItem(REFRESH_FLAG) === '1'; } catch { return false; } };
+    const setRefreshed = () => { try { sessionStorage.setItem(REFRESH_FLAG, '1'); } catch (_) {} };
+    const clearRefreshed = () => { try { sessionStorage.removeItem(REFRESH_FLAG); } catch (_) {} };
+
     if (location.hash === '#force-relogin') {
         history.replaceState(null, '', location.pathname + location.search); // 清 hash 避免重跳
+        setRefreshed();
         try { liff.logout(); } catch (_) {}
         liff.login({ redirectUri: location.href });
         return true; // login() 會 redirect, 不 return
@@ -460,16 +474,15 @@ function ensureFreshTokenOrRedirect() {
     if (!token) return false;
     const payload = decodeJwtPayload(token);
     if (!payload || !payload.exp) return false; // 解不出 exp 就交給後端 verify 兜底
-    const nowSec = Math.floor(Date.now() / 1000);
-    const secLeft = payload.exp - nowSec;
-    // 剩不到 15 分鐘 → 立即 silent refresh (用戶還沒開始填, 不會 lose data)
-    if (secLeft < 15 * 60) {
-        console.log('[liff] ID token expires in', secLeft, 's — silent refresh');
-        try { liff.logout(); } catch (_) {}
-        liff.login({ redirectUri: location.href });
-        return true;
-    }
-    return false;
+    const secLeft = payload.exp - Math.floor(Date.now() / 1000);
+    if (secLeft >= 120) { clearRefreshed(); return false; } // token 夠新 → 清 flag, 正常進行
+    // token 已過期 / 剩不到 2 分鐘:
+    if (wasRefreshed()) return false; // 已自動 refresh 過一次還是舊的 → 不再跳 (避免逾期迴圈), 交給 submit 處理
+    setRefreshed();
+    console.log('[liff] ID token expires in', secLeft, 's — silent refresh (one-shot)');
+    try { liff.logout(); } catch (_) {}
+    liff.login({ redirectUri: location.href });
+    return true;
 }
 
 // liff.init() / liff.getProfile() 都是打 LINE 伺服器的網路請求, SDK 本身沒有
