@@ -1044,7 +1044,7 @@ function buildContractInvoice(contract, payment = {}) {
         amount: totalAmount,
         dueDate: contract.startDate,
         status: '已繳清',
-        paidDate: today,
+        paidDate: payment.paidDate || today,   // 使用者在入住收款步驟手選的入帳日, 沒填才預設今天
         periodStart: contract.startDate,
         periodEnd: contract.endDate,
         note: `${contract.id} ${termLabel} 房租${bundleNote}` + (payment.note ? ` · ${payment.note}` : (paidAmount >= due ? ' · 簽約已收' : '')),

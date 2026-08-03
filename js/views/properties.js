@@ -552,7 +552,8 @@ export function showCheckinAssignmentForm(opts = {}) {
         { name: 'discountReason', type: 'hidden', value: '' },    // 自動編碼: JSON of adjustments
         { name: 'totalDue', label: '應收總額', type: 'number', value: '', span: 2, hint: '月租金 × 合約期 + 加項 − 折扣（自動計算）' },
         { name: 'paidAmount', label: '已收金額', type: 'number', hint: '留空或 0 = 未收；全額收訖請填上面「應收總額」顯示的數字 (已含自動加項)' },
-        { name: 'paymentMethod', label: '付款方式', type: 'select', options: (mockData.paymentMethods || []).map(p => ({ value: p.name, label: p.name })), value: (mockData.paymentMethods || [])[0]?.name || '匯款' }
+        { name: 'paymentMethod', label: '付款方式', type: 'select', options: (mockData.paymentMethods || []).map(p => ({ value: p.name, label: p.name })), value: (mockData.paymentMethods || [])[0]?.name || '匯款' },
+        { name: 'paidDate', label: '入帳日', type: 'date', span: 2, hint: '實際收到款項的日期 (留空 = 有收款時預設今天)' }
     ];
     const fields = [...bedFields, ...tenantFields, ...contractFields, ...paymentFields];
 
@@ -1056,7 +1057,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                 scheduledDate: 2, termMonths: 2, termMonthsCustom: 2, amount: 2,
                 paymentChannel: 3, platformName: 3,
                 __sep_payment: 3, adjustments: 3, discount: 3, discountReason: 3,
-                totalDue: 3, paidAmount: 3, paymentMethod: 3
+                totalDue: 3, paidAmount: 3, paymentMethod: 3, paidDate: 3
             };
             const STEP_LABELS = ['床位與租客', '合約條件', '收款'];
 
@@ -1374,6 +1375,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                             discountReason: values.discountReason || null,
                             paidAmount: values.paidAmount != null && values.paidAmount !== '' ? Number(values.paidAmount) : null,
                             paymentMethod: values.paymentMethod || '匯款',
+                            paidDate: values.paidDate || null,   // 使用者手選的入帳日 (留空 → buildContractInvoice 預設今天)
                             __bundleExtraRents: extraBedRentList,  // ← 自動累加進首張 invoice
                             excludeRuleLabels: Array.from(cancelledRuleLabels)  // 收款步驟裡被 X 掉的自動加項
                         }
