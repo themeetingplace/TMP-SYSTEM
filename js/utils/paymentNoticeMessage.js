@@ -93,7 +93,8 @@ export function buildPaymentNoticeMessage(contract, opts = {}) {
     const childRents = mockData.contracts
         .filter(c => c.bundleParentContractId === contract.id)
         .reduce((s, c) => s + (Number(c.amount) || 0), 0);
-    const baseRent = ((Number(contract.amount) || 0) + childRents) * term;
+    const monthlyRent = (Number(contract.amount) || 0) + childRents;  // 月租金 (bundle 併子床)
+    const baseRent = monthlyRent * term;                              // 全期租金 = 月租 × 期數
 
     // Apply rent rules (fresh 算, 標籤月份永遠正確) + 帳單上的手動加項 (fresh 算不出來的部分)
     const adjustments = [...applyRentRules(contract), ...getManualAdjustments(contract)];
@@ -106,6 +107,17 @@ export function buildPaymentNoticeMessage(contract, opts = {}) {
         .map(a => `　　${a.kind === 'sub' ? '折抵' : '加項'}: ${a.label} $${Math.abs(a.amount).toLocaleString()}`)
         .join('\n');
 
+    // === 算式列出來 (2026-08-01 用戶要求): 月租金 × 期數 + 加項 − 折抵 = 應繳金額 ===
+    const totalAdd = adjustments.filter(a => a.kind === 'add').reduce((s, a) => s + Math.abs(a.amount), 0);
+    const totalSub = adjustments.filter(a => a.kind === 'sub').reduce((s, a) => s + Math.abs(a.amount), 0);
+    const formulaParts = [`月租金 $${monthlyRent.toLocaleString()} × ${term} 個月`];
+    if (totalAdd) formulaParts.push(`+ 加項 $${totalAdd.toLocaleString()}`);
+    if (totalSub) formulaParts.push(`− 折抵 $${totalSub.toLocaleString()}`);
+    const formulaLine = `🧮 ${formulaParts.join(' ')} = $${dueAmount.toLocaleString()}`;
+
+    // 合約期間 (斜線格式, 例 2026/09/12~2026/12/11)
+    const periodSlash = `${(contract.startDate || '').replace(/-/g, '/') || '—'}~${(contract.endDate || '').replace(/-/g, '/') || '—'}`;
+
     // === 組訊息 ===
     const greeting = includeRenewalGreeting
         ? `感謝您回覆續租!\n\n🔄 已為您建立續租合約 ${contract.id}`
@@ -115,11 +127,11 @@ export function buildPaymentNoticeMessage(contract, opts = {}) {
 
 ${greeting}
 📍 ${propertyShort}
-📅 期間: ${period}
 
 🔔 應繳金額: NT$${dueAmount.toLocaleString()}
-應繳日: ${dueDate || '—'}
-租金：$${baseRent.toLocaleString()}${adjLines ? '\n細項:\n' + adjLines : ''}
+📅 合約期間: ${periodSlash}
+月租金：$${monthlyRent.toLocaleString()}${adjLines ? '\n細項:\n' + adjLines : ''}
+${formulaLine}
 
 繳款完成後, 請回傳「銀行帳戶末 5 碼」(5 位數字), 系統會自動記錄 ✨
 入帳後合約 PDF 會自動寄給您.`;
