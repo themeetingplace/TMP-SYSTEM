@@ -360,7 +360,9 @@ export function renderContracts() {
         const standardButtons =
             rowAction({ action: 'view', id: c.id, icon: 'ph-eye', title: '檢視合約', className: 'contract-action' })
             + rowAction({ action: 'edit', id: c.id, icon: 'ph-pencil', title: '編輯合約', className: 'contract-action' })
-            + (isArchived ? '' : rowAction({ action: 'download', id: c.id, icon: 'ph-download', title: '下載 PDF', className: 'contract-action' }))
+            // 下載 PDF: 已結束合約 (已續約/已終止) 也開放, 方便事後調閱存檔 (2026-08-01 用戶要求)
+            + rowAction({ action: 'download', id: c.id, icon: 'ph-download', title: '下載 PDF', className: 'contract-action' })
+            // LINE 寄合約: 只對進行中的合約 (寄給已退租的人不合理)
             + (isArchived ? '' : rowAction({ action: 'send-line', id: c.id, icon: 'ph-paper-plane-tilt', title: 'LINE 寄合約 PDF', className: 'contract-action' }))
             + signedButton
             + rowAction({ action: 'delete', id: c.id, icon: 'ph-trash', title: '刪除', variant: 'danger', className: 'contract-action' });
