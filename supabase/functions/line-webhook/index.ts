@@ -816,11 +816,17 @@ Our team will get back to you soon ~`,
                 .order('due_date', { ascending: true });
             if (invErr) throw new Error(`invoices lookup failed: ${invErr.message}`);
 
+            // 顯示規則 (2026-08-01 修 bug: 未來還沒到期的帳單查不到):
+            //   1. 只要「還沒繳清」(含未繳 / 部分繳 / 未來還沒到期的未繳) → 一律顯示
+            //   2. 已繳清的 → 只保留「本期」(期間涵蓋今天) 當已繳參考, 舊的已繳清不列 (免洗版)
+            // 原本只留「期間涵蓋今天」→ 期間在未來的帳單 (剛建約還沒到繳費日) 被整個濾掉,
+            // 租客點帳單查詢就抓不到 (用戶回報)。
             const invoices = (allInvoices || []).filter((i: any) => {
-                if (i.period_start && i.period_end) {
-                    return i.period_start <= today && i.period_end >= today;
-                }
-                return i.status !== '已繳清';
+                const due = (i.amount || 0) - (i.discount || 0);
+                const fullyPaid = (i.paid_amount || 0) >= due && due > 0;
+                if (!fullyPaid) return true;
+                if (i.period_start && i.period_end) return i.period_start <= today && i.period_end >= today;
+                return false;
             });
 
             // 情境 F：完全無帳單
@@ -841,6 +847,9 @@ Our team will get back to you soon ~`,
                     const days = Math.floor((Date.now() - new Date(i.due_date).getTime()) / 86400000);
                     return `⚠️ 逾期 ${days} 天`;
                 }
+                // 還沒到期 (期間起始 / 到期日在未來) → 顯示「尚未到期」, 不要顯示成「未繳」嚇到租客
+                const startRef = i.period_start || i.due_date;
+                if (startRef && startRef > today) return '🗓 尚未到期';
                 return '❌ 未繳';
             };
             const periodLabel = (i: any) => {
