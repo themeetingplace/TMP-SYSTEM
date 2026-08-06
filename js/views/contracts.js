@@ -106,6 +106,52 @@ function buildAdjustmentValues(contract) {
     };
 }
 
+// 合約 PDF 範本要填入的「所有欄位值」— 下載 PDF / LINE 寄合約共用同一份, 保證一致。
+// 範本裡的表單欄位「名稱」要跟這裡的 key 一模一樣才會被填入 (大小寫、底線都要對)。
+//   欄位名            意義
+//   ─────────────    ─────────────────────────────
+//   issue_date       生成當天日期 (今天, YYYY/MM/DD)
+//   address          物件地址 (床位地址, 沒有就退回館別地址)
+//   bed_no           床位編號 (例 R2-A)
+//   tenant_name      承租人姓名
+//   rental_period    租賃期間 (起 ~ 迄 合併一格)
+//   start_date       租約開始日 (YYYY/MM/DD)
+//   end_date         租約結束日 (YYYY/MM/DD)
+//   total_days       租約共幾日 (起訖日相差天數; 本系統 1 個月=30 天)
+//   rent_amount      每月租金
+//   deposit_amount   押金
+//   total_amount     租金總額 (月租 × 期數 + 加項 − 折扣)
+//   monthly_amount   月付金額 (總額 ÷ 期數)
+//   adjustments      折扣 / 加收 明細 (多行文字)
+function buildPdfFieldValues(c) {
+    const adj = buildAdjustmentValues(c);
+    const slash = (d) => d ? String(d).replace(/-/g, '/') : '';
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const prop = mockData.properties.find(p => p.name === c.propertyName);
+    const bld = mockData.buildings.find(b => b.id === getContractBuildingId(c));
+    const address = prop?.address || bld?.address || '';
+    let totalDays = '';
+    if (c.startDate && c.endDate) {
+        const d = Math.round((new Date(c.endDate) - new Date(c.startDate)) / 86400000);
+        if (d > 0) totalDays = String(d);
+    }
+    return {
+        issue_date: slash(todayISO),
+        address,
+        bed_no: getBedNo(c),
+        tenant_name: c.tenant || '',
+        rental_period: formatRentalPeriod(c.startDate, c.endDate),
+        start_date: slash(c.startDate),
+        end_date: slash(c.endDate),
+        total_days: totalDays,
+        rent_amount: (c.amount || 0).toLocaleString(),
+        deposit_amount: (c.depositAmount || 0).toLocaleString(),
+        adjustments: adj.adjustments,
+        total_amount: adj.total_amount,
+        monthly_amount: adj.monthly_amount
+    };
+}
+
 // total_amount (租金總額) 是金額類重大欄位 — 樣板裡沒這個欄位, PDF 上「租金總額」
 // 的位置多半只能顯示跟 rent_amount (月租金) 共用/相同的值, 多期合約看起來會少收錢
 // 卻完全沒有錯誤訊息, 只會混在「已下載 (N 個欄位填入)」這種容易被忽略的小 toast 裡。
@@ -1393,17 +1439,7 @@ async function downloadContractPdf(id) {
     }
 
     try {
-        const adj = buildAdjustmentValues(c);
-        const values = {
-            bed_no: getBedNo(c),
-            tenant_name: c.tenant || '',
-            rental_period: formatRentalPeriod(c.startDate, c.endDate),
-            rent_amount: (c.amount || 0).toLocaleString(),
-            deposit_amount: (c.depositAmount || 0).toLocaleString(),
-            adjustments: adj.adjustments,        // 折扣 / 加收 多行明細
-            total_amount: adj.total_amount,      // 租金總額 = 月租 × term + 加 − 折
-            monthly_amount: adj.monthly_amount   // 月付金額 = 租金總額 ÷ term
-        };
+        const values = buildPdfFieldValues(c);
         const { bytes, filledFields, missingFields } = await fillContractPdf(tpl.pdfBase64, values);
 
         if (filledFields.length === 0) {
@@ -1452,17 +1488,7 @@ export async function sendContractToLine(id) {
 
     showToast('產生 PDF 中…', 'info');
     try {
-        const adj = buildAdjustmentValues(c);
-        const values = {
-            bed_no: getBedNo(c),
-            tenant_name: c.tenant || '',
-            rental_period: formatRentalPeriod(c.startDate, c.endDate),
-            rent_amount: (c.amount || 0).toLocaleString(),
-            deposit_amount: (c.depositAmount || 0).toLocaleString(),
-            adjustments: adj.adjustments,
-            total_amount: adj.total_amount,
-            monthly_amount: adj.monthly_amount
-        };
+        const values = buildPdfFieldValues(c);
         const { bytes, missingFields } = await fillContractPdf(tpl.pdfBase64, values);
         warnMissingMoneyFields(missingFields);
         const filename = `合約_${c.id}_${c.tenant}.pdf`;

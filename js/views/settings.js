@@ -1008,10 +1008,11 @@ async function inspectTemplate(buildingId) {
             });
             return;
         }
-        // 必要：bed_no / tenant_name / rental_period 是最基本識別
-        // 選填：所有金額欄位 (用戶可只用 total_amount + monthly_amount 也行，不一定要 rent_amount)
-        const REQUIRED = ['bed_no', 'tenant_name', 'rental_period'];
-        const OPTIONAL = ['rent_amount', 'deposit_amount', 'adjustments', 'total_amount', 'monthly_amount'];
+        // 必要：bed_no / tenant_name 是最基本識別
+        // 選填：日期 / 地址 / 金額欄位 (rental_period 跟 start_date+end_date 擇一即可, 都放選填)
+        const REQUIRED = ['bed_no', 'tenant_name'];
+        const OPTIONAL = ['issue_date', 'address', 'rental_period', 'start_date', 'end_date', 'total_days',
+                          'rent_amount', 'deposit_amount', 'adjustments', 'total_amount', 'monthly_amount'];
         const KNOWN = [...REQUIRED, ...OPTIONAL];
         const list = fields.map(f => {
             const isKnown = KNOWN.includes(f.name);

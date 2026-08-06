@@ -1,11 +1,16 @@
 // PDF 套版工具
 // 用 pdf-lib 載入樣板 PDF → 填入 form fields → 下載最終 PDF
-// 樣板 PDF 在 Acrobat 等工具中建立 text form field：
-//   [必要] bed_no          (床號，例：R1-A)
-//   [必要] tenant_name     (乙方姓名，例：王大明)
-//   [必要] rental_period   (租賃期間，例：2026/05/01 ~ 2026/07/30)
-//   [必要] rent_amount     (月租金 — 基底，例：10,000)
-//   [必要] deposit_amount  (押金金額，例：0 或 18,000)
+// 樣板 PDF 在 Acrobat 等工具中建立 text form field (欄位名稱要一字不差)：
+//   [必要] bed_no          (床位編號，例：R1-A)
+//   [必要] tenant_name     (承租人姓名，例：王大明)
+//   [選填] issue_date      (生成當天日期 = 今天，例：2026/08/06)
+//   [選填] address         (物件地址)
+//   [選填] rental_period   (租賃期間合併一格，例：2026/05/01 ~ 2026/07/30)
+//   [選填] start_date      (租約開始日，例：2026/05/01)
+//   [選填] end_date        (租約結束日，例：2026/07/30)
+//   [選填] total_days      (租約共幾日 = 起訖相差天數，本系統 1 月=30 天)
+//   [選填] rent_amount     (每月租金 — 基底，例：10,000)
+//   [選填] deposit_amount  (押金金額，例：0 或 18,000)
 //   [選填] adjustments     (折扣 / 加收明細多行文字 — 設成 multi-line 欄位)
 //   [選填] total_amount    (租金總額 = 月租 × 合約期 + 加 − 折，例：29,000)
 //   [選填] monthly_amount  (月付金額 = 租金總額 ÷ 合約期，1 期等於 total，3 期÷3)
