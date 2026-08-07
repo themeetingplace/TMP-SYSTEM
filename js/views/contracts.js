@@ -592,7 +592,7 @@ export function renderContracts() {
                         清除
                     </button>
                 </div>
-                <table class="data-table contracts-table">
+                <table class="data-table contracts-table cards-with-hero">
                     <colgroup>
                         <col style="width: 36px;">
                         <col style="width: 220px;">

@@ -272,7 +272,7 @@ export function renderProperties() {
             </div>
 
             <div class="table-container">
-                <table class="data-table" style="table-layout: fixed;">
+                <table class="data-table cards-with-hero" style="table-layout: fixed;">
                     <colgroup>
                         <col style="width: 22%;">
                         <col style="width: 12%;">
