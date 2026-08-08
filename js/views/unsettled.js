@@ -169,9 +169,9 @@ export function renderUnsettled() {
                             ? rowAction({ action: 'verify', id: inv.id, icon: 'ph-shield-check', title: '核對銀行末 5 碼後結帳', label: '核對結帳', variant: 'success', className: 'unsettled-action' })
                             : rowAction({ action: 'settle', id: inv.id, icon: 'ph-check', title: `標記為${inv.direction === 'in' ? '已收' : '已付'}`, label: '結帳', variant: 'success', className: 'unsettled-action' })
                         )
-                        + rowAction({ action: 'remind', id: inv.id, icon: 'ph-bell', title: inv.direction === 'in' ? '催繳' : '記錄通知', className: 'unsettled-action' })
-                        + rowAction({ action: 'edit', id: inv.id, icon: 'ph-pencil', title: '編輯', className: 'unsettled-action' })
-                        + rowAction({ action: 'delete', id: inv.id, icon: 'ph-trash', title: '刪除', variant: 'danger', className: 'unsettled-action' })
+                        + rowAction({ action: 'remind', id: inv.id, icon: 'ph-bell', title: inv.direction === 'in' ? '催繳' : '記錄通知', label: inv.direction === 'in' ? '催繳' : '記錄通知', className: 'unsettled-action' })
+                        + rowAction({ action: 'edit', id: inv.id, icon: 'ph-pencil', title: '編輯', label: '編輯', className: 'unsettled-action' })
+                        + rowAction({ action: 'delete', id: inv.id, icon: 'ph-trash', title: '刪除', label: '刪除', variant: 'danger', className: 'unsettled-action' })
                     )}
                 </td>
             </tr>
@@ -278,7 +278,7 @@ export function renderUnsettled() {
             </div>
 
             <div class="table-container">
-                <table class="data-table cards-with-hero" style="table-layout: fixed;">
+                <table class="data-table cards-with-hero unsettled-table" style="table-layout: fixed;">
                     <colgroup>
                         <col style="width: 36px;">
                         <col style="width: 13%;">
