@@ -393,25 +393,26 @@ export function renderContracts() {
         const days = c._daysLeft;
 
         // 操作按鈕：未決策的合約優先顯示決策按鈕
+        // 2026-08-08 用戶要求: 合約按鈕改文字呈現 (圖示 + 文字), 比純圖示直覺
         const decisionButtons = isDecision
             ? rowAction({ action: 'renew', id: c.id, icon: 'ph-arrow-clockwise', title: '續租', label: '續租', variant: 'success', className: 'contract-action' })
-              + rowAction({ action: 'terminate', id: c.id, icon: 'ph-door-open', title: '退租', variant: 'danger', className: 'contract-action' })
-              + rowAction({ action: 'snooze', id: c.id, icon: 'ph-clock-clockwise', title: '暫緩', className: 'contract-action' })
+              + rowAction({ action: 'terminate', id: c.id, icon: 'ph-door-open', title: '退租', label: '退租', variant: 'danger', className: 'contract-action' })
+              + rowAction({ action: 'snooze', id: c.id, icon: 'ph-clock-clockwise', title: '暫緩決策', label: '暫緩', className: 'contract-action' })
             : '';
 
         const signedButton = c.signedFileUrl
-            ? rowAction({ action: 'view-signed', id: c.id, icon: 'ph-check-square', title: '租客已回傳簽署檔，點此檢視', variant: 'success', className: 'contract-action' })
+            ? rowAction({ action: 'view-signed', id: c.id, icon: 'ph-check-square', title: '租客已回傳簽署檔，點此檢視', label: '簽署檔', variant: 'success', className: 'contract-action' })
             : '';
 
         const standardButtons =
-            rowAction({ action: 'view', id: c.id, icon: 'ph-eye', title: '檢視合約', className: 'contract-action' })
-            + rowAction({ action: 'edit', id: c.id, icon: 'ph-pencil', title: '編輯合約', className: 'contract-action' })
+            rowAction({ action: 'view', id: c.id, icon: 'ph-eye', title: '檢視合約', label: '檢視', className: 'contract-action' })
+            + rowAction({ action: 'edit', id: c.id, icon: 'ph-pencil', title: '編輯合約', label: '編輯', className: 'contract-action' })
             // 下載 PDF: 已結束合約 (已續約/已終止) 也開放, 方便事後調閱存檔 (2026-08-01 用戶要求)
-            + rowAction({ action: 'download', id: c.id, icon: 'ph-download', title: '下載 PDF', className: 'contract-action' })
+            + rowAction({ action: 'download', id: c.id, icon: 'ph-download', title: '下載合約 PDF', label: '下載 PDF', className: 'contract-action' })
             // LINE 寄合約: 只對進行中的合約 (寄給已退租的人不合理)
-            + (isArchived ? '' : rowAction({ action: 'send-line', id: c.id, icon: 'ph-paper-plane-tilt', title: 'LINE 寄合約 PDF', className: 'contract-action' }))
+            + (isArchived ? '' : rowAction({ action: 'send-line', id: c.id, icon: 'ph-paper-plane-tilt', title: 'LINE 寄合約 PDF', label: 'LINE 寄合約', className: 'contract-action' }))
             + signedButton
-            + rowAction({ action: 'delete', id: c.id, icon: 'ph-trash', title: '刪除', variant: 'danger', className: 'contract-action' });
+            + rowAction({ action: 'delete', id: c.id, icon: 'ph-trash', title: '刪除', label: '刪除', variant: 'danger', className: 'contract-action' });
 
         const rowClass = isDecision ? 'is-decision-row' : (isArchived ? 'is-archived-row' : '');
 
