@@ -1176,10 +1176,14 @@ export function showContractDetails(id) {
             const t = mockData.tenants.find(x => x.name === c.tenant && x.lineUserId);
             const hasLine = !!t?.lineUserId;
             const canChangeBed = state === 'active' || state === 'expiring_soon' || state === 'awaiting_decision';
+            // 已終止 / 排定退租 → 提供「退回入住中」(誤操作 / 房客反悔不退)
+            const canReactivate = state === 'terminated' || state === 'pending_termination';
+            const reactivateLabel = state === 'pending_termination' ? '取消排定退租' : '恢復入住中';
             return `
                 <button class="btn btn-outline" data-action="close-detail" type="button">關閉</button>
                 ${canChangeBed ? `<button class="btn btn-outline" data-action="change-bed" type="button" data-write title="房客住到一半換另一張床 (保留同一份合約, 只換物件)"><i class="ph ph-arrows-left-right"></i> 更換床位</button>` : ''}
                 ${hasLine ? `<button class="btn btn-outline" data-action="resend-notice" type="button" data-write title="用當下合約資料重發 LINE 繳款通知 (修 date 錯掉的 case)"><i class="ph ph-arrow-clockwise"></i> 重發繳款通知</button>` : ''}
+                ${canReactivate ? `<button class="btn btn-outline" data-action="reactivate" type="button" data-write style="color: var(--color-success); border-color: var(--color-success);" title="把此合約狀態退回「入住中」"><i class="ph ph-arrow-u-up-left"></i> ${reactivateLabel}</button>` : ''}
                 <button class="btn btn-primary" data-action="edit-from-detail" type="button" data-write>
                     <i class="ph ph-pencil"></i> 編輯合約
                 </button>
@@ -1187,6 +1191,23 @@ export function showContractDetails(id) {
         })(),
         onMount: (overlay, closeModal) => {
             overlay.querySelector('[data-action="close-detail"]')?.addEventListener('click', closeModal);
+            overlay.querySelector('[data-action="reactivate"]')?.addEventListener('click', () => {
+                const isPending = !!c.pendingTerminationDate && c.renewalState === 'active';
+                openConfirm({
+                    title: isPending ? '取消排定退租？' : '恢復入住中？',
+                    message: isPending
+                        ? `將取消合約 <strong>${c.id}</strong> 的排定退租（原生效日 ${c.pendingTerminationDate}），合約回到「入住中」。`
+                        : `將把已終止的合約 <strong>${c.id}</strong>（${c.tenant}）退回「入住中」，並重新把床位標記為此租客居住。<br><br><span style="color: var(--text-muted); font-size: var(--text-xs);">⚠ 當初退租時清掉的「終止日之後預排帳單」不會自動還原，需要的話用「補產缺帳單」重建。</span>`,
+                    confirmLabel: isPending ? '確認取消退租' : '確認恢復',
+                    onConfirm: () => {
+                        const r = store.reactivateContract(c.id);
+                        if (r.error) { showToast(r.error, 'danger', 6000); return; }
+                        closeModal();
+                        refreshView();
+                        showToast(r.mode === 'cancel_pending' ? `✅ 已取消排定退租，合約 ${c.id} 回到入住中` : `✅ 合約 ${c.id} 已恢復入住中`, 'success', 4000);
+                    }
+                });
+            });
             overlay.querySelector('[data-action="edit-from-detail"]')?.addEventListener('click', () => {
                 closeModal();
                 showContractForm(c);

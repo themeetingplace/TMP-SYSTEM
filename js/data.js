@@ -2384,6 +2384,63 @@ export const store = {
         return { ok: true, cleanedFutureInvoices: invoicesToDelete.length };
     },
 
+    // 恢復入住中 — 把「已終止」或「排定退租」的合約退回 active
+    // (用戶誤點退租 / 房客反悔不退租)。2026-08-10 用戶要求。
+    //   情況1 排定退租(還沒生效): 只清 pendingTerminationDate, 床位/租客本來就沒動
+    //   情況2 已終止: 恢復 active + 重新佔床 + 租客標回居住中
+    // ⚠ 已終止當下被清掉的「終止日之後預排 invoice」不會一起還原 (已從雲端刪除),
+    //   需要的話用「補產缺帳單」重建。床位若已被別的 active 合約佔走則不給恢復。
+    reactivateContract(contractId) {
+        const c = mockData.contracts.find(x => x.id === contractId);
+        if (!c) return { error: '找不到合約' };
+        const idx = mockData.contracts.findIndex(x => x.id === contractId);
+
+        // 情況 1: 排定退租 (還沒生效)
+        if (c.renewalState === 'active' && c.pendingTerminationDate) {
+            mockData.contracts[idx] = { ...c, pendingTerminationDate: null };
+            markDirty('contracts', contractId);
+            recalcMetrics();
+            return { ok: true, mode: 'cancel_pending' };
+        }
+
+        // 情況 2: 已終止
+        if (c.renewalState === 'terminated') {
+            const bedTaken = mockData.contracts.find(x =>
+                x.id !== contractId && x.propertyName === c.propertyName && x.renewalState === 'active'
+            );
+            if (bedTaken) {
+                return { error: `床位「${(c.propertyName || '').replace('聚空間 - ', '')}」已被合約 ${bedTaken.id}（${bedTaken.tenant}）佔用，無法恢復。請先處理該床位。` };
+            }
+            mockData.contracts[idx] = {
+                ...c,
+                renewalState: 'active',
+                terminatedDate: null,
+                pendingTerminationDate: null,
+                status: c.status === '已終止' ? '已簽署' : c.status
+            };
+            markDirty('contracts', contractId);
+
+            // 重新佔用床位
+            const prop = mockData.properties.find(p => p.name === c.propertyName);
+            if (prop) {
+                const pIdx = mockData.properties.indexOf(prop);
+                mockData.properties[pIdx] = { ...prop, status: '已出租', tenant: c.tenant, contractId, contractEnd: c.endDate };
+                markDirty('properties', prop.id);
+            }
+            // 租客標回居住中 (僅當目前是已退租)
+            const tenant = mockData.tenants.find(t => t.name === c.tenant);
+            if (tenant && tenant.status === '已退租') {
+                const tIdx = mockData.tenants.indexOf(tenant);
+                mockData.tenants[tIdx] = { ...tenant, status: '居住中', currentProperty: c.propertyName };
+                markDirty('tenants', tenant.id);
+            }
+            recalcMetrics();
+            return { ok: true, mode: 'reactivate' };
+        }
+
+        return { error: '此合約目前就是進行中，不需恢復' };
+    },
+
     // 掃描 pendingTerminationDate <= today 的合約, 一律執行 _finalizeTermination
     // 由 app.js / sync 在 boot + 每日 (或頁面 focus) 觸發
     finalizePendingTerminations() {
