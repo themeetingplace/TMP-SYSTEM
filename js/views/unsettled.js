@@ -527,7 +527,7 @@ function contractForSend(inv) {
     if (!c) return null;
     if (c.contractSentAt) return null;        // 已寄過, 不重發
     if (c.status === '已終止') return null;    // 終止合約不寄
-    if (c.renewalState !== 'active') return null;
+    if (c.renewalState === 'terminated') return null;  // 只擋已終止; active/snoozed/renewed 當期合約仍可寄
     if (c.contractType && c.contractType !== 'cohousing') return null;
     if (c.paymentChannel === 'platform') return null;
     return c;
