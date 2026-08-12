@@ -365,59 +365,95 @@ function showVerifyModal(id) {
 function settleInvoice(id) {
     const inv = mockData.invoices.find(x => x.id === id);
     if (!inv) return;
-    const due = (inv.amount || 0) - (inv.discount || 0);
-    const paid = inv.paidAmount || 0;
-    const balance = Math.max(0, due - paid);
     const isIncome = inv.direction === 'in';
+    const due = (inv.amount || 0) - (inv.discount || 0);
+    const alreadyPaid = inv.paidAmount || 0;
     const newStatus = isIncome ? '已繳清' : '已付';
-    const hasPartial = paid > 0 && paid < due;
+    // 收入且合約可寄 → 全額結後跳「合約資訊確認」再發送
+    const sendable = isIncome ? contractForSend(inv) : null;
+    const verb = isIncome ? '收到' : '支付';
+    const noun = isIncome ? '收' : '付';
 
-    // 非部分繳款 → 走原本單按鈕確認
-    if (!hasPartial) {
-        openConfirm({
-            title: '結帳確認',
-            message: `確定要將 <strong>${inv.id}</strong>（餘額 $${balance.toLocaleString()}）標記為「${newStatus}」？<br><br>結帳後會自動移到「帳務管理」頁的已結帳目。`,
-            confirmLabel: `確認${newStatus}`,
-            onConfirm: () => doFullSettle(inv, due, newStatus)
-        });
-        return;
-    }
-
-    // 部分繳款 → 3 個按鈕：取消 / 拆帳結 / 全額結
+    // 結帳一律先問「實際入帳金額」→ 相符=全額結(+可發合約) / 不足=拆帳結
     openModal({
-        title: '結帳確認（部分繳款）',
-        maxWidth: 540,
+        title: '結帳 · 入帳金額',
+        maxWidth: 480,
         bodyHtml: `
             <div style="line-height: 1.7;">
-                <div><strong>${inv.id}</strong>（${isIncome ? '收入' : '支出'}）</div>
-                <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--color-background); border-radius: 6px; font-size: 0.9rem;">
-                    <div>應${isIncome ? '收' : '付'}總額：<strong>$${due.toLocaleString()}</strong></div>
-                    <div style="color: #22946e;">已${isIncome ? '收' : '付'}：<strong>$${paid.toLocaleString()}</strong></div>
-                    <div style="color: #b13535;">未${isIncome ? '收' : '付'}餘額：<strong>$${balance.toLocaleString()}</strong></div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                    <strong style="color: var(--text-main);">${inv.id}</strong>
+                    · ${isIncome ? '收入' : '支出'}${(inv.tenantName || inv.tenant) ? ' · ' + escapeHtml(inv.tenantName || inv.tenant) : ''}
                 </div>
-                <div style="margin-top: 1rem;">兩種處理方式：</div>
-                <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem; font-size: 0.88rem; color: var(--color-text-secondary);">
-                    <li><strong>拆帳結 $${paid.toLocaleString()}</strong> — 只把已${isIncome ? '收' : '付'}部分結成獨立帳目，剩 $${balance.toLocaleString()} 留待結（新帳目 ID 自動產生，備註會註記來源）</li>
-                    <li><strong>全額結 $${due.toLocaleString()}</strong> — 餘額視為已${isIncome ? '收' : '付'}，整筆關掉（適用對方一次補完）</li>
-                </ul>
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--color-background); border-radius: 8px; font-size: 0.9rem;">
+                    <div>應${noun}總額：<strong>$${due.toLocaleString()}</strong></div>
+                    ${alreadyPaid > 0 ? `<div style="color: #22946e;">已入帳：$${alreadyPaid.toLocaleString()}</div>` : ''}
+                </div>
+                <label for="settle-received" style="display: block; margin-top: 1rem; font-weight: 600; font-size: 0.9rem;">實際${verb}金額</label>
+                <div style="position: relative; margin-top: 0.4rem;">
+                    <span style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-weight: 700;">$</span>
+                    <input id="settle-received" type="number" inputmode="numeric" min="0" step="1" value="${due}"
+                        style="width: 100%; padding: 0.6rem 0.75rem 0.6rem 1.75rem; font-size: 1.2rem; font-weight: 700; border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box;">
+                </div>
+                <div id="settle-hint" style="margin-top: 0.6rem; font-size: 0.85rem; min-height: 1.3em; line-height: 1.4;"></div>
             </div>
         `,
         footerHtml: `
             <button class="btn btn-secondary" data-action="cancel">取消</button>
-            <button class="btn btn-secondary" data-action="split">拆帳結 $${paid.toLocaleString()}</button>
-            <button class="btn btn-primary" data-action="full">全額結 $${due.toLocaleString()}</button>
+            <button class="btn btn-primary" data-action="go"></button>
         `,
         onMount: (modal, close) => {
+            const input = modal.querySelector('#settle-received');
+            const hint = modal.querySelector('#settle-hint');
+            const btn = modal.querySelector('[data-action="go"]');
+            const refresh = () => {
+                const v = Math.round(Number(input.value) || 0);
+                if (v <= 0) {
+                    hint.innerHTML = '<span style="color: var(--color-danger);">請輸入實際入帳金額</span>';
+                    btn.disabled = true;
+                    btn.textContent = '確認';
+                    return;
+                }
+                btn.disabled = false;
+                if (v >= due) {
+                    hint.innerHTML = `<span style="color: #22946e;">✓ 金額相符，全額結清${sendable ? '並發送合約' : ''}</span>`;
+                    btn.textContent = sendable ? '確認並發送合約' : `確認${newStatus}`;
+                } else {
+                    hint.innerHTML = `<span style="color: #b13535;">差額 $${(due - v).toLocaleString()} — 以實${noun} $${v.toLocaleString()} 拆帳結，剩 $${(due - v).toLocaleString()} 留待結</span>`;
+                    btn.textContent = `以實${noun} $${v.toLocaleString()} 拆帳結`;
+                }
+            };
+            input.addEventListener('input', refresh);
+            refresh();
+            setTimeout(() => { input.focus(); input.select(); }, 30);
             modal.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
-            modal.querySelector('[data-action="full"]')?.addEventListener('click', () => {
+            btn.addEventListener('click', () => {
+                const v = Math.round(Number(input.value) || 0);
+                if (v <= 0) return;
                 close();
-                doFullSettle(inv, due, newStatus);
-            });
-            modal.querySelector('[data-action="split"]')?.addEventListener('click', () => {
-                close();
-                doSplitSettle(inv, paid, balance);
+                if (v >= due) {
+                    // 正確 → 全額結帳；doFullSettle 內 maybeAutoSendContract 會跳「合約資訊確認」再發送
+                    doFullSettle(inv, due, newStatus);
+                } else {
+                    // 不正確 → 拆帳確認
+                    confirmSplitSettle(inv, v, due - v);
+                }
             });
         }
+    });
+}
+
+// 拆帳確認：實收金額 < 應收 → 確認後把已收部分拆成獨立已結帳目
+function confirmSplitSettle(inv, paidPortion, remainingBalance) {
+    const isIncome = inv.direction === 'in';
+    const noun = isIncome ? '收' : '付';
+    const due = (inv.amount || 0) - (inv.discount || 0);
+    openConfirm({
+        title: '拆帳確認',
+        message: `<strong>${inv.id}</strong> 實${noun} <strong>$${paidPortion.toLocaleString()}</strong>，與應${noun} $${due.toLocaleString()} 不符。<br><br>`
+            + `將把已${noun}的 <strong>$${paidPortion.toLocaleString()}</strong> 拆成一筆獨立已結帳目，剩餘 <strong>$${remainingBalance.toLocaleString()}</strong> 留在原帳目待結。<br><br>`
+            + `⚠ 未全額入帳，<strong>不會發送合約</strong>（需全額結帳後才寄）。`,
+        confirmLabel: `確認拆帳結 $${paidPortion.toLocaleString()}`,
+        onConfirm: () => doSplitSettle(inv, paidPortion, remainingBalance)
     });
 }
 
@@ -430,7 +466,7 @@ function doFullSettle(inv, due, newStatus) {
         status: deriveInvoiceStatus(patched)
     });
     showToast(`已結帳：${inv.id}`, 'success');
-    // Q4 入帳即發 — 結帳通過後若對應合約還沒寄合約 PDF，自動寄
+    // 入帳即發 — 結帳後若對應合約還沒寄, 跳「合約資訊確認」讓管理員確認再發送
     maybeAutoSendContract(inv);
     refreshView();
 }
@@ -483,26 +519,50 @@ function doSplitSettle(inv, paidPortion, remainingBalance) {
     refreshView();
 }
 
-// 共用: 入帳後自動寄合約 (核對結帳 + 一般結帳 + 批次結帳 都呼叫)
-// 寄合約 = 客戶簽署「前」要拿到的, 所以 status 是「待簽署」或「已簽署」都該寄
-// 只擋「已終止」(=合約失效不該寄)
-function maybeAutoSendContract(inv) {
-    if (!inv?.contractId) return;
+// 判斷這張帳單對應的合約現在該不該寄 (回傳合約物件, 不該寄回 null)
+// 寄合約 = 客戶簽署「前」要拿到的, 待簽署 / 已簽署 都該寄; 只擋已終止 / 已寄過 / 非共居 / 平台收款
+function contractForSend(inv) {
+    if (!inv?.contractId) return null;
     const c = mockData.contracts.find(x => x.id === inv.contractId);
+    if (!c) return null;
+    if (c.contractSentAt) return null;        // 已寄過, 不重發
+    if (c.status === '已終止') return null;    // 終止合約不寄
+    if (c.renewalState !== 'active') return null;
+    if (c.contractType && c.contractType !== 'cohousing') return null;
+    if (c.paymentChannel === 'platform') return null;
+    return c;
+}
+
+// 共用: 入帳後發合約 (核對結帳 + 一般結帳 都呼叫; 批次結帳不呼叫避免連續彈窗)
+// 改為「跳合約資訊確認 → 確認後才發送」(取代原本 500ms 靜默自動寄)
+function maybeAutoSendContract(inv) {
+    const c = contractForSend(inv);
     if (!c) return;
-    if (c.contractSentAt) return;        // 已寄過, 不重發
-    if (c.status === '已終止') return;    // 終止合約不寄
-    if (c.renewalState !== 'active') return;
-    if (c.contractType && c.contractType !== 'cohousing') return;
-    if (c.paymentChannel === 'platform') return;
-    // 預設租客有綁 LINE 才寄, 沒綁 sendContractToLine 自己會 toast warning
-    setTimeout(() => {
-        showToast(`入帳完成, 自動寄合約 ${c.id} 給 ${c.tenant}…`, 'info', 3000);
-        sendContractToLine(c.id).catch(e => {
-            console.warn('[auto-send-contract]', e);
-            showToast(`自動寄合約失敗: ${e.message} (可手動到合約頁重寄)`, 'warning', 6000);
-        });
-    }, 500);
+    confirmAndSendContract(c);
+}
+
+// 合約資訊確認框：發送前先讓管理員核對合約內容, 確認後才產生 PDF 推到租客 LINE
+function confirmAndSendContract(c) {
+    const place = [c.propertyName, c.bedNo && `床位 ${c.bedNo}`].filter(Boolean).map(escapeHtml).join(' · ');
+    openConfirm({
+        title: '確認發送合約',
+        message: `即將把合約 PDF 推送到 <strong>${escapeHtml(c.tenant || '')}</strong> 的 LINE，請先核對合約資訊：`
+            + `<div style="margin-top: 0.75rem; padding: 0.75rem 0.9rem; background: var(--color-background); border-radius: 8px; font-size: 0.9rem; line-height: 1.8;">`
+            + `<div>合約編號：<strong>${c.id}</strong></div>`
+            + (place ? `<div>物件：${place}</div>` : '')
+            + `<div>租期：${c.startDate || '—'} ~ ${c.endDate || '—'}</div>`
+            + `<div>月租：$${(c.amount || 0).toLocaleString()}</div>`
+            + `</div>`
+            + `<div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">確認後系統會產生合約 PDF 並發送，連結 24 小時內有效。</div>`,
+        confirmLabel: '發送合約',
+        onConfirm: () => {
+            showToast(`發送合約 ${c.id} 給 ${c.tenant}…`, 'info', 3000);
+            sendContractToLine(c.id).catch(e => {
+                console.warn('[send-contract]', e);
+                showToast(`發送合約失敗: ${e.message} (可手動到合約頁重寄)`, 'warning', 6000);
+            });
+        }
+    });
 }
 
 // === 批次結帳 ===
