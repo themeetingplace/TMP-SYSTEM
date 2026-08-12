@@ -371,6 +371,10 @@ function settleInvoice(id) {
     const newStatus = isIncome ? '已繳清' : '已付';
     // 收入且合約可寄 → 全額結後跳「合約資訊確認」再發送
     const sendable = isIncome ? contractForSend(inv) : null;
+    // 有合約待寄、但租客沒綁 LINE → 提示 (本次只結帳, 合約之後手動寄)
+    const eligibleUnbound = (isIncome && !sendable) ? eligibleContractForSend(inv) : null;
+    const unboundNote = (eligibleUnbound && !tenantForContract(eligibleUnbound)?.lineUserId)
+        ? '此合約待寄，但租客尚未綁 LINE — 本次只結帳，之後可到合約頁手動寄' : '';
     const verb = isIncome ? '收到' : '支付';
     const noun = isIncome ? '收' : '付';
 
@@ -388,6 +392,7 @@ function settleInvoice(id) {
                     <div>應${noun}總額：<strong>$${due.toLocaleString()}</strong></div>
                     ${alreadyPaid > 0 ? `<div style="color: #22946e;">已入帳：$${alreadyPaid.toLocaleString()}</div>` : ''}
                 </div>
+                ${unboundNote ? `<div style="margin-top: 0.5rem; font-size: 0.82rem; color: var(--color-warning);">⚠ ${unboundNote}</div>` : ''}
                 <label for="settle-received" style="display: block; margin-top: 1rem; font-weight: 600; font-size: 0.9rem;">實際${verb}金額</label>
                 <div style="position: relative; margin-top: 0.4rem;">
                     <span style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-weight: 700;">$</span>
@@ -519,9 +524,9 @@ function doSplitSettle(inv, paidPortion, remainingBalance) {
     refreshView();
 }
 
-// 判斷這張帳單對應的合約現在該不該寄 (回傳合約物件, 不該寄回 null)
+// 合約「層級」發送資格 (不含 LINE 綁定) — 回傳合約物件, 不合格回 null
 // 寄合約 = 客戶簽署「前」要拿到的, 待簽署 / 已簽署 都該寄; 只擋已終止 / 已寄過 / 非共居 / 平台收款
-function contractForSend(inv) {
+function eligibleContractForSend(inv) {
     if (!inv?.contractId) return null;
     const c = mockData.contracts.find(x => x.id === inv.contractId);
     if (!c) return null;
@@ -530,6 +535,21 @@ function contractForSend(inv) {
     if (c.renewalState === 'terminated') return null;  // 只擋已終止; active/snoozed/renewed 當期合約仍可寄
     if (c.contractType && c.contractType !== 'cohousing') return null;
     if (c.paymentChannel === 'platform') return null;
+    return c;
+}
+
+// 找合約對應的租客 (同名優先取已綁 LINE 的那筆) — 跟 sendContractToLine 同邏輯
+function tenantForContract(c) {
+    const name = (c?.tenant || '').trim();
+    return mockData.tenants.find(x => (x.name || '').trim() === name && x.lineUserId)
+        || mockData.tenants.find(x => (x.name || '').trim() === name);
+}
+
+// 真正「可寄」= 合約層級合格 + 租客有綁 LINE (跟新增入住/續租的發送按鈕一致, 有綁定才發)
+function contractForSend(inv) {
+    const c = eligibleContractForSend(inv);
+    if (!c) return null;
+    if (!tenantForContract(c)?.lineUserId) return null;   // 沒綁 LINE → 不算可寄
     return c;
 }
 
