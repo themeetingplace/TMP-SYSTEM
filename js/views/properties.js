@@ -528,13 +528,14 @@ export function showCheckinAssignmentForm(opts = {}) {
     // 依入住日期算合約期 dropdown 標籤，例如「1 個月 · 7/15 到期」
     // 用 calendar month 算 (leaseEndISO = 起租 + N 月 − 1 天)，符合「+N 個月」直覺
     // 共用 utils/termSelector.js → buildTermOptionsUtil(start, leaseEndISO)
-    const buildTermOptions = (startDate) => buildTermOptionsUtil(startDate, leaseEndISO);
+    const buildTermOptions = (startDate) => buildTermOptionsUtil(startDate, leaseEndISO, { includeCustomDate: true });
 
     // 合約欄位（共用）
     const contractFields = [
         { name: 'scheduledDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: todayStr },
         { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(todayStr), value: '1' },
         { name: 'termMonthsCustom', label: '自訂月數', type: 'number', value: 4, placeholder: '4' },
+        { name: 'termEndDate', label: '自訂到期日', type: 'date', hint: '直接指定合約結束日，月數由起訖天數換算' },
         { name: 'amount', label: '月租金', type: 'number', required: true, span: 2, value: preselectBed?.rent || 0, hint: '會自動帶床位設定的租金，可調整' }
         // 簽署狀態 拿掉, 一律預設「待簽署」(在 confirm page 後自動寄合約 PDF 給客戶簽)
     ];
@@ -758,6 +759,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                 startName: 'scheduledDate',
                 termName: 'termMonths',
                 customName: 'termMonthsCustom',
+                endDateName: 'termEndDate',
+                includeCustomDate: true,
                 isVisible: () => (typeof currentStep === 'undefined') ? true : currentStep === 2,
                 onTermChange: () => { try { recalcTotalDue?.(); } catch {} }
             });
@@ -791,6 +794,11 @@ export function showCheckinAssignmentForm(opts = {}) {
                 if (termHidden?.value === '__custom') {
                     const customInput = form.querySelector('[name="termMonthsCustom"]');
                     term = parseInt(customInput?.value, 10) || 1;
+                } else if (termHidden?.value === '__customdate') {
+                    // 自訂到期日 → 用起訖天數換算月數 (1 月 = 30 天)
+                    const endInput = form.querySelector('[name="termEndDate"]');
+                    const s = scheduledDateInput?.value, e = endInput?.value;
+                    term = (s && e && e > s) ? Math.max(1, Math.round((new Date(e) - new Date(s)) / 86400000 / 30)) : 1;
                 } else {
                     term = parseInt(termHidden?.value, 10) || 1;
                 }
@@ -1054,7 +1062,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             const STEP_MAP = {
                 buildingId: 1, bedId: 1, extraBeds: 1,
                 source: 1, tenantName: 1, tenantPhone: 1, tenantEmail: 1, tenantEmergency: 1,
-                scheduledDate: 2, termMonths: 2, termMonthsCustom: 2, amount: 2,
+                scheduledDate: 2, termMonths: 2, termMonthsCustom: 2, termEndDate: 2, amount: 2,
                 paymentChannel: 3, platformName: 3,
                 __sep_payment: 3, adjustments: 3, discount: 3, discountReason: 3,
                 totalDue: 3, paidAmount: 3, paymentMethod: 3, paidDate: 3
@@ -1222,14 +1230,23 @@ export function showCheckinAssignmentForm(opts = {}) {
             if (!inputName) { showToast('請填姓名', 'danger'); return false; }
 
             const startDate = values.scheduledDate;
-            // 解析 termMonths：__custom → 走 values.termMonthsCustom；其他正常 parseInt
-            let term;
-            if (values.termMonths === '__custom') {
+            // 解析 termMonths + 到期日：
+            //   __custom     → 走 values.termMonthsCustom, 到期日 = leaseEndISO(起, 月數)
+            //   __customdate → 走 values.termEndDate (直接指定), 月數用起訖天數換算
+            //   其他         → 正常 parseInt, 到期日 = leaseEndISO(起, 月數)
+            let term, endDate;
+            if (values.termMonths === '__customdate') {
+                endDate = values.termEndDate;
+                if (!endDate) { showToast('請選擇自訂到期日', 'danger'); return false; }
+                if (endDate <= startDate) { showToast('到期日要晚於入住日', 'danger'); return false; }
+                term = Math.max(1, Math.round((new Date(endDate) - new Date(startDate)) / 86400000 / 30));
+            } else if (values.termMonths === '__custom') {
                 term = parseInt(values.termMonthsCustom, 10) || 1;
+                endDate = leaseEndISO(startDate, term);  // 該期最後一天 (start + N 月 − 1 天)
             } else {
                 term = parseInt(values.termMonths, 10) || 1;
+                endDate = leaseEndISO(startDate, term);  // 該期最後一天 (start + N 月 − 1 天)
             }
-            const endDate = leaseEndISO(startDate, term);  // 該期最後一天 (start + N 月 − 1 天)
             // amount: 尊重用戶輸入 (包含 0)。null/undefined/空字串 才 fallback 床位租金
             const amount = (values.amount != null && values.amount !== '')
                 ? (Number(values.amount) || 0)
