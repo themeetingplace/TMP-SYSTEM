@@ -635,6 +635,20 @@ async function handleMessage(event: any) {
 
     if (/館別|關於/.test(text)) return;
 
+    // 匯款帳號 / 房租怎麼繳 — 不分綁定狀態都回 (系統沒存帳號 → 提示末5碼流程 + 通知小編)
+    // 放在綁定關鍵字前面, 避免「匯款帳號」被誤導到綁定 (2026-08-12 用戶回報)
+    if (/匯款|轉帳|繳費帳|繳款帳|收款帳|銀行帳|房租.{0,5}(帳[號戶户]|怎麼繳|怎麼付|匯|付款)|帳[號戶户].{0,4}(多少|幾號|給我|提供|是什麼|在哪)|(怎麼|如何|要怎).{0,5}(繳|匯|付).{0,4}(房租|租金)/.test(text)) {
+        await lineReply(event.replyToken, [{
+            type: 'text',
+            text: `關於房租匯款帳號，小編會盡快提供給您 🙂\n\n💡 匯款完成後，請直接回傳「銀行帳戶末 5 碼」(5 位數字)，系統會自動幫您記錄入帳 ✨`,
+            quickReply: bound ? tenantServiceQuickReply() : welcomeQuickReply()
+        }]);
+        try {
+            await notifyAdmin(`💬 有人在 LINE 詢問「匯款帳號 / 房租怎麼繳」\n對方訊息：${text}\n請主動提供匯款帳號給對方。`);
+        } catch (e) { console.error('[notifyAdmin 匯款詢問] failed:', e); }
+        return;
+    }
+
     // 「預約看房」— 中文版：直接給表單連結 (2026-07-25 起改掉需要複製填空模板貼回來的舊流程)
     if (text === '預約看房') {
         await lineReply(event.replyToken, [
@@ -1009,8 +1023,8 @@ Our team will get back to you soon ~`,
     // 詢問空房 / 預約看房 → 已被上方共用入住詢問模板處理
     // 找小編 → 已在最上方統一處理
 
-    // 想綁定 / 登記
-    if (/綁定|我是房客|我是租客|帳號|登記/.test(text)) {
+    // 想綁定 / 登記 (拿掉「帳號」— 太廣, 會把「匯款帳號」誤抓成要綁定, 2026-08-12 修)
+    if (/綁定|我是房客|我是租客|登記/.test(text)) {
         await lineReply(event.replyToken, [
             {
                 type: 'text',
