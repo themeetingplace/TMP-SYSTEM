@@ -537,7 +537,7 @@ export function showCheckinAssignmentForm(opts = {}) {
         { name: 'termMonthsCustom', label: '自訂月數', type: 'number', value: 4, placeholder: '4' },
         { name: 'termEndDate', label: '自訂到期日', type: 'date', hint: '直接指定合約結束日，月數由起訖天數換算' },
         { name: 'amount', label: '月租金', type: 'number', required: true, span: 2, value: preselectBed?.rent || 0, hint: '會自動帶床位設定的租金，可調整' }
-        // 簽署狀態 拿掉, 一律預設「待簽署」(在 confirm page 後自動寄合約 PDF 給客戶簽)
+        // 簽署狀態 拿掉, 一律預設「待簽署」; checkin 只發繳費通知, 合約 PDF 改到結帳時才寄
     ];
     // 收款欄位 — 收費對象拉到收款步驟頂端
     const paymentFields = [
@@ -1316,7 +1316,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                 ['已收金額', `${moneyAmount(paidAmount)}${paidAmount >= due ? ' <span style="color: var(--color-success);">✅ 已收訖</span>' : paidAmount > 0 ? ` <span style="color: var(--color-warning);">部分繳款 (餘 ${moneyAmount(due - paidAmount)})</span>` : ' <span style="color: var(--color-danger);">❌ 未繳</span>'}`],
                 ['付款方式', values.paymentMethod || '匯款']
             ];
-            // 找該租客有沒有綁 LINE — 決定要不要自動寄合約
+            // 找該租客有沒有綁 LINE — 決定要不要自動發繳費通知
             const linkedTenant = mockData.tenants.find(t => t.name === inputName && t.lineUserId)
                               || mockData.tenants.find(t => t.name === inputName);
             const tenantHasLine = !!linkedTenant?.lineUserId;
@@ -1324,10 +1324,11 @@ export function showCheckinAssignmentForm(opts = {}) {
             const reviewHtml = `
                 <div style="font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 1rem;">請核對下方資料 → 選擇下方按鈕：</div>
                 <ol style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0 0 1rem 1.2rem; padding: 0; line-height: 1.7;">
-                    <li><strong>建立合約</strong>：建合約 + 開帳單 + 更新床位 (狀態 <span style="color: var(--color-warning);">待簽署</span>) — 合約 PDF <strong>不寄出</strong></li>
+                    <li><strong>建立合約</strong>：建合約 + 開帳單 + 更新床位 (狀態 <span style="color: var(--color-warning);">待簽署</span>)</li>
                     ${tenantHasLine
-                        ? `<li><strong style="color: var(--color-success);">建立並寄出合約檔案</strong>：上面全部 + ✉ 自動寄 PDF 給租客 LINE</li>`
-                        : `<li style="color: var(--text-muted);">⚠ 租客尚未綁 LINE, 「建立並寄出」按鈕關閉 (合約建後可到合約頁手動寄)</li>`}
+                        ? `<li><strong style="color: var(--color-success);">建立並發送繳費通知</strong>：上面全部 + 🔔 把繳費通知推給租客 LINE</li>`
+                        : `<li style="color: var(--text-muted);">⚠ 租客尚未綁 LINE，「發送繳費通知」關閉 (合約建後可到帳務頁手動催繳)</li>`}
+                    <li style="color: var(--text-muted);">合約 PDF 不在此寄出 — 等房租入帳、<strong>結帳</strong>時才跳「確認並發送合約」</li>
                 </ol>
                 <table style="width: 100%; border-collapse: collapse; font-size: var(--text-base);">
                     ${reviewRows.map(([k, v]) => `
@@ -1339,7 +1340,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                 </table>
             `;
 
-            // ── 建合約核心邏輯 (送出後 send=true 才寄合約 PDF) ──
+            // ── 建合約核心邏輯 (送出後 send=true 才發繳費通知; 合約 PDF 改到結帳時才寄) ──
             const doCreate = (sendContract) => {
                     // ── 3. 真正執行 ──
                     const inputPhone = (values.tenantPhone || '').trim();
@@ -1445,15 +1446,25 @@ export function showCheckinAssignmentForm(opts = {}) {
                     formModal.close();
                     refreshView();
 
-                    // 寄合約 PDF (使用者點「建立並寄出」才寄)
+                    // 發繳費通知 (使用者點「建立並發送繳費通知」才發)
+                    // 合約 PDF 不在這裡寄 — 等房租入帳、結帳時才跳「確認並發送合約」
                     if (sendContract && tenantHasLine) {
+                        const rentInv = mockData.invoices.find(iv =>
+                            iv.contractId === contract.id && iv.direction === 'in' && iv.type === '房租'
+                        );
                         setTimeout(() => {
-                            showToast(`寄合約 ${contract.id} 給 ${tenant.name}…`, 'info', 3000);
-                            import('./contracts.js').then(({ sendContractToLine }) => {
-                                sendContractToLine(contract.id).catch(e => {
-                                    console.warn('[auto-send-after-create]', e);
-                                    showToast(`自動寄合約失敗: ${e.message} (可到合約頁手動寄)`, 'warning', 6000);
-                                });
+                            showToast(`發繳費通知給 ${tenant.name}…`, 'info', 3000);
+                            Promise.all([
+                                import('../utils/paymentNoticeMessage.js'),
+                                import('../utils/line.js')
+                            ]).then(([{ buildPaymentNoticeMessage }, { pushToTenant }]) => {
+                                const { message } = buildPaymentNoticeMessage(contract, { includeRenewalGreeting: false });
+                                return pushToTenant(tenant.id, { message, invoiceId: rentInv?.id });
+                            })
+                            .then(() => showToast(`✅ 已發繳費通知給 ${tenant.name}`, 'success', 4000))
+                            .catch(e => {
+                                console.warn('[auto-notify-after-create]', e);
+                                showToast(`繳費通知發送失敗: ${e.message} (可到帳務頁手動催繳)`, 'warning', 6000);
                             });
                         }, 800);
                     }
@@ -1470,8 +1481,8 @@ export function showCheckinAssignmentForm(opts = {}) {
                     <button type="button" class="btn btn-outline" data-action="create-only" style="color: var(--color-primary); border-color: var(--color-primary); margin-left: auto;">
                         <i class="ph ph-file-plus"></i> 建立合約
                     </button>
-                    <button type="button" class="btn btn-primary" data-action="create-and-send" ${tenantHasLine ? '' : 'disabled title="租客未綁 LINE, 無法自動寄"'}>
-                        <i class="ph ph-paper-plane-tilt"></i> 建立並寄出合約檔案
+                    <button type="button" class="btn btn-primary" data-action="create-and-notify" ${tenantHasLine ? '' : 'disabled title="租客未綁 LINE, 無法發繳費通知"'}>
+                        <i class="ph ph-bell"></i> 建立並發送繳費通知
                     </button>
                 `,
                 onMount: (overlay, close) => {
@@ -1480,7 +1491,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                         close();
                         doCreate(false);
                     });
-                    overlay.querySelector('[data-action="create-and-send"]')?.addEventListener('click', () => {
+                    overlay.querySelector('[data-action="create-and-notify"]')?.addEventListener('click', () => {
                         if (!tenantHasLine) return;
                         close();
                         doCreate(true);
