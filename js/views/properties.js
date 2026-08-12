@@ -536,6 +536,7 @@ export function showCheckinAssignmentForm(opts = {}) {
         { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(todayStr), value: '1' },
         { name: 'termMonthsCustom', label: '自訂月數', type: 'number', value: 4, placeholder: '4' },
         { name: 'termEndDate', label: '自訂到期日', type: 'date', hint: '直接指定合約結束日，月數由起訖天數換算' },
+        { name: 'endDatePreview', type: 'placeholder', span: 2 },
         { name: 'amount', label: '月租金', type: 'number', required: true, span: 2, value: preselectBed?.rent || 0, hint: '會自動帶床位設定的租金，可調整' }
         // 簽署狀態 拿掉, 一律預設「待簽署」; checkin 只發繳費通知, 合約 PDF 改到結帳時才寄
     ];
@@ -853,6 +854,28 @@ export function showCheckinAssignmentForm(opts = {}) {
                 }
             };
 
+            // === 到期日即時預覽 — 不管選 1/3 個月、自訂月數、自訂到期日都顯示算出來的結束日 ===
+            // (跟合約編輯一樣讓 admin 看得到合約到哪一天; termSelector.getEffectiveEndDate 已處理三種模式)
+            const endPreviewEl = form.querySelector('#ph-endDatePreview');
+            const refreshEndPreview = () => {
+                if (!endPreviewEl) return;
+                const end = termSelector?.getEffectiveEndDate?.() || '';
+                const term = termSelector?.getEffectiveTerm?.() || '';
+                endPreviewEl.innerHTML = end
+                    ? `<div style="padding: 0.5rem 0.7rem; background: var(--color-background); border-radius: 6px; font-size: 0.88rem; color: var(--text-secondary); border-left: 3px solid var(--color-primary);">
+                           <i class="ph ph-calendar-check" style="vertical-align: -1px;"></i> 合約到期日：<strong style="color: var(--text-main);">${end}</strong>${term ? ` <span style="color: var(--text-muted);">（約 ${term} 個月）</span>` : ''}
+                       </div>`
+                    : '';
+            };
+            // 起租日 / 合約期 / 自訂月數 / 自訂到期日 任一變動 → 更新預覽 (+ 起租日變動也要重算總額, 因自訂到期日的月數依起訖天數)
+            scheduledDateInput?.addEventListener('change', () => { refreshEndPreview(); recalcTotalDue(); });
+            scheduledDateInput?.addEventListener('input', () => { refreshEndPreview(); recalcTotalDue(); });
+            termHidden?.addEventListener('change', refreshEndPreview);
+            form.querySelector('[name="termMonthsCustom"]')?.addEventListener('input', refreshEndPreview);
+            form.querySelector('[name="termEndDate"]')?.addEventListener('change', refreshEndPreview);
+            form.querySelector('[name="termEndDate"]')?.addEventListener('input', refreshEndPreview);
+            refreshEndPreview();
+
             // === 加減項目子表單 — 收斂到 initAdjustmentsWidget (跟 finance 編輯帳目 / 編輯合約同源) ===
             // 每筆 = { kind: 'sub'|'add', label, amount }
             // widget 自動把 net (sub - add) 寫到 discount hidden、JSON 寫到 discountReason hidden
@@ -1062,7 +1085,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             const STEP_MAP = {
                 buildingId: 1, bedId: 1, extraBeds: 1,
                 source: 1, tenantName: 1, tenantPhone: 1, tenantEmail: 1, tenantEmergency: 1,
-                scheduledDate: 2, termMonths: 2, termMonthsCustom: 2, termEndDate: 2, amount: 2,
+                scheduledDate: 2, termMonths: 2, termMonthsCustom: 2, termEndDate: 2, endDatePreview: 2, amount: 2,
                 paymentChannel: 3, platformName: 3,
                 __sep_payment: 3, adjustments: 3, discount: 3, discountReason: 3,
                 totalDue: 3, paidAmount: 3, paymentMethod: 3, paidDate: 3
