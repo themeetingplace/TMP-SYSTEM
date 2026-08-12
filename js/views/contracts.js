@@ -81,7 +81,7 @@ function deriveTermMonths(contract) {
 // 已經補上這段同步), 導致舊帳單金額可能永遠停在建立當下的錯誤值 (C218 案例:
 // 續約當下用錯期數建了 1 個月的帳單金額). PDF 現場算才能保證跟 modal 看到的
 // 應收總額一致, 不受帳單裡可能過期的 amount 影響。
-function buildAdjustmentValues(contract) {
+export function buildAdjustmentValues(contract) {
     const adjustments = getContractAdjustments(contract);
     const base = Number(contract?.amount) || 0;
     const term = deriveTermMonths(contract);

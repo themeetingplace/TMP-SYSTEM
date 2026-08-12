@@ -9,7 +9,7 @@ import { filterInvoicesByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { pushToTenant } from '../utils/line.js';
-import { sendContractToLine } from './contracts.js';
+import { sendContractToLine, buildAdjustmentValues } from './contracts.js';
 import { moneyAmount, moneyCell, adjustmentBadge } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { emptyState } from '../utils/emptyState.js';
@@ -544,6 +544,7 @@ function maybeAutoSendContract(inv) {
 // 合約資訊確認框：發送前先讓管理員核對合約內容, 確認後才產生 PDF 推到租客 LINE
 function confirmAndSendContract(c) {
     const place = [c.propertyName, c.bedNo && `床位 ${c.bedNo}`].filter(Boolean).map(escapeHtml).join(' · ');
+    const { total_amount } = buildAdjustmentValues(c);   // 租金總額 (月租 × 期數 + 加 − 折)
     openConfirm({
         title: '確認發送合約',
         message: `即將把合約 PDF 推送到 <strong>${escapeHtml(c.tenant || '')}</strong> 的 LINE，請先核對合約資訊：`
@@ -551,7 +552,8 @@ function confirmAndSendContract(c) {
             + `<div>合約編號：<strong>${c.id}</strong></div>`
             + (place ? `<div>物件：${place}</div>` : '')
             + `<div>租期：${c.startDate || '—'} ~ ${c.endDate || '—'}</div>`
-            + `<div>月租：$${(c.amount || 0).toLocaleString()}</div>`
+            + `<div>總金額：<strong>$${total_amount}</strong></div>`
+            + `<div>每月租金：$${(c.amount || 0).toLocaleString()}</div>`
             + `</div>`
             + `<div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">確認後系統會產生合約 PDF 並發送，連結 24 小時內有效。</div>`,
         confirmLabel: '發送合約',
