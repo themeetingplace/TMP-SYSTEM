@@ -45,7 +45,10 @@ const pct = v => `${(v * 100).toFixed(1)}%`;
 
 function settledInRange(range = reportState.viewRange) {
     // 起算自 FINANCE_CUTOFF_DATE, pre-cutoff invoices 不算進報表統計 (保留在 DB 但隱藏)
-    return _md().invoices.filter(i => !isPreCutoff(i) && isSettled(i) && invoiceInRange(i, range));
+    // 紅利 (紅利發放 等) 一律不列入報表任何統計 (2026-08-12 用戶要求) — 帳務/收支頁照舊顯示
+    return _md().invoices.filter(i =>
+        !isPreCutoff(i) && isSettled(i) && invoiceInRange(i, range) && !/紅利/.test(i.type || '')
+    );
 }
 
 function rangeDayCount(range = reportState.viewRange) {

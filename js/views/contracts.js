@@ -1009,8 +1009,16 @@ function showContractForm(contract, opts = {}) {
                 if (tenantEmergency !== (targetTenant.emergencyContact || '')) patch.emergencyContact = tenantEmergency;
                 if (Object.keys(patch).length) store.updateTenant(targetTenant.id, patch);
             }
+            // 簽署狀態選「已終止」→ 連動 renewalState=terminated (下面再釋放床位/標租客);
+            //   改回進行中狀態 → renewalState=active。原本只改 status 欄位, renewalState
+            //   沒動, 住房一覽 (讀 renewalState) 還照顯示該筆 — 2026-08-12 用戶回報修正。
+            const terminating = values.status === '已終止';
+            payload.renewalState = terminating ? 'terminated' : 'active';
+            payload.terminatedDate = terminating ? (contract.terminatedDate || new Date().toISOString().slice(0, 10)) : null;
+            if (terminating) payload.pendingTerminationDate = null;
+
             const saved = store.updateContract(contract.id, payload);
-            showToast('已更新合約', 'success');
+            showToast(terminating ? '合約已標記為已終止' : '已更新合約', 'success');
 
             // 把加減項目 + 收款 寫到對應的房租 invoice — 平台代收沒帳單就不動
             if (values.paymentChannel !== 'platform') {
@@ -1052,12 +1060,26 @@ function showContractForm(contract, opts = {}) {
             }
 
             if (saved) {
-                store.updateProperty(property.id, {
-                    status: '已出租',
-                    tenant: values.tenant,
-                    contractId: saved.id,
-                    contractEnd: endDate
-                });
+                if (terminating) {
+                    // 釋放床位 (住房一覽/空床統計不再顯示) + 租客標記已退租 (若無其他 active 合約)
+                    const bedProp = mockData.properties.find(p => p.name === values.propertyName);
+                    if (bedProp && (bedProp.contractId === saved.id || bedProp.contractId === contract.id || !bedProp.contractId)) {
+                        store.updateProperty(bedProp.id, { status: '待租', tenant: null, contractId: null, contractEnd: null });
+                    }
+                    const stillActive = mockData.contracts.some(x => x.id !== saved.id && x.tenant === values.tenant && x.renewalState === 'active');
+                    const tn = mockData.tenants.find(t => t.name === values.tenant);
+                    if (!stillActive && tn && tn.status !== '已退租') store.updateTenant(tn.id, { status: '已退租', currentProperty: null });
+                } else {
+                    store.updateProperty(property.id, {
+                        status: '已出租',
+                        tenant: values.tenant,
+                        contractId: saved.id,
+                        contractEnd: endDate
+                    });
+                    // 若剛從「已終止」改回進行中 → 租客標回居住中
+                    const tn = mockData.tenants.find(t => t.name === values.tenant);
+                    if (tn && tn.status === '已退租') store.updateTenant(tn.id, { status: '居住中', currentProperty: values.propertyName });
+                }
             }
             refreshView();
             if (typeof opts.onSaved === 'function') opts.onSaved(saved);
