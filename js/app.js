@@ -3,6 +3,7 @@ import { renderPropertiesHub, initPropertiesHubActions, forceHubTab } from './vi
 import { renderManagedHouse, initManagedHouseActions, showNewManagedHouseForm } from './views/managed-house.js';
 import { renderManagedOwners, initManagedOwnersActions } from './views/managed-owners.js';
 import { renderManagedSettlements, initManagedSettlementsActions } from './views/managed-settlements.js';
+import { renderManagedLeads, initManagedLeadsActions } from './views/managed-leads.js';
 import { initModeSwitcher } from './utils/sidebarRender.js';
 import { getMode, applyModeAttribute } from './utils/appMode.js';
 import { promptRenewalAuditIfNeeded, promptBundleAuditIfNeeded } from './utils/renewalAudit.js';
@@ -59,7 +60,8 @@ const routes = {
     'm-house':       { title: '代管房屋',       group: '代管', render: renderManagedHouse,       init: initManagedHouseActions, dynamic: true },
     'm-house-new':   { title: '新增代管房屋',   group: '代管', render: () => { setTimeout(showNewManagedHouseForm, 50); return '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">開啟新增代管房屋表單中…</div>'; } },
     'm-owners':      { title: '屋主清單',       group: '跨房屋', render: renderManagedOwners,      init: initManagedOwnersActions },
-    'm-settlements': { title: '屋主月結算',     group: '跨房屋', render: renderManagedSettlements, init: initManagedSettlementsActions }
+    'm-settlements': { title: '屋主月結算',     group: '跨房屋', render: renderManagedSettlements, init: initManagedSettlementsActions },
+    'm-leads':       { title: '委託諮詢',       group: '代管',   render: renderManagedLeads,       init: initManagedLeadsActions }
 };
 
 function handleRoute() {

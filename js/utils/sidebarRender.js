@@ -67,6 +67,10 @@ function buildManagedNavHtml() {
                 <i class="ph ph-receipt"></i>
                 <span class="nav-label">屋主月結算</span>
             </a>
+            <a href="#m-leads" class="nav-item" data-view="m-leads" data-label="委託諮詢">
+                <i class="ph ph-tray"></i>
+                <span class="nav-label">委託諮詢</span>
+            </a>
         </div>
     `;
 
