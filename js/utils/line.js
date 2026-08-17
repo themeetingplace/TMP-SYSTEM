@@ -47,6 +47,20 @@ export async function uploadPdfToStorage(filename, bytes) {
     return { path: key, url };
 }
 
+// 手動上傳「簽署檔」(PDF 或圖片) → contract-pdfs bucket
+// 跟 line-webhook 自動流程同 bucket + 同命名 (signed_<合約>_<時間>.<副檔名>)，
+// 所以之後一樣用 resolveSignedPdfUrl(path) 開得起來。回傳 { path }。
+export async function uploadSignedFileToStorage(bytes, ext, contentType, contractId) {
+    const random = Math.random().toString(36).slice(2, 8);
+    const safeExt = (ext || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+    const key = `signed_${contractId || 'manual'}_${Date.now()}_${random}.${safeExt}`;
+    const { error } = await supabase.storage
+        .from('contract-pdfs')
+        .upload(key, bytes, { contentType: contentType || 'application/octet-stream', upsert: false });
+    if (error) throw new Error(`上傳失敗：${error.message}`);
+    return { path: key };
+}
+
 // 簽過名連結 (預設 24 小時有效) — bucket 是 private，這是唯一存取方式
 // P2-3: 從 7 天縮短到 24h，降低 URL 被截圖外流的暴露時間
 // (合約 PDF 用戶當下會看；要再看用 BMS「重發 URL」按鈕重新產)

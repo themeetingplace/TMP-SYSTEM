@@ -9,7 +9,7 @@ import { openFormModal, openConfirm, openDetailModal, openModal, showToast, show
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { fillContractPdf, downloadPdfBytes, formatRentalPeriod } from '../utils/pdfGen.js';
 import { showCheckinAssignmentForm } from './properties.js';
-import { pushToTenant, uploadPdfToStorage, resolveSignedPdfUrl, triggerRenewalPoll } from '../utils/line.js';
+import { pushToTenant, uploadPdfToStorage, uploadSignedFileToStorage, resolveSignedPdfUrl, triggerRenewalPoll } from '../utils/line.js';
 import { buildPaymentNoticeMessage, previewRenewalFor } from '../utils/paymentNoticeMessage.js';
 import { findRenewalConfirmCandidates, confirmAndProcessRenewals } from '../utils/autoRenewalProcessor.js';
 import { filterContractsByMode } from '../utils/modeFilter.js';
@@ -400,9 +400,12 @@ export function renderContracts() {
               + rowAction({ action: 'snooze', id: c.id, icon: 'ph-clock-clockwise', title: '暫緩決策', label: '暫緩', className: 'contract-action' })
             : '';
 
-        const signedButton = c.signedFileUrl
+        // 有真檔 → 檢視; 沒檔 (或只是 MANUAL_MARKED 佔位) 且未封存 → 讓 admin 手動上傳
+        // (租客超過 24h 才回傳 / 走 email / 紙本拍照 的情況)
+        const hasRealSignedFile = c.signedFileUrl && c.signedFileUrl !== 'MANUAL_MARKED';
+        const signedButton = hasRealSignedFile
             ? rowAction({ action: 'view-signed', id: c.id, icon: 'ph-check-square', title: '租客已回傳簽署檔，點此檢視', label: '簽署檔', variant: 'success', className: 'contract-action' })
-            : '';
+            : (isArchived ? '' : rowAction({ action: 'upload-signed', id: c.id, icon: 'ph-upload-simple', title: '上傳租客回傳的簽署檔 (PDF / 圖片)', label: '上傳簽署檔', className: 'contract-action' }));
 
         const standardButtons =
             rowAction({ action: 'view', id: c.id, icon: 'ph-eye', title: '檢視合約', label: '檢視', className: 'contract-action' })
@@ -1187,9 +1190,9 @@ export function showContractDetails(id) {
             { label: '起始日', value: c.startDate || '—' },
             { label: '到期日', value: c.endDate || '—' },
             { label: '簽署狀態', value: c.status },
-            { label: '租客簽署檔', value: c.signedFileUrl
+            { label: '租客簽署檔', value: (c.signedFileUrl && c.signedFileUrl !== 'MANUAL_MARKED')
                 ? `<button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs); color: var(--color-success); border-color: var(--color-success);" onclick="window.openSignedContractByPath('${c.signedFileUrl.replace(/'/g, '\\\'')}')"><i class="ph-fill ph-check-square"></i> 已收到 — 點此檢視</button>`
-                : '<span style="color: var(--text-muted);">尚未收到（租客可從 LINE 傳檔回來）</span>' },
+                : `<span style="color: var(--text-muted);">${c.signedFileUrl === 'MANUAL_MARKED' ? '已手動標記已簽署（未存檔）' : '尚未收到（租客可從 LINE 傳檔回來）'}</span> <button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: var(--text-xs); margin-left: 0.4rem;" onclick="window.uploadSignedContractFile('${c.id.replace(/'/g, '\\\'')}')"><i class="ph ph-upload-simple"></i> 上傳簽署檔</button>` },
             { label: '續自', value: c.parentContractId || '—' },
             ...(c.renewalState === 'terminated' ? [{ label: '終止日', value: c.terminatedDate || '—' }] : []),
             ...(c.snoozeUntil ? [{ label: '暫緩至', value: c.snoozeUntil }] : [])
@@ -1465,6 +1468,47 @@ window.openSignedContractByPath = async (pathOrUrl) => {
         alert(`開啟失敗：${e.message}`);
     }
 };
+
+// 手動上傳簽署檔 — 租客超過 24h 才回傳 / 走 email / 紙本拍照 時, admin 自己把檔案存進來
+// 存進 contract-pdfs bucket (跟 webhook 自動流程同 bucket), signedFileUrl 指向真檔 + 標記已簽署
+function uploadSignedFile(id) {
+    const c = mockData.contracts.find(x => x.id === id);
+    if (!c) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,image/*';
+    input.style.display = 'none';
+    input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        input.remove();
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) {
+            showToast(`檔案太大 (${(file.size / 1024 / 1024).toFixed(1)} MB)，上限 10 MB`, 'danger', 5000);
+            return;
+        }
+        // 副檔名: 先信檔名, 檔名沒有再從 MIME type 推
+        const nameExt = (file.name.split('.').pop() || '').toLowerCase();
+        const ext = /^(pdf|jpg|jpeg|png|webp|heic)$/.test(nameExt)
+            ? nameExt
+            : (file.type === 'application/pdf' ? 'pdf' : (file.type.split('/')[1] || 'bin'));
+        try {
+            showToast('上傳簽署檔中…', 'info');
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            const { path } = await uploadSignedFileToStorage(bytes, ext, file.type, c.id);
+            store.updateContract(c.id, { signedFileUrl: path, status: '已簽署' });
+            showToast(`✅ 已存簽署檔，合約 ${c.id} 標記為已簽署`, 'success', 4000);
+            refreshView();
+        } catch (e) {
+            console.error('[upload-signed]', e);
+            showToast(`上傳失敗：${e.message}`, 'danger', 6000);
+        }
+    }, { once: true });
+    document.body.appendChild(input);
+    input.click();
+}
+
+// 給 detail modal 的 inline onclick 用
+window.uploadSignedContractFile = (id) => uploadSignedFile(id);
 
 async function downloadContractPdf(id) {
     const c = mockData.contracts.find(x => x.id === id);
@@ -2112,6 +2156,7 @@ export function initContractActions(scope) {
             if (action === 'download') downloadContractPdf(id);
             if (action === 'send-line') sendContractToLine(id);
             if (action === 'view-signed') openSignedFile(c);
+            if (action === 'upload-signed') uploadSignedFile(id);
             if (action === 'delete') confirmDelete(id);
             if (action === 'renew') confirmRenew(id);
             if (action === 'terminate') confirmTerminate(id);
