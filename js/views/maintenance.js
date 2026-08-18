@@ -27,13 +27,15 @@ export function renderMaintenance() {
 
         const days = Math.floor((new Date(TODAY) - new Date(m.reportDate)) / 86400000);
         const searchText = [m.id, m.propertyName, m.issue, m.reporter].join(' ').toLowerCase();
+        // 位置顯示: 有床位用床位, 沒有(公共空間報修)退回館別名
+        const locationLabel = m.propertyName || mockData.buildings.find(b => b.id === m.buildingId)?.name || '';
 
         const actionsHtml = rowActionGroup(rowActions([
-            m.status === '待處理' ? { action: 'start', icon: 'ph-play', title: '開始處理', variant: 'primary', className: 'maintenance-action' } : null,
-            m.status === '進行中' ? { action: 'complete', icon: 'ph-check', title: '完成維修', variant: 'success', className: 'maintenance-action' } : null,
-            { action: 'view', icon: 'ph-eye', title: '查看記錄', className: 'maintenance-action' },
-            { action: 'edit', icon: 'ph-pencil', title: '編輯維修', className: 'maintenance-action' },
-            { action: 'delete', icon: 'ph-trash', title: '刪除', variant: 'danger', className: 'maintenance-action' }
+            m.status === '待處理' ? { action: 'start', icon: 'ph-play', title: '開始處理', label: '開始', variant: 'primary', className: 'maintenance-action' } : null,
+            m.status === '進行中' ? { action: 'complete', icon: 'ph-check', title: '完成維修', label: '完成', variant: 'success', className: 'maintenance-action' } : null,
+            { action: 'view', icon: 'ph-eye', title: '查看記錄', label: '檢視', className: 'maintenance-action' },
+            { action: 'edit', icon: 'ph-pencil', title: '編輯維修', label: '編輯', className: 'maintenance-action' },
+            { action: 'delete', icon: 'ph-trash', title: '刪除', label: '刪除', variant: 'danger', className: 'maintenance-action' }
         ], m.id));
 
         const statusBadge = `<span class="status-badge ${statusClass}">${esc(m.status)}</span>`;
@@ -43,7 +45,7 @@ export function renderMaintenance() {
 
         const mobileCardHtml = entityCard({
             title: esc(m.id),
-            subtitle: esc(m.propertyName || ''),
+            subtitle: esc(locationLabel),
             hero: {
                 value: m.cost ? moneyAmount(m.cost) : '',
                 badge: statusBadge
@@ -67,7 +69,7 @@ export function renderMaintenance() {
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong style="font-size: var(--text-base);">${esc(m.id)}</strong>
-                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${esc(m.propertyName || '')}</span>
+                        <span style="font-size: var(--text-xs); color: var(--text-muted);">${esc(locationLabel)}</span>
                     </div>
                 </td>
                 <td>
@@ -122,14 +124,14 @@ export function renderMaintenance() {
             </div>
 
             <div class="table-container">
-                <table class="data-table cards-with-hero" style="table-layout: fixed;">
+                <table class="data-table cards-with-hero maintenance-table" style="table-layout: fixed;">
                     <colgroup>
-                        <col style="width: 22%;">
-                        <col style="width: 28%;">
+                        <col style="width: 20%;">
+                        <col style="width: 25%;">
                         <col style="width: 13%;">
                         <col style="width: 10%;">
                         <col style="width: 12%;">
-                        <col style="width: 15%;">
+                        <col style="width: 20%;">
                     </colgroup>
                     <thead><tr><th>工單資訊</th><th>報修內容</th><th>回報時間</th><th>狀態</th><th>維修費用</th><th>操作</th></tr></thead>
                     <tbody>${tableRows || emptyState({ mode: 'table-row', colspan: 6, icon: 'ph-wrench', title: '尚無維修單', hint: '點右上「新增報修」建立第一筆工單' })}</tbody>
@@ -176,7 +178,7 @@ function showMaintenanceForm(item = null) {
         maxWidth: 700,
         fields: [
             { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions, value: initialBuildingId },
-            { name: 'propertyName', label: '物件', type: 'select', required: true, options: propertyOptions },
+            { name: 'propertyName', label: '物件 (床位)', type: 'select', required: false, options: propertyOptions, hint: '公共空間報修可留空' },
             { name: 'reporter', label: '回報人', type: 'text', required: true, placeholder: '例：王大明' },
             { name: 'reportDate', label: '回報日期', type: 'date', required: true, value: item?.reportDate ?? TODAY },
             { name: 'status', label: '狀態', type: 'select', required: true, options: MAINTENANCE_STATUSES, value: item?.status ?? '待處理' },
@@ -221,7 +223,7 @@ export function showMaintenanceDetails(id) {
     openDetailModal({
         title: `維修單 ${m.id}`,
         items: [
-            { label: '物件', value: m.propertyName },
+            { label: '物件', value: m.propertyName || mockData.buildings.find(b => b.id === m.buildingId)?.name || '—' },
             { label: '狀態', value: `<span class="status-badge ${statusClass}">${m.status}</span>` },
             { label: '回報人', value: m.reporter },
             { label: '回報日期', value: m.reportDate },

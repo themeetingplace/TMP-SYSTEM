@@ -7528,7 +7528,8 @@ select.form-input {
 /* 合約 / 房租查帳 row 按鈕改文字呈現 (2026-08-08 用戶要求) — 按鈕變寬, 桌機也允許
    換行靠右, 避免多個文字按鈕擠在一行撐破表格 */
 .contracts-table .row-action-group,
-.unsettled-table .row-action-group {
+.unsettled-table .row-action-group,
+.maintenance-table .row-action-group {
     flex-wrap: wrap;
     gap: 0.3rem;
     justify-content: flex-end;

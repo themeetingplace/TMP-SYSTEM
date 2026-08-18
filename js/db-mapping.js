@@ -122,6 +122,7 @@ export const toDb = {
     maintenance: m => ({
         id: m.id,
         property_name: m.propertyName ?? null,
+        building_id: m.buildingId ?? null,
         issue: m.issue ?? null,
         reporter: m.reporter ?? null,
         report_date: m.reportDate ?? null,
@@ -330,6 +331,7 @@ export const fromDb = {
     maintenance: r => ({
         id: r.id,
         propertyName: r.property_name,
+        buildingId: r.building_id,
         issue: r.issue,
         reporter: r.reporter,
         reportDate: r.report_date,
