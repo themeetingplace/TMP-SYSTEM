@@ -33,7 +33,7 @@ function roleBadge(role) {
         return `<span class="status-badge primary" title="可管理其他帳號"><i class="ph-fill ph-crown" aria-hidden="true"></i> Owner</span>`;
     }
     if (role === 'helper') {
-        return `<span class="status-badge info" title="小幫手 — 只能檢視 物件/住房/租客"><i class="ph-fill ph-hand-heart" aria-hidden="true"></i> 小幫手</span>`;
+        return `<span class="status-badge info" title="小幫手 — 只能檢視部分資料，不可編輯"><i class="ph-fill ph-hand-heart" aria-hidden="true"></i> 小幫手</span>`;
     }
     if (role === 'viewer') {
         return `<span class="status-badge muted"><i class="ph-fill ph-eye" aria-hidden="true"></i> Viewer</span>`;
@@ -95,9 +95,9 @@ export function renderAdminUsers() {
             <div style="background: var(--bg-secondary); border-left: 3px solid var(--color-info, #0ea5e9); padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 4px; font-size: var(--text-xs); color: var(--text-secondary);">
                 <strong><i class="ph ph-info" aria-hidden="true"></i> 角色說明</strong>
                 <div style="margin-top: 0.4rem; line-height: 1.8; display: grid; gap: 0.25rem;">
-                    <div><i class="ph-fill ph-crown" aria-hidden="true" style="color: var(--color-primary);"></i> <strong>Owner</strong> — 完整權限，可管理其他帳號（你跟老闆）</div>
-                    <div><i class="ph-fill ph-wrench" aria-hidden="true" style="color: var(--text-secondary);"></i> <strong>Admin</strong> — 完整 PMS 操作權限，但無法管理帳號（員工）</div>
-                    <div><i class="ph-fill ph-hand-heart" aria-hidden="true" style="color: var(--color-info, #0ea5e9);"></i> <strong>小幫手 Helper</strong> — 只能檢視 物件管理 / 住房一覽 / 租客清單，所有寫入按鈕都隱藏</div>
+                    <div><i class="ph-fill ph-crown" aria-hidden="true" style="color: var(--color-primary);"></i> <strong>Owner</strong> — 最高權限，可管理其他帳號</div>
+                    <div><i class="ph-fill ph-wrench" aria-hidden="true" style="color: var(--text-secondary);"></i> <strong>Admin</strong> — 完整操作權限</div>
+                    <div><i class="ph-fill ph-hand-heart" aria-hidden="true" style="color: var(--color-info, #0ea5e9);"></i> <strong>小幫手 Helper</strong> — 只能檢視部分資料</div>
                     <div><i class="ph-fill ph-eye" aria-hidden="true" style="color: var(--text-muted);"></i> <strong>Viewer</strong> — 預留給未來「全頁只能看」的角色（目前等同 Admin）</div>
                 </div>
             </div>
@@ -163,7 +163,7 @@ function openAddAdminForm() {
             { name: 'role', label: '角色', type: 'select', required: true, value: 'admin', options: [
                 { value: 'admin', label: '🛠 Admin (完整 PMS 操作)' },
                 { value: 'owner', label: '👑 Owner (可管理其他帳號)' },
-                { value: 'helper', label: '🤝 小幫手 (只看 物件/住房/租客)' },
+                { value: 'helper', label: '🤝 小幫手 (只能檢視部分資料)' },
                 { value: 'viewer', label: '👁 Viewer (預留)' }
             ] }
         ],

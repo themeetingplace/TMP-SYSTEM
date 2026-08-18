@@ -337,8 +337,10 @@ export function renderDashboard() {
         }
     }
 
-    // helper 不看「本月租金收入」(沒有總收支權限)
-    const isHelper = window.__currentRole === 'helper';
+    // 2026-08-18 用戶要求: 小幫手儀表板「顯示」跟管理員完全相同 (含續租與收款流程),
+    //   差別只在不能操作 — 唯讀由 body[data-role="helper"] 的 CSS 隱藏寫入按鈕控制 (見 style.css)。
+    //   所以這裡 isHelper 一律當 false, 讓 helper 也渲染完整 admin 版儀表板。
+    const isHelper = false;
     return `
         ${checkBanner}
         <div class="metrics-grid${isHelper ? ' metrics-grid--3col' : ''}">

@@ -3872,6 +3872,14 @@ body[data-role="helper"] .occ-table tbody td:nth-child(4) {
 }
 /* 顯式標 data-write="1" 的按鈕 (其他地方寫入按鈕的逃生口) */
 body[data-role="helper"] [data-write] { display: none !important; }
+/* 儀表板「續租與收款流程」— helper 唯讀 (顯示跟管理員相同, 但不能操作):
+   步驟按鈕是 .rp-step-btn[data-goto=...] (不是 id), 擋掉「前往發送」+「前往確認」兩個寫入動作;
+   「前往核對」(goto-unsettled) 只是導覽去房租查帳(可檢視), 保留。
+   「辦退租」列改成不可點, 但資訊(不續/床位/租客/原到期)仍看得到。 */
+body[data-role="helper"] .rp-step-btn[data-goto="btn-ask-renewal"],
+body[data-role="helper"] .rp-step-btn[data-goto="btn-confirm-renewals"] { display: none !important; }
+body[data-role="helper"] .renewal-decline-item { pointer-events: none; cursor: default; }
+body[data-role="helper"] .renewal-decline-item .rp-row-link { display: none !important; }
 /* 住房一覽 — 入住按鈕 + 退房 checkbox 隱藏 (helper 不能寫入這些) */
 body[data-role="helper"] .occ-checkin-btn,
 body[data-role="helper"] .occ-terminate-check { display: none !important; }
