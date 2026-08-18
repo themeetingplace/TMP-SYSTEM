@@ -40,3 +40,6 @@ build/
 __pycache__/
 *.pyc
 *.pyo
+
+# storage migration backup (contains id-cards; secret; never commit)
+scripts/storage-backup/
