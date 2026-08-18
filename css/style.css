@@ -5580,7 +5580,16 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 }
 .rp-row--clickable {
     all: unset;
+    /* all:unset 會把 .rp-row / .rp-row--reply 的排版一起清掉,
+       這裡原樣補回 grid 欄位 + 字級 + 間距, 讓「不續」列跟「要續」列長一樣
+       (不然欄位會往下堆疊、租客名字被放大, 看起來突兀) */
     display: grid;
+    grid-template-columns: 40px 44px minmax(56px, auto) 1fr;
+    align-items: baseline;
+    column-gap: 0.6rem;
+    padding: 0.3rem 0;
+    font-size: var(--text-xs);
+    border-bottom: 1px solid var(--border-color);
     width: 100%;
     box-sizing: border-box;
     cursor: pointer;
