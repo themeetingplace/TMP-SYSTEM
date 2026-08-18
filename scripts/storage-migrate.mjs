@@ -26,12 +26,32 @@ const BUCKETS = ['contract-pdfs', 'id-cards'];
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKUP_ROOT = path.join(__dirname, 'storage-backup');
 
-const URL_BASE = process.env.SB_URL?.replace(/\/$/, '');
-const KEY = process.env.SB_SERVICE_KEY;
+// 設定來源：優先環境變數；沒有的話讀 scripts/sb-secret.txt (url= / key= 兩行)
+// → 非技術用戶只要把 key 貼進那個檔存檔即可，不用碰終端機環境變數
+function loadConfig() {
+    let url = process.env.SB_URL;
+    let key = process.env.SB_SERVICE_KEY;
+    if (!url || !key) {
+        const f = path.join(__dirname, 'sb-secret.txt');
+        if (fs.existsSync(f)) {
+            for (const line of fs.readFileSync(f, 'utf8').split(/\r?\n/)) {
+                const m = line.match(/^\s*(url|key)\s*=\s*(.+?)\s*$/i);
+                if (!m) continue;
+                if (m[1].toLowerCase() === 'url') url = url || m[2];
+                else key = key || m[2];
+            }
+        }
+    }
+    // 濾掉還沒填的佔位字 (含「貼上」「your」等)
+    if (key && /貼上|paste|your_|<.*>/i.test(key)) key = '';
+    return { url: url ? url.replace(/\/$/, '') : url, key };
+}
+
+const { url: URL_BASE, key: KEY } = loadConfig();
 const MODE = process.argv[2];
 
 if (!URL_BASE || !KEY) {
-    console.error('✗ 請先設好環境變數 SB_URL 與 SB_SERVICE_KEY (service_role key)');
+    console.error('✗ 找不到網址或鑰匙。請打開 scripts/sb-secret.txt，把 key= 後面換成你的 service_role key 再存檔。');
     process.exit(1);
 }
 if (MODE !== 'backup' && MODE !== 'restore') {
