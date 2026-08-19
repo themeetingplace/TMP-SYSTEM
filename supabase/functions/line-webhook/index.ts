@@ -956,8 +956,11 @@ Our team will get back to you soon ~`,
                 const lastNum = max ? parseInt(String(max.id).replace(/\D/g, ''), 10) || 0 : 0;
                 const newId = 'M' + String(lastNum + 1).padStart(3, '0');
                 const today = new Date().toISOString().split('T')[0];
+                // 順便存 building_id (用選的館名反查) → PMS 編輯時館別不會跑掉
+                const { data: bld } = await supabase
+                    .from('buildings').select('id').eq('name', buildingName).maybeSingle();
                 await supabase.from('maintenances').insert({
-                    id: newId, property_name: buildingName, issue,
+                    id: newId, property_name: buildingName, building_id: bld?.id ?? null, issue,
                     reporter: bound.name, report_date: today, status: '待處理', cost: null
                 });
                 await supabase.from('line_messages').insert({

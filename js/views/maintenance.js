@@ -158,9 +158,14 @@ function showMaintenanceForm(item = null) {
         .filter(b => (b.mode || 'cohousing') === targetMode)
         .sort((a, b) => (a.order || 0) - (b.order || 0))
         .map(b => ({ value: b.id, label: b.name }));
-    // 初始 buildingId: 編輯時優先讀 item.buildingId, 沒有則從 propertyName 反查
+    // 初始 buildingId: 編輯時優先讀 item.buildingId, 沒有則從 propertyName 反查床位, 再退而用館名反查
     const currentProperty = item?.propertyName ? mockData.properties.find(p => p.name === item.propertyName) : null;
-    const initialBuildingId = item?.buildingId || currentProperty?.buildingId || buildingOptions[0]?.value || '';
+    // ⚠ LINE 報修「兩步引導」流程把 property_name 存成「館別名」(如「古亭1館」) 而非床位,
+    //   所以床位比不到時, 再用館名反查館別 — 不然編輯時館別會 silently 跑成第一個館 (松山館)。
+    const buildingByName = item?.propertyName ? mockData.buildings.find(b => b.name === item.propertyName) : null;
+    const resolvedBuildingId = item?.buildingId || currentProperty?.buildingId || buildingByName?.id || '';
+    // 新增: 沒解析到 → 預設第一個館 (方便填); 編輯: 解析不到 → 留空逼使用者確認, 不 silently 存成錯的館
+    const initialBuildingId = resolvedBuildingId || (item ? '' : (buildingOptions[0]?.value || ''));
     // 物件 options builder: 依 buildingId filter (沒選館則用整個 mode)
     const buildPropertyOptions = (buildingId) => mockData.properties
         .filter(p => buildingId ? p.buildingId === buildingId : modeBuildingIds.has(p.buildingId))
