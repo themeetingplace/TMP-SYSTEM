@@ -915,22 +915,32 @@ function renderContractTemplatesTab() {
                 <p style="margin: 0 0 0.75rem;">每個館別上傳一份 <strong>含可填入欄位</strong> 的 PDF 合約樣板。系統產生合約時會自動填入下列欄位：</p>
                 <table style="width: auto; font-size: var(--text-sm); border-collapse: collapse; margin-bottom: 0.75rem;">
                     <thead>
-                        <tr><th colspan="3" style="text-align: left; padding: 0.3rem 0; color: var(--text-secondary); font-size: var(--text-xs); border-bottom: 1px solid var(--border-color);">必要欄位</th></tr>
+                        <tr><th colspan="3" style="text-align: left; padding: 0.3rem 0; color: var(--text-secondary); font-size: var(--text-xs); border-bottom: 1px solid var(--border-color);">必要欄位（樣板一定要有這兩個）</th></tr>
                     </thead>
                     <tbody>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">bed_no</code></td><td style="color: var(--text-muted);">床號（例：R1-A）</td></tr>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">tenant_name</code></td><td style="color: var(--text-muted);">乙方姓名（例：王大明）</td></tr>
-                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">rental_period</code></td><td style="color: var(--text-muted);">租賃期間（例：2026/05/01 ~ 2026/07/30）</td></tr>
-                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">rent_amount</code></td><td style="color: var(--text-muted);">月租金（例：18,000，已含千分位）</td></tr>
+                    </tbody>
+                    <thead>
+                        <tr><th colspan="3" style="text-align: left; padding: 0.65rem 0 0.3rem; color: var(--text-secondary); font-size: var(--text-xs); border-bottom: 1px solid var(--border-color);">選填欄位 — 合約資訊（樣板有加就自動填，沒加不影響）</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">issue_date</code></td><td style="color: var(--text-muted);">合約生成日＝今天（例：2026/08/19）</td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">address</code></td><td style="color: var(--text-muted);">物件地址（床位地址，沒有則退回館別地址）</td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">rental_period</code></td><td style="color: var(--text-muted);">租賃期間 起~迄（例：2026/05/01 ~ 2026/07/30）</td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">start_date</code></td><td style="color: var(--text-muted);">租約開始日（例：2026/05/01）</td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">end_date</code></td><td style="color: var(--text-muted);">租約結束日（例：2026/07/30）</td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">total_days</code></td><td style="color: var(--text-muted);">租約總天數（系統以 1 個月＝30 天計）</td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">rent_amount</code></td><td style="color: var(--text-muted);">每月租金（例：18,000，已含千分位）</td></tr>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">deposit_amount</code></td><td style="color: var(--text-muted);">押金金額（例：0 或 18,000）</td></tr>
                     </tbody>
                     <thead>
-                        <tr><th colspan="3" style="text-align: left; padding: 0.65rem 0 0.3rem; color: var(--text-secondary); font-size: var(--text-xs); border-bottom: 1px solid var(--border-color);">選填欄位 — 折扣 / 加收 (季繳優惠、能源費等)</th></tr>
+                        <tr><th colspan="3" style="text-align: left; padding: 0.65rem 0 0.3rem; color: var(--text-secondary); font-size: var(--text-xs); border-bottom: 1px solid var(--border-color);">選填欄位 — 金額 / 折扣加收（季繳優惠、能源費等）</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">adjustments</code></td><td style="color: var(--text-muted);">加減項目明細，多筆換行（例：<br>− 季繳優惠：−$1,000<br>+ 能源費：+$500）<br><small>欄位請設為「多行文字」(Multi-line)</small></td></tr>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">total_amount</code></td><td style="color: var(--text-muted);"><strong>租金總額</strong>（整個合約期，加減後）<br>= 月租 × 合約期 + 加收 − 折扣<br><small>例：月租 $10,000 × 3 月 − 季繳優惠 $1,000 = 29,000</small></td></tr>
                         <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">monthly_amount</code></td><td style="color: var(--text-muted);"><strong>月付金額</strong>（每月實際付多少）= 租金總額 ÷ 合約期<br><small>1 個月 → 跟 total_amount 相同；3 個月合約 → 平均到每月（四捨五入到整數）</small></td></tr>
+                        <tr><td style="padding: 0.25rem 1rem 0.25rem 0;"><code style="background: var(--color-background); padding: 0.15rem 0.4rem; border-radius: 4px;">adjustments</code></td><td style="color: var(--text-muted);">加減項目明細，多筆換行（例：<br>− 季繳優惠：−$1,000<br>+ 能源費：+$500）<br><small>欄位請設為「多行文字」(Multi-line)</small></td></tr>
                     </tbody>
                 </table>
                 <p style="margin: 0; color: var(--text-muted); font-size: var(--text-xs);">
@@ -1002,7 +1012,7 @@ async function inspectTemplate(buildingId) {
         if (fields.length === 0) {
             openConfirm({
                 title: '此 PDF 無表單欄位',
-                message: `「${tpl.fileName}」沒有可填入的表單欄位。<br><br>請先在 Adobe Acrobat / PDFescape 加入 <code>bed_no</code>、<code>tenant_name</code>、<code>rental_period</code> 三個文字欄位，再重新上傳。`,
+                message: `「${tpl.fileName}」沒有可填入的表單欄位。<br><br>請先在 Adobe Acrobat / PDFescape 至少加入 <code>bed_no</code>、<code>tenant_name</code> 兩個文字欄位，再重新上傳。`,
                 confirmLabel: '了解',
                 cancelLabel: ''
             });
