@@ -10,9 +10,10 @@ import { previewRenewalFor } from '../utils/paymentNoticeMessage.js';
 import { confirmTerminate } from './contracts.js';
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
+// ⚠ fullName 可能是 null (維修單物件改非必填後, 公共空間報修無 propertyName) → 一律先轉字串防炸
 function extractAreaName(fullName) {
-    const match = fullName.match(/聚空間 - ([^\s]+)\s/);
-    return match ? match[1] : fullName;
+    const match = (fullName || '').match(/聚空間 - ([^\s]+)\s/);
+    return match ? match[1] : (fullName || '');
 }
 
 // 統計各館空床狀況（含性別分布）
@@ -267,7 +268,7 @@ function buildMaintenanceTodos(maintenances) {
         .map(m => ({
             status: m.status === '待處理' ? 'danger' : 'warning',
             label: m.status === '待處理' ? '待處理' : '進行中',
-            text: `${extractAreaName(m.propertyName)} / ${m.issue}`,
+            text: `${extractAreaName(m.propertyName) || mockData.buildings.find(b => b.id === m.buildingId)?.name || '公共空間'} / ${m.issue}`,
             action: '派工',
             entityType: 'maintenance',
             entityId: m.id
