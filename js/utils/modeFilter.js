@@ -5,11 +5,19 @@ import { getMode } from './appMode.js';
 
 export function currentModeBuildingIdSet(mode = getMode()) {
     const targetMode = mode === 'managed' ? 'managed' : 'cohousing';
-    const ids = new Set();
+    let ids = new Set();
     (mockData.buildings || []).forEach(b => {
         const bm = b.mode || 'cohousing';
         if (bm === targetMode) ids.add(b.id);
     });
+    // 小幫手按館別限制: window.__helperBuildings 只在 helper 角色時被設 (app.js boot)。
+    //   跟 mode 的館取交集 → 全站 (物件/住房/合約/租客/房租查帳/維修/儀表板) 都只看到被指定的館。
+    //   空陣列 = 看不到任何館 (用戶選定的行為)。非 helper → undefined → 不過濾。
+    const helperBuildings = (typeof window !== 'undefined') ? window.__helperBuildings : undefined;
+    if (Array.isArray(helperBuildings)) {
+        const allowed = new Set(helperBuildings);
+        ids = new Set([...ids].filter(id => allowed.has(id)));
+    }
     return ids;
 }
 

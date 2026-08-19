@@ -2,7 +2,7 @@
 import { emptyState } from '../utils/emptyState.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { getChartColors } from '../utils/chartTheme.js';
-import { modeFilteredData } from '../utils/modeFilter.js';
+import { modeFilteredData, currentModeBuildingIdSet } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { findRenewalAskCandidates, findRenewalAskCandidatesNoLine } from '../utils/renewalAskFallback.js';
 import { findRenewalConfirmCandidates, findDeclinePendingCandidates } from '../utils/autoRenewalProcessor.js';
@@ -19,8 +19,9 @@ function extractAreaName(fullName) {
 // 回傳順序跟系統設定的館別順序一致（getSortedBuildings）— 只列當前 mode 的 buildings
 function buildEmptyBedsByProperty(properties, mode = getMode()) {
     const targetMode = mode === 'managed' ? 'managed' : 'cohousing';
+    const scopeIds = currentModeBuildingIdSet(mode);  // 含小幫手可看的館限制
     const sortedBuildings = getSortedBuildings({ activeOnly: true })
-        .filter(b => (b.mode || 'cohousing') === targetMode);
+        .filter(b => (b.mode || 'cohousing') === targetMode && scopeIds.has(b.id));
     const propertiesByArea = {};
     // 先按設定順序預建 key，確保之後 Object.keys 順序對
     sortedBuildings.forEach(b => {
@@ -104,10 +105,19 @@ function buildFinanceTodos(invoices) {
 // 舊的「合約事項」(待簽署等) / 「帳款事項」(一般逾期) 已依用戶決定完全移除,
 // 這三步驟涵蓋首頁待辦的全部內容 (維修事項是獨立領域, 不屬於這個流程, 保留原樣).
 function buildRenewalPipelineCard(invoices) {
-    const askCandidates = findRenewalAskCandidates();
-    const askNoLineCandidates = findRenewalAskCandidatesNoLine();
-    const renewCandidates = findRenewalConfirmCandidates();
-    const declineCandidates = findDeclinePendingCandidates();
+    // 依 mode + 小幫手可看的館別過濾候選 (這些 find* 直接讀 mockData.contracts, 沒過濾)
+    const scopeIds = currentModeBuildingIdSet();
+    const isHelperScoped = Array.isArray(window.__helperBuildings);
+    const inScope = (c) => {
+        if (c.buildingId) return scopeIds.has(c.buildingId);
+        const p = mockData.properties.find(x => x.name === c.propertyName);
+        if (p) return scopeIds.has(p.buildingId);
+        return !isHelperScoped; // 判不出歸屬: admin 顯示; helper 藏起來 (安全)
+    };
+    const askCandidates = findRenewalAskCandidates().filter(inScope);
+    const askNoLineCandidates = findRenewalAskCandidatesNoLine().filter(inScope);
+    const renewCandidates = findRenewalConfirmCandidates().filter(inScope);
+    const declineCandidates = findDeclinePendingCandidates().filter(inScope);
     const verifyCandidates = invoices.filter(inv =>
         inv.direction === 'in' && inv.bankLast5 && !inv.bankVerified
     );
@@ -526,10 +536,11 @@ function aggregateNetByBuildingMonth(months, buildings) {
 function buildChartData() {
     const months = lastNMonths(6);
     const monthLabels = months.map(m => `${parseInt(m.substring(5), 10)}月`);
-    // 依 mode 篩 buildings (代管 mode 圖表只顯代管房屋)
+    // 依 mode 篩 buildings (代管 mode 圖表只顯代管房屋); 並套小幫手可看的館 (currentModeBuildingIdSet 已含 helper 限制)
     const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
+    const scopeIds = currentModeBuildingIdSet();
     const buildings = getSortedBuildings({ activeOnly: true })
-        .filter(b => (b.mode || 'cohousing') === targetMode);
+        .filter(b => (b.mode || 'cohousing') === targetMode && scopeIds.has(b.id));
     const C = getChartColors();
 
     if (chartMode === 'total') {

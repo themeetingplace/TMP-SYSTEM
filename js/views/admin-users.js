@@ -7,10 +7,25 @@
 
 import { supabase } from '../supabase.js';
 import { getSession } from '../auth.js';
+import { mockData, getSortedBuildings } from '../data.js';
 import { openFormModal, openConfirm, showToast } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { emptyState } from '../utils/emptyState.js';
+
+// 小幫手可看的館別 — 給指派選單 (共居、啟用中)
+function helperBuildingChoices() {
+    return getSortedBuildings({ activeOnly: true }).filter(b => (b.mode || 'cohousing') === 'cohousing');
+}
+// 列表裡顯示某小幫手可看哪些館 (空 = 警示看不到)
+function helperBuildingsLabel(ids) {
+    const arr = Array.isArray(ids) ? ids : [];
+    if (!arr.length) {
+        return `<div style="font-size: var(--text-2xs); color: var(--color-danger); margin-top: 0.25rem;">⚠ 未指定館別（看不到任何資料）</div>`;
+    }
+    const names = arr.map(id => (mockData.buildings.find(b => b.id === id)?.name) || id);
+    return `<div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.25rem;">可看：${esc(names.join('、'))}</div>`;
+}
 
 let cachedAdmins = [];
 let currentEmail = null;
@@ -61,15 +76,17 @@ function rowsHtml(admins) {
                     ${isSelf ? '<span class="status-badge neutral" style="margin-left: 0.5rem; font-size: var(--text-2xs);">你</span>' : ''}
                 </td>
                 <td>${a.display_name ? esc(a.display_name) : '<span style="color: var(--text-muted);">—</span>'}</td>
-                <td>${roleBadge(a.role)}</td>
+                <td>${roleBadge(a.role)}${a.role === 'helper' ? helperBuildingsLabel(a.allowed_buildings) : ''}</td>
                 <td style="color: var(--text-muted); font-size: var(--text-xs);">${esc(formatDate(a.created_at))}</td>
                 <td style="text-align: right;">
                     ${canDelete
                         ? rowActionGroup(
-                            rowAction({ action: 'delete', id: a.email, icon: 'ph-trash', title: '移除此帳號', variant: 'danger', className: 'admin-delete-btn' })
+                            rowAction({ action: 'edit', id: a.email, icon: 'ph-pencil', title: '編輯（角色 / 館別權限）', className: 'admin-edit-btn' })
+                                .replace('<button ', `<button data-email="${escapeAttr(a.email)}" `)
+                            + rowAction({ action: 'delete', id: a.email, icon: 'ph-trash', title: '移除此帳號', variant: 'danger', className: 'admin-delete-btn' })
                                 .replace('<button ', `<button data-email="${escapeAttr(a.email)}" data-name="${escapeAttr(a.display_name || a.email)}" `)
                           )
-                        : '<span style="color: var(--text-muted); font-size: var(--text-xs);">不能移除自己</span>'
+                        : '<span style="color: var(--text-muted); font-size: var(--text-xs);">不能編輯自己</span>'
                     }
                 </td>
             </tr>
@@ -130,6 +147,12 @@ async function refreshTable() {
 }
 
 function bindRowActions() {
+    document.querySelectorAll('.admin-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const admin = cachedAdmins.find(a => a.email === btn.dataset.email);
+            if (admin) openAdminForm(admin);
+        });
+    });
     document.querySelectorAll('.admin-delete-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const email = btn.dataset.email;
@@ -153,44 +176,81 @@ function bindRowActions() {
     });
 }
 
-function openAddAdminForm() {
+// 新增 (admin=null) / 編輯 (admin=record) 共用同一個表單
+function openAdminForm(admin = null) {
+    const isEdit = !!admin;
+    const roleOptions = [
+        { value: 'admin', label: '🛠 Admin (完整 PMS 操作)' },
+        { value: 'owner', label: '👑 Owner (可管理其他帳號)' },
+        { value: 'helper', label: '🤝 小幫手 (只能檢視部分資料)' },
+        { value: 'viewer', label: '👁 Viewer (預留)' }
+    ];
+    const fields = [];
+    if (!isEdit) {
+        fields.push({ name: 'email', label: 'Google 帳號 Email', type: 'email', required: true, span: 2, placeholder: 'employee@gmail.com', hint: '必須是 Google 帳號（Gmail 或啟用 Google 登入的網域）' });
+    }
+    fields.push({ name: 'display_name', label: '顯示名稱', type: 'text', required: false, span: 2, placeholder: '例：王經理', value: admin?.display_name || '' });
+    fields.push({ name: 'role', label: '角色', type: 'select', required: true, value: admin?.role || 'admin', options: roleOptions });
+    fields.push({ name: 'allowedBuildings', type: 'placeholder', span: 2 });
+
+    let formEl = null;
+    const preChecked = new Set(Array.isArray(admin?.allowed_buildings) ? admin.allowed_buildings : []);
+
     openFormModal({
-        title: '新增管理員',
+        title: isEdit ? `編輯帳號：${admin.email}` : '新增管理員',
         maxWidth: 480,
-        fields: [
-            { name: 'email', label: 'Google 帳號 Email', type: 'email', required: true, span: 2, placeholder: 'employee@gmail.com', hint: '必須是 Google 帳號（Gmail 或啟用 Google 登入的網域）' },
-            { name: 'display_name', label: '顯示名稱', type: 'text', required: false, span: 2, placeholder: '例：王經理' },
-            { name: 'role', label: '角色', type: 'select', required: true, value: 'admin', options: [
-                { value: 'admin', label: '🛠 Admin (完整 PMS 操作)' },
-                { value: 'owner', label: '👑 Owner (可管理其他帳號)' },
-                { value: 'helper', label: '🤝 小幫手 (只能檢視部分資料)' },
-                { value: 'viewer', label: '👁 Viewer (預留)' }
-            ] }
-        ],
-        submitLabel: '加入白名單',
+        fields,
+        submitLabel: isEdit ? '儲存變更' : '加入白名單',
+        onFormMount: (form) => {
+            formEl = form;
+            const roleSelect = form.querySelector('[name="role"]');
+            const ph = form.querySelector('#ph-allowedBuildings');
+            if (ph) {
+                const blds = helperBuildingChoices();
+                ph.innerHTML = `
+                    <label style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem;">可看的館別 <span style="color: var(--color-danger);">*</span></label>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">小幫手只看得到勾選的館；沒勾任何館 = 看不到任何資料。</div>
+                    ${blds.length === 0
+                        ? '<div style="color: var(--text-muted); font-size: 0.85rem;">目前沒有共居館別</div>'
+                        : `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                            ${blds.map(b => `<label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" class="helper-bld-chk" value="${escapeAttr(b.id)}" ${preChecked.has(b.id) ? 'checked' : ''}> ${esc(b.name)}
+                            </label>`).join('')}
+                        </div>`}
+                `;
+            }
+            const syncVisible = () => {
+                if (ph) ph.style.display = (roleSelect?.value === 'helper') ? '' : 'none';
+            };
+            roleSelect?.addEventListener('change', syncVisible);
+            syncVisible();
+        },
         onSubmit: async (values) => {
-            const email = (values.email || '').trim().toLowerCase();
-            if (!email.includes('@')) {
-                showToast('Email 格式不正確', 'danger');
-                return false;
-            }
-            // 重複檢查
-            if (cachedAdmins.some(a => a.email === email)) {
-                showToast(`${email} 已在白名單內`, 'warning');
-                return false;
-            }
-            const { error } = await supabase.from('admins').insert({
-                email,
-                display_name: values.display_name || null,
-                role: values.role || 'admin'
-            });
-            if (error) {
-                // RLS 擋下 → 通常是非 owner 嘗試新增
-                if (error.message?.includes('row-level security')) {
-                    showToast('只有 Owner 可以新增管理員', 'danger');
-                } else {
-                    showToast(`新增失敗：${error.message}`, 'danger');
+            const role = values.role || 'admin';
+            // 只有 helper 記館別; 其他角色一律清空 (不受此限制)
+            const allowed_buildings = role === 'helper'
+                ? Array.from(formEl?.querySelectorAll('.helper-bld-chk:checked') || []).map(c => c.value)
+                : [];
+
+            if (isEdit) {
+                const { error } = await supabase.from('admins')
+                    .update({ display_name: values.display_name || null, role, allowed_buildings })
+                    .eq('email', admin.email);
+                if (error) {
+                    showToast(error.message?.includes('row-level security') ? '只有 Owner 可以編輯帳號' : `更新失敗：${error.message}`, 'danger');
+                    return false;
                 }
+                showToast(`已更新 ${admin.email}`, 'success');
+                refreshTable();
+                return;
+            }
+
+            const email = (values.email || '').trim().toLowerCase();
+            if (!email.includes('@')) { showToast('Email 格式不正確', 'danger'); return false; }
+            if (cachedAdmins.some(a => a.email === email)) { showToast(`${email} 已在白名單內`, 'warning'); return false; }
+            const { error } = await supabase.from('admins').insert({ email, display_name: values.display_name || null, role, allowed_buildings });
+            if (error) {
+                showToast(error.message?.includes('row-level security') ? '只有 Owner 可以新增管理員' : `新增失敗：${error.message}`, 'danger');
                 return false;
             }
             showToast(`已加入 ${email}`, 'success');
@@ -203,6 +263,6 @@ export async function initAdminUsersActions(scope) {
     const session = await getSession();
     currentEmail = session?.user?.email?.toLowerCase() || null;
 
-    scope.querySelector('#btn-add-admin')?.addEventListener('click', openAddAdminForm);
+    scope.querySelector('#btn-add-admin')?.addEventListener('click', () => openAdminForm());
     await refreshTable();
 }

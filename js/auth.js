@@ -124,6 +124,17 @@ export async function getCurrentRole() {
     return data || null;
 }
 
+// 取得當前登入者可看的館別 id 陣列 (小幫手按館別限制用) — 非 helper 不需理會
+// 回傳 string[]; 找不到 / 出錯 → []
+export async function getMyAllowedBuildings() {
+    const { data, error } = await supabase.rpc('get_my_allowed_buildings');
+    if (error) {
+        console.error('[auth] getMyAllowedBuildings failed:', error);
+        return [];
+    }
+    return Array.isArray(data) ? data : [];
+}
+
 // 監聽 auth 狀態變更（其他分頁登入/登出時也會觸發）
 export function onAuthChange(cb) {
     return supabase.auth.onAuthStateChange((event, session) => cb(event, session));

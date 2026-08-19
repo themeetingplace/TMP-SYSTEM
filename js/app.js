@@ -27,7 +27,7 @@ import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
 import { bootstrap as syncBootstrap } from './sync.js'; // 雲端同步引擎
-import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole } from './auth.js';
+import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole, getMyAllowedBuildings } from './auth.js';
 import { showLogin, showAccessDenied, bindPasswordToggles } from './views/login.js';
 import { applyAvatar, getAvatar, AVATAR_ICONS, AVATAR_COLORS } from './utils/avatar.js';
 import { APP_VERSION, APP_BUILD_DATE, APP_NAME, APP_COPYRIGHT, APP_CHANGELOG } from './version.js';
@@ -361,6 +361,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     // helper → 隱藏非白名單的 nav 項目 (包含首頁)
     if (window.__currentRole === 'helper') {
+        // 小幫手按館別限制: 載入這個小幫手可看的館 (空 = 看不到任何館)。
+        // modeFilter 的 currentModeBuildingIdSet 會讀 window.__helperBuildings 做交集, 一處生效全頁面。
+        window.__helperBuildings = await getMyAllowedBuildings();
         document.querySelectorAll('.nav-item[data-view]').forEach(el => {
             const view = el.dataset.view;
             if (!HELPER_ALLOWED.has(view)) el.style.display = 'none';
