@@ -404,27 +404,33 @@ function settleInvoice(id) {
         `,
         footerHtml: `
             <button class="btn btn-secondary" data-action="cancel">取消</button>
+            <button class="btn btn-outline" data-action="go-nosend" style="display: none;">結帳，不發送合約</button>
             <button class="btn btn-primary" data-action="go"></button>
         `,
         onMount: (modal, close) => {
             const input = modal.querySelector('#settle-received');
             const hint = modal.querySelector('#settle-hint');
             const btn = modal.querySelector('[data-action="go"]');
+            const btnNoSend = modal.querySelector('[data-action="go-nosend"]');
             const refresh = () => {
                 const v = Math.round(Number(input.value) || 0);
                 if (v <= 0) {
                     hint.innerHTML = '<span style="color: var(--color-danger);">請輸入實際入帳金額</span>';
                     btn.disabled = true;
                     btn.textContent = '確認';
+                    if (btnNoSend) btnNoSend.style.display = 'none';
                     return;
                 }
                 btn.disabled = false;
                 if (v >= due) {
                     hint.innerHTML = `<span style="color: #22946e;">✓ 金額相符，全額結清${sendable ? '並發送合約' : ''}</span>`;
                     btn.textContent = sendable ? '確認並發送合約' : `確認${newStatus}`;
+                    // 綁定租客(合約可寄) → 額外提供「結帳但不發送合約」的選項
+                    if (btnNoSend) btnNoSend.style.display = sendable ? '' : 'none';
                 } else {
                     hint.innerHTML = `<span style="color: #b13535;">差額 $${(due - v).toLocaleString()} — 以實${noun} $${v.toLocaleString()} 拆帳結，剩 $${(due - v).toLocaleString()} 留待結</span>`;
                     btn.textContent = `以實${noun} $${v.toLocaleString()} 拆帳結`;
+                    if (btnNoSend) btnNoSend.style.display = 'none';
                 }
             };
             input.addEventListener('input', refresh);
@@ -442,6 +448,12 @@ function settleInvoice(id) {
                     // 不正確 → 拆帳確認
                     confirmSplitSettle(inv, v, due - v);
                 }
+            });
+            btnNoSend?.addEventListener('click', () => {
+                const v = Math.round(Number(input.value) || 0);
+                if (v < due) return;  // 只在全額結帳時有效
+                close();
+                doFullSettle(inv, due, newStatus, { send: false });  // 結帳但不發送合約
             });
         }
     });
@@ -463,7 +475,8 @@ function confirmSplitSettle(inv, paidPortion, remainingBalance) {
 }
 
 // 全額結帳：餘額視為已收/付，整筆關
-function doFullSettle(inv, due, newStatus) {
+// opts.send === false → 只結帳、不觸發發合約 (綁定租客也能選「結帳不發送」)
+function doFullSettle(inv, due, newStatus, opts = {}) {
     const patched = { ...inv, paidAmount: due, paidDate: TODAY };
     store.updateInvoice(inv.id, {
         paidAmount: due,
@@ -472,7 +485,7 @@ function doFullSettle(inv, due, newStatus) {
     });
     showToast(`已結帳：${inv.id}`, 'success');
     // 入帳即發 — 結帳後若對應合約還沒寄, 跳「合約資訊確認」讓管理員確認再發送
-    maybeAutoSendContract(inv);
+    if (opts.send !== false) maybeAutoSendContract(inv);
     refreshView();
 }
 
