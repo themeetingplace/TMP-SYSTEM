@@ -306,6 +306,8 @@ function contractProgressTimeline(c, lifecycle) {
 function renewIntentBadge(contract) {
     const intent = contract.renewIntent;
     if (!intent) return '';
+    // 已續約 / 已終止 = 續租意願已處理完 → 不再顯示 (避免「已續約 + 要續」重複)
+    if (contract.renewalState === 'renewed' || contract.renewalState === 'terminated') return '';
     const map = {
         asking:  { text: '⏳ 已問', cls: 'warning',  title: contract.renewAskedAt ? `已詢問於 ${contract.renewAskedAt.slice(0, 10)}` : '已詢問，等待回覆' },
         renew:   { text: '✅ 要續', cls: 'success',  title: '租客已表達續租意願' },
@@ -351,11 +353,16 @@ export function renderContracts() {
     const archivedCount = enriched.filter(c => c._state === 'renewed' || c._state === 'terminated').length;
 
     // 續租意願計數 (LINE 自動詢問結果)
+    // 已續約 / 已終止 = 意願已處理完, 不算進「待處理」的續租意願篩選 (2026-08-22 用戶)
+    //   → 這些切到「已續約」子分頁仍查得到, 只是不佔用要續租/不續租的待辦清單
+    const activeIntentCount = (intent) => enriched.filter(c =>
+        c.renewIntent === intent && c._state !== 'renewed' && c._state !== 'terminated'
+    ).length;
     const renewCounts = {
-        asking:  enriched.filter(c => c.renewIntent === 'asking').length,
-        renew:   enriched.filter(c => c.renewIntent === 'renew').length,
-        decline: enriched.filter(c => c.renewIntent === 'decline').length,
-        inquiry: enriched.filter(c => c.renewIntent === 'inquiry').length
+        asking:  activeIntentCount('asking'),
+        renew:   activeIntentCount('renew'),
+        decline: activeIntentCount('decline'),
+        inquiry: activeIntentCount('inquiry')
     };
     const anyRenewIntent = renewCounts.asking + renewCounts.renew + renewCounts.decline + renewCounts.inquiry;
 
@@ -430,7 +437,7 @@ export function renderContracts() {
                 ? `<span class="status-badge info contract-action" data-action="unbundle-self" data-id="${c.id}" style="font-size: var(--text-2xs); margin-left: 0.25rem; cursor: pointer;" title="此合約已併入 ${esc(c.bundleParentContractId)} 收款，點擊解除">🔗 子 → ${esc(c.bundleParentContractId)}</span>`
                 : '');
         const cbDisabled = isArchived || c.paymentChannel === 'platform';
-        const sharedDataAttrs = `data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${c.renewIntent || 'none'}" data-channel="${esc(c.paymentChannel || 'self')}" data-tenant="${escapeAttr(c.tenant || '')}" data-building="${esc(mockData.properties.find(p => p.name === c.propertyName)?.buildingId || '')}" data-search="${escapeAttr(searchText)}"`;
+        const sharedDataAttrs = `data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${isArchived ? 'none' : (c.renewIntent || 'none')}" data-channel="${esc(c.paymentChannel || 'self')}" data-tenant="${escapeAttr(c.tenant || '')}" data-building="${esc(mockData.properties.find(p => p.name === c.propertyName)?.buildingId || '')}" data-search="${escapeAttr(searchText)}"`;
 
         // ===== Mobile card 共用資料 =====
         const mobileChips = [
