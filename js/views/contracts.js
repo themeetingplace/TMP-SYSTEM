@@ -1031,6 +1031,10 @@ function showContractForm(contract, opts = {}) {
             showToast(terminating ? '合約已標記為已終止' : '已更新合約', 'success');
 
             // 把加減項目 + 收款 寫到對應的房租 invoice — 平台代收沒帳單就不動
+            // 使用者是否真的動了收支 (加減項 / 收款 / 入帳日) → 沒帳單時據此決定要不要提示
+            const enteredAdjust = (Number(adjDiscount) || 0) !== 0 || !!(adjReason && String(adjReason).trim())
+                || (Number(values.paidAmount) || 0) > 0 || !!values.paidDate;
+            let adjustWritten = false;
             if (values.paymentChannel !== 'platform') {
                 const rentInv = mockData.invoices.find(inv =>
                     inv.direction === 'in' && inv.type === '房租' && inv.contractId === contract.id
@@ -1066,7 +1070,12 @@ function showContractForm(contract, opts = {}) {
                         if (newPaidAmount > 0 && !rentInv.paidDate && !patch.paidDate) patch.paidDate = new Date().toISOString().slice(0, 10);
                     }
                     if (Object.keys(patch).length) store.updateInvoice(rentInv.id, patch);
+                    adjustWritten = true; // 有房租帳單可承接收支 (即使無變更也算有地方記錄)
                 }
+            }
+            // 有輸入收支、卻沒有帳單可寫 → 明確提示, 別靜默失敗
+            if (enteredAdjust && !adjustWritten) {
+                showToast('⚠ 此合約沒有對應的房租帳單，收支未寫入（可先到房租查帳補產帳單）', 'warning', 6000);
             }
 
             if (saved) {
