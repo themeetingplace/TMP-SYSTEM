@@ -27,6 +27,24 @@ function helperBuildingsLabel(ids) {
     return `<div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.25rem;">可看：${esc(names.join('、'))}</div>`;
 }
 
+// 小幫手可勾選的頁面 (key 要跟 app.js HELPER_PAGE_ROUTES 對齊)
+const HELPER_VIEW_CHOICES = [
+    { key: 'dashboard',   label: '首頁儀表板' },
+    { key: 'occupancy',   label: '住房一覽 / 物件' },
+    { key: 'contracts',   label: '合約管理' },
+    { key: 'unsettled',   label: '房租查帳' },
+    { key: 'maintenance', label: '維修管理' },
+    { key: 'tenants',     label: '租客清單' }
+];
+const ALL_HELPER_VIEW_KEYS = HELPER_VIEW_CHOICES.map(v => v.key);
+// 列表顯示某小幫手可看哪些頁面 (空 allowed_views = 全部)
+function helperViewsLabel(views) {
+    const arr = (Array.isArray(views) && views.length) ? views : ALL_HELPER_VIEW_KEYS;
+    const isAll = arr.length === ALL_HELPER_VIEW_KEYS.length;
+    const names = arr.map(k => (HELPER_VIEW_CHOICES.find(v => v.key === k)?.label) || k);
+    return `<div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.15rem;">頁面：${isAll ? '全部' : esc(names.join('、'))}</div>`;
+}
+
 let cachedAdmins = [];
 let currentEmail = null;
 
@@ -76,7 +94,7 @@ function rowsHtml(admins) {
                     ${isSelf ? '<span class="status-badge neutral" style="margin-left: 0.5rem; font-size: var(--text-2xs);">你</span>' : ''}
                 </td>
                 <td>${a.display_name ? esc(a.display_name) : '<span style="color: var(--text-muted);">—</span>'}</td>
-                <td>${roleBadge(a.role)}${a.role === 'helper' ? helperBuildingsLabel(a.allowed_buildings) : ''}</td>
+                <td>${roleBadge(a.role)}${a.role === 'helper' ? helperBuildingsLabel(a.allowed_buildings) + helperViewsLabel(a.allowed_views) : ''}</td>
                 <td style="color: var(--text-muted); font-size: var(--text-xs);">${esc(formatDate(a.created_at))}</td>
                 <td style="text-align: right;">
                     ${canDelete
@@ -191,10 +209,15 @@ function openAdminForm(admin = null) {
     }
     fields.push({ name: 'display_name', label: '顯示名稱', type: 'text', required: false, span: 2, placeholder: '例：王經理', value: admin?.display_name || '' });
     fields.push({ name: 'role', label: '角色', type: 'select', required: true, value: admin?.role || 'admin', options: roleOptions });
+    fields.push({ name: 'allowedViews', type: 'placeholder', span: 2 });
     fields.push({ name: 'allowedBuildings', type: 'placeholder', span: 2 });
 
     let formEl = null;
     const preChecked = new Set(Array.isArray(admin?.allowed_buildings) ? admin.allowed_buildings : []);
+    // 頁面: 空 allowed_views = 全部 (向下相容), 所以預設全勾
+    const preCheckedViews = new Set(
+        (Array.isArray(admin?.allowed_views) && admin.allowed_views.length) ? admin.allowed_views : ALL_HELPER_VIEW_KEYS
+    );
 
     openFormModal({
         title: isEdit ? `編輯帳號：${admin.email}` : '新增管理員',
@@ -204,6 +227,18 @@ function openAdminForm(admin = null) {
         onFormMount: (form) => {
             formEl = form;
             const roleSelect = form.querySelector('[name="role"]');
+            const phViews = form.querySelector('#ph-allowedViews');
+            if (phViews) {
+                phViews.innerHTML = `
+                    <label style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem;">可看的頁面</label>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">勾選這個小幫手能進入哪些頁面（沒勾的側欄會隱藏、也進不去）。</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                        ${HELPER_VIEW_CHOICES.map(v => `<label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer;">
+                            <input type="checkbox" class="helper-view-chk" value="${escapeAttr(v.key)}" ${preCheckedViews.has(v.key) ? 'checked' : ''}> ${esc(v.label)}
+                        </label>`).join('')}
+                    </div>
+                `;
+            }
             const ph = form.querySelector('#ph-allowedBuildings');
             if (ph) {
                 const blds = helperBuildingChoices();
@@ -220,21 +255,26 @@ function openAdminForm(admin = null) {
                 `;
             }
             const syncVisible = () => {
-                if (ph) ph.style.display = (roleSelect?.value === 'helper') ? '' : 'none';
+                const show = roleSelect?.value === 'helper';
+                if (ph) ph.style.display = show ? '' : 'none';
+                if (phViews) phViews.style.display = show ? '' : 'none';
             };
             roleSelect?.addEventListener('change', syncVisible);
             syncVisible();
         },
         onSubmit: async (values) => {
             const role = values.role || 'admin';
-            // 只有 helper 記館別; 其他角色一律清空 (不受此限制)
+            // 只有 helper 記館別 / 頁面; 其他角色一律清空 (不受此限制)
             const allowed_buildings = role === 'helper'
                 ? Array.from(formEl?.querySelectorAll('.helper-bld-chk:checked') || []).map(c => c.value)
+                : [];
+            const allowed_views = role === 'helper'
+                ? Array.from(formEl?.querySelectorAll('.helper-view-chk:checked') || []).map(c => c.value)
                 : [];
 
             if (isEdit) {
                 const { error } = await supabase.from('admins')
-                    .update({ display_name: values.display_name || null, role, allowed_buildings })
+                    .update({ display_name: values.display_name || null, role, allowed_buildings, allowed_views })
                     .eq('email', admin.email);
                 if (error) {
                     showToast(error.message?.includes('row-level security') ? '只有 Owner 可以編輯帳號' : `更新失敗：${error.message}`, 'danger');
@@ -248,7 +288,7 @@ function openAdminForm(admin = null) {
             const email = (values.email || '').trim().toLowerCase();
             if (!email.includes('@')) { showToast('Email 格式不正確', 'danger'); return false; }
             if (cachedAdmins.some(a => a.email === email)) { showToast(`${email} 已在白名單內`, 'warning'); return false; }
-            const { error } = await supabase.from('admins').insert({ email, display_name: values.display_name || null, role, allowed_buildings });
+            const { error } = await supabase.from('admins').insert({ email, display_name: values.display_name || null, role, allowed_buildings, allowed_views });
             if (error) {
                 showToast(error.message?.includes('row-level security') ? '只有 Owner 可以新增管理員' : `新增失敗：${error.message}`, 'danger');
                 return false;

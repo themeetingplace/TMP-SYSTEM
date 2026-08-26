@@ -135,6 +135,17 @@ export async function getMyAllowedBuildings() {
     return Array.isArray(data) ? data : [];
 }
 
+// 取得當前登入者可看的頁面 keys 陣列 (小幫手頁面權限用) — 非 helper 不需理會
+// 回傳 string[]; 找不到 / 出錯 → []
+export async function getMyAllowedViews() {
+    const { data, error } = await supabase.rpc('get_my_allowed_views');
+    if (error) {
+        console.error('[auth] getMyAllowedViews failed:', error);
+        return [];
+    }
+    return Array.isArray(data) ? data : [];
+}
+
 // 監聽 auth 狀態變更（其他分頁登入/登出時也會觸發）
 export function onAuthChange(cb) {
     return supabase.auth.onAuthStateChange((event, session) => cb(event, session));

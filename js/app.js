@@ -27,7 +27,7 @@ import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
 import { bootstrap as syncBootstrap } from './sync.js'; // 雲端同步引擎
-import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole, getMyAllowedBuildings } from './auth.js';
+import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole, getMyAllowedBuildings, getMyAllowedViews } from './auth.js';
 import { showLogin, showAccessDenied, bindPasswordToggles } from './views/login.js';
 import { applyAvatar, getAvatar, AVATAR_ICONS, AVATAR_COLORS } from './utils/avatar.js';
 import { APP_VERSION, APP_BUILD_DATE, APP_NAME, APP_COPYRIGHT, APP_CHANGELOG } from './version.js';
@@ -42,8 +42,32 @@ const navItems = document.querySelectorAll('.nav-item');
 //   helper 預設首頁 = 住房一覽 (#occupancy)，不給看 dashboard
 // helper 能看的 view (sidebar 已把 #finance 換成 #unsettled, 全員生效)
 // 各頁內部的「新增/編輯/刪除」按鈕用 CSS hide (body[data-role="helper"])
-const HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'contracts', 'unsettled', 'maintenance', 'tenants']);
-const HELPER_DEFAULT_HASH = 'occupancy';
+//
+// 2026-08-22: 每個 helper 可看的頁面改成可個別勾選 (admins.allowed_views)。
+//   view key → route hash(es); 住房一覽/物件是同一個 hub 用一個 key 'occupancy' 管兩個 route。
+const HELPER_PAGE_ROUTES = {
+    dashboard:   ['dashboard'],
+    occupancy:   ['occupancy', 'properties'],
+    contracts:   ['contracts'],
+    unsettled:   ['unsettled'],
+    maintenance: ['maintenance'],
+    tenants:     ['tenants']
+};
+const DEFAULT_HELPER_VIEWS = Object.keys(HELPER_PAGE_ROUTES);  // 空 allowed_views = 全部 (向下相容)
+// 下面兩個在 boot 時依該 helper 的 allowed_views 重算 (applyHelperViews)
+let HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'contracts', 'unsettled', 'maintenance', 'tenants']);
+let HELPER_DEFAULT_HASH = 'occupancy';
+// 依 view keys 算出可進入的 route 集合 + 落地頁
+function applyHelperViews(views) {
+    const eff = (Array.isArray(views) && views.length) ? views : DEFAULT_HELPER_VIEWS;
+    const routes = new Set();
+    eff.forEach(v => (HELPER_PAGE_ROUTES[v] || []).forEach(r => routes.add(r)));
+    HELPER_ALLOWED = routes;
+    // 落地頁: 優先住房一覽, 其次租客/查帳/維修/合約/首頁 — 取第一個可進入的
+    const landingOrder = ['occupancy', 'tenants', 'unsettled', 'maintenance', 'contracts', 'dashboard'];
+    HELPER_DEFAULT_HASH = landingOrder.find(r => routes.has(r)) || 'occupancy';
+    window.__helperViews = eff;
+}
 const routes = {
     dashboard:     { title: '首頁',         group: '總覽', render: renderDashboard },
     properties:    { title: '物件管理',     group: '營運', render: renderPropertiesHub, init: initPropertiesHubActions, isHub: true },
@@ -364,13 +388,16 @@ window.addEventListener('DOMContentLoaded', async () => {
         // 小幫手按館別限制: 載入這個小幫手可看的館 (空 = 看不到任何館)。
         // modeFilter 的 currentModeBuildingIdSet 會讀 window.__helperBuildings 做交集, 一處生效全頁面。
         window.__helperBuildings = await getMyAllowedBuildings();
+        // 小幫手頁面權限: 依 allowed_views 收窄 HELPER_ALLOWED + 落地頁 (空 = 預設全部)
+        applyHelperViews(await getMyAllowedViews());
         document.querySelectorAll('.nav-item[data-view]').forEach(el => {
             const view = el.dataset.view;
             if (!HELPER_ALLOWED.has(view)) el.style.display = 'none';
         });
         // 「帳務管理」(#finance) 改成「房租查帳」(#unsettled) — helper 不能看總收支表
+        // 只有這個 helper 有開「房租查帳」才顯示; 沒開就讓它維持隱藏 (上面迴圈已隱藏 finance)
         const financeNav = document.querySelector('.nav-item[data-view="finance"]');
-        if (financeNav) {
+        if (financeNav && HELPER_ALLOWED.has('unsettled')) {
             financeNav.style.display = '';
             financeNav.setAttribute('href', '#unsettled');
             financeNav.setAttribute('data-view', 'unsettled');
