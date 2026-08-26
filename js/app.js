@@ -27,7 +27,7 @@ import { showToast } from './utils/ui.js';
 import './setup.js'; // 載入 console 偵錯工具（quickTest / testSupabaseConnection）
 import './migrate-to-supabase.js'; // 暴露 migrateToSupabase() / clearAllSupabase()
 import { bootstrap as syncBootstrap } from './sync.js'; // 雲端同步引擎
-import { getSession, signOut, updateDisplayName, updatePassword, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole, getMyAllowedBuildings, getMyAllowedViews } from './auth.js';
+import { getSession, signOut, updateDisplayName, updateAvatar, clearSensitiveLocalCache, checkIsAdmin, checkIsOwner, getCurrentRole, getMyAllowedBuildings, getMyAllowedViews } from './auth.js';
 import { showLogin, showAccessDenied, bindPasswordToggles } from './views/login.js';
 import { applyAvatar, getAvatar, AVATAR_ICONS, AVATAR_COLORS } from './utils/avatar.js';
 import { APP_VERSION, APP_BUILD_DATE, APP_NAME, APP_COPYRIGHT, APP_CHANGELOG } from './version.js';
@@ -498,10 +498,7 @@ function hideBootLoading() {
     document.getElementById('boot-loading')?.remove();
 }
 
-// 主題切換 / 登出 — 目前為佔位行為，留給後續串實際邏輯
-window.toggleAppTheme = function () {
-    showToast('主題切換功能開發中', 'info');
-};
+// 登出
 window.logoutPlaceholder = async function () {
     if (confirm('確定要登出？')) {
         await signOut();
@@ -638,37 +635,6 @@ window.showAccountSettings = async function() {
                         </div>
                     </div>
 
-                    <div class="form-section" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                        <h4 style="margin-bottom: 0.75rem;">變更密碼（選填）</h4>
-                        <div class="form-group">
-                            <label for="acct-old-pw">目前密碼 <span style="color: var(--text-muted); font-size: 0.75rem;">(改密碼時必填)</span></label>
-                            <div class="password-field-wrap">
-                                <input type="password" id="acct-old-pw" class="form-input" autocomplete="current-password" placeholder="留空表示不改密碼">
-                                <button type="button" class="password-toggle" data-target="acct-old-pw" title="顯示 / 隱藏密碼" aria-label="顯示密碼">
-                                    <i class="ph ph-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="acct-new-pw">新密碼</label>
-                            <div class="password-field-wrap">
-                                <input type="password" id="acct-new-pw" class="form-input" autocomplete="new-password" placeholder="至少 6 字元，留空表示不改">
-                                <button type="button" class="password-toggle" data-target="acct-new-pw" title="顯示 / 隱藏密碼" aria-label="顯示密碼">
-                                    <i class="ph ph-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="acct-confirm-pw">確認新密碼</label>
-                            <div class="password-field-wrap">
-                                <input type="password" id="acct-confirm-pw" class="form-input" autocomplete="new-password">
-                                <button type="button" class="password-toggle" data-target="acct-confirm-pw" title="顯示 / 隱藏密碼" aria-label="顯示密碼">
-                                    <i class="ph ph-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
                     <div id="acct-error" class="auth-error" hidden style="margin-top: 1rem;"></div>
 
                     <div class="form-actions" style="margin-top: 1.25rem;">
@@ -744,13 +710,6 @@ window.showAccountSettings = async function() {
         e.preventDefault();
         errEl.hidden = true;
         const newName = modal.querySelector('#acct-name').value.trim();
-        const oldPw = modal.querySelector('#acct-old-pw').value;
-        const newPw = modal.querySelector('#acct-new-pw').value;
-        const confirmPw = modal.querySelector('#acct-confirm-pw').value;
-
-        if (newPw && newPw !== confirmPw) { showErr('兩次輸入的新密碼不一致'); return; }
-        if (newPw && newPw.length < 6) { showErr('密碼至少 6 字元'); return; }
-        if (newPw && !oldPw) { showErr('改密碼前要先輸入目前密碼驗證身份'); return; }
 
         // 判斷頭像是否變動
         const initialKey = initialAvatar ? `${initialAvatar.icon}:${initialAvatar.color}` : '_letter_';
@@ -772,10 +731,6 @@ window.showAccountSettings = async function() {
                 const updatedUser = await updateAvatar(pendingAvatar);
                 updateUserProfile(updatedUser);
                 changes.push('頭像');
-            }
-            if (newPw) {
-                await updatePassword(newPw, oldPw);
-                changes.push('密碼');
             }
             close();
             showToast(changes.length ? `已更新：${changes.join('、')}` : '沒有變更', 'success');
