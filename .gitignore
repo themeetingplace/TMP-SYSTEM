@@ -44,5 +44,7 @@ __pycache__/
 # storage migration backup (contains id-cards; secret; never commit)
 scripts/storage-backup/
 scripts/sb-secret.txt
+scripts/sb-secret-new.txt
 scripts/sb-pat.txt
+scripts/sb-pat-new.txt
 scripts/db-backup/

@@ -1,8 +1,8 @@
 // Supabase Configuration
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-const supabaseUrl = 'https://zkwkycpfcyecebstmotc.supabase.co';
-const supabaseKey = 'sb_publishable_qsFrMoFYyM5DMcSt9nvNcg_pah5nruy';
+const supabaseUrl = 'https://mkatwwouurwxlruisqwe.supabase.co';
+const supabaseKey = 'sb_publishable__CepJC3ggYmoXBXSx0ETxA_0_RnWJCY';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 

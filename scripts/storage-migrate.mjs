@@ -28,27 +28,30 @@ const BACKUP_ROOT = path.join(__dirname, 'storage-backup');
 
 // 設定來源：優先環境變數；沒有的話讀 scripts/sb-secret.txt (url= / key= 兩行)
 // → 非技術用戶只要把 key 貼進那個檔存檔即可，不用碰終端機環境變數
-function loadConfig() {
+function loadConfig(mode) {
     let url = process.env.SB_URL;
     let key = process.env.SB_SERVICE_KEY;
     if (!url || !key) {
-        const f = path.join(__dirname, 'sb-secret.txt');
+        // restore → 新專案 (sb-secret-new.txt)；backup → 舊專案 (sb-secret.txt)
+        const fname = mode === 'restore' ? 'sb-secret-new.txt' : 'sb-secret.txt';
+        const f = path.join(__dirname, fname);
         if (fs.existsSync(f)) {
             for (const line of fs.readFileSync(f, 'utf8').split(/\r?\n/)) {
                 const m = line.match(/^\s*(url|key)\s*=\s*(.+?)\s*$/i);
                 if (!m) continue;
-                if (m[1].toLowerCase() === 'url') url = url || m[2];
-                else key = key || m[2];
+                const val = m[2].replace(/^<+|>+$/g, '').trim(); // 去掉貼上時誤留的角括號
+                if (m[1].toLowerCase() === 'url') url = url || val;
+                else key = key || val;
             }
         }
     }
     // 濾掉還沒填的佔位字 (含「貼上」「your」等)
-    if (key && /貼上|paste|your_|<.*>/i.test(key)) key = '';
+    if (key && /貼上|paste|your_/i.test(key)) key = '';
     return { url: url ? url.replace(/\/$/, '') : url, key };
 }
 
-const { url: URL_BASE, key: KEY } = loadConfig();
 const MODE = process.argv[2];
+const { url: URL_BASE, key: KEY } = loadConfig(MODE);
 
 if (!URL_BASE || !KEY) {
     console.error('✗ 找不到網址或鑰匙。請打開 scripts/sb-secret.txt，把 key= 後面換成你的 service_role key 再存檔。');

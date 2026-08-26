@@ -390,10 +390,10 @@ window.fixBundleInvoices = async (apply = false) => {
 window.quickTest = async () => {
     console.log('🔍 Quick Supabase connection test...');
     try {
-        const response = await fetch('https://zkwkycpfcyecebstmotc.supabase.co/rest/v1/properties?select=count', {
+        const response = await fetch('https://mkatwwouurwxlruisqwe.supabase.co/rest/v1/properties?select=count', {
             headers: {
-                'apikey': 'sb_publishable_qsFrMoFYyM5DMcSt9nvNcg_pah5nruy',
-                'Authorization': 'Bearer sb_publishable_qsFrMoFYyM5DMcSt9nvNcg_pah5nruy'
+                'apikey': 'sb_publishable__CepJC3ggYmoXBXSx0ETxA_0_RnWJCY',
+                'Authorization': 'Bearer sb_publishable__CepJC3ggYmoXBXSx0ETxA_0_RnWJCY'
             }
         });
         if (response.ok) {
