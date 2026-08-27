@@ -328,20 +328,42 @@ export function showTenantDetails(id) {
             { label: 'LINE 綁定', value: (t.lineUserId
                 ? `<span class="status-badge success"><i class="ph-fill ph-check-circle"></i> 已綁定</span>${t.lineDisplayName ? ` · ${t.lineDisplayName}` : ''}`
                 : '<span style="color: var(--text-muted)">未綁定</span>')
-                + ` <button class="btn btn-outline" style="margin-left: 0.5rem; padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="merge-line" data-id="${t.id}"><i class="ph ph-link"></i> 合併其他 LINE 綁定紀錄</button>` },
+                + ` <button class="btn btn-outline" style="margin-left: 0.5rem; padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="merge-line" data-id="${t.id}"><i class="ph ph-link"></i> 合併其他 LINE 綁定紀錄</button>`
+                + (t.lineUserId ? ` <button class="btn btn-outline" style="margin-left: 0.35rem; padding: 0.25rem 0.55rem; font-size: var(--text-xs); color: var(--color-danger); border-color: var(--color-danger);" data-action="unbind-line" data-id="${t.id}"><i class="ph ph-link-break"></i> 解除綁定</button>` : '') },
             { label: '身分證 (浮水印)', value: idCardHtml },
             { label: '備註', value: t.note
                 ? `<span style="white-space: pre-wrap; color: var(--text-main);">${t.note.replace(/</g, '&lt;')}</span>`
                 : '<span style="color: var(--text-muted)">無</span>' }
         ],
         extraHtml: historyHtml,
-        onMount: (overlay) => {
+        onMount: (overlay, close) => {
             overlay.querySelectorAll('[data-action="view-id-card"]').forEach(btn => {
                 btn.addEventListener('click', () => openIdCard(btn.dataset.path, btn.dataset.side));
             });
             overlay.querySelector('[data-action="merge-line"]')?.addEventListener('click', () => {
                 showLineMergePicker(id);
             });
+            overlay.querySelector('[data-action="unbind-line"]')?.addEventListener('click', () => {
+                confirmUnbindLine(id, close);
+            });
+        }
+    });
+}
+
+// 解除 LINE 綁定 — 只清掉這筆租客的 LINE 欄位, 不刪租客 (綁錯人時手動拆開, 讓對的人重新綁)
+function confirmUnbindLine(tenantId, closeDetail) {
+    const t = mockData.tenants.find(x => x.id === tenantId);
+    if (!t || !t.lineUserId) return;
+    openConfirm({
+        title: '解除 LINE 綁定',
+        message: `確定解除 <strong>${esc(t.name)}</strong> 的 LINE 綁定（${esc(t.lineDisplayName || t.lineUserId)}）？<br>只會拿掉這筆的 LINE，<strong>不會刪除租客</strong>；對方之後可用 LIFF 重新綁到正確的人。`,
+        danger: true,
+        confirmLabel: '解除綁定',
+        onConfirm: () => {
+            store.updateTenant(tenantId, { lineUserId: null, lineDisplayName: null, linePictureUrl: null, lineBoundAt: null });
+            showToast(`已解除 ${t.name} 的 LINE 綁定`, 'success');
+            if (typeof closeDetail === 'function') closeDetail();
+            refreshView();
         }
     });
 }
