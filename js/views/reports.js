@@ -999,6 +999,7 @@ function renderSingleBuildingAnalysis(buildingId) {
     const monthCount = months.length;
 
     const buckets = bucketExpensesOf(invoices);
+    const income = bucketIncomeOf(invoices);
 
     return `
         <div class="bldg-hero">
@@ -1020,6 +1021,28 @@ function renderSingleBuildingAnalysis(buildingId) {
             <div class="report-chart-card">
                 <div class="report-chart-title"><span><i class="ph ph-chart-bar"></i> 月度趨勢 · 近 ${monthCount} 個月</span></div>
                 ${renderTrendChart(months)}
+            </div>
+        </div>
+
+        <!-- 該館收入分項 — 對稱支出分項 (收入在前) -->
+        <div class="report-chart-card">
+            <div class="report-chart-title"><i class="ph ph-list-numbers"></i> ${building.name} 收入分項</div>
+            <div class="expense-bucket-grid">
+                ${INCOME_BUCKETS.map(b => {
+                    const v = income[b.key] || 0;
+                    return `
+                        <div class="expense-bucket-tile ${v === 0 ? 'is-empty' : ''}">
+                            <div class="expense-bucket-label">${b.label}</div>
+                            <div class="expense-bucket-value">${v === 0 ? '—' : moneyAmount(v)}</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            <div class="expense-subtotal-list">
+                <div class="expense-subtotal-row is-total">
+                    <span class="label">收入合計</span>
+                    <span class="value">${moneyAmount(incomeSubtotal(income))}</span>
+                </div>
             </div>
         </div>
 
@@ -1087,6 +1110,23 @@ function bucketExpensesOf(invoices) {
 }
 function bucketSubtotal(b) { return EXPENSE_BUCKETS.reduce((s, x) => s + (b[x.key] || 0), 0); }
 function bucketGrandTotal(b) { return bucketSubtotal(b) + (b.bonus || 0); }
+
+// === 收入分類桶 (對稱支出分項) ===
+// 目前收入類別很單純: 房租 + 其他收入; 非房租一律歸「其他收入」
+const INCOME_BUCKETS = [
+    { key: 'rent',  label: '房租',     matchTypes: ['房租'] },
+    { key: 'other', label: '其他收入', matchTypes: [] }  // 非房租的收入都歸這
+];
+function bucketIncomeOf(invoices) {
+    const b = { rent: 0, other: 0 };
+    invoices.filter(i => i.direction === 'in').forEach(inv => {
+        const amt = actualAmount(inv);
+        if ((inv.type || '') === '房租') b.rent += amt;
+        else b.other += amt;
+    });
+    return b;
+}
+function incomeSubtotal(b) { return INCOME_BUCKETS.reduce((s, x) => s + (b[x.key] || 0), 0); }
 
 // === 群組累金 (R2 — 2026-06-17) ===
 // 公式: 上期累金 + 群組結餘 - 群組紅利發放
