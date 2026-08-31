@@ -502,7 +502,9 @@ function withTimeout(promise, ms, label) {
 async function main() {
     initLangSwitch();
     try {
-        await withTimeout(liff.init({ liffId: LIFF_ID }), 12000, 'LIFF 初始化');
+        // 逾時 30s (不是 12s): OAuth 跳轉回來時 liff.init 要拿授權碼換 token,
+        // Android in-app 瀏覽器這步比 iOS 慢, 12s 常常還沒換完就誤判 timeout。
+        await withTimeout(liff.init({ liffId: LIFF_ID }), 30000, 'LIFF 初始化');
         // 用戶沒手動選過 → 用 LINE 系統語言當預設
         if (!localStorage.getItem('tmp-liff-lang')) {
             const liffLang = (liff.getLanguage() || '').toLowerCase();
@@ -518,7 +520,7 @@ async function main() {
         }
         // ⚠ 進 form 前先確保 token 至少還有 15 分鐘可活 — 不然填完送出時剛好過期
         if (ensureFreshTokenOrRedirect()) return; // silent refresh 會 redirect
-        const profile = await withTimeout(liff.getProfile(), 10000, '取得 LINE 個人資料');
+        const profile = await withTimeout(liff.getProfile(), 20000, '取得 LINE 個人資料');
         renderForm(profile);
     } catch (e) {
         const code = e.code || e.name || '(no code)';
@@ -917,9 +919,11 @@ function renderDone(profile, data) {
 function showError(payload) {
     _currentRender = () => showError(payload);
     const text = typeof payload === 'string' ? payload : t(payload.key, payload.vars);
+    // 重試: 清掉網址上的 OAuth 參數 (?code/&state 等) 再乾淨重載。
+    // 若直接 location.reload() 會重用已失效的授權碼 → 重試也一直失敗 (Android timeout 後的死循環)。
     document.getElementById('root').innerHTML = `
         <div class="msg error" style="margin: 2rem 0; white-space: pre-line;">${text}</div>
-        <button class="submit" onclick="location.reload()">${t('btnRetry')}</button>
+        <button class="submit" onclick="location.href = location.pathname">${t('btnRetry')}</button>
     `;
 }
 
