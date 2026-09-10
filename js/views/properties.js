@@ -576,6 +576,9 @@ export function showCheckinAssignmentForm(opts = {}) {
     // onSubmit 讀取(送出時排除). 兩者是同一個 openFormModal 呼叫的 sibling callback,
     // 要宣告在這個外層作用域才能共用同一份 Set.
     const cancelledRuleLabels = new Set();
+    // 收款頁已完成的應收快照。最後確認與建帳必須沿用這份結果，避免再次用
+    // 館別／規則資料重算時漏掉已顯示的能源費。
+    let paymentCalculationSnapshot = null;
 
     const formModal = openFormModal({
         title: preselectBed
@@ -819,7 +822,12 @@ export function showCheckinAssignmentForm(opts = {}) {
                 const ruleAdjustments = allRuleAdjustments.filter(a => !cancelledRuleLabels.has(a.label));
                 const ruleNet = ruleAdjustments.reduce((s, a) => s + (a.kind === 'add' ? a.amount : -a.amount), 0);
 
-                totalDueInput.value = Math.max(0, (rent + extraBedRentSum) * term - discount + ruleNet);
+                const totalDue = Math.max(0, Math.round((rent + extraBedRentSum) * term - discount + ruleNet));
+                totalDueInput.value = totalDue;
+                paymentCalculationSnapshot = {
+                    totalDue,
+                    autoAdjustments: ruleAdjustments.map(({ kind, label, amount }) => ({ kind, label, amount }))
+                };
 
                 // 顯示規則細項 (有命中才顯示, 讓 admin 知道這筆錢從哪來; 每筆附 X 可取消)
                 // 取消掉的規則也列出來 (劃掉樣式 + 復原按鈕), 不是點了就整個消失讓人忘記有這回事
@@ -1308,16 +1316,35 @@ export function showCheckinAssignmentForm(opts = {}) {
             const paidAmount = values.paidAmount != null && values.paidAmount !== '' ? Number(values.paidAmount) : 0;
             // 最後確認頁必須跟即時預覽、buildContractInvoice 使用同一組自動規則與取消清單。
             // 之前這裡只算人工加減項，未取消的能源費會在確認頁消失，建帳後才出現。
-            const reviewRuleAdjustments = applyRentRules({
+            const fallbackRuleAdjustments = applyRentRules({
                 startDate,
                 termMonths: term,
                 buildingId: bed.buildingId || values.buildingId || null
             }).filter(item => !cancelledRuleLabels.has(item.label));
+            const reviewRuleAdjustments = Array.isArray(paymentCalculationSnapshot?.autoAdjustments)
+                ? paymentCalculationSnapshot.autoAdjustments.map(item => ({ ...item }))
+                : fallbackRuleAdjustments;
             const reviewRuleNet = reviewRuleAdjustments.reduce(
                 (sum, item) => sum + (item.kind === 'add' ? item.amount : -item.amount),
                 0
             );
-            const due = Math.max(0, Math.round((amount + extraBedRentTotal) * term - discount + reviewRuleNet));
+            const recalculatedDue = Math.max(0, Math.round((amount + extraBedRentTotal) * term - discount + reviewRuleNet));
+            const submittedDue = values.totalDue === '' || values.totalDue == null ? NaN : Number(values.totalDue);
+            // totalDue 是收款頁唯一顯示給管理員核對的應收；最後確認頁直接沿用，
+            // 不再讓第二次規則查詢把能源費算掉。
+            const due = Number.isFinite(submittedDue)
+                ? Math.max(0, Math.round(submittedDue))
+                : recalculatedDue;
+            // 防禦性補正：若舊分頁沒有保存規則明細，但 totalDue 已含自動費用，
+            // 補一筆自動調整，讓確認頁 breakdown 與稍後建立的 invoice 仍完全相等。
+            const unexplainedNet = due - recalculatedDue;
+            if (unexplainedNet !== 0) {
+                reviewRuleAdjustments.push({
+                    kind: unexplainedNet > 0 ? 'add' : 'sub',
+                    label: '自動調整（依收款頁）',
+                    amount: Math.abs(unexplainedNet)
+                });
+            }
             // 加減項目 breakdown 顯示：自動規則 + 人工項目，跟即時預覽及帳單一致。
             const reviewAdjustments = [
                 ...reviewRuleAdjustments.map(item => ({ ...item, automatic: true })),
@@ -1434,7 +1461,9 @@ export function showCheckinAssignmentForm(opts = {}) {
                             paymentMethod: values.paymentMethod || '匯款',
                             paidDate: values.paidDate || null,   // 使用者手選的入帳日 (留空 → buildContractInvoice 預設今天)
                             __bundleExtraRents: extraBedRentList,  // ← 自動累加進首張 invoice
-                            excludeRuleLabels: Array.from(cancelledRuleLabels)  // 收款步驟裡被 X 掉的自動加項
+                            excludeRuleLabels: Array.from(cancelledRuleLabels), // 收款步驟裡被 X 掉的自動加項
+                            // 固定使用最後確認頁已核對的自動調整，不在建帳時第三次重算。
+                            autoAdjustments: reviewRuleAdjustments.map(({ kind, label, amount }) => ({ kind, label, amount }))
                         }
                     });
                     // bed.rent 同步合約月租，避免 住房一覽 顯示舊金額

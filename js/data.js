@@ -1012,7 +1012,19 @@ function buildContractInvoice(contract, payment = {}) {
     // payment.excludeRuleLabels: 建立合約時 admin 手動點 X 取消掉的規則 (見 properties.js
     // 收款步驟的即時預覽), 用 label 比對排除, 不讓那幾筆自動加項/折抵真的算進帳單
     const excludeLabels = new Set(Array.isArray(payment.excludeRuleLabels) ? payment.excludeRuleLabels : []);
-    const autoAdjustments = applyRentRules(contract).filter(a => !excludeLabels.has(a.label));
+    // 建約精靈若已經讓管理員核對過應收，使用當時的規則快照，避免建帳時
+    // 因館別資料尚未同步或規則剛更新而算出另一個金額。其他流程仍即時計算。
+    const suppliedAutoAdjustments = Array.isArray(payment.autoAdjustments)
+        ? payment.autoAdjustments
+            .map(a => ({
+                kind: a?.kind === 'sub' ? 'sub' : 'add',
+                label: String(a?.label || '自動調整'),
+                amount: Math.abs(Number(a?.amount) || 0)
+            }))
+            .filter(a => a.amount > 0 && !excludeLabels.has(a.label))
+        : null;
+    const autoAdjustments = suppliedAutoAdjustments
+        ?? applyRentRules(contract).filter(a => !excludeLabels.has(a.label));
     const autoNet = autoAdjustments.reduce((s, a) => s + (a.kind === 'add' ? -a.amount : a.amount), 0);
     // 合併 payment 傳入的 discount + 自動規則
     const userDiscount = Number(payment.discount) || 0;
