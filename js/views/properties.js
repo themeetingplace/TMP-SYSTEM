@@ -1306,13 +1306,29 @@ export function showCheckinAssignmentForm(opts = {}) {
             const extraBedRentTotal = extraBeds.reduce((s, b) => s + (Number(b.rent) || 0), 0);
             // 已收金額留空 → 0 (未收)
             const paidAmount = values.paidAmount != null && values.paidAmount !== '' ? Number(values.paidAmount) : 0;
-            const due = (amount + extraBedRentTotal) * term - discount;
-            // 加減項目 breakdown 顯示
-            const adjustmentLines = adjItems.length
-                ? adjItems.map(x => {
+            // 最後確認頁必須跟即時預覽、buildContractInvoice 使用同一組自動規則與取消清單。
+            // 之前這裡只算人工加減項，未取消的能源費會在確認頁消失，建帳後才出現。
+            const reviewRuleAdjustments = applyRentRules({
+                startDate,
+                termMonths: term,
+                buildingId: bed.buildingId || values.buildingId || null
+            }).filter(item => !cancelledRuleLabels.has(item.label));
+            const reviewRuleNet = reviewRuleAdjustments.reduce(
+                (sum, item) => sum + (item.kind === 'add' ? item.amount : -item.amount),
+                0
+            );
+            const due = Math.max(0, Math.round((amount + extraBedRentTotal) * term - discount + reviewRuleNet));
+            // 加減項目 breakdown 顯示：自動規則 + 人工項目，跟即時預覽及帳單一致。
+            const reviewAdjustments = [
+                ...reviewRuleAdjustments.map(item => ({ ...item, automatic: true })),
+                ...adjItems.map(item => ({ ...item, automatic: false }))
+            ];
+            const adjustmentLines = reviewAdjustments.length
+                ? reviewAdjustments.map(x => {
                     const sign = x.kind === 'add' ? '+' : '-';
                     const color = x.kind === 'add' ? 'var(--color-info)' : 'var(--color-warning)';
-                    return `<div style="font-size: var(--text-xs); color: ${color}; padding-left: 0.5rem;">${sign} ${moneyAmount(x.amount)} ${x.label || '(無說明)'}</div>`;
+                    const source = x.automatic ? '自動' : '手動';
+                    return `<div style="font-size: var(--text-xs); color: ${color}; padding-left: 0.5rem;">${sign} ${moneyAmount(x.amount)} ${x.label || '(無說明)'} <span style="color: var(--text-muted);">(${source})</span></div>`;
                 }).join('')
                 : '';
             const bedSummary = extraBeds.length === 0
@@ -1481,7 +1497,10 @@ export function showCheckinAssignmentForm(opts = {}) {
                                 import('../utils/paymentNoticeMessage.js'),
                                 import('../utils/line.js')
                             ]).then(([{ buildPaymentNoticeMessage }, { pushToTenant }]) => {
-                                const { message } = buildPaymentNoticeMessage(contract, { includeRenewalGreeting: false });
+                                const { message } = buildPaymentNoticeMessage(contract, {
+                                    includeRenewalGreeting: false,
+                                    invoice: rentInv
+                                });
                                 return pushToTenant(tenant.id, { message, invoiceId: rentInv?.id });
                             })
                             .then(() => showToast(`✅ 已發繳費通知給 ${tenant.name}`, 'success', 4000))

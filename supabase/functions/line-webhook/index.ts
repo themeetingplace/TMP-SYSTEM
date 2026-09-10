@@ -780,14 +780,13 @@ Our team will get back to you soon ~`,
                     bank_last5: text,
                     bank_verified: false
                 }).eq('id', inv.id);
-                // ⚠ 應繳金額 = amount − discount (discount 負值代表加項, 如能源費)
-                //   之前直接用 inv.amount 沒扣加項/折扣, 造成金額跟原始繳款通知對不上
-                //   (2026-07-19 事故: 通知顯示 $10000, 這裡回報卻變 $9500, 就是少扣了 $500 加項)
+                // 應繳金額 = amount − discount (discount 負值代表加項, 如能源費)。
+                // 此時只收到末 5 碼，尚未核對實際入帳，不可宣稱「繳款已記錄」。
                 const dueAmount = (Number(inv.amount) || 0) - (Number(inv.discount) || 0);
                 await lineReply(event.replyToken, [
                     {
                         type: 'text',
-                        text: `✅ ${bound.name} 您的繳款已記錄\n\n• 帳單：${inv.type} $${dueAmount.toLocaleString()}\n• 到期日：${inv.due_date || '未定'}\n• 末 5 碼：${text}\n\n小編核對銀行對帳單後會通知您 ✨`,
+                        text: `✅ ${bound.name} 已收到您的銀行帳戶末 5 碼\n\n• 帳單應收：${inv.type} $${dueAmount.toLocaleString()}\n• 到期日：${inv.due_date || '未定'}\n• 末 5 碼：${text}\n• 狀態：待小編核對入帳\n\n完成銀行對帳後會再通知您 ✨`,
                         quickReply: tenantServiceQuickReply()
                     }
                 ]);

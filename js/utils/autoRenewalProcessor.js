@@ -83,7 +83,10 @@ export async function confirmAndProcessRenewals(renewals) {
         const rentInv = mockData.invoices.find(inv =>
             inv.contractId === newC.id && inv.direction === 'in' && inv.type === '房租'
         );
-        const { message } = buildPaymentNoticeMessage(newC, { includeRenewalGreeting: true });
+        const { message } = buildPaymentNoticeMessage(newC, {
+            includeRenewalGreeting: true,
+            invoice: rentInv
+        });
 
         try {
             await pushToTenant(tenant.id, { message, invoiceId: rentInv?.id });

@@ -1260,7 +1260,11 @@ export function showContractDetails(id) {
             overlay.querySelector('[data-action="resend-notice"]')?.addEventListener('click', () => {
                 const t = mockData.tenants.find(x => x.name === c.tenant && x.lineUserId);
                 if (!t?.lineUserId) { showToast('租客未綁 LINE, 無法重發', 'warning'); return; }
-                const { message, dueAmount, dueDate } = buildPaymentNoticeMessage(c, { includeRenewalGreeting: false });
+                const rentInv = mockData.invoices.find(inv => inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租');
+                const { message, dueAmount, dueDate } = buildPaymentNoticeMessage(c, {
+                    includeRenewalGreeting: false,
+                    invoice: rentInv
+                });
                 openConfirm({
                     title: '重發繳款通知？',
                     message: `即將用「合約當下」資料重發 LINE 給 <strong>${c.tenant}</strong>:<br><br>
@@ -1269,7 +1273,6 @@ export function showContractDetails(id) {
                     maxWidth: 640,
                     onConfirm: async () => {
                         try {
-                            const rentInv = mockData.invoices.find(inv => inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租');
                             await pushToTenant(t.id, { message, invoiceId: rentInv?.id });
                             showToast(`✅ 已重發繳款通知給 ${c.tenant}`, 'success', 4000);
                         } catch (e) {
@@ -1678,7 +1681,10 @@ export function confirmRenew(id) {
                 const rentInv = mockData.invoices.find(inv =>
                     inv.contractId === newC.id && inv.direction === 'in' && inv.type === '房租'
                 );
-                const { message } = buildPaymentNoticeMessage(newC, { includeRenewalGreeting: true });
+                const { message } = buildPaymentNoticeMessage(newC, {
+                    includeRenewalGreeting: true,
+                    invoice: rentInv
+                });
                 setTimeout(() => {
                     showToast(`推繳款通知給 ${newC.tenant}…`, 'info', 3000);
                     pushToTenant(t.id, { message, invoiceId: rentInv?.id })

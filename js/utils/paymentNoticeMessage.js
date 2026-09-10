@@ -1,40 +1,18 @@
 // paymentNoticeMessage.js
-// LINE 繳款通知訊息組裝 — 一律用「合約當下」資料, 不吃 invoice 存的舊值
+// LINE 繳款通知訊息組裝
 // 給 autoRenewalProcessor + contracts.js doRenew + 手動「重發繳款通知」共用
 //
-// 為什麼要這個: 若用戶編輯合約日期後, invoice.dueDate/period 可能同步不及
-// (cascade 有 edge case), 造成 LINE 顯示舊值. 一律用 contract 當下值最安全.
+// 已建立帳單的通知：金額與加減項目一律以 invoice 為準。
+// 尚未建立帳單的續約預覽：才依合約套用目前的租金規則。
 
 import { mockData, applyRentRules, leaseEndISO } from '../data.js';
+import { invoiceAdjustments, invoiceDueAmount } from './invoicePaymentSummary.js';
 
-function escapeRegExp(s) {
-    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// 抓合約首張帳單存的加減項目, 過濾掉「跟目前 rentRules 規則同名」的項目
-// (那些交給 applyRentRules 現算, 避免用到帳單建立當下的舊月份標籤 / 舊金額)
-// 剩下的視為手動加項 (例如「多一天」這種一次性費用), 這種東西只存在帳單上,
-// 合約物件本身沒有欄位可以 fresh 算, 一定要從帳單撈
-function getManualAdjustments(contract) {
-    if (!contract?.id) return [];
-    // periodStart 要對到現在這個 contract.startDate — previewRenewalFor 會拿舊合約
-    // 的 id 組一個「假想新期間」的 virtual contract, 那種情況下舊帳單的手動加項
-    // (例如上一期的「多一天」) 不該被誤帶進這一期的預覽
-    const invoice = mockData.invoices
+function findRentInvoice(contract) {
+    if (!contract?.id) return null;
+    return mockData.invoices
         .filter(i => i.contractId === contract.id && i.direction === 'in' && i.type === '房租' && i.periodStart === contract.startDate)
         .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))[0];
-    if (!invoice || !invoice.discountReason) return [];
-    let arr;
-    try { arr = JSON.parse(invoice.discountReason); } catch { return []; }
-    if (!Array.isArray(arr)) return [];
-    const ruleNames = (mockData.rentRules || []).filter(r => r.enabled !== false).map(r => r.name);
-    // 月份可能是單月 "(8月)" 或帳單上被人工合併過的區間 "(8-10月)" / "(8~10月)" —
-    // 兩種都代表「這筆本來就是規則算出來的」, 都要濾掉, 不然會跟 applyRentRules
-    // 現算的月份項目疊加, 變成同一筆能源費多收一次 (2026-07-30 抓到 C202 多收 $1500).
-    return arr.filter(a => {
-        const label = String(a?.label || '');
-        return !ruleNames.some(name => new RegExp(`^${escapeRegExp(name)} \\(\\d{1,2}(?:[-~～]\\d{1,2})?月\\)$`).test(label));
-    });
 }
 
 // 把同一條 rentRules 規則、跨連續月份的多筆加總合併成一行給訊息顯示用
@@ -80,14 +58,15 @@ function mergeMonthlyLabelsForDisplay(items) {
 export function buildPaymentNoticeMessage(contract, opts = {}) {
     if (!contract) return { message: '', dueAmount: 0, dueDate: null };
 
-    const { includeRenewalGreeting = false } = opts;
+    const { includeRenewalGreeting = false, invoice: suppliedInvoice } = opts;
+    const invoice = suppliedInvoice || findRentInvoice(contract) || null;
 
-    // === 一律用合約當下的資料 ===
-    const dueDate = contract.startDate;
+    // 日期與房間資訊用合約；既有帳單的到期日與金額則以帳單快照為準。
+    const dueDate = invoice?.dueDate || contract.startDate;
     const period = `${contract.startDate || '—'} ~ ${contract.endDate || '—'}`;
     const propertyShort = String(contract.propertyName || '').replace('聚空間 - ', '');
 
-    // === 金額 fresh 算 (含 rentRules adjustments) ===
+    // === 應收金額 ===
     const term = contract.termMonths || 1;
     // bundle 主合約: 併入子合約 rent
     const childRents = mockData.contracts
@@ -96,12 +75,13 @@ export function buildPaymentNoticeMessage(contract, opts = {}) {
     const monthlyRent = (Number(contract.amount) || 0) + childRents;  // 月租金 (bundle 併子床)
     const baseRent = monthlyRent * term;                              // 全期租金 = 月租 × 期數
 
-    // Apply rent rules (fresh 算, 標籤月份永遠正確) + 帳單上的手動加項 (fresh 算不出來的部分)
-    const adjustments = [...applyRentRules(contract), ...getManualAdjustments(contract)];
+    // 已建立帳單：直接使用帳單保存的有效細項（包含建立時真正套用的自動/手動項目）。
+    // 預覽：沒有帳單時才依目前規則計算。
+    const adjustments = invoice ? invoiceAdjustments(invoice) : applyRentRules(contract);
     const adjNet = adjustments.reduce((s, a) => s + (a.kind === 'add' ? a.amount : -a.amount), 0);
-    // discount = 負(=加收) or 正(=折扣); 應收 = base - discount
-    // (跟 buildContractInvoice 同語意, 但這裡直接算應繳)
-    const dueAmount = Math.max(0, Math.round(baseRent + adjNet));
+    const dueAmount = invoice
+        ? invoiceDueAmount(invoice)
+        : Math.max(0, Math.round(baseRent + adjNet));
 
     const adjLines = mergeMonthlyLabelsForDisplay(adjustments)
         .map(a => `　　${a.kind === 'sub' ? '折抵' : '加項'}: ${a.label} $${Math.abs(a.amount).toLocaleString()}`)
