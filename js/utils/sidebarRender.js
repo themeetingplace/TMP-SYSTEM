@@ -51,6 +51,10 @@ function buildManagedNavHtml() {
                 <i class="ph ph-wallet"></i>
                 <span class="nav-label">帳務管理</span>
             </a>
+            <a href="#expenses" class="nav-item" data-view="expenses" data-label="館務報帳">
+                <i class="ph ph-receipt"></i>
+                <span class="nav-label">館務報帳</span>
+            </a>
             <a href="#maintenance" class="nav-item" data-view="maintenance" data-label="維修管理">
                 <i class="ph ph-wrench"></i>
                 <span class="nav-label">維修管理</span>

@@ -33,6 +33,7 @@ const HELPER_VIEW_CHOICES = [
     { key: 'occupancy',   label: '住房一覽 / 物件' },
     { key: 'contracts',   label: '合約管理' },
     { key: 'unsettled',   label: '房租查帳' },
+    { key: 'expenses',    label: '館務報帳' },
     { key: 'maintenance', label: '維修管理' },
     { key: 'tenants',     label: '租客清單' }
 ];
@@ -66,7 +67,7 @@ function roleBadge(role) {
         return `<span class="status-badge primary" title="可管理其他帳號"><i class="ph-fill ph-crown" aria-hidden="true"></i> Owner</span>`;
     }
     if (role === 'helper') {
-        return `<span class="status-badge info" title="小幫手 — 只能檢視部分資料，不可編輯"><i class="ph-fill ph-hand-heart" aria-hidden="true"></i> 小幫手</span>`;
+        return `<span class="status-badge info" title="小幫手 — 可檢視被授權資料，並送出館務報帳"><i class="ph-fill ph-hand-heart" aria-hidden="true"></i> 小幫手</span>`;
     }
     if (role === 'viewer') {
         return `<span class="status-badge muted"><i class="ph-fill ph-eye" aria-hidden="true"></i> Viewer</span>`;
@@ -132,7 +133,7 @@ export function renderAdminUsers() {
                 <div style="margin-top: 0.4rem; line-height: 1.8; display: grid; gap: 0.25rem;">
                     <div><i class="ph-fill ph-crown" aria-hidden="true" style="color: var(--color-primary);"></i> <strong>Owner</strong> — 最高權限，可管理其他帳號</div>
                     <div><i class="ph-fill ph-wrench" aria-hidden="true" style="color: var(--text-secondary);"></i> <strong>Admin</strong> — 完整操作權限</div>
-                    <div><i class="ph-fill ph-hand-heart" aria-hidden="true" style="color: var(--color-info, #0ea5e9);"></i> <strong>小幫手 Helper</strong> — 只能檢視部分資料</div>
+                    <div><i class="ph-fill ph-hand-heart" aria-hidden="true" style="color: var(--color-info, #0ea5e9);"></i> <strong>小幫手 Helper</strong> — 可檢視授權資料，並送出館務報帳</div>
                     <div><i class="ph-fill ph-eye" aria-hidden="true" style="color: var(--text-muted);"></i> <strong>Viewer</strong> — 預留給未來「全頁只能看」的角色（目前等同 Admin）</div>
                 </div>
             </div>

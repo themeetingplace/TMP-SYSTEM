@@ -10,6 +10,7 @@ import { promptRenewalAuditIfNeeded, promptBundleAuditIfNeeded } from './utils/r
 import { renderContracts, initContractActions } from './views/contracts.js';
 import { renderFinance, initFinanceActions } from './views/finance.js';
 import { renderUnsettled, initUnsettledActions } from './views/unsettled.js';
+import { renderExpenses, initExpensesActions } from './views/expenses.js';
 import { renderReports, initReportsActions } from './views/reports.js';
 import { reportState } from './views/report-state.js';
 import { renderMaintenance, initMaintenanceActions } from './views/maintenance.js';
@@ -38,7 +39,7 @@ const navItems = document.querySelectorAll('.nav-item');
 
 // 角色說明：
 //   owner / admin / viewer = 看得到全部分頁 (差別在能不能管帳號 / 寫入)
-//   helper = 小幫手 → 只能看 物件管理 / 住房一覽 / 租客清單，且寫入按鈕全隱藏
+//   helper = 小幫手 → 依帳號白名單看指定頁面；館務報帳可送審，其餘頁面維持唯讀
 //   helper 預設首頁 = 住房一覽 (#occupancy)，不給看 dashboard
 // helper 能看的 view (sidebar 已把 #finance 換成 #unsettled, 全員生效)
 // 各頁內部的「新增/編輯/刪除」按鈕用 CSS hide (body[data-role="helper"])
@@ -50,12 +51,13 @@ const HELPER_PAGE_ROUTES = {
     occupancy:   ['occupancy', 'properties'],
     contracts:   ['contracts'],
     unsettled:   ['unsettled'],
+    expenses:    ['expenses'],
     maintenance: ['maintenance'],
     tenants:     ['tenants']
 };
 const DEFAULT_HELPER_VIEWS = Object.keys(HELPER_PAGE_ROUTES);  // 空 allowed_views = 全部 (向下相容)
 // 下面兩個在 boot 時依該 helper 的 allowed_views 重算 (applyHelperViews)
-let HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'contracts', 'unsettled', 'maintenance', 'tenants']);
+let HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'contracts', 'unsettled', 'expenses', 'maintenance', 'tenants']);
 let HELPER_DEFAULT_HASH = 'occupancy';
 // 依 view keys 算出可進入的 route 集合 + 落地頁
 function applyHelperViews(views) {
@@ -64,7 +66,7 @@ function applyHelperViews(views) {
     eff.forEach(v => (HELPER_PAGE_ROUTES[v] || []).forEach(r => routes.add(r)));
     HELPER_ALLOWED = routes;
     // 落地頁: 優先住房一覽, 其次租客/查帳/維修/合約/首頁 — 取第一個可進入的
-    const landingOrder = ['occupancy', 'tenants', 'unsettled', 'maintenance', 'contracts', 'dashboard'];
+    const landingOrder = ['occupancy', 'expenses', 'tenants', 'unsettled', 'maintenance', 'contracts', 'dashboard'];
     HELPER_DEFAULT_HASH = landingOrder.find(r => routes.has(r)) || 'occupancy';
     window.__helperViews = eff;
 }
@@ -75,6 +77,7 @@ const routes = {
     contracts:     { title: '合約管理',     group: '營運', render: renderContracts,  init: initContractActions },
     finance:       { title: '總收支表',     group: '帳務', render: renderFinance,    init: initFinanceActions },
     unsettled:     { title: '房租查帳',     group: '帳務', render: renderUnsettled,  init: initUnsettledActions },
+    expenses:      { title: '館務報帳',     group: '帳務', render: renderExpenses,   init: initExpensesActions },
     reports:       { title: '報表',         group: '分析', render: renderReports,    init: initReportsActions },
     maintenance:   { title: '維修管理',     group: '營運', render: renderMaintenance,init: initMaintenanceActions },
     tenants:       { title: '租客清單',     group: '營運', render: renderTenants,    init: initTenantActions },
@@ -115,7 +118,7 @@ function handleRoute() {
     }
     // helper-only route guard：小幫手只能看白名單裡的頁面
     if (window.__currentRole === 'helper' && !HELPER_ALLOWED.has(hash)) {
-        showToast('小幫手只能檢視 物件管理 / 住房一覽 / 租客清單', 'warning', 4000);
+        showToast('這個帳號沒有該頁面的存取權限', 'warning', 4000);
         window.location.hash = HELPER_DEFAULT_HASH;
         return;
     }
@@ -167,7 +170,7 @@ function handleRoute() {
     //   settings: 有 sub-tab 自管表格
     //   occupancy: 矩陣表，不分頁；橫向滾動處理寬度
     //   hub: 自己管 (每個 tab 切換時呼叫 initTableInteractions)
-    if (baseHash !== 'dashboard' && baseHash !== 'settings' && baseHash !== 'occupancy' && baseHash !== 'm-house' && !route.isHub) {
+    if (baseHash !== 'dashboard' && baseHash !== 'settings' && baseHash !== 'occupancy' && baseHash !== 'expenses' && baseHash !== 'm-house' && !route.isHub) {
         initTableInteractions({ scope: viewElement, rowsPerPage: 10 });
     }
 
@@ -205,6 +208,7 @@ function updateMobileFab(viewElement) {
     const label = primary.textContent.replace(/\s+/g, ' ').trim() || '新增';
     const fab = document.createElement('button');
     fab.className = 'mobile-fab';
+    if (primary.classList.contains('helper-authorized-write')) fab.classList.add('helper-authorized-write');
     fab.type = 'button';
     fab.setAttribute('aria-label', label);
     fab.title = label;
