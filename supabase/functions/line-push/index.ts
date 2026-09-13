@@ -98,7 +98,7 @@ serve(async (req) => {
             // 改用 text message 帶連結
             messages.push({
                 type: 'text',
-                text: `📄 ${fileName || '檔案'}\n下載連結：${fileUrl}\n(連結 7 天內有效)`
+                text: `📄 ${fileName || '檔案'}\n下載連結：${fileUrl}\n(連結 24 小時內有效)`
             });
         }
         if (messages.length === 0) throw new Error('message 或 fileUrl 至少要有一個');

@@ -23,6 +23,18 @@ const FUNCTIONS = [
     { slug: 'renewal-poll', verify_jwt: true },
 ];
 
+// 可只部署指定 function，例如：node scripts/deploy-functions-new.mjs line-push
+// 未指定時維持原行為，部署全部 function。
+const requestedSlugs = process.argv.slice(2);
+const unknownSlugs = requestedSlugs.filter(slug => !FUNCTIONS.some(fn => fn.slug === slug));
+if (unknownSlugs.length) {
+    console.error(`✗ 不認得的 Edge Function：${unknownSlugs.join(', ')}`);
+    process.exit(1);
+}
+const functionsToDeploy = requestedSlugs.length
+    ? FUNCTIONS.filter(fn => requestedSlugs.includes(fn.slug))
+    : FUNCTIONS;
+
 function readKV(file, keys) {
     const out = {};
     if (!fs.existsSync(file)) return out;
@@ -76,7 +88,7 @@ async function deployOne({ slug, verify_jwt }) {
 (async () => {
     console.log(`▶ 部署 Edge Functions 到 ref=${REF}\n`);
     let ok = 0;
-    for (const fn of FUNCTIONS) {
+    for (const fn of functionsToDeploy) {
         try {
             await deployOne(fn);
             ok++;
@@ -85,8 +97,8 @@ async function deployOne({ slug, verify_jwt }) {
             console.error(`  ✗ ${fn.slug}: ${e.message}`);
         }
     }
-    console.log(`\n${ok}/${FUNCTIONS.length} 部署完成`);
-    if (ok === FUNCTIONS.length) {
+    console.log(`\n${ok}/${functionsToDeploy.length} 部署完成`);
+    if (ok === functionsToDeploy.length && functionsToDeploy.length === FUNCTIONS.length) {
         console.log('\n下一步: 到新專案後台設 Edge Function secrets (LINE_* 那幾個), 見 Claude 說明。');
     }
 })().catch(e => { console.error('\n✗ 失敗：', e.message); process.exit(1); });

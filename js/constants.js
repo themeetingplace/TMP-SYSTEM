@@ -39,7 +39,7 @@ export const SYNC_TIMINGS = {
 };
 
 // === 連結 / 檔案 ===
-export const SIGNED_URL_TTL_SECONDS = 7 * 24 * 3600;  // 7 天 (Supabase Storage signed URL)
+export const SIGNED_URL_TTL_SECONDS = 24 * 3600;  // 24 小時 (Supabase Storage signed URL)
 
 // === 群組累金 baselines (2026/05 月底) ===
 // 用戶 2026-06-17 確認: 純歷史資料寫死，未來每月用「上期 + 結餘 - 紅利」自動往後算

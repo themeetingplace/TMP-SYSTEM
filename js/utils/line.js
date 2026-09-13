@@ -1,6 +1,7 @@
 // LINE 推送工具 — 呼叫 Supabase Edge Function 'line-push'
 import { supabase } from '../supabase.js';
 import { mockData } from '../data.js';
+import { SIGNED_URL_TTL_SECONDS } from '../constants.js';
 
 // 推訊息給租客 (tenant 必須已綁定 LINE)
 // opts.message: 文字訊息
@@ -64,7 +65,7 @@ export async function uploadSignedFileToStorage(bytes, ext, contentType, contrac
 // 簽過名連結 (預設 24 小時有效) — bucket 是 private，這是唯一存取方式
 // P2-3: 從 7 天縮短到 24h，降低 URL 被截圖外流的暴露時間
 // (合約 PDF 用戶當下會看；要再看用 BMS「重發 URL」按鈕重新產)
-export async function createSignedPdfUrl(path, expiresInSec = 24 * 3600) {
+export async function createSignedPdfUrl(path, expiresInSec = SIGNED_URL_TTL_SECONDS) {
     const { data, error } = await supabase.storage
         .from('contract-pdfs')
         .createSignedUrl(path, expiresInSec);
