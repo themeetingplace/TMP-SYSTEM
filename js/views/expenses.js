@@ -278,7 +278,7 @@ function openClaimForm(prefill = {}) {
                 <label class="expense-upload" for="expense-receipt-input">
                     <input id="expense-receipt-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden>
                     <span class="expense-upload-icon"><i class="ph ph-camera-plus"></i></span>
-                    <span><strong>上傳發票／收據</strong><small>可直接拍照，支援 JPG、PNG、WebP、PDF，上限 10 MB</small></span>
+                    <span><strong>上傳發票／收據</strong><small>可直接拍照，支援 JPG、PNG、WebP、PDF，上限 10 MB。發票要記得收好喔！</small></span>
                     <span class="expense-upload-state">選擇檔案</span>
                 </label>`;
             const input = ph.querySelector('input');
