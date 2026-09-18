@@ -18,4 +18,3 @@ assert.equal(isHistoricalBundleMatch(main, {
 assert.equal(isHistoricalBundleMatch(null, main, '林大鈞'), false);
 
 console.log('bundle audit regression checks passed');
-

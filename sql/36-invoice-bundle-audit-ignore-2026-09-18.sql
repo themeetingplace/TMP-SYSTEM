@@ -9,4 +9,3 @@ alter table public.invoices
 
 comment on column public.invoices.bundle_audit_ignored is
   '管理員確認此 invoice 不參與 bundle 重複帳單自動校正；true 時開機 audit 不再提示';
-

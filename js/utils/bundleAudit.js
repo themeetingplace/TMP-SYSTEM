@@ -6,4 +6,3 @@ export function isHistoricalBundleMatch(mainContract, candidateContract, tenantN
         && candidateContract.startDate === mainContract.startDate
         && candidateContract.endDate === mainContract.endDate;
 }
-
