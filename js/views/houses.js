@@ -4,6 +4,7 @@ import { mockData, store, getSortedBuildings, bedOccupied } from '../data.js';
 import { openFormModal, showToast, refreshView, initFlatpickr, initCustomSelects } from '../utils/ui.js';
 import { escapeHtml as esc } from '../utils/escape.js';
 import { getMode } from '../utils/appMode.js';
+import { currentModeBuildingIdSet } from '../utils/modeFilter.js';
 import { showBuildingRoomsModal } from './settings.js';
 
 // 每 section 獨立編輯 (跟代管 managed-house 同款 inline 編輯流程)
@@ -230,9 +231,10 @@ function renderBuildingDetail(building) {
 }
 
 export function renderHouses() {
-    // 跟 mode 切開：共居 hub 只顯示共居房屋，代管走 #m-house/* route
+    // 跟 mode 切開，並套用小幫手被授權的館別；代管走 #m-house/* route。
     const mode = getMode();
-    const buildings = getSortedBuildings().filter(b => (b.mode || 'cohousing') === (mode === 'managed' ? 'managed' : 'cohousing'));
+    const allowedBuildingIds = currentModeBuildingIdSet(mode);
+    const buildings = getSortedBuildings().filter(b => allowedBuildingIds.has(b.id));
 
     if (buildings.length === 0) {
         return `

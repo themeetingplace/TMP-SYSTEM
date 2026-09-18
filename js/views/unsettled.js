@@ -169,7 +169,7 @@ export function renderUnsettled() {
                             ? rowAction({ action: 'verify', id: inv.id, icon: 'ph-shield-check', title: '核對銀行末 5 碼後結帳', label: '核對結帳', variant: 'success', className: 'unsettled-action' })
                             : rowAction({ action: 'settle', id: inv.id, icon: 'ph-check', title: `標記為${inv.direction === 'in' ? '已收' : '已付'}`, label: '結帳', variant: 'success', className: 'unsettled-action' })
                         )
-                        + rowAction({ action: 'remind', id: inv.id, icon: 'ph-bell', title: inv.direction === 'in' ? '催繳' : '記錄通知', label: inv.direction === 'in' ? '催繳' : '記錄通知', className: 'unsettled-action' })
+                        + rowAction({ action: 'remind', id: inv.id, icon: 'ph-bell', title: inv.direction === 'in' ? '預覽催繳訊息' : '記錄通知', label: inv.direction === 'in' ? '催繳' : '記錄通知', className: 'unsettled-action' })
                         + rowAction({ action: 'edit', id: inv.id, icon: 'ph-pencil', title: '編輯', label: '編輯', className: 'unsettled-action' })
                         + rowAction({ action: 'delete', id: inv.id, icon: 'ph-trash', title: '刪除', label: '刪除', variant: 'danger', className: 'unsettled-action' })
                     )}
@@ -202,7 +202,7 @@ export function renderUnsettled() {
                         </div>
                         <div class="c-actions">
                             ${primaryBtn}
-                            <button class="btn-icon unsettled-action" data-action="remind" data-id="${inv.id}" title="${inv.direction === 'in' ? '催繳' : '記錄通知'}"><i class="ph ph-bell"></i></button>
+                            <button class="btn-icon unsettled-action" data-action="remind" data-id="${inv.id}" title="${inv.direction === 'in' ? '預覽催繳訊息' : '記錄通知'}"><i class="ph ph-bell"></i></button>
                             <button class="btn-icon unsettled-action" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
                             <button class="btn-icon unsettled-action danger" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
                         </div>
@@ -988,19 +988,13 @@ async function remindUnsettled(id) {
         return;
     }
 
-    // 7 天 cooldown — 同一筆 invoice 7 天內已催過 → 跳 confirm 才能再催
+    // 7 天 cooldown — 顯示在稍後的訊息預覽裡，仍由使用者最後確認是否推播。
     const COOLDOWN_DAYS = 7;
     const lastReminderAt = inv.lastReminderAt ? new Date(inv.lastReminderAt) : null;
     const now = new Date();
-    if (lastReminderAt) {
-        const daysSince = Math.floor((now - lastReminderAt) / (86400 * 1000));
-        if (daysSince < COOLDOWN_DAYS) {
-            const ok = window.confirm(
-                `這筆帳款 ${daysSince} 天前剛催過 (${inv.lastReminderAt.slice(0,10)}), 真的要再催一次嗎?\n\n建議至少間隔 ${COOLDOWN_DAYS} 天避免打擾。`
-            );
-            if (!ok) return;
-        }
-    }
+    const daysSince = lastReminderAt && !Number.isNaN(lastReminderAt.getTime())
+        ? Math.max(0, Math.floor((now - lastReminderAt) / (86400 * 1000)))
+        : null;
 
     // 組訊息 (用戶最終確認版)
     const due = (Number(inv.amount) || 0) - (Number(inv.discount) || 0);
@@ -1026,21 +1020,61 @@ ${locationLine}
 
 如有疑問請傳「找小編」 🙂`;
 
-    showToast(`催繳 ${tenant.name}…`, 'info');
-    try {
-        await pushToTenant(tenant.id, {
-            message,
-            messageType: 'reminder',
-            invoiceId: inv.id
-        });
-        // 記錄 lastReminderAt 到 invoice 上
-        store.updateInvoice(inv.id, { lastReminderAt: now.toISOString() });
-        showToast(`✅ 已催繳 ${tenant.name} ($${remaining.toLocaleString()})`, 'success', 4000);
-        refreshView();
-    } catch (e) {
-        console.error('[remind]', e);
-        showToast(`催繳失敗: ${e.message}`, 'danger', 5000);
-    }
+    const cooldownWarning = daysSince !== null && daysSince < COOLDOWN_DAYS
+        ? `<div style="margin-bottom: 0.85rem; padding: 0.7rem 0.8rem; border: 1px solid color-mix(in srgb, var(--color-warning) 35%, var(--border-color)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface)); color: var(--text-main);">
+               <strong style="color: var(--color-warning);"><i class="ph ph-warning"></i> ${daysSince === 0 ? '今天已催繳過' : `${daysSince} 天前已催繳過`}</strong><br>
+               <small style="color: var(--text-secondary);">上次：${escapeHtml(inv.lastReminderAt.slice(0, 10))}，建議至少間隔 ${COOLDOWN_DAYS} 天避免打擾。</small>
+           </div>`
+        : '';
+    let isSending = false;
+    let confirmButton = null;
+
+    openConfirm({
+        title: '確認催繳訊息',
+        maxWidth: 640,
+        confirmLabel: '確認推播',
+        message: `
+            <div style="margin-bottom: 0.75rem; color: var(--text-secondary); font-size: var(--text-sm);">
+                即將透過 LINE 推播給 <strong style="color: var(--text-main);">${escapeHtml(tenant.name)}</strong>，請先確認以下文字：
+            </div>
+            ${cooldownWarning}
+            <div style="padding: 0.85rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-main); font-size: var(--text-sm); line-height: 1.65; white-space: pre-wrap; max-height: 360px; overflow-y: auto;">${escapeHtml(message)}</div>
+            <div style="margin-top: 0.75rem; color: var(--text-muted); font-size: var(--text-xs);"><i class="ph ph-info"></i> 尚未發送；按下「確認推播」後才會傳給租客。</div>`,
+        onMount: overlay => {
+            confirmButton = overlay.querySelector('[data-action="confirm"]');
+        },
+        onConfirm: async () => {
+            if (isSending) return false;
+            isSending = true;
+            const originalLabel = confirmButton?.innerHTML;
+            if (confirmButton) {
+                confirmButton.disabled = true;
+                confirmButton.innerHTML = '<i class="ph ph-circle-notch" style="animation: spin 0.8s linear infinite;"></i> 推播中…';
+            }
+            showToast(`催繳 ${tenant.name}…`, 'info');
+            try {
+                await pushToTenant(tenant.id, {
+                    message,
+                    messageType: 'reminder',
+                    invoiceId: inv.id
+                });
+                // 只有推播成功才記錄 lastReminderAt。
+                store.updateInvoice(inv.id, { lastReminderAt: new Date().toISOString() });
+                showToast(`✅ 已催繳 ${tenant.name} ($${remaining.toLocaleString()})`, 'success', 4000);
+                refreshView();
+                return true;
+            } catch (e) {
+                console.error('[remind]', e);
+                showToast(`催繳失敗: ${e.message}`, 'danger', 5000);
+                isSending = false;
+                if (confirmButton) {
+                    confirmButton.disabled = false;
+                    confirmButton.innerHTML = originalLabel;
+                }
+                return false;
+            }
+        }
+    });
 }
 
 export function initUnsettledActions(scope) {

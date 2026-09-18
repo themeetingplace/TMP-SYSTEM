@@ -9,6 +9,7 @@
 import { mockData, formatRoomType, getSortedBuildings, isSettled, needsDecision } from '../data.js';
 import { showTenantNoteEditor, showTenantDetails } from './tenants.js';
 import { getMode } from '../utils/appMode.js';
+import { currentModeBuildingIdSet } from '../utils/modeFilter.js';
 import { showPropertyDetails, showCheckinAssignmentForm } from './properties.js';
 import { showContractDetails, confirmTerminate, confirmRenew, confirmSnooze } from './contracts.js';
 import { emptyState } from '../utils/emptyState.js';
@@ -440,7 +441,9 @@ function renderBuildingTable(building, months, today) {
 // === M-R-3：手機垂直導航三層 render ===
 
 function renderMobileBuildingsList() {
-    const buildings = getSortedBuildings({ activeOnly: true });
+    const allowedBuildingIds = currentModeBuildingIdSet(getMode());
+    const buildings = getSortedBuildings({ activeOnly: true })
+        .filter(b => allowedBuildingIds.has(b.id));
     const today = new Date().toISOString().slice(0, 10);
     if (!buildings.length) {
         return emptyState({ mode: 'block', icon: 'ph-buildings', title: '尚無館別資料', hint: '請先到房源管理新增館別' });
@@ -478,7 +481,8 @@ function renderMobileBuildingsList() {
 }
 
 function renderMobileRoomsList(buildingId) {
-    const building = mockData.buildings.find(b => b.id === buildingId);
+    const allowedBuildingIds = currentModeBuildingIdSet(getMode());
+    const building = mockData.buildings.find(b => b.id === buildingId && allowedBuildingIds.has(b.id));
     if (!building) return emptyState({ mode: 'block', icon: 'ph-buildings', title: '館別不存在', hint: '請返回上一層重新選擇' });
     const beds = mockData.properties.filter(p => p.buildingId === buildingId);
     const roomMap = new Map();
@@ -524,7 +528,8 @@ function renderMobileRoomsList(buildingId) {
 }
 
 function renderMobileBedsList(buildingId, roomNumber) {
-    const building = mockData.buildings.find(b => b.id === buildingId);
+    const allowedBuildingIds = currentModeBuildingIdSet(getMode());
+    const building = mockData.buildings.find(b => b.id === buildingId && allowedBuildingIds.has(b.id));
     if (!building) return emptyState({ mode: 'block', icon: 'ph-buildings', title: '館別不存在', hint: '請返回上一層重新選擇' });
     const beds = mockData.properties
         .filter(p => p.buildingId === buildingId && p.roomNumber === Number(roomNumber))
@@ -602,10 +607,11 @@ export function renderOccupancy() {
     const today = new Date();
     const monthCount = calculateMonthCount();
     const months = buildMonths(today, monthCount);
-    // 跟 mode 切開：共居 mode 只列共居館，代管同理
+    // 跟 mode 切開，並套用小幫手可查看館別的交集。
     const mode = getMode();
+    const allowedBuildingIds = currentModeBuildingIdSet(mode);
     const buildings = getSortedBuildings({ activeOnly: true })
-        .filter(b => (b.mode || 'cohousing') === (mode === 'managed' ? 'managed' : 'cohousing'));
+        .filter(b => allowedBuildingIds.has(b.id));
 
     if (!currentBuildingId || !buildings.find(b => b.id === currentBuildingId)) {
         currentBuildingId = buildings[0]?.id;
