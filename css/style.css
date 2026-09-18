@@ -3963,6 +3963,19 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 .expense-intro-mark i { font-size: 2rem; }
 .expense-intro-mark span { font: 700 0.64rem/1 'Outfit', sans-serif; letter-spacing: 0.2em; }
 
+.expense-quick-section {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.expense-quick-title {
+    margin: 0 0.15rem;
+    color: var(--text-main);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
 .expense-quick-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));

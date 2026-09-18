@@ -173,8 +173,11 @@ function contentHtml() {
             <div class="expense-intro-mark" aria-hidden="true"><i class="ph ph-receipt"></i><span>CLAIM</span></div>
         </section>
 
-        <section class="expense-quick-grid" aria-label="快速建立報帳">
-            ${quickActionHtml()}
+        <section class="expense-quick-section" aria-labelledby="expense-quick-title">
+            <h3 class="expense-quick-title" id="expense-quick-title">快速新增記帳</h3>
+            <div class="expense-quick-grid">
+                ${quickActionHtml()}
+            </div>
         </section>
 
         <section class="expense-metrics">
