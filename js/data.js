@@ -1,6 +1,7 @@
 // Data Service - Switch between mock data and Supabase
 import { supabase } from './supabase.js';
 import { RENEWAL_THRESHOLDS } from './constants.js';
+import { isHistoricalBundleMatch } from './utils/bundleAudit.js';
 
 // Mock Data simulating Supabase responses (fallback)
 export const mockData = {
@@ -442,6 +443,7 @@ export function runMigration() {
         if (!('bankLast5' in inv)) inv.bankLast5 = null;
         if (!('bankVerified' in inv)) inv.bankVerified = false;
         if (!('contractId' in inv)) inv.contractId = null;
+        if (!('bundleAuditIgnored' in inv)) inv.bundleAuditIgnored = false;
         // 階段 2.1：補上舊房租帳單的 contractId（用 tenant + propertyName 找對應 active 合約）
         if (inv.direction === 'in' && inv.type === '房租' && !inv.contractId && inv.tenant && inv.propertyName) {
             const matchedContract = mockData.contracts.find(c =>
@@ -2240,12 +2242,14 @@ export const store = {
     auditBundleInvoices({ apply = false } = {}) {
         const affected = [];
         const skipped = [];
+        const ignored = [];
         const bundleMains = mockData.invoices.filter(inv =>
             inv.direction === 'in'
             && inv.type === '房租'
             && /含額外\s*(\d+)\s*張床位/.test(inv.note || '')
         );
         bundleMains.forEach(main => {
+            const mainContract = mockData.contracts.find(c => c.id === main.contractId);
             const dupes = mockData.invoices.filter(inv =>
                 inv.id !== main.id
                 && inv.direction === 'in'
@@ -2256,11 +2260,23 @@ export const store = {
                 && inv.propertyName !== main.propertyName
             );
             dupes.forEach(dup => {
+                // 管理員已明確選擇「這筆不處理」：保留帳單，且之後不再提示。
+                if (dup.bundleAuditIgnored === true) {
+                    ignored.push({
+                        dupInvoiceId: dup.id,
+                        tenant: dup.tenant,
+                        propertyName: dup.propertyName
+                    });
+                    return;
+                }
                 // 安全檢查：dup 的合約是 bundleParent=main.contractId 或 amount 跟主合約裡某個 extra 對得起來
                 const dupContract = mockData.contracts.find(c => c.id === dup.contractId);
                 const isLinkedBundle = dupContract?.bundleParentContractId === main.contractId;
-                // 沒 link 但 amount 規律對得起來 — 也算 (歷史 bug 產生的舊資料)
-                if (isLinkedBundle || (dupContract && dupContract.tenant === main.tenant && dupContract.startDate === dupContract.startDate)) {
+                // 沒 link 的歷史資料：只有同租客、同起訖期間才視為同一 bundle。
+                // 原本誤寫成 dupContract.startDate === dupContract.startDate（永遠 true），
+                // 會把同館同日但其實獨立的帳單誤判成重複。
+                const matchesHistoricalBundle = isHistoricalBundleMatch(mainContract, dupContract, main.tenant);
+                if (isLinkedBundle || matchesHistoricalBundle) {
                     affected.push({
                         mainInvoiceId: main.id,
                         mainAmount: main.amount,
@@ -2282,7 +2298,7 @@ export const store = {
             });
         });
 
-        if (!apply) return { affected, skipped, applied: false };
+        if (!apply) return { affected, skipped, ignored, applied: false };
 
         // apply: 刪除重複 invoice + 給對應合約補上 bundleParentContractId
         const deletedIds = [];
@@ -2302,7 +2318,7 @@ export const store = {
         persist();
         recalcMetrics();
         window.dispatchEvent(new CustomEvent('bms:audit-applied', { detail: { type: 'bundle-invoices', count: deletedIds.length } }));
-        return { affected, skipped, applied: true, deletedIds };
+        return { affected, skipped, ignored, applied: true, deletedIds };
     },
 
     // 退租：終止合約 + 床位釋放 + 租客標記

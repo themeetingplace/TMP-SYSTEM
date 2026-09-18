@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.5.2';
+export const APP_VERSION = '1.5.3';
 export const APP_BUILD_DATE = '2026-09-18';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.5.3', date: '2026-09-18', notes: '開機重複帳單檢查新增單筆「這筆不處理」並同步保存到雲端；修正歷史 bundle 判斷的過度誤判；小幫手不再執行或看到重複帳單校正提示。' },
     { version: '1.5.2', date: '2026-09-18', notes: '小幫手的物件管理頁移除「房屋資料」分頁與閱讀入口；舊瀏覽器即使曾停留在該分頁，也會自動回到可用分頁。' },
     { version: '1.5.1', date: '2026-09-18', notes: '修正小幫手住房一覽未套用授權館別限制；房租催繳改為先顯示完整 LINE 文字預覽，確認後才推播，並保留 7 天內重複催繳提醒。' },
     { version: '1.5.0', date: '2026-09-13', notes: '新增館務報帳工作台：小幫手可依授權館別登記日用品、清潔用品、零用金支出與個人代墊，上傳私有發票後送審；Admin / Owner 核准後自動建立正式支出，個人代墊可追蹤撥款狀態。' },

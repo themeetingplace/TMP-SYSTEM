@@ -4,7 +4,8 @@
 // 一次性歷史校正：舊 renewContract 多 +1 天，已在 data.js renewContract 修 forward；
 // 這裡負責把歷史已產生的續租合約一次補回來
 import { store, mockData } from '../data.js';
-import { openModal, showToast } from './ui.js';
+import { openConfirm, openModal, showToast } from './ui.js';
+import { escapeAttr, escapeHtml as esc } from './escape.js';
 
 const SESSION_DISMISS_KEY = 'pms-renewal-audit-dismissed';
 const BUNDLE_SESSION_KEY = 'pms-bundle-audit-dismissed';
@@ -26,6 +27,8 @@ export function promptRenewalAuditIfNeeded() {
 
 // bundle 重複 invoice audit
 export function promptBundleAuditIfNeeded() {
+    // 這是管理員資料校正工具；小幫手不顯示、不執行 dry-run。
+    if (window.__currentRole === 'helper') return;
     try {
         if (sessionStorage.getItem(BUNDLE_SESSION_KEY) === '1') return;
     } catch {}
@@ -50,9 +53,10 @@ function showBundleAuditModal(report) {
                 <span style="font-size: 0.7rem; color: var(--text-muted);">$${a.mainAmount?.toLocaleString()}</span></td>
             <td><code style="font-size: 0.75rem; color: var(--color-danger);">${a.dupInvoiceId}</code><br>
                 <span style="font-size: 0.7rem; color: var(--color-danger);">$${a.dupAmount?.toLocaleString()}</span></td>
-            <td>${a.tenant}</td>
-            <td style="font-size: 0.78rem;">${a.propertyName}</td>
+            <td>${esc(a.tenant || '—')}</td>
+            <td style="font-size: 0.78rem;">${esc(a.propertyName || '—')}</td>
             <td><code style="font-size: 0.75rem;">${a.dueDate}</code></td>
+            <td><button type="button" class="btn btn-outline btn-sm" data-action="ignore-one" data-invoice-id="${escapeAttr(a.dupInvoiceId)}" title="保留這筆帳單，之後不再列入重複帳單提示">這筆不處理</button></td>
         </tr>
     `).join('');
 
@@ -85,6 +89,7 @@ function showBundleAuditModal(report) {
                             <th>租客</th>
                             <th>床位</th>
                             <th>應收日</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -114,6 +119,34 @@ function showBundleAuditModal(report) {
             overlay.querySelector('[data-action="dismiss"]').addEventListener('click', () => {
                 try { sessionStorage.setItem(BUNDLE_SESSION_KEY, '1'); } catch {}
                 close();
+            });
+            overlay.querySelectorAll('[data-action="ignore-one"]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const invoiceId = btn.dataset.invoiceId;
+                    const item = affected.find(a => a.dupInvoiceId === invoiceId);
+                    if (!item) return;
+                    openConfirm({
+                        title: '這筆重複帳單不處理？',
+                        message: `將保留帳單 <strong>${esc(invoiceId)}</strong>（${esc(item.tenant || '—')} · ${esc(item.propertyName || '—')}），不刪除也不修改金額。<br><br><span style="color: var(--text-muted); font-size: var(--text-sm);">確認後會保存到雲端，之後登入不再提示這一筆。</span>`,
+                        confirmLabel: '確認不處理',
+                        onConfirm: () => {
+                            const updated = store.updateInvoice(invoiceId, { bundleAuditIgnored: true });
+                            if (!updated) {
+                                showToast(`找不到帳單 ${invoiceId}`, 'danger', 5000);
+                                return false;
+                            }
+                            showToast(`已保留 ${invoiceId}，之後不再提示`, 'success', 4500);
+                            const nextReport = store.auditBundleInvoices({ apply: false });
+                            close();
+                            if (nextReport.affected?.length) {
+                                setTimeout(() => showBundleAuditModal(nextReport), 220);
+                            } else {
+                                try { sessionStorage.setItem(BUNDLE_SESSION_KEY, '1'); } catch {}
+                            }
+                            return true;
+                        }
+                    });
+                });
             });
             overlay.querySelector('[data-action="apply"]').addEventListener('click', () => {
                 const result = store.auditBundleInvoices({ apply: true });

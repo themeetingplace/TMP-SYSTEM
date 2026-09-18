@@ -166,7 +166,8 @@ create table if not exists public.invoices (
   paid_amount numeric default 0,
   payment_method text,
   last_reminder_at timestamp with time zone,
-  period_tag text
+  period_tag text,
+  bundle_audit_ignored boolean not null default false
 );
 
 create table if not exists public.line_messages (

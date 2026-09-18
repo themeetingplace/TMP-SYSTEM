@@ -472,7 +472,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     handleRoute();
     // 資料載完後跑 audit (dry-run) — 有 affected 才彈 modal
     setTimeout(() => promptRenewalAuditIfNeeded(), 800);
-    setTimeout(() => promptBundleAuditIfNeeded(), 1200);
+    if (window.__currentRole !== 'helper') {
+        setTimeout(() => promptBundleAuditIfNeeded(), 1200);
+    }
 });
 
 function updateUserProfile(user) {

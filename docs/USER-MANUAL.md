@@ -1,6 +1,6 @@
 # 聚空間 PMS 使用手冊
 
-**版本** v1.5.2
+**版本** v1.5.3
 **最後更新** 2026-09-18
 **正式網址** https://themeetingplace-pms.pages.dev
 

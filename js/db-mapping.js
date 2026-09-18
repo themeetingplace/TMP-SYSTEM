@@ -117,7 +117,8 @@ export const toDb = {
         discount: i.discount ?? 0,
         discount_reason: i.discountReason ?? null,
         paid_amount: i.paidAmount ?? 0,
-        payment_method: i.paymentMethod ?? null
+        payment_method: i.paymentMethod ?? null,
+        bundle_audit_ignored: !!i.bundleAuditIgnored
     }),
     maintenance: m => ({
         id: m.id,
@@ -326,7 +327,8 @@ export const fromDb = {
         discount: r.discount ?? 0,
         discountReason: r.discount_reason,
         paidAmount: r.paid_amount ?? 0,
-        paymentMethod: r.payment_method
+        paymentMethod: r.payment_method,
+        bundleAuditIgnored: !!r.bundle_audit_ignored
     }),
     maintenance: r => ({
         id: r.id,
