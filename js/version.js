@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.5.1';
+export const APP_VERSION = '1.5.2';
 export const APP_BUILD_DATE = '2026-09-18';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.5.2', date: '2026-09-18', notes: '小幫手的物件管理頁移除「房屋資料」分頁與閱讀入口；舊瀏覽器即使曾停留在該分頁，也會自動回到可用分頁。' },
     { version: '1.5.1', date: '2026-09-18', notes: '修正小幫手住房一覽未套用授權館別限制；房租催繳改為先顯示完整 LINE 文字預覽，確認後才推播，並保留 7 天內重複催繳提醒。' },
     { version: '1.5.0', date: '2026-09-13', notes: '新增館務報帳工作台：小幫手可依授權館別登記日用品、清潔用品、零用金支出與個人代墊，上傳私有發票後送審；Admin / Owner 核准後自動建立正式支出，個人代墊可追蹤撥款狀態。' },
     { version: '1.4.0', date: '2026-07-17', notes: '續租改成兩次人工確認 (詢問 → 回覆 → 你按確認才真的建合約, 首頁「續租與收款流程」3 步驟卡片) / 續租提醒天數 10/5 → 14/7 天 (更充裕的回覆窗口) / 補產缺帳單 + 詢問續住 兩處改成勾選 modal (搜尋 / 全選 / 智慧預設) / 合約中途換床位 (保留原合約, 不用重簽) / 排定退租狀態 / 15 號結算入住率修正 (Set 去重防重疊合約算兩次 + endDate 排除退房日) + drill-down 明細 modal / 租金加項規則 (夏季能源費等自動加減, 建約時可即時預覽 + 逐項取消) / 核對結帳改為確認實際入帳金額 / LIFF 綁定 silent refresh + 錯誤引導更清楚 / 合併綁定 picker 加搜尋 / 手機版頁面內搜尋欄修回可見' },

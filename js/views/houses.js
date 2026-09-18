@@ -5,6 +5,7 @@ import { openFormModal, showToast, refreshView, initFlatpickr, initCustomSelects
 import { escapeHtml as esc } from '../utils/escape.js';
 import { getMode } from '../utils/appMode.js';
 import { currentModeBuildingIdSet } from '../utils/modeFilter.js';
+import { emptyState } from '../utils/emptyState.js';
 import { showBuildingRoomsModal } from './settings.js';
 
 // 每 section 獨立編輯 (跟代管 managed-house 同款 inline 編輯流程)
@@ -231,6 +232,9 @@ function renderBuildingDetail(building) {
 }
 
 export function renderHouses() {
+    if (window.__currentRole === 'helper') {
+        return `<div class="card">${emptyState({ mode: 'block', icon: 'ph-lock', title: '沒有房屋資料權限', hint: '小幫手帳號不開放查看房屋資料。' })}</div>`;
+    }
     // 跟 mode 切開，並套用小幫手被授權的館別；代管走 #m-house/* route。
     const mode = getMode();
     const allowedBuildingIds = currentModeBuildingIdSet(mode);

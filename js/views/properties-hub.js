@@ -17,6 +17,13 @@ const TABS = [
     { key: 'houses',     label: '房屋資料', icon: 'ph-house',     render: renderHouses,     init: initHousesActions }
 ];
 
+function getAvailableTabs() {
+    // 小幫手不提供「房屋資料」閱讀入口；Owner／Admin／Viewer 保持原功能。
+    return window.__currentRole === 'helper'
+        ? TABS.filter(tab => tab.key !== 'houses')
+        : TABS;
+}
+
 // 模組層：被 app.js handleRoute 設定為 'occupancy' (強制 lock) 或 null (用 localStorage)
 let forcedTab = null;
 
@@ -24,25 +31,27 @@ export function forceHubTab(tab) {
     forcedTab = VALID_TABS.includes(tab) ? tab : null;
 }
 
-function getActiveTab() {
-    if (forcedTab) return forcedTab;
+function getActiveTab(availableTabs = getAvailableTabs()) {
+    const availableKeys = new Set(availableTabs.map(tab => tab.key));
+    if (forcedTab && availableKeys.has(forcedTab)) return forcedTab;
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (VALID_TABS.includes(saved)) return saved;
+        if (availableKeys.has(saved)) return saved;
     } catch {}
-    return DEFAULT_TAB;
+    return availableKeys.has(DEFAULT_TAB) ? DEFAULT_TAB : availableTabs[0]?.key;
 }
 
 function saveActiveTab(tab) {
-    if (!VALID_TABS.includes(tab)) return;
+    if (!getAvailableTabs().some(item => item.key === tab)) return;
     try { localStorage.setItem(STORAGE_KEY, tab); } catch {}
 }
 
 export function renderPropertiesHub() {
-    const activeTab = getActiveTab();
-    const activeMeta = TABS.find(t => t.key === activeTab) || TABS[0];
+    const availableTabs = getAvailableTabs();
+    const activeTab = getActiveTab(availableTabs);
+    const activeMeta = availableTabs.find(t => t.key === activeTab) || availableTabs[0];
 
-    const tabsHtml = TABS.map(t => `
+    const tabsHtml = availableTabs.map(t => `
         <button class="settings-tab ${t.key === activeTab ? 'active' : ''}" data-hub-tab="${t.key}">
             <i class="ph ${t.icon}"></i> ${t.label}
         </button>
@@ -74,7 +83,7 @@ export function initPropertiesHubActions(scope) {
         const btn = e.target.closest('[data-hub-tab]');
         if (!btn) return;
         const target = btn.dataset.hubTab;
-        if (!VALID_TABS.includes(target) || target === contentEl.dataset.hubActive) return;
+        if (!getAvailableTabs().some(item => item.key === target) || target === contentEl.dataset.hubActive) return;
 
         // forcedTab 被切走 → 清掉 (避免下次又被 lock)
         if (forcedTab && target !== forcedTab) forcedTab = null;
