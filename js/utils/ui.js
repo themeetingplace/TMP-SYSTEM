@@ -267,7 +267,10 @@ export function initFormWizard({
         ].join(', ');
         const el = form.querySelector(selector);
         if (!el) return;
-        if (el.tagName === 'INPUT' && el.type === 'hidden') {
+        // 只有原本就是資料用 hidden field 才跨步驟保留。
+        // 「最後應收」會在視覺升級時把 readonly number input 轉為 hidden，
+        // 但它仍屬於第 3 步，不能因 DOM type 被誤判為每步都顯示。
+        if (field.type === 'hidden') {
             el.dataset.wizardStep = 'all';
             return;
         }
