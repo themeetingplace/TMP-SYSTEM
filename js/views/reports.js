@@ -8,7 +8,6 @@ import {
     mockData, store,
     getSortedBuildings,
     activeContractFor,
-    bedOccupied,
     isSettled, isPreCutoff, FINANCE_CUTOFF_DATE,
     invoiceActualAmount as actualAmount,
     occupiedAtCurrent15th, occupied15thTrend, occupiedContractsOn
@@ -203,11 +202,29 @@ function renderTrendChart(months) {
 // 計算營運面 KPI (出租率 / 平均空置天數 / 續租率 / 入住-退租)
 // building = null 表示全館合計
 function computeOperationalKPIs(building, range) {
-    const beds = building
-        ? _md().properties.filter(p => p.buildingId === building.id)
-        : (_md().properties || []);
+    const modeBeds = _md().properties || [];
+    const beds = building ? modeBeds.filter(p => p.buildingId === building.id) : modeBeds;
+    const targetBedKeys = new Set(beds.map(p => `${p.buildingId}\u0000${p.name}`));
+    const bedKeysByName = new Map();
+    modeBeds.forEach(p => {
+        if (!bedKeysByName.has(p.name)) bedKeysByName.set(p.name, []);
+        bedKeysByName.get(p.name).push(`${p.buildingId}\u0000${p.name}`);
+    });
+    const contractBedKey = c => {
+        if (!c?.propertyName) return null;
+        if (c.buildingId) return `${c.buildingId}\u0000${c.propertyName}`;
+        const candidates = bedKeysByName.get(c.propertyName) || [];
+        return candidates.length === 1 ? candidates[0] : null;
+    };
+    const belongsToTargetBeds = c => targetBedKeys.has(contractBedKey(c));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const occupiedBedKeys = new Set(_md().contracts
+        .filter(c => (c.renewalState === 'active' || c.renewalState === 'snoozed')
+            && c.startDate && c.startDate <= todayStr && belongsToTargetBeds(c))
+        .map(contractBedKey));
+    const bedIsOccupied = p => occupiedBedKeys.has(`${p.buildingId}\u0000${p.name}`);
     const totalBeds = beds.length;
-    const rentedBeds = beds.filter(p => bedOccupied(p.name)).length;
+    const rentedBeds = beds.filter(bedIsOccupied).length;
     const vacantBeds = totalBeds - rentedBeds;
     const occRate = totalBeds ? rentedBeds / totalBeds : 0;
 
@@ -216,10 +233,10 @@ function computeOperationalKPIs(building, range) {
     const todayMs = Date.now();
     const vacantDaysArr = [];
     beds.forEach(p => {
-        if (bedOccupied(p.name)) return; // 已出租跳過 (對齊住房一覽)
+        if (bedIsOccupied(p)) return; // 已出租跳過 (對齊住房一覽)
         // 找這個床位最近一次的合約 (有 terminatedDate 或 endDate < today)
         const lastContract = _md().contracts
-            .filter(c => c.propertyName === p.name)
+            .filter(c => contractBedKey(c) === `${p.buildingId}\u0000${p.name}`)
             .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''))[0];
         if (lastContract && lastContract.endDate) {
             const days = Math.floor((todayMs - new Date(lastContract.endDate).getTime()) / 86400000);
@@ -233,7 +250,7 @@ function computeOperationalKPIs(building, range) {
     // 續租率 — 過去區間內到期 (endDate 落在 range) 的合約中，renewalState='renewed' 的比例
     const expiredInRange = _md().contracts.filter(c => {
         if (!c.endDate) return false;
-        if (building && !beds.some(b => b.name === c.propertyName)) return false;
+        if (building && !belongsToTargetBeds(c)) return false;
         return c.endDate >= range.start && c.endDate <= range.end;
     });
     const renewedCount = expiredInRange.filter(c => c.renewalState === 'renewed').length;
@@ -242,13 +259,13 @@ function computeOperationalKPIs(building, range) {
     // 本期入住 / 退租 (區間內 startDate / terminatedDate)
     const moveInCount = _md().contracts.filter(c => {
         if (!c.startDate) return false;
-        if (building && !beds.some(b => b.name === c.propertyName)) return false;
+        if (building && !belongsToTargetBeds(c)) return false;
         return c.startDate >= range.start && c.startDate <= range.end;
     }).length;
     const moveOutCount = _md().contracts.filter(c => {
         if (c.renewalState !== 'terminated') return false;
         if (!c.terminatedDate) return false;
-        if (building && !beds.some(b => b.name === c.propertyName)) return false;
+        if (building && !belongsToTargetBeds(c)) return false;
         return c.terminatedDate >= range.start && c.terminatedDate <= range.end;
     }).length;
 
@@ -258,7 +275,7 @@ function computeOperationalKPIs(building, range) {
     const expiringSoonCount = _md().contracts.filter(c => {
         if (c.renewalState !== 'active') return false;
         if (!c.endDate) return false;
-        if (building && !beds.some(b => b.name === c.propertyName)) return false;
+        if (building && !belongsToTargetBeds(c)) return false;
         return c.endDate >= todayIso && c.endDate <= in30;
     }).length;
 
@@ -273,9 +290,13 @@ function computeOperationalKPIs(building, range) {
 
 // 月度入住 vs 退租 — 過去 N 個月每月計數
 function computeMoveInOutTrend(building, endDate, monthCount = 6) {
-    const beds = building
-        ? _md().properties.filter(p => p.buildingId === building.id)
-        : (_md().properties || []);
+    const modeBeds = _md().properties || [];
+    const contractBelongsToBuilding = c => {
+        if (!building) return true;
+        if (c.buildingId) return c.buildingId === building.id;
+        const matches = modeBeds.filter(p => p.name === c.propertyName);
+        return matches.length === 1 && matches[0].buildingId === building.id;
+    };
     const end = new Date(endDate);
     const months = [];
     for (let i = monthCount - 1; i >= 0; i--) {
@@ -289,13 +310,13 @@ function computeMoveInOutTrend(building, endDate, monthCount = 6) {
 
         const moveIn = _md().contracts.filter(c => {
             if (!c.startDate) return false;
-            if (building && !beds.some(b => b.name === c.propertyName)) return false;
+            if (!contractBelongsToBuilding(c)) return false;
             return c.startDate >= monthStart && c.startDate <= monthEnd;
         }).length;
         const moveOut = _md().contracts.filter(c => {
             if (c.renewalState !== 'terminated') return false;
             if (!c.terminatedDate) return false;
-            if (building && !beds.some(b => b.name === c.propertyName)) return false;
+            if (!contractBelongsToBuilding(c)) return false;
             return c.terminatedDate >= monthStart && c.terminatedDate <= monthEnd;
         }).length;
         months.push({ label: `${d.getMonth() + 1}月`, moveIn, moveOut, net: moveIn - moveOut });
