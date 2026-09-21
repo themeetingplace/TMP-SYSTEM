@@ -2,7 +2,7 @@
 // 集中追蹤所有「欠繳 / 未付」帳款
 // 階段 2 新增：末 5 碼核對 / 批次結帳 / 一鍵產生本月帳單
 import { mockData, store, isUnsettled, ensureContractInvoices, previewContractInvoices, getSortedBuildings, deriveInvoiceStatus } from '../data.js';
-import { openFormModal, openModal, openConfirm, showToast, refreshView } from '../utils/ui.js';
+import { openFormModal, openModal, openConfirm, showToast, refreshView, initFinalReceivable } from '../utils/ui.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
 import { escapeHtml } from '../utils/escape.js';
 import { filterInvoicesByMode } from '../utils/modeFilter.js';
@@ -820,7 +820,7 @@ function showUnsettledForm(invoice = null) {
         { name: 'adjustments', type: 'placeholder' },
         { name: 'discount', type: 'hidden', value: invoice?.discount ?? 0 },
         { name: 'discountReason', type: 'hidden', value: invoice?.discountReason ?? '' },
-        { name: 'totalDue', label: '應收總額', type: 'number', span: 2, hint: '租金金額 + 加收 − 折扣 (自動計算)' },
+        { name: 'totalDue', label: '最後應收', type: 'number', span: 2 },
         { name: 'paidAmount', label: '已收金額', type: 'number', value: invoice?.paidAmount ?? 0 },
         { name: 'paymentMethod', label: '付款方式', type: 'select', options: paymentMethodOptions, value: invoice?.paymentMethod ?? defaultPaymentMethod },
         { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
@@ -846,10 +846,22 @@ function showUnsettledForm(invoice = null) {
             }
             const amountInputUS = form.querySelector('[name="amount"]');
             const totalDueInputUS = form.querySelector('[name="totalDue"]');
+            const finalReceivableUS = initFinalReceivable({
+                form,
+                getFormula: () => {
+                    const base = Number(amountInputUS?.value) || 0;
+                    const net = Number(form.querySelector('[name="discount"]')?.value) || 0;
+                    const parts = [`原始金額 $${base.toLocaleString()}`];
+                    if (net < 0) parts.push(`+ 加收 $${Math.abs(net).toLocaleString()}`);
+                    if (net > 0) parts.push(`− 折扣 $${net.toLocaleString()}`);
+                    return `${parts.join(' ')} = 最後應收`;
+                }
+            });
             const recomputeUS = (net) => {
                 if (!totalDueInputUS) return;
                 const amt = Number(amountInputUS?.value) || 0;
                 totalDueInputUS.value = String(amt - (net || 0));
+                finalReceivableUS?.sync();
             };
             initAdjustmentsWidget({
                 container: form.querySelector('#ph-adjustments'),
@@ -862,15 +874,6 @@ function showUnsettledForm(invoice = null) {
                 const widgetNet = Number(form.querySelector('[name="discount"]')?.value) || 0;
                 recomputeUS(widgetNet);
             });
-            // 應收總額 readonly 灰底橘字
-            if (totalDueInputUS) {
-                totalDueInputUS.readOnly = true;
-                totalDueInputUS.style.backgroundColor = 'var(--bg-tertiary)';
-                totalDueInputUS.style.cursor = 'not-allowed';
-                totalDueInputUS.style.fontWeight = '700';
-                totalDueInputUS.style.color = 'var(--color-primary)';
-            }
-
             // 館別變更 → 重 build 物件下拉 (跟 contracts.js showContractForm 同款 pattern)
             const buildingHidden = form.querySelector('[name="buildingId"]');
             const propertyWrap = form.querySelector('.custom-select[data-name="propertyName"]');

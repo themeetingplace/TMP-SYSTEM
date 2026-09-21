@@ -98,8 +98,8 @@ export function initTermSelector(opts) {
 
     // 取得當前生效到期日 ISO — __customdate 用選的日期; 其他用 leaseEndISO(起, 月數)
     const getEffectiveEndDate = () => {
-        if (termHidden?.value === '__customdate' && endDateInput?.value) {
-            return endDateInput.value;
+        if (termHidden?.value === '__customdate') {
+            return endDateInput?.value || '';
         }
         return startInput?.value ? leaseEndISO(startInput.value, getEffectiveTerm()) : '';
     };

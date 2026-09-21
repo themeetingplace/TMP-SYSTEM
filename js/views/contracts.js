@@ -5,7 +5,7 @@ import {
     findOverlappingBedContracts, findOverlappingTenantContracts,
     getSortedBuildings, leaseEndISO
 } from '../data.js';
-import { openFormModal, openConfirm, openDetailModal, openModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
+import { openFormModal, openConfirm, openDetailModal, openModal, showToast, showUndoToast, refreshView, initFormWizard, initFinalReceivable } from '../utils/ui.js';
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { fillContractPdf, downloadPdfBytes, formatRentalPeriod } from '../utils/pdfGen.js';
 import { showCheckinAssignmentForm } from './properties.js';
@@ -682,17 +682,21 @@ function showContractForm(contract, opts = {}) {
     const linkedTenant = mockData.tenants.find(t => t.name === contract.tenant) || null;
 
     // 共用 utils/termSelector.js → buildTermOptionsUtil(start, leaseEndISO)
-    const buildTermOptions = (startDate) => buildTermOptionsUtil(startDate, leaseEndISO);
+    const buildTermOptions = (startDate) => buildTermOptionsUtil(startDate, leaseEndISO, { includeCustomDate: true });
     const initialStart = contract.startDate ?? TODAY;
-    // termMonths 不是 1 或 3 → 視為自訂; 帶入 __custom + termMonthsCustom 顯示
+    // 舊資料若到期日不等於「起日 + 期數」，直接帶成自訂到期日，避免編輯時默默改掉。
     const ctermNum = Number(contract.termMonths) || 1;
     const isCustomTerm = ctermNum !== 1 && ctermNum !== 3;
-    const initialTerm = isCustomTerm ? '__custom' : String(ctermNum);
+    const expectedInitialEnd = leaseEndISO(initialStart, ctermNum);
+    const hasCustomEndDate = !!contract.endDate && contract.endDate !== expectedInitialEnd;
+    const initialTerm = hasCustomEndDate ? '__customdate' : (isCustomTerm ? '__custom' : String(ctermNum));
+    let editTermSelector = null;
 
     openFormModal({
         title: `編輯合約：${contract.id}`,
         maxWidth: 640,
         fields: [
+            { name: 'contractContext', type: 'placeholder', span: 2 },
             // 1. 床位 (館別 → 物件 兩段, 對齊 finance 編輯 modal)
             { name: '__sep_bed', type: 'section', label: '床位' },
             { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions, value: initialBuildingId },
@@ -710,7 +714,8 @@ function showContractForm(contract, opts = {}) {
             { name: 'startDate', label: '入住日期 (= 合約起始日)', type: 'date', required: true, value: initialStart },
             { name: 'termMonths', label: '合約期', type: 'select', required: true, options: buildTermOptions(initialStart), value: initialTerm },
             { name: 'termMonthsCustom', label: '自訂月數', type: 'number', value: isCustomTerm ? ctermNum : '', placeholder: '例: 6' },
-            { name: 'endDate', label: '到期日 (留空自動算)', type: 'date', span: 2 },
+            { name: 'termEndDate', label: '自訂到期日', type: 'date', value: hasCustomEndDate ? contract.endDate : '', hint: '直接指定合約結束日，月數由起訖天數換算' },
+            { name: 'endDatePreview', type: 'placeholder', span: 2 },
 
             // 4. 收費方式 (先決定要不要開帳單)
             { name: '__sep_channel', type: 'section', label: '收費方式' },
@@ -723,8 +728,8 @@ function showContractForm(contract, opts = {}) {
 
             // 5. 租金 + 折扣加收 + 收款 (要建帳單時才填得到)
             { name: '__sep_rent', type: 'section', label: '租金' },
-            { name: 'amount', label: '月租金', type: 'number', required: true },
-            { name: 'totalDue', label: '應收總額', type: 'number' },
+            { name: 'amount', label: '月租金', type: 'number', required: true, span: 2, hint: '會自動帶床位設定的租金，可調整' },
+            { name: 'totalDue', label: '最後應收', type: 'number' },
             { name: 'adjustments', type: 'placeholder' },
             { name: 'discount', type: 'hidden', value: 0 },
             { name: 'discountReason', type: 'hidden', value: '' },
@@ -766,6 +771,9 @@ function showContractForm(contract, opts = {}) {
             }
             return {
                 ...contract,
+                termMonths: initialTerm,
+                termMonthsCustom: isCustomTerm ? ctermNum : '',
+                termEndDate: hasCustomEndDate ? contract.endDate : '',
                 paymentChannel: contract.paymentChannel || 'self',
                 platformName: contract.platformName || '',
                 tenantPhone: linkedTenant?.phone || '',
@@ -798,13 +806,40 @@ function showContractForm(contract, opts = {}) {
             const buildingHidden = form.querySelector('[name="buildingId"]');
             const propertyWrap = form.querySelector('.custom-select[data-name="propertyName"]');
             const propertyHidden = form.querySelector('[name="propertyName"]');
+            const tenantHidden = form.querySelector('[name="tenant"]');
+            const amountInput = form.querySelector('[name="amount"]');
+            const contextEl = form.querySelector('#ph-contractContext');
+            const updateContextCard = () => {
+                if (!contextEl) return;
+                const property = mockData.properties.find(p => p.name === propertyHidden?.value) || currentProperty;
+                const building = mockData.buildings.find(b => b.id === (property?.buildingId || buildingHidden?.value));
+                const shortName = (property?.name || contract.propertyName || '尚未選擇床位').replace('聚空間 - ', '');
+                const locationLabel = building?.name && shortName.startsWith(building.name)
+                    ? shortName
+                    : `${building?.name || ''}${building?.name ? ' · ' : ''}${shortName}`;
+                const amount = Number(amountInput?.value) || 0;
+                contextEl.className = 'contract-context-card';
+                contextEl.innerHTML = `
+                    <div>
+                        <div class="contract-context-card__eyebrow">合約床位</div>
+                        <div class="contract-context-card__title">${esc(locationLabel)}</div>
+                        <div class="contract-context-card__meta">${esc(tenantHidden?.value || contract.tenant || '未指定租客')}</div>
+                    </div>
+                    <div class="contract-context-card__amount">$${amount.toLocaleString()}<small>/月</small></div>
+                `;
+            };
             buildingHidden?.addEventListener('change', () => {
                 const bid = buildingHidden.value;
                 if (propertyWrap?.__setOptions) {
                     // __setOptions 內部已自動清 hidden.value + 重設 trigger 文字, 不需手動重置
                     propertyWrap.__setOptions(buildPropertyOptions(bid));
                 }
+                updateContextCard();
             });
+            propertyHidden?.addEventListener('change', updateContextCard);
+            tenantHidden?.addEventListener('change', updateContextCard);
+            amountInput?.addEventListener('input', updateContextCard);
+            updateContextCard();
 
             // === 收費方式切換 — platform → 隱藏 platformName 以外的收款相關 ===
             const channelInput = form.querySelector('[name="paymentChannel"]');
@@ -825,47 +860,54 @@ function showContractForm(contract, opts = {}) {
             syncChannelVisibility();
             channelInput?.addEventListener('change', syncChannelVisibility);
 
-            // 起始日變更時：(1) 重算簽約期下拉的到期日標籤  (2) 若 endDate 空著自動填
+            // 合約期與最終到期日 — 新增 / 編輯共用 termSelector 與相同預覽樣式
             const startInput = form.querySelector('[name="startDate"]');
-            const endInput = form.querySelector('[name="endDate"]');
-            const amountInput = form.querySelector('[name="amount"]');
             const termInput = form.querySelector('[name="termMonths"]');
             const totalDueInput = form.querySelector('[name="totalDue"]');
             const discountInput = form.querySelector('[name="discount"]');
             const discountReasonInput = form.querySelector('[name="discountReason"]');
-            // 應收總額 readonly + 灰底橘字 (跟新增入住 / 收支編輯一致)
-            if (totalDueInput) {
-                totalDueInput.readOnly = true;
-                totalDueInput.style.backgroundColor = 'var(--bg-tertiary)';
-                totalDueInput.style.cursor = 'not-allowed';
-                totalDueInput.style.fontWeight = '700';
-                totalDueInput.style.color = 'var(--color-primary)';
-            }
             // bundle child / parent 偵測
             const isBundleChild = !!contract.bundleParentContractId;
             const bundleChildrenLocal = mockData.contracts.filter(c => c.bundleParentContractId === contract.id);
             const isBundleParent = bundleChildrenLocal.length > 0;
             const childRentSumLocal = bundleChildrenLocal.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+            const finalReceivable = initFinalReceivable({
+                form,
+                getFormula: () => {
+                    if (isBundleChild) return `已併入主合約 ${contract.bundleParentContractId}，此合約不重複收款`;
+                    const rent = (Number(amountInput?.value) || 0) + (isBundleParent ? childRentSumLocal : 0);
+                    const term = editTermSelector?.getEffectiveTerm()
+                        || (termInput?.value === '__custom' ? parseInt(form.querySelector('[name="termMonthsCustom"]')?.value, 10) : parseInt(termInput?.value, 10))
+                        || 1;
+                    const discount = Number(discountInput?.value) || 0;
+                    const parts = [`月租合計 $${rent.toLocaleString()} × ${term} 個月`];
+                    if (discount < 0) parts.push(`+ 加收 $${Math.abs(discount).toLocaleString()}`);
+                    if (discount > 0) parts.push(`− 折扣 $${discount.toLocaleString()}`);
+                    return `${parts.join(' ')} = 最後應收`;
+                }
+            });
             const refreshTotal = () => {
                 if (!totalDueInput) return;
                 // bundle child 強制 0, 不算公式 (避免覆蓋掉歸零後的 invoice 顯示)
                 if (isBundleChild) {
                     totalDueInput.value = 0;
+                    finalReceivable?.sync();
                     return;
                 }
                 const amt = Number(amountInput?.value) || 0;
                 // term: __custom 讀 termMonthsCustom; 其他 parseInt termMonths
-                let t;
-                if (termInput?.value === '__custom') {
+                let t = editTermSelector?.getEffectiveTerm();
+                if (!t && termInput?.value === '__custom') {
                     const tc = form.querySelector('[name="termMonthsCustom"]');
                     t = parseInt(tc?.value, 10) || 1;
-                } else {
+                } else if (!t) {
                     t = parseInt(termInput?.value, 10) || 1;
                 }
                 const disc = Number(discountInput?.value) || 0;
                 // bundle parent: 應收 = (主月租 + 子月租加總) × 期數 − 折扣
                 const baseAmt = isBundleParent ? amt + childRentSumLocal : amt;
                 totalDueInput.value = Math.max(0, baseAmt * t - disc);
+                finalReceivable?.sync();
             };
 
             // bundle parent: 加提示, 列出子合約
@@ -923,29 +965,73 @@ function showContractForm(contract, opts = {}) {
                     onChange: () => refreshTotal()
                 });
             }
-            // 自訂月數欄位顯隱 + termMonths/termMonthsCustom 變動 → refreshTotal
-            // 共用 utils/termSelector.js (跟 properties.js 新增入住 wizard 同源)
-            const termSelector = initTermSelector({
+            const endPreviewEl = form.querySelector('#ph-endDatePreview');
+            const updateEndDatePreview = () => {
+                if (!endPreviewEl || !editTermSelector) return;
+                const endDate = editTermSelector.getEffectiveEndDate();
+                const term = editTermSelector.getEffectiveTerm();
+                endPreviewEl.className = 'contract-end-preview';
+                endPreviewEl.innerHTML = endDate
+                    ? `<i class="ph ph-calendar-check"></i><span>合約最終到期日：<strong>${esc(endDate)}</strong>（約 ${term} 個月）</span>`
+                    : '<i class="ph ph-calendar-check"></i><span>選擇入住日期與合約期後，這裡會顯示最終到期日</span>';
+            };
+
+            // 共用 utils/termSelector.js（與新增入住完全同源，包含自訂到期日）
+            editTermSelector = initTermSelector({
                 form,
                 leaseEndISO,
                 startName: 'startDate',
                 termName: 'termMonths',
                 customName: 'termMonthsCustom',
-                onTermChange: refreshTotal
-            });
-            const getEffectiveTerm = () => termSelector?.getEffectiveTerm() ?? 1;
-
-            // refresh: startDate 變動 → 重算 dropdown label (termSelector 已處理) + endInput 空著自動填 + refreshTotal
-            const refresh = () => {
-                if (!endInput.value && startInput.value) {
-                    const term = getEffectiveTerm();
-                    if (term) endInput.value = leaseEndISO(startInput.value, term);
+                endDateName: 'termEndDate',
+                includeCustomDate: true,
+                onTermChange: () => {
+                    refreshTotal();
+                    updateEndDatePreview();
                 }
+            });
+            const getEffectiveTerm = () => editTermSelector?.getEffectiveTerm() ?? 1;
+
+            const refresh = () => {
                 refreshTotal();
+                updateEndDatePreview();
             };
             startInput.addEventListener('change', refresh);
             startInput.addEventListener('input', refresh);
             amountInput?.addEventListener('input', refreshTotal);
+            updateEndDatePreview();
+
+            const STEP_MAP = {
+                __sep_bed: 1, buildingId: 1, propertyName: 1,
+                __sep_tenant: 1, tenant: 1, tenantPhone: 1, tenantEmail: 1, tenantEmergency: 1,
+                __sep_contract: 2, startDate: 2, termMonths: 2, termMonthsCustom: 2,
+                termEndDate: 2, endDatePreview: 2, amount: 2,
+                __sep_misc: 2, depositAmount: 2, status: 2,
+                __sep_channel: 3, paymentChannel: 3, platformName: 3,
+                __sep_rent: 3, totalDue: 3, adjustments: 3, discount: 3, discountReason: 3,
+                paidAmount: 3, paymentMethod: 3, paidDate: 3
+            };
+            initFormWizard({
+                form,
+                fields: [
+                    { name: '__sep_bed' }, { name: 'buildingId', label: '館別', required: true }, { name: 'propertyName', label: '物件', required: true },
+                    { name: '__sep_tenant' }, { name: 'tenant', label: '租客姓名', required: true }, { name: 'tenantPhone' }, { name: 'tenantEmail' }, { name: 'tenantEmergency' },
+                    { name: '__sep_contract' }, { name: 'startDate', label: '入住日期', required: true }, { name: 'termMonths', label: '合約期', required: true },
+                    { name: 'termMonthsCustom' }, { name: 'termEndDate' }, { name: 'endDatePreview' }, { name: 'amount', label: '月租金', required: true },
+                    { name: '__sep_misc' }, { name: 'depositAmount' }, { name: 'status', label: '簽署狀態', required: true },
+                    { name: '__sep_channel' }, { name: 'paymentChannel', label: '收費對象', required: true }, { name: 'platformName' },
+                    { name: '__sep_rent' }, { name: 'totalDue' }, { name: 'adjustments' }, { name: 'discount' }, { name: 'discountReason' },
+                    { name: 'paidAmount' }, { name: 'paymentMethod' }, { name: 'paidDate' }
+                ],
+                stepMap: STEP_MAP,
+                labels: ['床位與租客', '合約條件', '收款'],
+                onStepChange: () => {
+                    editTermSelector?.syncCustomVisibility();
+                    syncChannelVisibility();
+                    refreshTotal();
+                    updateEndDatePreview();
+                }
+            });
         },
         onSubmit: (values) => {
             const property = mockData.properties.find(p => p.name === values.propertyName);
@@ -953,23 +1039,24 @@ function showContractForm(contract, opts = {}) {
                 showToast('找不到對應的物件', 'danger');
                 return false;
             }
-            // termMonths: __custom → 讀 termMonthsCustom 的整數值, 寫回 values.termMonths
+            // 合約期與最終到期日由新增 / 編輯共用的 termSelector 決定。
             if (values.termMonths === '__custom') {
                 const customMonths = parseInt(values.termMonthsCustom, 10);
                 if (!customMonths || customMonths < 1) {
                     showToast('自訂月數請填 ≥ 1 的整數', 'danger');
                     return false;
                 }
-                values.termMonths = customMonths;
-            } else {
-                values.termMonths = parseInt(values.termMonths, 10) || 1;
             }
+            if (values.termMonths === '__customdate' && !values.termEndDate) {
+                showToast('請選擇自訂到期日', 'danger');
+                return false;
+            }
+            values.termMonths = editTermSelector?.getEffectiveTerm() || parseInt(values.termMonths, 10) || 1;
+            const endDate = editTermSelector?.getEffectiveEndDate()
+                || (values.startDate ? leaseEndISO(values.startDate, values.termMonths) : '');
             delete values.termMonthsCustom;
+            delete values.termEndDate;
             delete values.buildingId;  // 只用於 form 內篩物件下拉, 不寫進合約 (合約透過 propertyName 反查 building)
-            let endDate = values.endDate;
-            if (!endDate && values.startDate && values.termMonths) {
-                endDate = leaseEndISO(values.startDate, values.termMonths);  // 起租 + N 月 − 1 天
-            }
 
             // 抽離 tenant 子欄位 + totalDue (顯示用) + adjustments + paidAmount/paymentMethod/paidDate (寫到 invoice)
             const { tenantPhone, tenantEmail, tenantEmergency, totalDue: _td,

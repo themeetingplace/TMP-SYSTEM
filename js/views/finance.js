@@ -4,7 +4,7 @@
 import { mockData, store, invoiceMonth, shiftMonth, currentMonth, formatMonthLabel, isSettled, getSortedBuildings, invoiceActualAmount as actualAmount, formatDiscountReason, leaseEndISO, isPreCutoff, FINANCE_CUTOFF_DATE } from '../data.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { renderFinanceSubTabs } from '../utils/financeSubTabs.js';
-import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView } from '../utils/ui.js';
+import { openFormModal, openConfirm, openDetailModal, showToast, showUndoToast, refreshView, initFinalReceivable } from '../utils/ui.js';
 import { financeState } from './finance-state.js';
 import { exportFinanceReport } from './finance-export.js';
 import { escapeHtml } from '../utils/escape.js';
@@ -422,7 +422,7 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'adjustments', type: 'placeholder' },
             { name: 'discount', type: 'hidden', value: invoice?.discount ?? 0 },
             { name: 'discountReason', type: 'hidden', value: invoice?.discountReason ?? '' },
-            { name: 'totalDue', label: '應收總額', type: 'number', span: 2, hint: '租金金額 + 加收 − 折扣 (自動計算)' },
+            { name: 'totalDue', label: '最後應收', type: 'number', span: 2 },
             { name: 'paidAmount', label: '已收金額', type: 'number' },
             { name: 'paymentMethod', label: '付款方式', type: 'select', options: paymentMethodOptions, value: invoice?.paymentMethod ?? defaultPaymentMethod },
             { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
@@ -556,12 +556,24 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             const amountInput = form.querySelector('[name="amount"]');
             const totalDueInput = form.querySelector('[name="totalDue"]');
             const paidAmountInput = form.querySelector('[name="paidAmount"]');
+            const finalReceivable = initFinalReceivable({
+                form,
+                getFormula: () => {
+                    const base = Number(amountInput?.value) || 0;
+                    const net = Number(form.querySelector('[name="discount"]')?.value) || 0;
+                    const parts = [`原始金額 $${base.toLocaleString()}`];
+                    if (net < 0) parts.push(`+ 加收 $${Math.abs(net).toLocaleString()}`);
+                    if (net > 0) parts.push(`− 折扣 $${net.toLocaleString()}`);
+                    return `${parts.join(' ')} = 最後應收`;
+                }
+            });
             const recomputeTotalDue = (widgetNet) => {
                 if (!totalDueInput) return;
                 const amt = Number(amountInput?.value) || 0;
                 // widget net 正 = 折扣 / 負 = 加收 → 實際應收 = amount - net
                 const due = amt - (widgetNet || 0);
                 totalDueInput.value = String(due);
+                finalReceivable?.sync();
             };
             initAdjustmentsWidget({
                 container: form.querySelector('#ph-adjustments'),
@@ -581,15 +593,6 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
                     : (Number(invoice?.amount || 0) - Number(invoice?.discount || 0));
                 paidAmountInput.value = String(initPaid);
             }
-            // 應收總額 — readonly 灰底橘字 (跟入住合約收款步驟一致)
-            if (totalDueInput) {
-                totalDueInput.readOnly = true;
-                totalDueInput.style.backgroundColor = 'var(--bg-tertiary)';
-                totalDueInput.style.cursor = 'not-allowed';
-                totalDueInput.style.fontWeight = '700';
-                totalDueInput.style.color = 'var(--color-primary)';
-            }
-
             if (!isExpense) {
                 // 收入: 填了 periodStart 自動帶 periodEnd = leaseEndISO(start, 1)
                 const psInput = form.querySelector('[name="periodStart"]');

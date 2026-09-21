@@ -6647,6 +6647,239 @@ tr.is-await-verify-row:hover {
     margin-bottom: 0;
 }
 
+/* 共居合約統一步驟列 — 新增、入住與編輯共用 */
+.wizard-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    grid-column: 1 / -1;
+    padding: 0.5rem 0 1rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.wizard-stepper .wiz-step {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-shrink: 0;
+}
+.wizard-stepper .wiz-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    transition: background-color 0.18s ease, color 0.18s ease;
+}
+.wizard-stepper .wiz-step-label {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    white-space: nowrap;
+}
+.wizard-stepper .wiz-step.is-current .wiz-step-num {
+    background: var(--color-primary);
+    color: #fff;
+}
+.wizard-stepper .wiz-step.is-current .wiz-step-label {
+    color: var(--text-main);
+    font-weight: 700;
+}
+.wizard-stepper .wiz-step.is-done .wiz-step-num {
+    background: var(--color-success);
+    color: #fff;
+}
+.wizard-stepper .wiz-step-bar {
+    flex: 1;
+    height: 2px;
+    min-width: 20px;
+    border-radius: 999px;
+    background: var(--border-color);
+    transition: background-color 0.18s ease;
+}
+.wizard-stepper .wiz-step-bar.is-done {
+    background: var(--color-success);
+}
+[data-wizard-step][hidden] {
+    display: none !important;
+}
+.modal-footer .wizard-prev[hidden],
+.modal-footer .wizard-next[hidden],
+.modal-footer button[type="submit"][hidden] {
+    display: none !important;
+}
+
+.contract-context-card {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    border-left: 3px solid var(--color-warning);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+}
+.contract-context-card__eyebrow {
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    letter-spacing: 0.04em;
+}
+.contract-context-card__title {
+    margin-top: 0.15rem;
+    color: var(--text-main);
+    font-size: var(--text-md);
+    font-weight: 700;
+}
+.contract-context-card__meta {
+    margin-top: 0.15rem;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+.contract-context-card__amount {
+    color: var(--color-primary);
+    font-size: 1.1rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.contract-context-card__amount small {
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    font-weight: 500;
+}
+.contract-end-preview {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.65rem 0.8rem;
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+}
+.contract-end-preview strong {
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 帳務表單的結算終點：最後應收。以「帳本結算線」和大數字區分於可編輯金額。 */
+.form-group.final-receivable-card {
+    position: relative;
+    grid-column: 1 / -1 !important;
+    gap: 0;
+    overflow: hidden;
+    padding: 0.95rem 1.1rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 38%, var(--border-color));
+    border-left: 5px solid var(--color-primary);
+    border-radius: var(--radius-lg);
+    background:
+        linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 58%),
+        var(--color-surface);
+    box-shadow: 0 8px 24px -20px color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+.form-group.final-receivable-card::after {
+    content: '';
+    position: absolute;
+    right: 1rem;
+    bottom: 0.65rem;
+    width: 54px;
+    border-bottom: 3px double color-mix(in srgb, var(--color-primary) 35%, transparent);
+    pointer-events: none;
+}
+.final-receivable-label {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0 !important;
+    color: var(--text-secondary) !important;
+    font-size: var(--text-sm) !important;
+    font-weight: 700 !important;
+}
+.final-receivable-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+.final-receivable-result {
+    margin-top: 0.4rem;
+}
+.final-receivable-value {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    color: var(--color-primary);
+    font-variant-numeric: tabular-nums;
+}
+.final-receivable-currency {
+    font-size: var(--text-sm);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+}
+.final-receivable-amount {
+    font-size: clamp(2rem, 5vw, 2.65rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+}
+.final-receivable-formula {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+    padding-top: 0.55rem;
+    border-top: 1px dashed color-mix(in srgb, var(--color-primary) 28%, var(--border-color));
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+}
+.final-receivable-formula i {
+    margin-top: 0.12rem;
+    color: var(--color-primary);
+    font-weight: 700;
+}
+.final-receivable-card.is-zero .final-receivable-value {
+    color: var(--text-muted);
+}
+.final-receivable-card > .form-hint {
+    margin-top: 0.45rem;
+}
+.review-final-receivable {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.7rem;
+    border-left: 4px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+.review-final-receivable strong {
+    color: var(--color-primary);
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.review-final-receivable span {
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    text-align: right;
+}
+
 /* 斷點 768 不是 640 — 涵蓋 iPad mini portrait + 大手機橫拿，跟其他 mobile rule 同 (audit QW-2) */
 @media (max-width: 768px) {
     /* 手機: form-grid 直接改 block，每個 form-group 自然成一行
@@ -6664,6 +6897,23 @@ tr.is-await-verify-row:hover {
     .form-grid > .form-section-divider {
         margin-top: 1rem;
         margin-bottom: 0.75rem;
+    }
+    .contract-context-card {
+        align-items: flex-start;
+    }
+    .form-group.final-receivable-card {
+        padding: 0.85rem 0.9rem 0.95rem;
+    }
+    .final-receivable-amount {
+        font-size: 2.1rem;
+    }
+    .review-final-receivable {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .review-final-receivable span {
+        text-align: left;
     }
 }
 

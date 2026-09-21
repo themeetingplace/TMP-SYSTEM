@@ -243,6 +243,193 @@ export function openFormModal({ title, fields = [], values = {}, submitLabel = '
     });
 }
 
+// 將 openFormModal 升級為一致的多步驟流程。
+// 共居合約的新增 / 編輯都使用這個 helper，避免步驟列、驗證與 footer 再次分岔。
+export function initFormWizard({
+    form,
+    fields = [],
+    stepMap = {},
+    labels = [],
+    initialStep = 1,
+    onStepChange
+}) {
+    if (!form || labels.length === 0) return null;
+
+    fields.forEach(field => {
+        const step = stepMap[field.name];
+        if (!step) return;
+        const selector = [
+            `#ph-${field.name}`,
+            `#section-${field.name}`,
+            `#f-${field.name}`,
+            `input[name="${field.name}"]`,
+            `textarea[name="${field.name}"]`
+        ].join(', ');
+        const el = form.querySelector(selector);
+        if (!el) return;
+        if (el.tagName === 'INPUT' && el.type === 'hidden') {
+            el.dataset.wizardStep = 'all';
+            return;
+        }
+        const target = el.id?.startsWith('ph-') || el.id?.startsWith('section-')
+            ? el
+            : el.closest('.form-group, .form-section-divider');
+        if (target) target.dataset.wizardStep = String(step);
+    });
+
+    const stepper = document.createElement('div');
+    stepper.className = 'wizard-stepper';
+    stepper.setAttribute('aria-label', '表單進度');
+    stepper.innerHTML = labels.map((label, index) => `
+        <div class="wiz-step" data-wiz-step="${index + 1}">
+            <span class="wiz-step-num">${index + 1}</span>
+            <span class="wiz-step-label">${label}</span>
+        </div>
+        ${index < labels.length - 1 ? '<span class="wiz-step-bar" aria-hidden="true"></span>' : ''}
+    `).join('');
+    form.insertBefore(stepper, form.firstChild);
+
+    const overlay = form.closest('.modal-overlay');
+    const footer = overlay?.querySelector('.modal-footer');
+    const submitBtn = footer?.querySelector('button[type="submit"]');
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.className = 'btn btn-outline wizard-prev';
+    prevBtn.innerHTML = '<i class="ph ph-caret-left"></i> 上一步';
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.className = 'btn btn-primary wizard-next';
+    nextBtn.innerHTML = '下一步 <i class="ph ph-caret-right"></i>';
+    if (footer && submitBtn) {
+        footer.insertBefore(prevBtn, submitBtn);
+        footer.insertBefore(nextBtn, submitBtn);
+    }
+
+    let currentStep = Math.max(1, Math.min(labels.length, Number(initialStep) || 1));
+
+    const validateCurrentStep = () => {
+        const requiredFields = fields.filter(field => stepMap[field.name] === currentStep && field.required);
+        let firstInvalid = null;
+        let invalidLabel = '';
+        requiredFields.forEach(field => {
+            const el = form.querySelector(`[name="${field.name}"]`);
+            if (!el) return;
+            const value = String(el.value || '').trim();
+            const target = el.closest('.custom-select') || el;
+            if (!value) {
+                if (!firstInvalid) {
+                    firstInvalid = target;
+                    invalidLabel = field.label || field.name;
+                }
+                target.classList.add('input-error');
+            } else {
+                target.classList.remove('input-error');
+            }
+        });
+        if (!firstInvalid) return true;
+        const focusTarget = firstInvalid.classList.contains('custom-select')
+            ? firstInvalid.querySelector('.custom-select-trigger')
+            : firstInvalid;
+        focusTarget?.focus();
+        focusTarget?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        showToast(`「${invalidLabel}」必填，請補上`, 'danger', 4000);
+        return false;
+    };
+
+    const setStep = step => {
+        currentStep = Math.max(1, Math.min(labels.length, Number(step) || 1));
+        form.querySelectorAll('[data-wizard-step]').forEach(el => {
+            const fieldStep = el.dataset.wizardStep;
+            el.hidden = fieldStep !== 'all' && Number(fieldStep) !== currentStep;
+        });
+        stepper.querySelectorAll('.wiz-step').forEach(el => {
+            const stepNumber = Number(el.dataset.wizStep);
+            const isCurrent = stepNumber === currentStep;
+            const isDone = stepNumber < currentStep;
+            el.classList.toggle('is-current', isCurrent);
+            el.classList.toggle('is-done', isDone);
+            el.setAttribute('aria-current', isCurrent ? 'step' : 'false');
+            const num = el.querySelector('.wiz-step-num');
+            num.innerHTML = isDone ? '<i class="ph ph-check"></i>' : String(stepNumber);
+        });
+        stepper.querySelectorAll('.wiz-step-bar').forEach((bar, index) => {
+            bar.classList.toggle('is-done', (index + 1) < currentStep);
+        });
+        prevBtn.hidden = currentStep === 1;
+        nextBtn.hidden = currentStep === labels.length;
+        if (submitBtn) submitBtn.hidden = currentStep !== labels.length;
+        if (typeof onStepChange === 'function') onStepChange(currentStep);
+        const modalBody = overlay?.querySelector('.modal-body');
+        if (modalBody) modalBody.scrollTop = 0;
+    };
+
+    prevBtn.addEventListener('click', () => setStep(currentStep - 1));
+    nextBtn.addEventListener('click', () => {
+        if (validateCurrentStep()) setStep(currentStep + 1);
+    });
+    form.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' || currentStep >= labels.length) return;
+        const tag = (event.target.tagName || '').toLowerCase();
+        if (tag === 'textarea' || event.target.closest?.('.adj-row')) return;
+        event.preventDefault();
+        nextBtn.click();
+    });
+
+    setStep(currentStep);
+    return {
+        getCurrentStep: () => currentStep,
+        setStep,
+        refresh: () => setStep(currentStep)
+    };
+}
+
+// 將「最後應收」從一般 readonly input 提升為帳務結果卡。
+// input 仍保留在表單中作為 single source of truth，視覺層另用 output 呈現千分位。
+export function initFinalReceivable({
+    form,
+    inputName = 'totalDue',
+    label = '最後應收',
+    getFormula
+}) {
+    const input = form?.querySelector(`[name="${inputName}"]`);
+    const group = input?.closest('.form-group');
+    if (!input || !group) return null;
+
+    group.classList.add('final-receivable-card');
+    const labelEl = group.querySelector(`label[for="${input.id}"]`) || group.querySelector('label');
+    if (labelEl) {
+        labelEl.className = 'final-receivable-label';
+        labelEl.innerHTML = `<span>${label}</span><span class="final-receivable-badge"><i class="ph ph-calculator"></i> 自動計算</span>`;
+    }
+
+    input.readOnly = true;
+    input.type = 'hidden';
+    input.setAttribute('aria-hidden', 'true');
+
+    const result = document.createElement('div');
+    result.className = 'final-receivable-result';
+    result.innerHTML = `
+        <div class="final-receivable-value">
+            <span class="final-receivable-currency">NT$</span>
+            <output class="final-receivable-amount" aria-live="polite" aria-atomic="true">0</output>
+        </div>
+        <div class="final-receivable-formula"><i class="ph ph-equals"></i><span></span></div>
+    `;
+    input.insertAdjacentElement('afterend', result);
+
+    const amountEl = result.querySelector('.final-receivable-amount');
+    const formulaEl = result.querySelector('.final-receivable-formula span');
+    const sync = () => {
+        const amount = Number(input.value) || 0;
+        amountEl.textContent = amount.toLocaleString('zh-TW');
+        const formula = typeof getFormula === 'function' ? getFormula() : '';
+        formulaEl.textContent = formula || '已包含所有加收與折扣，儲存後以此金額入帳';
+        group.classList.toggle('is-zero', amount === 0);
+    };
+    sync();
+    return { input, group, sync };
+}
+
 // === Flatpickr 日期選擇器 ===
 export function initFlatpickr(scope) {
     if (typeof window.flatpickr !== 'function') return;
@@ -491,7 +678,7 @@ function renderField(field, currentValue) {
     const wrapStyle = `style="grid-column: span ${span};"`;
 
     if (type === 'section') {
-        return `<div class="form-section-divider" style="grid-column: 1 / -1; margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-color);">
+        return `<div id="section-${name}" class="form-section-divider" style="grid-column: 1 / -1; margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-color);">
             <div style="font-weight: 600; color: var(--text-main); font-size: 0.95rem;">${label}</div>
             ${hint ? `<small class="form-hint" style="display:block; margin-top:0.25rem;">${hint}</small>` : ''}
         </div>`;

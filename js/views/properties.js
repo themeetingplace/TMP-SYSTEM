@@ -1,6 +1,6 @@
 ﻿import { mockData, store, formatRoomType, getSortedBuildings, addDaysISO, addMonthsISO, leaseEndISO, activeContractFor, activeContractOfTenant, findOverlappingBedContracts, findOverlappingTenantContracts, bedOccupied, applyRentRules } from '../data.js';
 import { escapeHtml as esc } from '../utils/escape.js';
-import { openFormModal, openConfirm, openDetailModal, openModal, showToast, showUndoToast, refreshView, initCustomSelects } from '../utils/ui.js';
+import { openFormModal, openConfirm, openDetailModal, openModal, showToast, showUndoToast, refreshView, initCustomSelects, initFormWizard, initFinalReceivable } from '../utils/ui.js';
 import { showTenantDetails } from './tenants.js';
 import { filterPropertiesByMode } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
@@ -552,8 +552,8 @@ export function showCheckinAssignmentForm(opts = {}) {
         { name: 'adjustments', type: 'placeholder' },  // 加減項目子表單
         { name: 'discount', type: 'hidden', value: 0 },           // 自動計算：net (sub − add)
         { name: 'discountReason', type: 'hidden', value: '' },    // 自動編碼: JSON of adjustments
-        { name: 'totalDue', label: '應收總額', type: 'number', value: '', span: 2, hint: '月租金 × 合約期 + 加項 − 折扣（自動計算）' },
-        { name: 'paidAmount', label: '已收金額', type: 'number', hint: '留空或 0 = 未收；全額收訖請填上面「應收總額」顯示的數字 (已含自動加項)' },
+        { name: 'totalDue', label: '最後應收', type: 'number', value: '', span: 2 },
+        { name: 'paidAmount', label: '已收金額', type: 'number', hint: '留空或 0 = 未收；全額收訖請填上面「最後應收」的數字' },
         { name: 'paymentMethod', label: '付款方式', type: 'select', options: (mockData.paymentMethods || []).map(p => ({ value: p.name, label: p.name })), value: (mockData.paymentMethods || [])[0]?.name || '匯款' },
         { name: 'paidDate', label: '入帳日', type: 'date', span: 2, hint: '實際收到款項的日期 (留空 = 有收款時預設今天)' }
     ];
@@ -788,6 +788,7 @@ export function showCheckinAssignmentForm(opts = {}) {
             // cancelledRuleLabels 宣告在外層 (跟 onSubmit 共用), 這裡直接用
             // 額外床位的月租加總 — 在下方額外床位區塊更新；先宣告避免 TDZ
             let extraBedRentSum = 0;
+            let finalReceivable = null;
 
             // 應收總額計算 — 統一從這支寫入 totalDueInput, 其他地方只觸發呼叫
             // initAdjustmentsWidget 的 onChange 會 forward call 這個 (single source of truth for totalDue)
@@ -828,6 +829,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                     totalDue,
                     autoAdjustments: ruleAdjustments.map(({ kind, label, amount }) => ({ kind, label, amount }))
                 };
+                finalReceivable?.sync();
 
                 // 顯示規則細項 (有命中才顯示, 讓 admin 知道這筆錢從哪來; 每筆附 X 可取消)
                 // 取消掉的規則也列出來 (劃掉樣式 + 復原按鈕), 不是點了就整個消失讓人忘記有這回事
@@ -869,11 +871,10 @@ export function showCheckinAssignmentForm(opts = {}) {
                 if (!endPreviewEl) return;
                 const end = termSelector?.getEffectiveEndDate?.() || '';
                 const term = termSelector?.getEffectiveTerm?.() || '';
+                endPreviewEl.className = 'contract-end-preview';
                 endPreviewEl.innerHTML = end
-                    ? `<div style="padding: 0.5rem 0.7rem; background: var(--color-background); border-radius: 6px; font-size: 0.88rem; color: var(--text-secondary); border-left: 3px solid var(--color-primary);">
-                           <i class="ph ph-calendar-check" style="vertical-align: -1px;"></i> 合約到期日：<strong style="color: var(--text-main);">${end}</strong>${term ? ` <span style="color: var(--text-muted);">（約 ${term} 個月）</span>` : ''}
-                       </div>`
-                    : '';
+                    ? `<i class="ph ph-calendar-check"></i><span>合約最終到期日：<strong>${end}</strong>${term ? `（約 ${term} 個月）` : ''}</span>`
+                    : '<i class="ph ph-calendar-check"></i><span>選擇入住日期與合約期後，這裡會顯示最終到期日</span>';
             };
             // 起租日 / 合約期 / 自訂月數 / 自訂到期日 任一變動 → 更新預覽 (+ 起租日變動也要重算總額, 因自訂到期日的月數依起訖天數)
             scheduledDateInput?.addEventListener('change', () => { refreshEndPreview(); recalcTotalDue(); });
@@ -1055,12 +1056,22 @@ export function showCheckinAssignmentForm(opts = {}) {
             }
 
             if (totalDueInput) {
-                // readonly 樣式：灰底 + 不可編輯
-                totalDueInput.readOnly = true;
-                totalDueInput.style.backgroundColor = 'var(--bg-tertiary)';
-                totalDueInput.style.cursor = 'not-allowed';
-                totalDueInput.style.fontWeight = '700';
-                totalDueInput.style.color = 'var(--color-primary)';
+                finalReceivable = initFinalReceivable({
+                    form,
+                    getFormula: () => {
+                        const rent = (Number(amountInput2?.value) || 0) + extraBedRentSum;
+                        const term = termSelector?.getEffectiveTerm?.() || 1;
+                        const discount = Number(discountInput?.value) || 0;
+                        const ruleNet = (paymentCalculationSnapshot?.autoAdjustments || [])
+                            .reduce((sum, item) => sum + (item.kind === 'add' ? Number(item.amount) || 0 : -(Number(item.amount) || 0)), 0);
+                        const parts = [`月租合計 $${rent.toLocaleString()} × ${term} 個月`];
+                        if (ruleNet > 0) parts.push(`+ 自動加收 $${ruleNet.toLocaleString()}`);
+                        if (ruleNet < 0) parts.push(`− 自動折抵 $${Math.abs(ruleNet).toLocaleString()}`);
+                        if (discount < 0) parts.push(`+ 加收 $${Math.abs(discount).toLocaleString()}`);
+                        if (discount > 0) parts.push(`− 折扣 $${discount.toLocaleString()}`);
+                        return `${parts.join(' ')} = 最後應收`;
+                    }
+                });
 
                 // 租金加項規則的細項顯示 (插在 totalDue 欄位正下方, 預設隱藏, 有命中規則才顯示)
                 const previewDiv = document.createElement('div');
@@ -1089,7 +1100,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                 recalcTotalDue();  // 初始算一次
             }
 
-            // === UIUX #5: 3 步 wizard (床位+租客 → 合約條件 → 收款) ===
+            // === 共居合約統一 3 步 wizard (床位+租客 → 合約條件 → 收款) ===
             const STEP_MAP = {
                 buildingId: 1, bedId: 1, extraBeds: 1,
                 source: 1, tenantName: 1, tenantPhone: 1, tenantEmail: 1, tenantEmergency: 1,
@@ -1099,157 +1110,18 @@ export function showCheckinAssignmentForm(opts = {}) {
                 totalDue: 3, paidAmount: 3, paymentMethod: 3, paidDate: 3
             };
             const STEP_LABELS = ['床位與租客', '合約條件', '收款'];
-
-            // 把每個 field 對應的 form-group / divider / placeholder 加上 data-wizard-step
-            fields.forEach(f => {
-                const step = STEP_MAP[f.name];
-                if (!step) return;
-                const el = form.querySelector(`#ph-${f.name}, #f-${f.name}, input[name="${f.name}"], textarea[name="${f.name}"]`);
-                if (!el) return;
-                // placeholder 已經是頂層 div；hidden input 不分組；其他要找 .form-group
-                if (el.tagName === 'INPUT' && el.type === 'hidden') {
-                    el.dataset.wizardStep = 'all';
-                    return;
-                }
-                if (el.id && el.id.startsWith('ph-')) {
-                    el.dataset.wizardStep = String(step);
-                    return;
-                }
-                const target = el.closest('.form-group, .form-section-divider');
-                if (target) target.dataset.wizardStep = String(step);
-            });
-            // section divider (__sep_payment) 沒有 input，按 fields 順序找 — 目前只有「收款」一個，固定 step 3
-            form.querySelectorAll('.form-section-divider:not([data-wizard-step])').forEach(div => {
-                div.dataset.wizardStep = '3';
-            });
-
-            // 建 stepper
-            const stepper = document.createElement('div');
-            stepper.className = 'wizard-stepper';
-            stepper.style.cssText = 'display: flex; gap: 0.4rem; align-items: center; padding: 0.5rem 0 0.85rem; margin-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); grid-column: 1 / -1;';
-            stepper.innerHTML = STEP_LABELS.map((label, idx) => `
-                <div class="wiz-step" data-wiz-step="${idx + 1}" style="display: flex; align-items: center; gap: 0.4rem;">
-                    <span class="wiz-step-num" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--bg-tertiary); color: var(--text-muted); font-size: var(--text-2xs); font-weight: 700;">${idx + 1}</span>
-                    <span class="wiz-step-label" style="font-size: var(--text-xs); color: var(--text-muted); font-weight: 500;">${label}</span>
-                </div>
-                ${idx < STEP_LABELS.length - 1 ? '<span class="wiz-step-bar" style="flex: 1; height: 2px; background: var(--border-color); border-radius: 2px;"></span>' : ''}
-            `).join('');
-            form.insertBefore(stepper, form.firstChild);
-
-            // footer 動態切換 (上一步 / 下一步 / 送出)
-            const wizardOverlay = form.closest('.modal-overlay');
-            const footer = wizardOverlay?.querySelector('.modal-footer');
-            const originalSubmit = footer?.querySelector('button[type="submit"]');
-            const prevBtn = document.createElement('button');
-            prevBtn.type = 'button';
-            prevBtn.className = 'btn btn-outline';
-            prevBtn.innerHTML = '<i class="ph ph-caret-left"></i> 上一步';
-            const nextBtn = document.createElement('button');
-            nextBtn.type = 'button';
-            nextBtn.className = 'btn btn-primary';
-            nextBtn.innerHTML = '下一步 <i class="ph ph-caret-right"></i>';
-            if (footer && originalSubmit) {
-                footer.insertBefore(prevBtn, originalSubmit);
-                footer.insertBefore(nextBtn, originalSubmit);
-            }
-
-            // currentStep 已在 onFormMount 開頭宣告 (給 conditional sync 用)
-            const TOTAL_STEPS = STEP_LABELS.length;
-            const setStep = (n) => {
-                currentStep = Math.max(1, Math.min(TOTAL_STEPS, n));
-                form.querySelectorAll('[data-wizard-step]').forEach(el => {
-                    const s = el.dataset.wizardStep;
-                    if (s === 'all') { el.style.display = ''; return; }
-                    el.style.display = String(s) === String(currentStep) ? '' : 'none';
-                });
-                // step 切換後 conditional 欄位重新跑 sync (paymentChannel / termMonths 等)
-                // 不然 platformName / termMonthsCustom 預設會被 display='' 蓋掉變顯示
-                try { syncChannelVisibility?.(); } catch {}
-                try { syncCustomTermVisibility?.(); } catch {}
-                // step 3 重算 totalDue (自訂月數會影響)
-                try { recalcTotalDue?.(); } catch {}
-                // 更新 stepper 樣式
-                stepper.querySelectorAll('.wiz-step').forEach(el => {
-                    const s = Number(el.dataset.wizStep);
-                    // 手機 CSS 用 .is-current / .is-done 控制 stepper label 收/展 (M-C-4)
-                    el.classList.toggle('is-current', s === currentStep);
-                    el.classList.toggle('is-done', s < currentStep);
-                    const num = el.querySelector('.wiz-step-num');
-                    const lbl = el.querySelector('.wiz-step-label');
-                    if (s < currentStep) {
-                        num.style.background = 'var(--color-success)';
-                        num.style.color = '#fff';
-                        num.innerHTML = '<i class="ph ph-check" style="font-size: var(--text-xs);"></i>';
-                        lbl.style.color = 'var(--text-muted)';
-                        lbl.style.fontWeight = '500';
-                    } else if (s === currentStep) {
-                        num.style.background = 'var(--color-primary)';
-                        num.style.color = '#fff';
-                        num.textContent = String(s);
-                        lbl.style.color = 'var(--text-main)';
-                        lbl.style.fontWeight = '700';
-                    } else {
-                        num.style.background = 'var(--bg-tertiary)';
-                        num.style.color = 'var(--text-muted)';
-                        num.textContent = String(s);
-                        lbl.style.color = 'var(--text-muted)';
-                        lbl.style.fontWeight = '500';
-                    }
-                });
-                stepper.querySelectorAll('.wiz-step-bar').forEach((bar, idx) => {
-                    bar.style.background = (idx + 1) < currentStep ? 'var(--color-success)' : 'var(--border-color)';
-                });
-                // footer
-                if (prevBtn) prevBtn.style.display = currentStep > 1 ? '' : 'none';
-                if (nextBtn) nextBtn.style.display = currentStep < TOTAL_STEPS ? '' : 'none';
-                if (originalSubmit) originalSubmit.style.display = currentStep === TOTAL_STEPS ? '' : 'none';
-                // 捲到 modal body 頂端 (modal-body 才是滾動容器)
-                const modalBody = wizardOverlay?.querySelector('.modal-body');
-                if (modalBody) modalBody.scrollTop = 0;
-            };
-
-            prevBtn.addEventListener('click', () => setStep(currentStep - 1));
-            nextBtn.addEventListener('click', () => {
-                // 驗證當前 step 的 required 欄位
-                const stepFields = fields.filter(f => STEP_MAP[f.name] === currentStep && f.required);
-                let firstInvalid = null;
-                let invalidLabel = '';
-                stepFields.forEach(f => {
-                    const el = form.querySelector(`[name="${f.name}"]`);
-                    if (!el) return;
-                    const val = String(el.value || '').trim();
-                    const target = el.closest('.custom-select') || el;
-                    if (!val) {
-                        if (!firstInvalid) { firstInvalid = target; invalidLabel = f.label || f.name; }
-                        target.classList.add('input-error');
-                    } else {
-                        target.classList.remove('input-error');
-                    }
-                });
-                if (firstInvalid) {
-                    const focusTarget = firstInvalid.classList.contains('custom-select')
-                        ? firstInvalid.querySelector('.custom-select-trigger') : firstInvalid;
-                    focusTarget?.focus();
-                    if (focusTarget?.scrollIntoView) focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    showToast(`「${invalidLabel}」必填，請補上`, 'danger', 4000);
-                    return;
-                }
-                setStep(currentStep + 1);
-            });
-
-            // Enter 鍵在前兩步 = 下一步 (不送出整張表)
-            form.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && currentStep < TOTAL_STEPS) {
-                    // textarea / 加減項目 row 內輸入不攔截
-                    const tag = (e.target.tagName || '').toLowerCase();
-                    if (tag === 'textarea') return;
-                    if (e.target.closest?.('.adj-row')) return;
-                    e.preventDefault();
-                    nextBtn.click();
+            initFormWizard({
+                form,
+                fields,
+                stepMap: STEP_MAP,
+                labels: STEP_LABELS,
+                onStepChange: step => {
+                    currentStep = step;
+                    syncChannelVisibility();
+                    syncCustomTermVisibility();
+                    recalcTotalDue();
                 }
             });
-
-            setStep(1);
         },
         onSubmit: (values) => {
             // ── 1. 驗證 + 預先計算 (合約期間 / 重疊檢查) ──
@@ -1378,7 +1250,7 @@ export function showCheckinAssignmentForm(opts = {}) {
                 ['到期日', endDate],
                 ['合約期', term === 3 ? '3 個月（季繳）' : `${term} 個月`],
                 ['月租金', `${moneyAmount(amount + extraBedRentTotal)}${extraBeds.length ? ` <span style="color: var(--text-muted); font-size: var(--text-xs);">(主 ${moneyAmount(amount)} + 額外 ${moneyAmount(extraBedRentTotal)})</span>` : ''}`],
-                ['應收總額', `<div><strong>${moneyAmount(due)}</strong> <span style="color: var(--text-muted); font-size: var(--text-xs);">(月租 × ${term} = ${moneyAmount((amount + extraBedRentTotal) * term)})</span></div>${adjustmentLines}`],
+                ['最後應收', `<div class="review-final-receivable"><strong>${moneyAmount(due)}</strong><span>月租合計 × ${term} 個月，已含加收與折扣</span></div>${adjustmentLines}`],
                 ['已收金額', `${moneyAmount(paidAmount)}${paidAmount >= due ? ' <span style="color: var(--color-success);">✅ 已收訖</span>' : paidAmount > 0 ? ` <span style="color: var(--color-warning);">部分繳款 (餘 ${moneyAmount(due - paidAmount)})</span>` : ' <span style="color: var(--color-danger);">❌ 未繳</span>'}`],
                 ['付款方式', values.paymentMethod || '匯款']
             ];
