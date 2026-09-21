@@ -14,7 +14,10 @@ const STATUS_LABEL = {
 const statusLabel = (s) => STATUS_LABEL[s] || s || '—';
 
 export function renderManagedSettlements() {
-    const settlements = [...mockData.settlements].sort((a, b) =>
+    const managedBuildingIds = new Set(
+        (mockData.buildings || []).filter(b => b.mode === 'managed').map(b => b.id)
+    );
+    const settlements = (mockData.settlements || []).filter(s => managedBuildingIds.has(s.buildingId)).sort((a, b) =>
         (b.month || '').localeCompare(a.month || '')
     );
 
@@ -41,6 +44,7 @@ export function renderManagedSettlements() {
                         <button class="btn btn-outline settlement-action" data-action="view" data-id="${esc(s.id)}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs);" title="詳情"><i class="ph ph-eye"></i></button>
                         ${s.status !== 'settled' ? `<button class="btn btn-outline settlement-action" data-action="mark-sent" data-id="${esc(s.id)}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs);" title="標記已傳送"><i class="ph ph-paper-plane-tilt"></i></button>` : ''}
                         ${s.status === 'sent' ? `<button class="btn btn-outline settlement-action" data-action="mark-settled" data-id="${esc(s.id)}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs); color: var(--color-success);" title="標記已結清"><i class="ph ph-check-circle"></i></button>` : ''}
+                        <button class="btn btn-outline settlement-action" data-action="delete" data-id="${esc(s.id)}" style="padding: 0.2rem 0.5rem; font-size: var(--text-xs); color: var(--color-danger);" title="刪除結算"><i class="ph ph-trash"></i></button>
                     </div>
                 </td>
             </tr>
@@ -100,6 +104,19 @@ export function initManagedSettlementsActions(scope) {
             store.updateSettlement(id, { status: 'settled' });
             showToast('已標記為「已結清」', 'success');
             refreshView();
+        }
+        else if (action === 'delete') {
+            openConfirm({
+                title: `刪除 ${esc(s.month)} 結算？`,
+                message: '刪除後將同步移除雲端紀錄，且無法復原。屋主已收到的款項不會自動退回。',
+                confirmLabel: '確認刪除',
+                danger: true,
+                onConfirm: () => {
+                    store.deleteSettlement(s.id);
+                    showToast(`已刪除 ${s.month} 結算`, 'success');
+                    refreshView();
+                }
+            });
         }
     });
 }

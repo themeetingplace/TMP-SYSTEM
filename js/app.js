@@ -77,18 +77,18 @@ const routes = {
     contracts:     { title: '合約管理',     group: '營運', render: renderContracts,  init: initContractActions },
     finance:       { title: '總收支表',     group: '帳務', render: renderFinance,    init: initFinanceActions },
     unsettled:     { title: '房租查帳',     group: '帳務', render: renderUnsettled,  init: initUnsettledActions },
-    expenses:      { title: '館務報帳',     group: '帳務', render: renderExpenses,   init: initExpensesActions },
+    expenses:      { title: '館務報帳',     group: '帳務', render: renderExpenses,   init: initExpensesActions, allowedModes: ['cohousing'] },
     reports:       { title: '報表',         group: '分析', render: renderReports,    init: initReportsActions },
     maintenance:   { title: '維修管理',     group: '營運', render: renderMaintenance,init: initMaintenanceActions },
     tenants:       { title: '租客清單',     group: '營運', render: renderTenants,    init: initTenantActions },
     settings:      { title: '系統設定',     group: '系統', render: renderSettings,   init: initSettingsActions },
     'admin-users': { title: '帳號管理',     group: '系統', render: renderAdminUsers, init: initAdminUsersActions, ownerOnly: true },
     // 代管模式 routes
-    'm-house':       { title: '代管房屋',       group: '代管', render: renderManagedHouse,       init: initManagedHouseActions, dynamic: true },
-    'm-house-new':   { title: '新增代管房屋',   group: '代管', render: () => { setTimeout(showNewManagedHouseForm, 50); return '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">開啟新增代管房屋表單中…</div>'; } },
-    'm-owners':      { title: '屋主清單',       group: '跨房屋', render: renderManagedOwners,      init: initManagedOwnersActions },
-    'm-settlements': { title: '屋主月結算',     group: '跨房屋', render: renderManagedSettlements, init: initManagedSettlementsActions },
-    'm-leads':       { title: '委託諮詢',       group: '代管',   render: renderManagedLeads,       init: initManagedLeadsActions }
+    'm-house':       { title: '代管房屋',       group: '代管', render: renderManagedHouse,       init: initManagedHouseActions, dynamic: true, allowedModes: ['managed'] },
+    'm-house-new':   { title: '新增代管房屋',   group: '代管', render: () => { setTimeout(showNewManagedHouseForm, 50); return '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">開啟新增代管房屋表單中…</div>'; }, allowedModes: ['managed'] },
+    'm-owners':      { title: '屋主清單',       group: '跨房屋', render: renderManagedOwners,      init: initManagedOwnersActions, allowedModes: ['managed'] },
+    'm-settlements': { title: '屋主月結算',     group: '跨房屋', render: renderManagedSettlements, init: initManagedSettlementsActions, allowedModes: ['managed'] },
+    'm-leads':       { title: '委託諮詢',       group: '代管',   render: renderManagedLeads,       init: initManagedLeadsActions, allowedModes: ['managed'] }
 };
 
 function handleRoute() {
@@ -113,6 +113,12 @@ function handleRoute() {
     // owner-only route guard：非 owner 直接打 #admin-users 也擋掉
     if (route.ownerOnly && window.__currentRole !== 'owner') {
         showToast('此頁僅限 Owner 存取', 'warning');
+        window.location.hash = 'dashboard';
+        return;
+    }
+    // 模式路由防護：側欄隱藏之外，直接輸入 hash 也不能跨進另一套資料頁。
+    if (route.allowedModes && !route.allowedModes.includes(getMode())) {
+        showToast(getMode() === 'managed' ? '此功能僅提供共居模式使用' : '此功能僅提供代管模式使用', 'warning');
         window.location.hash = 'dashboard';
         return;
     }

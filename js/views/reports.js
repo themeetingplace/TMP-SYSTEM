@@ -335,18 +335,22 @@ function renderStatTile(opts) {
 
 // === 15 號結算明細 modal — 列出當日在住的每一份合約 (依館別/床位排) ===
 function show15thDetailModal(dateISO, buildingId) {
-    const contracts = occupiedContractsOn(dateISO, buildingId);
+    const mode = getMode();
+    const contracts = occupiedContractsOn(dateISO, buildingId, mode);
     const buildingById = new Map(mockData.buildings.map(b => [b.id, b.name]));
 
     // 該館(或全部館)的所有床位, 用於顯示未占用
     const allowedBuildingIds = buildingId
         ? new Set([buildingId])
-        : new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === 'cohousing').map(b => b.id));
+        : new Set(mockData.buildings.filter(b => (b.mode || 'cohousing') === mode).map(b => b.id));
     const totalBeds = mockData.properties.filter(p => allowedBuildingIds.has(p.buildingId)).length;
 
     // 依 propertyName 快取合約 → 判斷該床位有沒有在住
-    const occupiedByPropName = new Map();
-    contracts.forEach(c => { if (c.propertyName) occupiedByPropName.set(c.propertyName, c); });
+    const occupiedByBed = new Map();
+    contracts.forEach(c => {
+        const bid = c._occupancyBuildingId || c.buildingId;
+        if (bid && c.propertyName) occupiedByBed.set(`${bid}\u0000${c.propertyName}`, c);
+    });
 
     // 依館別 group
     const allBeds = mockData.properties
@@ -361,11 +365,13 @@ function show15thDetailModal(dateISO, buildingId) {
 
     const [y, m, d] = dateISO.split('-');
     const dateLabel = `${y}/${parseInt(m,10)}/${parseInt(d,10)}`;
-    const scopeLabel = buildingId ? (buildingById.get(buildingId) || '該館') : '全部共居館';
+    const scopeLabel = buildingId
+        ? (buildingById.get(buildingId) || '該館')
+        : (mode === 'managed' ? '全部代管房屋' : '全部共居館');
 
     const tableRows = [];
     byBuilding.forEach((beds, bName) => {
-        const occupiedInThisBuilding = beds.filter(p => occupiedByPropName.has(p.name)).length;
+        const occupiedInThisBuilding = beds.filter(p => occupiedByBed.has(`${p.buildingId}\u0000${p.name}`)).length;
         tableRows.push(`
             <tr class="detail-building-header">
                 <td colspan="4" style="background: var(--color-background); padding: 0.5rem 0.75rem; font-weight: 600; color: var(--text-main); border-top: 1px solid var(--border-color);">
@@ -375,7 +381,7 @@ function show15thDetailModal(dateISO, buildingId) {
             </tr>
         `);
         beds.forEach(p => {
-            const c = occupiedByPropName.get(p.name);
+            const c = occupiedByBed.get(`${p.buildingId}\u0000${p.name}`);
             const shortName = (p.name || '').replace(/^聚空間\s*[-–]\s*[^\s]+\s+/, '');
             if (c) {
                 const conflictBadge = c._conflictCount ? `<span title="⚠ 此床有 ${c._conflictCount} 份重疊合約 — 已取最新的一份 (資料需清理)" style="display:inline-block; margin-left:.35rem; padding:.05rem .35rem; background:var(--color-warning); color:#fff; border-radius:8px; font-size:.7em; font-weight:600;">重疊×${c._conflictCount}</span>` : '';
@@ -403,7 +409,7 @@ function show15thDetailModal(dateISO, buildingId) {
             <div><strong>📅 快照日期：</strong>${dateLabel}</div>
             <div><strong>🏠 統計範圍：</strong>${scopeLabel}</div>
             <div><strong>✅ 列入計算：</strong><span style="color: var(--color-success); font-weight: 700; font-size: 1.1em;">${contracts.length}</span> / ${totalBeds} 床 (占用率 ${totalBeds > 0 ? ((contracts.length/totalBeds)*100).toFixed(1) : 0}%)</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">計算規則: startDate ≤ ${dateLabel} 且 終止日 > ${dateLabel} (或未終止), 排除代管/bundle 子合約</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">計算規則: startDate ≤ ${dateLabel} 且 終止日 > ${dateLabel} (或未終止), 排除另一模式與 bundle 子合約</div>
         </div>
         <div style="max-height: 60vh; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
             <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
@@ -445,7 +451,7 @@ function renderOperationalKpiTiles(k, buildingId = null) {
         : k.avgVacancyDays <= 60 ? 'var(--color-warning-text)'
         : 'var(--color-danger)';
     // 15 號結算入住率 (單館 or 全館)
-    const snap15 = occupiedAtCurrent15th(buildingId);
+    const snap15 = occupiedAtCurrent15th(buildingId, getMode());
     const snap15Status = statusLight(snap15.rate, 0.95, 0.80);
     const snap15DateLabel = (() => {
         const [y, m, d] = snap15.date.split('-');
@@ -796,14 +802,15 @@ function renderAnalysisTab() {
 //   3. 各代管房屋本期結算明細
 function renderManagedAnalysis() {
     const range = reportState.viewRange;
-    const md = _md();
-    const buildings = md.properties.length
-        ? mockData.buildings.filter(b => b.mode === 'managed' && b.status === 'active')
-        : [];
+    const managedBuildings = mockData.buildings.filter(b => b.mode === 'managed');
+    const buildings = managedBuildings.filter(b => b.status === 'active');
+    const managedBuildingIds = new Set(managedBuildings.map(b => b.id));
     const settlements = (mockData.settlements || []).filter(s => {
         const m = s.month || '';
         const r = range;
-        return m >= (r.start || '').slice(0, 7) && m <= (r.end || '').slice(0, 7);
+        return managedBuildingIds.has(s.buildingId)
+            && m >= (r.start || '').slice(0, 7)
+            && m <= (r.end || '').slice(0, 7);
     });
 
     // KPI 算

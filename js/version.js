@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.5.4';
-export const APP_BUILD_DATE = '2026-09-18';
+export const APP_VERSION = '1.6.0';
+export const APP_BUILD_DATE = '2026-09-21';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.6.0', date: '2026-09-21', notes: '強化共居／代管資料隔離：代管模式移除館務報帳並加入路由防護；修正代管報表入住率跨館取值；屋主月結算總表新增可同步雲端的刪除功能；官網屋主委託表單正式串接委託諮詢收件桌。' },
     { version: '1.5.4', date: '2026-09-18', notes: '館務報帳的四個快速入口上方新增「快速新增記帳」區塊標題，提升手機版操作辨識。' },
     { version: '1.5.3', date: '2026-09-18', notes: '開機重複帳單檢查新增單筆「這筆不處理」並同步保存到雲端；修正歷史 bundle 判斷的過度誤判；小幫手不再執行或看到重複帳單校正提示。' },
     { version: '1.5.2', date: '2026-09-18', notes: '小幫手的物件管理頁移除「房屋資料」分頁與閱讀入口；舊瀏覽器即使曾停留在該分頁，也會自動回到可用分頁。' },
