@@ -5891,6 +5891,30 @@ body[data-role="helper"] #expense-create-btn.helper-authorized-write { display: 
     outline: 2px solid color-mix(in srgb, var(--color-success) 55%, transparent);
     outline-offset: 2px;
 }
+.renewal-ask-row--renewed {
+    background: color-mix(in srgb, var(--color-success) 5%, var(--color-surface));
+}
+.renewal-state-stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.18rem 0.42rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+.renewal-state-stamp--done {
+    color: var(--color-success);
+    border-color: color-mix(in srgb, var(--color-success) 42%, var(--border-color));
+    background: color-mix(in srgb, var(--color-success) 9%, var(--color-surface));
+}
+.renewal-state-stamp--open {
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+}
 .rp-row--reply {
     grid-template-columns: 40px 44px minmax(56px, auto) 1fr;
 }

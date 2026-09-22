@@ -11,7 +11,7 @@ import { findRenewalAskCandidates, findRenewalAskCandidatesNoLine } from '../uti
 import { findRenewalConfirmCandidates, findDeclinePendingCandidates } from '../utils/autoRenewalProcessor.js';
 import { previewRenewalFor } from '../utils/paymentNoticeMessage.js';
 import { findRenewalSuccessor } from '../utils/renewalSuccessor.js';
-import { confirmRenew, confirmTerminate } from './contracts.js';
+import { confirmTerminate } from './contracts.js';
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
 // ⚠ fullName 可能是 null (維修單物件改非必填後, 公共空間報修無 propertyName) → 一律先轉字串防炸
@@ -169,8 +169,8 @@ function buildRenewalPipelineCard(invoices) {
                 <span class="rp-bed">${bedCode(c.propertyName)}</span>
                 <span class="rp-tenant">${c.tenant}</span>
                 <span class="rp-detail">${c.startDate || '—'} ~ ${c.endDate || '—'}</span>
-                <button type="button" class="rp-renewed-marker" data-contract-id="${c.id}" data-write title="已有接續合約時，可將這筆標記為已續約">
-                    <i class="ph ph-check-circle"></i> 已續約
+                <button type="button" class="rp-renewed-marker" data-contract-id="${c.id}" data-write title="人工確認這份合約已經續約">
+                    <i class="ph ph-check-circle"></i> 標記已續約
                 </button>
             </div>
         `).join('')}
@@ -196,8 +196,8 @@ function buildRenewalPipelineCard(invoices) {
                             <span class="rp-bed">${bedCode(c.propertyName)}</span>
                             <span class="rp-tenant">${c.tenant}</span>
                             <span class="rp-detail">${c.startDate || '—'} ~ ${c.endDate || '—'}${phone}</span>
-                            <button type="button" class="rp-renewed-marker" data-contract-id="${c.id}" data-write title="已有接續合約時，可將這筆標記為已續約">
-                                <i class="ph ph-check-circle"></i> 已續約
+                            <button type="button" class="rp-renewed-marker" data-contract-id="${c.id}" data-write title="人工確認這份合約已經續約">
+                                <i class="ph ph-check-circle"></i> 標記已續約
                             </button>
                         </div>
                     `;
@@ -816,8 +816,8 @@ window.initDashboardInteractions = function() {
         });
     });
 
-    // 步驟①「已續約」：只在確實存在下一份合約時結束舊合約的通知流程。
-    // 若還沒有接續合約，改為引導建立續約，避免床位與應收帳單中斷。
+    // 步驟①「已續約」：由管理者人工確認，不用姓名／床位／日期猜測。
+    // 有 parentContractId 明確關聯時顯示接續合約；沒有時仍可單純結束通知流程。
     document.querySelectorAll('.rp-renewed-marker').forEach(btn => {
         btn.addEventListener('click', () => {
             const id = btn.dataset.contractId;
@@ -826,19 +826,11 @@ window.initDashboardInteractions = function() {
 
             const successor = findRenewalSuccessor(contract, mockData.contracts);
 
-            if (!successor) {
-                openConfirm({
-                    title: '還沒有接續合約',
-                    message: `目前找不到 <strong>${esc(contract.tenant)}</strong> 在 ${esc(bedCode(contract.propertyName))} 的下一份合約，因此先不會標記「已續約」，避免床位與帳單提前中斷。`,
-                    confirmLabel: '前往建立續約',
-                    onConfirm: () => setTimeout(() => confirmRenew(contract.id), 120)
-                });
-                return;
-            }
-
             openConfirm({
                 title: '標記為已續約？',
-                message: `將結束 <strong>${esc(contract.id)}</strong> 的續住詢問，並以接續合約 <strong>${esc(successor.id)}</strong>（${esc(successor.startDate || '—')} ~ ${esc(successor.endDate || '—')}）為準。<br><br><span style="color:var(--text-muted);">確認後不會再發送這份舊合約的續住詢問，也不會另外建立合約或帳單。</span>`,
+                message: successor
+                    ? `將結束 <strong>${esc(contract.id)}</strong> 的續住詢問；系統已確認接續合約 <strong>${esc(successor.id)}</strong>（${esc(successor.startDate || '—')} ~ ${esc(successor.endDate || '—')}）明確續自此合約。<br><br><span style="color:var(--text-muted);">確認後不會再發送這份舊合約的續住詢問，也不會另外建立合約或帳單。</span>`
+                    : `將由你人工確認 <strong>${esc(contract.tenant)}</strong> 的合約 <strong>${esc(contract.id)}</strong> 已續約，並停止這份舊合約的續住詢問。<br><br><span style="color:var(--color-warning-text);">目前沒有「續自此合約」的接續合約紀錄；這個標記不會建立新合約或帳單。</span>`,
                 confirmLabel: '確認已續約',
                 onConfirm: () => {
                     const updated = store.updateContract(contract.id, {

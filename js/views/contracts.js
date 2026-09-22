@@ -20,6 +20,7 @@ import { entityCard } from '../utils/entityCard.js';
 import { emptyState } from '../utils/emptyState.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { buildTermOptions as buildTermOptionsUtil, initTermSelector } from '../utils/termSelector.js';
+import { findRenewalSuccessor, hasContractRenewed } from '../utils/renewalSuccessor.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
@@ -1931,7 +1932,7 @@ export function initContractActions(scope) {
         const todayStr = new Date().toISOString().slice(0, 10);
         const in14 = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
         const expiringSoon = filterContractsByMode(mockData.contracts).filter(c => {
-            if (c.renewalState !== 'active') return false;
+            if (c.renewalState !== 'active' && c.renewalState !== 'renewed') return false;
             if (!c.endDate) return false;
             return c.endDate >= todayStr && c.endDate <= in14;
         });
@@ -1946,26 +1947,34 @@ export function initContractActions(scope) {
             const askedAt = c.renewAskedAt ? new Date(c.renewAskedAt) : null;
             const askedRecently = askedAt && (Date.now() - askedAt.getTime()) < 5 * 86400000;
             const daysLeft = Math.ceil((new Date(c.endDate).getTime() - Date.now()) / 86400000);
-            return { c, hasLine, askedRecently, daysLeft, tenantId: t?.id };
+            const successor = findRenewalSuccessor(c, mockData.contracts);
+            const isRenewed = hasContractRenewed(c, mockData.contracts);
+            return { c, hasLine, askedRecently, daysLeft, tenantId: t?.id, successor, isRenewed };
         }).sort((a, b) => a.daysLeft - b.daysLeft);
 
-        const rowsHtml = enriched.map(({ c, hasLine, askedRecently, daysLeft }) => {
+        const rowsHtml = enriched.map(({ c, hasLine, askedRecently, daysLeft, successor, isRenewed }) => {
             const badges = [];
+            const renewalTitle = successor
+                ? `已建立接續合約 ${successor.id}（${successor.startDate || '—'} ~ ${successor.endDate || '—'}）`
+                : '此合約已標記為已續約';
+            badges.push(isRenewed
+                ? `<span class="renewal-state-stamp renewal-state-stamp--done" title="${escapeAttr(renewalTitle)}"><i class="ph ph-check-circle"></i> 已續約</span>`
+                : '<span class="renewal-state-stamp renewal-state-stamp--open"><i class="ph ph-clock"></i> 尚未續約</span>');
             if (!hasLine) badges.push('<span class="status-badge danger" style="font-size: var(--text-2xs);">未綁 LINE</span>');
             if (askedRecently) badges.push('<span class="status-badge warning" style="font-size: var(--text-2xs);">5天內問過</span>');
             if (c.renewIntent === 'renew') badges.push('<span class="status-badge success" style="font-size: var(--text-2xs);">已回續租</span>');
             if (c.renewIntent === 'decline') badges.push('<span class="status-badge info" style="font-size: var(--text-2xs);">已回不續</span>');
             const propShort = String(c.propertyName || '').replace('聚空間 - ', '');
-            const disabled = !hasLine || c.renewIntent === 'renew' || c.renewIntent === 'decline';
+            const disabled = isRenewed || !hasLine || c.renewIntent === 'renew' || c.renewIntent === 'decline';
             const defaultChecked = !disabled && !askedRecently;
             return `
-                <tr data-row-cid="${c.id}">
+                <tr data-row-cid="${escapeAttr(c.id)}" class="${isRenewed ? 'renewal-ask-row--renewed' : ''}">
                     <td style="padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-color); text-align: center;">
-                        <input type="checkbox" class="ask-pick" data-cid="${c.id}" ${defaultChecked ? 'checked' : ''} ${disabled ? 'disabled' : ''} style="cursor: ${disabled ? 'not-allowed' : 'pointer'}; width: 16px; height: 16px;">
+                        <input type="checkbox" class="ask-pick" data-cid="${escapeAttr(c.id)}" ${defaultChecked ? 'checked' : ''} ${disabled ? 'disabled' : ''} aria-label="${isRenewed ? '已續約，無需再次發送' : `選取合約 ${escapeAttr(c.id)}`}" style="cursor: ${disabled ? 'not-allowed' : 'pointer'}; width: 16px; height: 16px;">
                     </td>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-family: monospace; font-size: var(--text-xs);">${c.id}</td>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); font-weight: 600;">${c.tenant || '—'}</td>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${propShort}</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-family: monospace; font-size: var(--text-xs);">${esc(c.id)}</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); font-weight: 600;">${esc(c.tenant || '—')}</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">${esc(propShort)}</td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs); color: var(--text-muted);">
                         ${c.endDate || '—'} <span style="color: ${daysLeft <= 7 ? 'var(--color-warning)' : 'var(--text-muted)'}; font-weight: ${daysLeft <= 7 ? '600' : '400'};">(${daysLeft} 天後)</span>
                     </td>
@@ -1976,7 +1985,8 @@ export function initContractActions(scope) {
             `;
         }).join('');
 
-        const defaultPickedCount = enriched.filter(x => x.hasLine && !x.askedRecently && x.c.renewIntent !== 'renew' && x.c.renewIntent !== 'decline').length;
+        const renewedCount = enriched.filter(x => x.isRenewed).length;
+        const defaultPickedCount = enriched.filter(x => !x.isRenewed && x.hasLine && !x.askedRecently && x.c.renewIntent !== 'renew' && x.c.renewIntent !== 'decline').length;
 
         openConfirm({
             title: '📮 詢問續租意願 — 選擇要發送的合約',
@@ -1984,9 +1994,9 @@ export function initContractActions(scope) {
             maxWidth: 900,
             message: `
                 <div style="margin-bottom: 0.75rem; padding: 0.65rem 0.8rem; background: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--color-primary); font-size: var(--text-sm); line-height: 1.5;">
-                    <div><strong>14 天內到期</strong>的合約共 <strong style="color: var(--color-primary);">${enriched.length}</strong> 筆.</div>
+                    <div><strong>14 天內到期</strong>的合約共 <strong style="color: var(--color-primary);">${enriched.length}</strong> 筆${renewedCount > 0 ? `，其中 <strong style="color: var(--color-success);">${renewedCount}</strong> 筆已續約` : ''}。</div>
                     <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.25rem;">
-                        預設打勾: 已綁 LINE + 5 天內未問過 + 尚未表態的 (${defaultPickedCount} 筆). 你可自行調整.
+                        預設打勾：已綁 LINE＋5 天內未問過＋尚未表態（${defaultPickedCount} 筆）。已續約資料只供確認，不會再次發送。
                     </div>
                 </div>
                 <div class="search-bar" style="margin-bottom: 0.5rem; width: 100%;">

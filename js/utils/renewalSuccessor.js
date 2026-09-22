@@ -1,6 +1,6 @@
 // 找出舊合約對應的接續合約。
-// 優先採用 parentContractId 明確指向舊合約的資料；舊資料若沒有關聯欄位，
-// 才以同租客、同床位且開始日不早於舊到期日作為相容判斷。
+// 續約狀態屬於重要業務資料，只接受 parentContractId 明確關聯；
+// 不可用同租客、同床位或相鄰日期推測，避免把重建／重複合約誤判為續約。
 export function findRenewalSuccessor(contract, contracts = []) {
     if (!contract) return null;
 
@@ -8,18 +8,13 @@ export function findRenewalSuccessor(contract, contracts = []) {
         .filter(other => {
             const state = other.renewalState ?? 'active';
             return other.id !== contract.id
-                && other.tenant === contract.tenant
-                && other.propertyName === contract.propertyName
-                && (
-                    other.parentContractId === contract.id
-                    || (other.startDate && contract.endDate && other.startDate >= contract.endDate)
-                )
+                && other.parentContractId === contract.id
                 && (state === 'active' || state === 'renewed');
         })
-        .sort((a, b) => {
-            const aLinked = a.parentContractId === contract.id ? 1 : 0;
-            const bLinked = b.parentContractId === contract.id ? 1 : 0;
-            return bLinked - aLinked
-                || String(a.startDate || '').localeCompare(String(b.startDate || ''));
-        })[0] || null;
+        .sort((a, b) => String(a.startDate || '').localeCompare(String(b.startDate || '')))[0] || null;
+}
+
+export function hasContractRenewed(contract, contracts = []) {
+    return contract?.renewalState === 'renewed'
+        || Boolean(findRenewalSuccessor(contract, contracts));
 }
