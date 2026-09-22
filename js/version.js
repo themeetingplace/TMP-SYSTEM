@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.6.4';
+export const APP_VERSION = '1.6.5';
 export const APP_BUILD_DATE = '2026-09-22';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.6.5', date: '2026-09-22', notes: '首頁續租清單改為雙狀態：尚未續約顯示灰色「標記已續約」操作，已續約顯示綠色「已續約」狀態並保留在 14 天到期區間供核對；待發數量仍只計算未處理合約。' },
     { version: '1.6.4', date: '2026-09-22', notes: '「詢問續租意願」清單新增已續約／尚未續約狀態；續約只採用人工標記或明確的續自合約關聯，不再以租客、床位與日期推測；首頁操作文字改為「標記已續約」，避免誤認為目前狀態。' },
     { version: '1.6.3', date: '2026-09-22', notes: '首頁「續租與收款流程」的待發通知新增「已續約」標記；確認已有接續合約後可結束舊合約通知，若尚未建立接續合約則會引導進入續約流程。' },
     { version: '1.6.2', date: '2026-09-21', notes: '修正合約編輯流程的步驟顯示，「最後應收」只會出現在第 3 步「收款」，不再提前出現於床位與租客資料。' },

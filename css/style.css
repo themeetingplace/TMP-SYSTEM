@@ -3880,7 +3880,7 @@ body[data-role="helper"] .rp-step-btn[data-goto="btn-ask-renewal"],
 body[data-role="helper"] .rp-step-btn[data-goto="btn-confirm-renewals"] { display: none !important; }
 body[data-role="helper"] .renewal-decline-item { pointer-events: none; cursor: default; }
 body[data-role="helper"] .renewal-decline-item .rp-row-link { display: none !important; }
-body[data-role="helper"] .rp-renewed-marker { display: none !important; }
+body[data-role="helper"] .rp-renewed-marker[data-write] { display: none !important; }
 /* 住房一覽 — 入住按鈕 + 退房 checkbox 隱藏 (helper 不能寫入這些) */
 body[data-role="helper"] .occ-checkin-btn,
 body[data-role="helper"] .occ-terminate-check { display: none !important; }
@@ -5868,28 +5868,40 @@ body[data-role="helper"] #expense-create-btn.helper-authorized-write { display: 
     gap: 0.22rem;
     min-height: 24px;
     padding: 0.15rem 0.45rem;
-    border: 1px solid color-mix(in srgb, var(--color-success) 45%, var(--border-color));
+    border: 1px solid var(--border-color);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-success) 7%, var(--color-surface));
-    color: var(--color-success);
+    background: var(--bg-secondary);
+    color: var(--text-muted);
     font-family: inherit;
     font-size: 0.6rem;
     font-weight: 700;
     line-height: 1;
     white-space: nowrap;
-    cursor: pointer;
+    cursor: default;
     transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
-.rp-renewed-marker:hover {
-    background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
-    border-color: var(--color-success);
+.rp-renewed-marker--pending {
+    cursor: pointer;
 }
-.rp-renewed-marker:active {
+.rp-renewed-marker--pending:hover {
+    background: color-mix(in srgb, var(--text-muted) 9%, var(--color-surface));
+    border-color: color-mix(in srgb, var(--text-muted) 55%, var(--border-color));
+    color: var(--text-main);
+}
+.rp-renewed-marker--pending:active {
     transform: translateY(1px);
 }
-.rp-renewed-marker:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-success) 55%, transparent);
+.rp-renewed-marker--pending:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--text-muted) 45%, transparent);
     outline-offset: 2px;
+}
+.rp-renewed-marker--done {
+    border-color: color-mix(in srgb, var(--color-success) 45%, var(--border-color));
+    background: color-mix(in srgb, var(--color-success) 9%, var(--color-surface));
+    color: var(--color-success);
+}
+.rp-row--renewed {
+    background: color-mix(in srgb, var(--color-success) 3%, transparent);
 }
 .renewal-ask-row--renewed {
     background: color-mix(in srgb, var(--color-success) 5%, var(--color-surface));
