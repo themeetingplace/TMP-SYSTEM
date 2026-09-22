@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.6.2';
-export const APP_BUILD_DATE = '2026-09-21';
+export const APP_VERSION = '1.6.3';
+export const APP_BUILD_DATE = '2026-09-22';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.6.3', date: '2026-09-22', notes: '首頁「續租與收款流程」的待發通知新增「已續約」標記；確認已有接續合約後可結束舊合約通知，若尚未建立接續合約則會引導進入續約流程。' },
     { version: '1.6.2', date: '2026-09-21', notes: '修正合約編輯流程的步驟顯示，「最後應收」只會出現在第 3 步「收款」，不再提前出現於床位與租客資料。' },
     { version: '1.6.1', date: '2026-09-21', notes: '統一共居合約的新增、入住與編輯入口為三步驟流程，支援合約期、自訂到期日與最終到期日預覽；帳務的「最後應收」改為明顯結算卡，即時列出月租、加收與折扣算式。' },
     { version: '1.6.0', date: '2026-09-21', notes: '強化共居／代管資料隔離：代管模式移除館務報帳並加入路由防護；修正代管報表入住率跨館取值；屋主月結算總表新增可同步雲端的刪除功能；官網屋主委託表單正式串接委託諮詢收件桌。' },
