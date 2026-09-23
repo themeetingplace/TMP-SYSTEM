@@ -5927,6 +5927,38 @@ body[data-role="helper"] #expense-create-btn.helper-authorized-write { display: 
     color: var(--text-muted);
     background: var(--bg-secondary);
 }
+.contract-management-link {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    padding: 0.28rem 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 34%, var(--border-color));
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+    color: var(--color-primary);
+    font: inherit;
+    font-size: var(--text-xs);
+    font-weight: 650;
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+.contract-management-link .mono {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--text-sm);
+    font-weight: 750;
+}
+.contract-management-link:hover {
+    background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+    border-color: var(--color-primary);
+}
+.contract-management-link:active {
+    transform: translateY(1px);
+}
+.contract-management-link:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    outline-offset: 2px;
+}
 .rp-row--reply {
     grid-template-columns: 40px 44px minmax(56px, auto) 1fr;
 }

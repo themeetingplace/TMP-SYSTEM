@@ -1282,6 +1282,13 @@ export function showContractDetails(id) {
         title: `合約 ${c.id}`,
         topHtml: contractProgressTimeline(c, state),
         items: [
+            { label: '合約編號', value: `
+                <button type="button" class="contract-management-link" data-action="goto-contract-management" data-contract-id="${escapeAttr(c.id)}" title="前往合約管理並定位這筆合約">
+                    <span class="mono">${esc(c.id)}</span>
+                    <span>前往合約管理</span>
+                    <i class="ph ph-arrow-right" aria-hidden="true"></i>
+                </button>
+            ` },
             { label: '生命週期', value: lifecycleBadge(state) + (
                 state === 'pending_termination'
                     ? ` <span style="color: var(--text-muted); font-size: var(--text-sm);">預計 ${c.pendingTerminationDate} 退租, 床位到那天前仍顯示在住</span>`
@@ -1320,6 +1327,14 @@ export function showContractDetails(id) {
         })(),
         onMount: (overlay, closeModal) => {
             overlay.querySelector('[data-action="close-detail"]')?.addEventListener('click', closeModal);
+            overlay.querySelector('[data-action="goto-contract-management"]')?.addEventListener('click', () => {
+                closeModal();
+                if (window.focusContractInManagement) {
+                    window.focusContractInManagement(c.id);
+                } else {
+                    window.location.hash = 'contracts';
+                }
+            });
             overlay.querySelector('[data-action="reactivate"]')?.addEventListener('click', () => {
                 const isPending = !!c.pendingTerminationDate && c.renewalState === 'active';
                 openConfirm({
