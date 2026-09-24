@@ -72,6 +72,7 @@ export const mockData = {
 // 為了不讓老用戶資料消失，hydrate 時會先試新 key，沒有就讀舊 key 並一次性 migrate
 const STORAGE_KEY = 'bananas-pms-data-v1';
 const LEGACY_STORAGE_KEY = 'bananas-bms-data-v1';
+const DIRTY_ROWS_KEY = 'pms-dirty-rows-v1';
 let _persistDisabled = false;
 
 // ── 財務起算日 cutoff ──
@@ -192,14 +193,87 @@ export const dirtyRows = {
     rentRules: new Set()
 };
 
-export function markDirty(table, id) {
-    if (dirtyRows[table] && id != null) dirtyRows[table].add(id);
+// 手機瀏覽器切到背景時，JavaScript 可能在 debounce push 完成前就被暫停。
+// dirty journal 必須獨立寫進 localStorage；下次開啟才能知道哪些本機修改尚未上雲，
+// 避免 bootstrap pull 直接以雲端舊值覆蓋掉手機剛做的更新。
+const dirtyRevisions = Object.fromEntries(
+    Object.keys(dirtyRows).map(table => [table, new Map()])
+);
+
+function persistDirtyJournal() {
+    try {
+        const rows = {};
+        Object.entries(dirtyRows).forEach(([table, ids]) => {
+            // PDF base64 刻意不進 localStorage，不能只保存 ID，否則重開後會拿舊雲端內容回推。
+            if (table === 'contractTemplates') return;
+            if (ids.size === 0) return;
+            rows[table] = Array.from(ids).map(id => ({
+                id,
+                revision: dirtyRevisions[table].get(id) || 1
+            }));
+        });
+        if (Object.keys(rows).length === 0) localStorage.removeItem(DIRTY_ROWS_KEY);
+        else localStorage.setItem(DIRTY_ROWS_KEY, JSON.stringify({ version: 1, rows }));
+    } catch (e) {
+        console.warn('[dirty-journal] 儲存失敗:', e);
+    }
 }
 
-export function clearDirty(table, ids) {
+function hydrateDirtyJournal() {
+    try {
+        const raw = localStorage.getItem(DIRTY_ROWS_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        Object.entries(parsed?.rows || {}).forEach(([table, entries]) => {
+            if (!dirtyRows[table] || !Array.isArray(entries)) return;
+            entries.forEach(entry => {
+                if (entry?.id == null) return;
+                dirtyRows[table].add(entry.id);
+                dirtyRevisions[table].set(entry.id, Number(entry.revision) || 1);
+            });
+        });
+        console.info('[dirty-journal] 已還原尚未上雲的修改');
+    } catch (e) {
+        console.warn('[dirty-journal] 內容毀損，已清除:', e);
+        try { localStorage.removeItem(DIRTY_ROWS_KEY); } catch {}
+    }
+}
+
+hydrateDirtyJournal();
+
+export function markDirty(table, id) {
+    if (!dirtyRows[table] || id == null) return;
+    dirtyRows[table].add(id);
+    dirtyRevisions[table].set(id, (dirtyRevisions[table].get(id) || 0) + 1);
+    persistDirtyJournal();
+}
+
+// expectedRevisions 用來防止 push 進行中同一筆又被編輯時，舊 push 回來誤清掉新修改。
+export function clearDirty(table, ids, expectedRevisions = null) {
     if (!dirtyRows[table]) return;
-    if (ids === undefined) { dirtyRows[table].clear(); return; }
-    (ids instanceof Set ? ids : Array.from(ids)).forEach(id => dirtyRows[table].delete(id));
+    if (ids === undefined) {
+        dirtyRows[table].clear();
+        dirtyRevisions[table].clear();
+        persistDirtyJournal();
+        return;
+    }
+    (ids instanceof Set ? ids : Array.from(ids)).forEach(id => {
+        if (expectedRevisions && (dirtyRevisions[table].get(id) || 0) !== expectedRevisions.get(id)) return;
+        dirtyRows[table].delete(id);
+        dirtyRevisions[table].delete(id);
+    });
+    persistDirtyJournal();
+}
+
+export function captureDirtyRevisions(table, ids) {
+    const revisions = new Map();
+    (ids || []).forEach(id => revisions.set(id, dirtyRevisions[table]?.get(id) || 0));
+    return revisions;
+}
+
+export function hasDirtyRows(tableNames = null) {
+    const names = tableNames || Object.keys(dirtyRows);
+    return names.some(table => (dirtyRows[table]?.size || 0) > 0);
 }
 
 // P1-15: contractTemplates (PDF base64) 不寫 localStorage，避免一個樣板就撐爆 5MB

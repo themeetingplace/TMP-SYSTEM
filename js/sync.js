@@ -19,7 +19,14 @@
 //   'bms:data-changed'        資料變動 → app.js 重新渲染當前頁
 
 import { supabase } from './supabase.js';
-import { mockData, runMigration, dirtyRows, clearDirty } from './data.js';
+import {
+    mockData,
+    runMigration,
+    dirtyRows,
+    clearDirty,
+    captureDirtyRevisions,
+    hasDirtyRows
+} from './data.js';
 import { TABLES, SMALL_TABLES, LARGE_TABLES } from './db-mapping.js';
 
 const LAST_SYNC_KEY = 'pms-last-sync';
@@ -152,11 +159,17 @@ export async function pullAll() {
                     mockData[t.src].forEach(r => localById.set(r[pkJs], r));
                     const remoteIds = new Set((data || []).map(r => r[t.pk]));
 
-                    let added = 0, replaced = 0;
+                    const dirtySet = dirtyRows[t.src];
+                    let added = 0, replaced = 0, preserved = 0;
                     (data || []).forEach(raw => {
                         const id = raw[t.pk];
                         const local = localById.get(id);
                         const converted = t.fromDb(raw);
+                        // 本機尚未上雲的 row 不可被 pull 回來的舊資料蓋掉。
+                        if (local && dirtySet?.has(id)) {
+                            preserved++;
+                            return;
+                        }
                         if (!local) {
                             mockData[t.src].push(converted);
                             added++;
@@ -169,9 +182,11 @@ export async function pullAll() {
                     });
                     // 雲端優先：本機有但雲端沒有 → 刪掉本機 (清掉 mockData demo 殘留)
                     const beforeLen = mockData[t.src].length;
-                    mockData[t.src] = mockData[t.src].filter(r => remoteIds.has(r[pkJs]));
+                    mockData[t.src] = mockData[t.src].filter(r =>
+                        remoteIds.has(r[pkJs]) || dirtySet?.has(r[pkJs])
+                    );
                     const removed = beforeLen - mockData[t.src].length;
-                    console.log(`  ⬇ ${t.key}: +${added} / ↺${replaced} / 🗑${removed}`);
+                    console.log(`  ⬇ ${t.key}: +${added} / ↺${replaced} / 🛡${preserved} / 🗑${removed}`);
                 } catch (tableErr) {
                     // 單表失敗：log 但不打斷其他表
                     tableErrors.push({ table: t.key, error: tableErr.message });
@@ -209,6 +224,7 @@ export async function pullAll() {
 let pushInFlight = null;
 async function pushSmall() {
     if (pushInFlight) return pushInFlight;       // audit: 防止三條 push 路徑併發 (race + status 閃爍)
+    let pushSucceeded = false;
     pushInFlight = (async () => {
         if (!navigator.onLine) return;
         if (!firstPullDone) {
@@ -231,8 +247,10 @@ async function pushSmall() {
                 const dedupeBeforePush = dedupeById(mockData[t.src] || [], t.src);
                 let rows;
                 let dirtyIds = [];
+                let dirtyRevisionSnapshot = new Map();
                 if (dirtySet && dirtySet.size > 0) {
                     dirtyIds = Array.from(dirtySet);
+                    dirtyRevisionSnapshot = captureDirtyRevisions(t.src, dirtyIds);
                     const dirtyRowObjects = dedupeBeforePush.filter(r => dirtyIds.includes(r[pkJs]));
                     rows = dirtyRowObjects.map(t.toDb);
                     console.log(`[sync] ${t.key} dirty push: ${rows.length}/${dedupeBeforePush.length} rows (${dirtyIds.length} marked)`);
@@ -272,7 +290,7 @@ async function pushSmall() {
                     }
                     throw new Error(`${t.key}: ${error.message}`);
                 }
-                clearDirty(t.src, dirtyIds);
+                clearDirty(t.src, dirtyIds, dirtyRevisionSnapshot);
                 markJustPushed();
                 (returned || []).forEach(r => {
                     if (r?.[t.pk] && r?.updated_at) markRowPushed(t.key, r[t.pk], r.updated_at);
@@ -280,12 +298,17 @@ async function pushSmall() {
             }
             setStatus('idle');
             resetRetryCounter();  // 成功 → 停止 auto-retry backoff
+            pushSucceeded = true;
         } catch (e) {
             setStatus('error', e.message);
             console.error('[sync] push 失敗:', e);
             scheduleAutoRetry();
         }
-    })().finally(() => { pushInFlight = null; });
+    })().finally(() => {
+        pushInFlight = null;
+        // push 期間同一筆若又被編輯，revision 不同所以不會被 clear；立刻補送最新版。
+        if (pushSucceeded && hasDirtyRows(SMALL_TABLES.map(t => t.src))) schedulePush(0);
+    });
     return pushInFlight;
 }
 
@@ -304,8 +327,10 @@ async function pushLarge() {
             const dedupeBeforePush = dedupeById(mockData[t.src] || [], t.src);
             let rows;
             let dirtyIds = [];
+            let dirtyRevisionSnapshot = new Map();
             if (dirtySet && dirtySet.size > 0) {
                 dirtyIds = Array.from(dirtySet);
+                dirtyRevisionSnapshot = captureDirtyRevisions(t.src, dirtyIds);
                 const dirtyRowObjects = dedupeBeforePush.filter(r => dirtyIds.includes(r[pkJs]));
                 rows = dirtyRowObjects.map(t.toDb);
                 console.log(`[sync] ${t.key} dirty push: ${rows.length}/${dedupeBeforePush.length} rows (${dirtyIds.length} marked)`);
@@ -327,7 +352,7 @@ async function pushLarge() {
                 }
                 throw new Error(`${t.key}: ${error.message}`);
             }
-            clearDirty(t.src, dirtyIds);
+            clearDirty(t.src, dirtyIds, dirtyRevisionSnapshot);
             markJustPushed();
             (returned || []).forEach(r => {
                 if (r?.[t.pk] && r?.updated_at) markRowPushed(t.key, r[t.pk], r.updated_at);
@@ -345,11 +370,11 @@ async function pushLarge() {
 export async function pushAll() { await pushSmall(); await pushLarge(); }
 
 let pushTimer = null;
-function schedulePush() {
+function schedulePush(delay = 300) {
     clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => pushSmall(), 1500);
+    pushTimer = setTimeout(() => pushSmall(), delay);
 }
-window.addEventListener('bms:persist', schedulePush);
+window.addEventListener('bms:persist', () => schedulePush());
 window.addEventListener('bms:template-changed', () => pushLarge());
 
 // 刪除事件 → 直接送 DELETE 到 Supabase (upsert 不會處理刪除，否則本機刪了雲端還在，下次 pull 又拉回)
@@ -523,6 +548,11 @@ function handleRealtimeChange(payload) {
             console.log(`[realtime] ${payload.eventType} ${t.key}/${id} 略過 (最近剛刪)`);
             return;
         }
+        // 本機正在等待上傳的修改優先，避免另一台裝置的舊 echo 蓋掉尚未同步內容。
+        if (dirtyRows[t.src]?.has(id)) {
+            console.log(`[realtime] ${payload.eventType} ${t.key}/${id} 略過 (本機尚待上傳)`);
+            return;
+        }
         // ⚠ Per-row echo check: 用 incoming.updated_at 比對本機這個 row 最近 push 的 updated_at
         //   通過 → 真的是別人改的 (或跨 tab 自己另開改的) → 套用 + re-render
         //   不通過 → 自家 echo → 靜默
@@ -592,6 +622,8 @@ function stopRealtime() {
 export async function bootstrap() {
     try {
         await pullAll();
+        // pullAll 會保留 dirty journal 中的本機 row；確認雲端可讀後立刻補送。
+        if (hasDirtyRows()) await pushAll();
         startRealtime();
         return { success: true };
     } catch (e) {
@@ -608,6 +640,7 @@ export function clearLocalCacheAndReload() {
         localStorage.removeItem('pms-last-sync');
         localStorage.removeItem('bananas-bms-data-v1');  // 舊 key
         localStorage.removeItem('bms-last-sync');
+        localStorage.removeItem('pms-dirty-rows-v1');
     } catch (e) {
         console.error('[sync] 清快取失敗:', e);
     }
@@ -616,18 +649,56 @@ export function clearLocalCacheAndReload() {
 window.clearLocalCacheAndReload = clearLocalCacheAndReload;
 
 // === 網路狀態監聽 ===
-// ⚠ 一定要序列化 pullAll → pushAll，原本平行賽跑會讓 stale local 把雲端覆蓋掉 (zombie restore)
+// 先補送 dirty journal，再拉雲端；pull 本身也會保留未上雲 row，避免離線修改遺失。
 window.addEventListener('online', async () => {
     state.online = true;
     emit();
     console.log('[sync] 連線恢復');
     try {
-        await pullAll();
-        await pushAll();
+        await reconcileDevices('online');
     } catch (e) {
         console.warn('[sync] 連線恢復後同步失敗:', e);
     }
 });
+
+// === 跨裝置 / 行動瀏覽器生命週期保護 ===
+// 手機切背景先盡力 flush；電腦分頁重新回到前景時則主動補推本機修改、再拉雲端最新值。
+let reconcileInFlight = null;
+let lastReconcileAt = 0;
+async function reconcileDevices(reason) {
+    if (!navigator.onLine) return;
+    if (!firstPullDone && reason !== 'online') return;
+    if (reconcileInFlight) return reconcileInFlight;
+    const now = Date.now();
+    if (reason !== 'online' && now - lastReconcileAt < 2000) return;
+    lastReconcileAt = now;
+    reconcileInFlight = (async () => {
+        console.log(`[sync] 跨裝置重新核對 (${reason})`);
+        // App 若在離線狀態啟動，恢復網路後要先完成首次 pull，才能安全補推本機資料。
+        if (!firstPullDone) await pullAll();
+        if (hasDirtyRows()) await pushAll();
+        await pullAll();
+        startRealtime();
+    })().catch(e => {
+        console.warn(`[sync] 跨裝置重新核對失敗 (${reason}):`, e);
+    }).finally(() => { reconcileInFlight = null; });
+    return reconcileInFlight;
+}
+
+function flushBeforeSuspend(reason) {
+    if (!navigator.onLine || !firstPullDone || !hasDirtyRows()) return;
+    clearTimeout(pushTimer);
+    pushTimer = null;
+    console.log(`[sync] 頁面即將暫停，立即補送 (${reason})`);
+    void pushAll();
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushBeforeSuspend('hidden');
+    else void reconcileDevices('visible');
+});
+window.addEventListener('focus', () => { void reconcileDevices('focus'); });
+window.addEventListener('pagehide', () => flushBeforeSuspend('pagehide'));
 window.addEventListener('offline', () => {
     state.online = false;
     setStatus('offline');
