@@ -7,6 +7,21 @@ function integerAmount(value) {
     return Number.isFinite(number) ? Math.round(number) : 0;
 }
 
+function invoiceSequence(id) {
+    const match = String(id || '').match(/(\d+)$/);
+    return match ? Number(match[1]) : 0;
+}
+
+export function latestContractRentInvoice(invoices, contractId) {
+    if (!contractId || !Array.isArray(invoices)) return null;
+    return invoices
+        .filter(invoice => invoice?.contractId === contractId && invoice.direction === 'in' && invoice.type === '房租')
+        .sort((a, b) => {
+            const createdDiff = (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0);
+            return createdDiff || invoiceSequence(b.id) - invoiceSequence(a.id);
+        })[0] || null;
+}
+
 export function invoiceDueAmount(invoice) {
     if (!invoice) return 0;
     return Math.max(0, integerAmount(invoice.amount) - integerAmount(invoice.discount));
@@ -54,4 +69,31 @@ export function invoiceAdjustments(invoice) {
     }
 
     return items;
+}
+
+// 合約 PDF / 合約確認頁的「最後應收」摘要。
+// 有房租帳單時，帳單是管理員最後確認並保存的金額來源；不能再用月租重算覆蓋，
+// 否則像 C285 這種直接調整最後應收的資料會從 9,000 被還原成 8,500。
+export function contractReceivableSummary({ monthlyRent = 0, termMonths = 1, invoice = null } = {}) {
+    const term = Math.max(1, integerAmount(termMonths));
+    const baseTotal = integerAmount(monthlyRent) * term;
+    const adjustments = invoiceAdjustments(invoice);
+    const describedTotal = baseTotal + adjustments.reduce(
+        (sum, item) => sum + (item.kind === 'add' ? item.amount : -item.amount),
+        0
+    );
+    const totalAmount = invoice ? invoiceDueAmount(invoice) : Math.max(0, describedTotal);
+
+    // 舊資料或直接編輯帳單金額時，最後應收可能沒有對應的結構化加減項。
+    // 補出差額，讓 PDF 的明細算式仍能對得上最後應收。
+    const unexplainedDifference = totalAmount - describedTotal;
+    if (invoice && unexplainedDifference !== 0) {
+        adjustments.push({
+            kind: unexplainedDifference > 0 ? 'add' : 'sub',
+            label: '帳單最後應收調整',
+            amount: Math.abs(unexplainedDifference)
+        });
+    }
+
+    return { adjustments, totalAmount, monthlyAmount: Math.round(totalAmount / term) };
 }

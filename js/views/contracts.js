@@ -21,6 +21,7 @@ import { emptyState } from '../utils/emptyState.js';
 import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { buildTermOptions as buildTermOptionsUtil, initTermSelector } from '../utils/termSelector.js';
 import { findRenewalSuccessor, hasContractRenewed } from '../utils/renewalSuccessor.js';
+import { contractReceivableSummary, latestContractRentInvoice } from '../utils/invoicePaymentSummary.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
@@ -43,22 +44,11 @@ function dismissRenewBanner() {
     } catch {}
 }
 
-// 合約的首張房租帳單 (money 相關欄位的唯一真相來源 — 建立當下算好存住的)
+// 合約最新一張房租帳單 (money 相關欄位的唯一真相來源)。
+// 正常情況每份合約只有一張；若歷史同步留下重複帳單，明確採最新建立者，
+// 避免依 Supabase 回傳順序或到期日誤抓舊資料。
 function getContractInvoice(contract) {
-    if (!contract?.id) return null;
-    return mockData.invoices
-        .filter(i => i.contractId === contract.id && i.direction === 'in' && i.type === '房租')
-        .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))[0] || null;
-}
-
-// 從合約的首張帳單抓加減項目 (季繳優惠 / 能源費等)，給合約 PDF 填入用
-function getContractAdjustments(contract) {
-    const invoice = getContractInvoice(contract);
-    if (!invoice || !invoice.discountReason) return [];
-    try {
-        const arr = JSON.parse(invoice.discountReason);
-        return Array.isArray(arr) ? arr : [];
-    } catch { return []; }
+    return latestContractRentInvoice(mockData.invoices, contract?.id);
 }
 
 // 用起訖日反推真正的合約期數 (月) — 不依賴 contract.termMonths 這個欄位本身
@@ -73,25 +63,17 @@ function deriveTermMonths(contract) {
     return Number(contract?.termMonths) || 1;
 }
 
-// 把加減項目格式化成多行文字塞進 PDF (一行一項)，計算:
-//   total_amount   = 租金總額 (整個合約期，加減後) = 月租 × term + 加 − 折
-//   monthly_amount = 月付金額                       = total_amount ÷ term
-// ⚠ 2026-07-24: total_amount 一律用 contract.amount × term 現場算, 不要信任
-// invoice.amount — 曾試過改成直接讀帳單金額, 結果抓到另一個更早的真相: 「編輯
-// 合約」modal 改動租金 / 合約期時, 從來沒把重算後的總額寫回帳單 (下面 onSubmit
-// 已經補上這段同步), 導致舊帳單金額可能永遠停在建立當下的錯誤值 (C218 案例:
-// 續約當下用錯期數建了 1 個月的帳單金額). PDF 現場算才能保證跟 modal 看到的
-// 應收總額一致, 不受帳單裡可能過期的 amount 影響。
+// 把加減項目格式化成多行文字塞進 PDF (一行一項)。
+// 最後應收以帳單已保存的 amount - discount 為準，跟合約第三步、房租查帳一致；
+// 沒有帳單的舊資料才退回月租 × 期數 ± 加減項計算。
 export function buildAdjustmentValues(contract) {
-    const adjustments = getContractAdjustments(contract);
-    const base = Number(contract?.amount) || 0;
     const term = deriveTermMonths(contract);
-    const net = adjustments.reduce((s, a) => {
-        const v = Number(a.amount) || 0;
-        return s + (a.kind === 'add' ? v : -v);
-    }, 0);
-    const termTotal = base * term + net;
-    const monthlyAmount = Math.round(termTotal / term);  // 月付金額 (四捨五入到整數)
+    const summary = contractReceivableSummary({
+        monthlyRent: contract?.amount,
+        termMonths: term,
+        invoice: getContractInvoice(contract)
+    });
+    const adjustments = summary.adjustments;
     const adjustmentsText = adjustments.length
         ? adjustments.map(a => {
             const sign = a.kind === 'add' ? '+' : '−';
@@ -102,8 +84,8 @@ export function buildAdjustmentValues(contract) {
         : '';
     return {
         adjustments: adjustmentsText,
-        total_amount: termTotal.toLocaleString(),
-        monthly_amount: monthlyAmount.toLocaleString()
+        total_amount: summary.totalAmount.toLocaleString(),
+        monthly_amount: summary.monthlyAmount.toLocaleString()
     };
 }
 
@@ -198,9 +180,7 @@ function contractProgressChip(c, lifecycle) {
     if (c.contractType && c.contractType !== 'cohousing') return '';
     if (c.paymentChannel === 'platform') return '';
 
-    const inv = mockData.invoices.find(i =>
-        i.contractId === c.id && i.direction === 'in' && i.type === '房租'
-    );
+    const inv = getContractInvoice(c);
     const due = inv ? ((Number(inv.amount) || 0) - (Number(inv.discount) || 0)) : 0;
     const paid = inv ? (Number(inv.paidAmount) || 0) : 0;
     const fullPaid = inv && paid >= due && due > 0;
@@ -230,9 +210,7 @@ function contractProgressTimeline(c, lifecycle) {
     if (c.contractType && c.contractType !== 'cohousing') return '';
     if (c.paymentChannel === 'platform') return '';
 
-    const inv = mockData.invoices.find(i =>
-        i.contractId === c.id && i.direction === 'in' && i.type === '房租'
-    );
+    const inv = getContractInvoice(c);
     const due = inv ? ((Number(inv.amount) || 0) - (Number(inv.discount) || 0)) : 0;
     const paid = inv ? (Number(inv.paidAmount) || 0) : 0;
     const fullPaid = inv && paid >= due && due > 0;
@@ -744,10 +722,8 @@ function showContractForm(contract, opts = {}) {
             { name: 'status', label: '簽署狀態', type: 'select', required: true, options: CONTRACT_STATUSES, value: contract.status ?? '待簽署' }
         ],
         values: (() => {
-            // 找該合約的首張房租 invoice (prefill 加減項目)
-            const rentInv = mockData.invoices.find(inv =>
-                inv.direction === 'in' && inv.type === '房租' && inv.contractId === contract.id
-            );
+            // 找該合約最新房租 invoice (prefill 加減項目 / 最後應收)
+            const rentInv = getContractInvoice(contract);
             let initAdjItems = [];
             try { initAdjItems = rentInv?.discountReason ? JSON.parse(rentInv.discountReason) : []; } catch {}
             const initDiscount = rentInv?.discount ?? 0;
@@ -1124,9 +1100,7 @@ function showContractForm(contract, opts = {}) {
                 || (Number(values.paidAmount) || 0) > 0 || !!values.paidDate;
             let adjustWritten = false;
             if (values.paymentChannel !== 'platform') {
-                const rentInv = mockData.invoices.find(inv =>
-                    inv.direction === 'in' && inv.type === '房租' && inv.contractId === contract.id
-                );
+                const rentInv = getContractInvoice(contract);
                 if (rentInv) {
                     const newDiscount = Number(adjDiscount) || 0;
                     const newReason = adjReason || '';
@@ -1363,7 +1337,7 @@ export function showContractDetails(id) {
             overlay.querySelector('[data-action="resend-notice"]')?.addEventListener('click', () => {
                 const t = mockData.tenants.find(x => x.name === c.tenant && x.lineUserId);
                 if (!t?.lineUserId) { showToast('租客未綁 LINE, 無法重發', 'warning'); return; }
-                const rentInv = mockData.invoices.find(inv => inv.contractId === c.id && inv.direction === 'in' && inv.type === '房租');
+                const rentInv = getContractInvoice(c);
                 const { message, dueAmount, dueDate } = buildPaymentNoticeMessage(c, {
                     includeRenewalGreeting: false,
                     invoice: rentInv
@@ -1404,9 +1378,7 @@ export function showContractDetails(id) {
 function editProgressStep(contractId, stepKey, onDone) {
     const c = mockData.contracts.find(x => x.id === contractId);
     if (!c) return;
-    const inv = mockData.invoices.find(i =>
-        i.contractId === c.id && i.direction === 'in' && i.type === '房租'
-    );
+    const inv = getContractInvoice(c);
     // 6 個 step 的 metadata
     const STEP_META = {
         reminded: { label: '催繳',     hasDate: true,  isDone: !!inv?.lastReminderAt, date: inv?.lastReminderAt,
@@ -1781,9 +1753,7 @@ export function confirmRenew(id) {
                     return;
                 }
                 // 一律用合約當下資料組訊息 (見 utils/paymentNoticeMessage.js)
-                const rentInv = mockData.invoices.find(inv =>
-                    inv.contractId === newC.id && inv.direction === 'in' && inv.type === '房租'
-                );
+                const rentInv = getContractInvoice(newC);
                 const { message } = buildPaymentNoticeMessage(newC, {
                     includeRenewalGreeting: true,
                     invoice: rentInv

@@ -328,7 +328,9 @@ export const fromDb = {
         discountReason: r.discount_reason,
         paidAmount: r.paid_amount ?? 0,
         paymentMethod: r.payment_method,
-        bundleAuditIgnored: !!r.bundle_audit_ignored
+        bundleAuditIgnored: !!r.bundle_audit_ignored,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at
     }),
     maintenance: r => ({
         id: r.id,
