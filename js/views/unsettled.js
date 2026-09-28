@@ -13,6 +13,7 @@ import { sendContractToLine, buildAdjustmentValues } from './contracts.js';
 import { moneyAmount, moneyCell, adjustmentBadge } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { emptyState } from '../utils/emptyState.js';
+import { settlementPreview } from '../utils/invoiceSettlement.js';
 
 // 類別 → type-chip class (語意色 — 跟 finance.js 同套)
 // 房租 (in) vs 租金 (out) 用 direction 分色
@@ -368,6 +369,7 @@ function settleInvoice(id) {
     const isIncome = inv.direction === 'in';
     const due = (inv.amount || 0) - (inv.discount || 0);
     const alreadyPaid = inv.paidAmount || 0;
+    const outstanding = Math.max(0, due - alreadyPaid);
     const newStatus = isIncome ? '已繳清' : '已付';
     // 收入且合約可寄 → 全額結後跳「合約資訊確認」再發送
     const sendable = isIncome ? contractForSend(inv) : null;
@@ -391,12 +393,13 @@ function settleInvoice(id) {
                 <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--color-background); border-radius: 8px; font-size: 0.9rem;">
                     <div>應${noun}總額：<strong>$${due.toLocaleString()}</strong></div>
                     ${alreadyPaid > 0 ? `<div style="color: #22946e;">已入帳：$${alreadyPaid.toLocaleString()}</div>` : ''}
+                    ${alreadyPaid > 0 ? `<div style="color: var(--text-secondary);">尚待入帳：<strong>$${outstanding.toLocaleString()}</strong></div>` : ''}
                 </div>
                 ${unboundNote ? `<div style="margin-top: 0.5rem; font-size: 0.82rem; color: var(--color-warning);">⚠ ${unboundNote}</div>` : ''}
-                <label for="settle-received" style="display: block; margin-top: 1rem; font-weight: 600; font-size: 0.9rem;">實際${verb}金額</label>
+                <label for="settle-received" style="display: block; margin-top: 1rem; font-weight: 600; font-size: 0.9rem;">本次實際${verb}金額</label>
                 <div style="position: relative; margin-top: 0.4rem;">
                     <span style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-weight: 700;">$</span>
-                    <input id="settle-received" type="number" inputmode="numeric" min="0" step="1" value="${due}"
+                    <input id="settle-received" type="number" inputmode="numeric" min="0" step="1" value="${outstanding}"
                         style="width: 100%; padding: 0.6rem 0.75rem 0.6rem 1.75rem; font-size: 1.2rem; font-weight: 700; border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box;">
                 </div>
                 <div id="settle-hint" style="margin-top: 0.6rem; font-size: 0.85rem; min-height: 1.3em; line-height: 1.4;"></div>
@@ -414,6 +417,7 @@ function settleInvoice(id) {
             const btnNoSend = modal.querySelector('[data-action="go-nosend"]');
             const refresh = () => {
                 const v = Math.round(Number(input.value) || 0);
+                const preview = settlementPreview(inv, v);
                 if (v <= 0) {
                     hint.innerHTML = '<span style="color: var(--color-danger);">請輸入實際入帳金額</span>';
                     btn.disabled = true;
@@ -422,14 +426,20 @@ function settleInvoice(id) {
                     return;
                 }
                 btn.disabled = false;
-                if (v >= due) {
-                    hint.innerHTML = `<span style="color: #22946e;">✓ 金額相符，全額結清${sendable ? '並發送合約' : ''}</span>`;
+                if (preview.isFullySettled) {
+                    const cumulativeNote = preview.alreadyPaid > 0
+                        ? `本次補${noun} $${preview.receivedThisTime.toLocaleString()}，累計 $${preview.cumulativePaid.toLocaleString()}，`
+                        : '';
+                    hint.innerHTML = `<span style="color: #22946e;">✓ ${cumulativeNote}全額結清${sendable ? '並發送合約' : ''}</span>`;
                     btn.textContent = sendable ? '確認並發送合約' : `確認${newStatus}`;
                     // 綁定租客(合約可寄) → 額外提供「結帳但不發送合約」的選項
                     if (btnNoSend) btnNoSend.style.display = sendable ? '' : 'none';
                 } else {
-                    hint.innerHTML = `<span style="color: #b13535;">差額 $${(due - v).toLocaleString()} — 以實${noun} $${v.toLocaleString()} 拆帳結，剩 $${(due - v).toLocaleString()} 留待結</span>`;
-                    btn.textContent = `以實${noun} $${v.toLocaleString()} 拆帳結`;
+                    const cumulativeNote = preview.alreadyPaid > 0
+                        ? `（含原已${noun} $${preview.alreadyPaid.toLocaleString()}，累計 $${preview.cumulativePaid.toLocaleString()}）`
+                        : '';
+                    hint.innerHTML = `<span style="color: #b13535;">尚差 $${preview.remainingBalance.toLocaleString()} — 本次實${noun} $${preview.receivedThisTime.toLocaleString()}${cumulativeNote}，拆帳後留 $${preview.remainingBalance.toLocaleString()} 待結</span>`;
+                    btn.textContent = `以累計 $${preview.cumulativePaid.toLocaleString()} 拆帳結`;
                     if (btnNoSend) btnNoSend.style.display = 'none';
                 }
             };
@@ -440,18 +450,19 @@ function settleInvoice(id) {
             btn.addEventListener('click', () => {
                 const v = Math.round(Number(input.value) || 0);
                 if (v <= 0) return;
+                const preview = settlementPreview(inv, v);
                 close();
-                if (v >= due) {
+                if (preview.isFullySettled) {
                     // 正確 → 全額結帳；doFullSettle 內 maybeAutoSendContract 會跳「合約資訊確認」再發送
                     doFullSettle(inv, due, newStatus);
                 } else {
-                    // 不正確 → 拆帳確認
-                    confirmSplitSettle(inv, v, due - v);
+                    // 尚未付清 → 把「原已入帳 + 本次入帳」一起拆成已結帳目，不能漏掉既有入帳。
+                    confirmSplitSettle(inv, preview.cumulativePaid, preview.remainingBalance, preview.receivedThisTime);
                 }
             });
             btnNoSend?.addEventListener('click', () => {
                 const v = Math.round(Number(input.value) || 0);
-                if (v < due) return;  // 只在全額結帳時有效
+                if (!settlementPreview(inv, v).isFullySettled) return;  // 只在全額結帳時有效
                 close();
                 doFullSettle(inv, due, newStatus, { send: false });  // 結帳但不發送合約
             });
@@ -460,13 +471,17 @@ function settleInvoice(id) {
 }
 
 // 拆帳確認：實收金額 < 應收 → 確認後把已收部分拆成獨立已結帳目
-function confirmSplitSettle(inv, paidPortion, remainingBalance) {
+function confirmSplitSettle(inv, paidPortion, remainingBalance, receivedThisTime = paidPortion) {
     const isIncome = inv.direction === 'in';
     const noun = isIncome ? '收' : '付';
     const due = (inv.amount || 0) - (inv.discount || 0);
+    const alreadyPaid = Number(inv.paidAmount) || 0;
+    const receivedLine = alreadyPaid > 0
+        ? `本次實${noun} <strong>$${receivedThisTime.toLocaleString()}</strong>，加上原已${noun} $${alreadyPaid.toLocaleString()}，累計 <strong>$${paidPortion.toLocaleString()}</strong>。<br><br>`
+        : `<strong>${inv.id}</strong> 實${noun} <strong>$${paidPortion.toLocaleString()}</strong>，與應${noun} $${due.toLocaleString()} 不符。<br><br>`;
     openConfirm({
         title: '拆帳確認',
-        message: `<strong>${inv.id}</strong> 實${noun} <strong>$${paidPortion.toLocaleString()}</strong>，與應${noun} $${due.toLocaleString()} 不符。<br><br>`
+        message: `${alreadyPaid > 0 ? `<strong>${inv.id}</strong> 應${noun} $${due.toLocaleString()}。<br><br>` : ''}${receivedLine}`
             + `將把已${noun}的 <strong>$${paidPortion.toLocaleString()}</strong> 拆成一筆獨立已結帳目，剩餘 <strong>$${remainingBalance.toLocaleString()}</strong> 留在原帳目待結。<br><br>`
             + `⚠ 未全額入帳，<strong>不會發送合約</strong>（需全額結帳後才寄）。`,
         confirmLabel: `確認拆帳結 $${paidPortion.toLocaleString()}`,

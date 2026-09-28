@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.6.8';
+export const APP_VERSION = '1.6.9';
 export const APP_BUILD_DATE = '2026-09-28';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.6.9', date: '2026-09-28', notes: '修正部分入帳後再次結帳的拆帳計算：本次入帳會先加上既有已入帳金額，再判斷是否結清；C285 補收 350 後會以累計 9,350 全額結清，不再錯誤留下 9,000 待結。' },
     { version: '1.6.8', date: '2026-09-28', notes: '修正合約 PDF 金額來源：下載與 LINE 寄送一律採用最新房租帳單的「最後應收」，並在歷史重複帳單存在時明確選用最新一筆；C285 下載金額會與第三步收款確認一致。' },
     { version: '1.6.7', date: '2026-09-24', notes: '修正手機與電腦跨裝置更新遺失：未上雲修改會持久保留、手機切至背景前立即補送，電腦分頁回到前景時主動重新核對雲端；同步進行中再次編輯同一筆也不會誤清除待同步狀態。' },
     { version: '1.6.6', date: '2026-09-23', notes: '住房一覽點日期開啟合約詳情後，合約編號新增「前往合約管理」連結；切頁會自動清除舊篩選、定位並高亮該筆合約，方便直接操作 LINE 寄合約。' },
