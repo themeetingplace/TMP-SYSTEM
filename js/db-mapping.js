@@ -24,11 +24,7 @@ export const toDb = {
         managed_start_date: b.managedStartDate ?? null,
         managed_end_date: b.managedEndDate ?? null,
         fee_type: b.feeType ?? 'fixed',
-        // 零用金額度沿用已有 JSON 設定，不讓新版前端依賴額外 schema migration。
-        fee_config: {
-            ...(b.feeConfig ?? {}),
-            pettyCashMonthlyBudget: Number(b.pettyCashMonthlyBudget) || 0
-        },
+        fee_config: Object.fromEntries(Object.entries(b.feeConfig ?? {}).filter(([key]) => key !== 'pettyCashMonthlyBudget')),
         energy_mode: b.energyMode ?? null,
         // 共居模式 inline 屋主 (代管模式走 owner_id)
         owner_name: b.ownerName ?? '',
@@ -241,8 +237,7 @@ export const fromDb = {
         managedStartDate: r.managed_start_date ?? null,
         managedEndDate: r.managed_end_date ?? null,
         feeType: r.fee_type ?? 'fixed',
-        feeConfig: r.fee_config ?? {},
-        pettyCashMonthlyBudget: Number(r.fee_config?.pettyCashMonthlyBudget) || 0,
+        feeConfig: Object.fromEntries(Object.entries(r.fee_config ?? {}).filter(([key]) => key !== 'pettyCashMonthlyBudget')),
         energyMode: r.energy_mode ?? null,
         ownerName: r.owner_name ?? '',
         ownerGender: r.owner_gender ?? '',

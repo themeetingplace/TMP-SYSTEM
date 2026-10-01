@@ -1,4 +1,4 @@
-// 館務報帳：小幫手送審日用／清潔／零用金／代墊支出，管理員核准後入正式帳。
+// 館務報帳：依館別獨立記錄支出、代墊與零用金收入，不併入主帳務。
 import { supabase } from '../supabase.js';
 import { mockData } from '../data.js';
 import { getSession } from '../auth.js';
@@ -12,27 +12,36 @@ import { enhanceAmountInput } from '../utils/amountInput.js';
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const CATEGORY_META = {
-    daily_supplies:    { label: '日用品', icon: 'ph-shopping-bag-open', tone: 'amber' },
-    cleaning_supplies: { label: '清潔用品', icon: 'ph-sparkle', tone: 'aqua' },
+    energy:            { label: '能源費', icon: 'ph-lightning', tone: 'amber' },
+    daily_supplies:    { label: '日用品', icon: 'ph-shopping-bag-open', tone: 'aqua' },
+    petty_cash_income: { label: '零用金收入', icon: 'ph-money', tone: 'green' },
+    cleaning_supplies: { label: '清潔用品（舊）', icon: 'ph-sparkle', tone: 'aqua' },
     repair_supplies:   { label: '維修耗材', icon: 'ph-toolbox', tone: 'slate' },
     transport:         { label: '交通費', icon: 'ph-bus', tone: 'blue' },
     other:             { label: '其他支出', icon: 'ph-dots-three-circle', tone: 'slate' }
 };
+const EXPENSE_CATEGORY_OPTIONS = ['energy', 'daily_supplies'];
 const FUNDING_META = {
-    company:    { label: '公司支付', icon: 'ph-buildings' },
     petty_cash: { label: '零用金', icon: 'ph-coins' },
-    personal:   { label: '個人代墊', icon: 'ph-hand-coins' }
+    personal:   { label: '個人代墊', icon: 'ph-hand-coins' },
+    company:    { label: '公司支付（舊）', icon: 'ph-buildings' }
 };
+const FUNDING_OPTIONS = ['personal', 'petty_cash'];
 
 let claims = [];
 let isLoading = true;
 let loadError = '';
 let activeFilter = 'all';
+let activeBuilding = 'all';
 let currentSession = null;
 let realtimeChannel = null;
 
 function isReviewer() {
     return ['owner', 'admin'].includes(window.__currentRole);
+}
+
+function isIncome(claim) {
+    return claim?.category === 'petty_cash_income';
 }
 
 function buildingName(id) {
@@ -60,6 +69,7 @@ function normalizeClaim(row) {
         receiptName: row.receipt_name || '',
         receiptMime: row.receipt_mime || '',
         status: row.status,
+        submittedBy: row.submitted_by,
         submittedByEmail: row.submitted_by_email || '',
         submittedByName: row.submitted_by_name || row.submitted_by_email || '',
         submittedAt: row.submitted_at,
@@ -71,13 +81,9 @@ function normalizeClaim(row) {
 }
 
 function statusMeta(claim) {
-    if (claim.status === 'submitted') return { label: '待審核', cls: 'warning', icon: 'ph-clock-countdown' };
+    if (claim.status === 'submitted' || claim.status === 'approved') return { label: isIncome(claim) ? '待確認' : '待付款', cls: 'warning', icon: 'ph-clock-countdown' };
     if (claim.status === 'rejected') return { label: '已退回', cls: 'danger', icon: 'ph-arrow-u-up-left' };
-    if (claim.status === 'reimbursed') return { label: '已撥款', cls: 'success', icon: 'ph-check-circle' };
-    if (claim.status === 'approved' && claim.fundingSource === 'personal') {
-        return { label: '待撥款', cls: 'info', icon: 'ph-hand-coins' };
-    }
-    return { label: '已核准', cls: 'success', icon: 'ph-check-circle' };
+    return { label: isIncome(claim) ? '已入帳' : '已付款', cls: 'success', icon: 'ph-check-circle' };
 }
 
 function formatDateTime(value) {
@@ -90,14 +96,14 @@ function formatDateTime(value) {
 
 function quickActionHtml() {
     const actions = [
-        { category: 'daily_supplies', funding: 'company', label: '日用品', hint: '紙品、燈泡、館內補給', icon: 'ph-shopping-bag-open', tone: 'amber' },
-        { category: 'cleaning_supplies', funding: 'company', label: '清潔用品', hint: '清潔劑、垃圾袋、耗材', icon: 'ph-sparkle', tone: 'aqua' },
-        { category: 'other', funding: 'petty_cash', label: '零用金支出', hint: '從館別零用金支付', icon: 'ph-coins', tone: 'blue' },
-        { category: 'other', funding: 'personal', label: '個人代墊報帳', hint: '送審後等待核准撥款', icon: 'ph-hand-coins', tone: 'coral' }
+        { category: 'energy', funding: 'personal', label: '能源費', hint: '水、電、瓦斯等費用', icon: 'ph-lightning', tone: 'amber' },
+        { category: 'daily_supplies', funding: 'personal', label: '日用品', hint: '清潔品與館內補給', icon: 'ph-shopping-bag-open', tone: 'aqua' },
+        { category: 'daily_supplies', funding: 'petty_cash', label: '零用金支出', hint: '以館內零用金付款', icon: 'ph-coins', tone: 'blue' },
+        { type: 'income', label: '新增收入', hint: '烘衣機等收入存入零用金', icon: 'ph-money', tone: 'coral' }
     ];
     return actions.map(a => `
         <button type="button" class="expense-quick-card tone-${a.tone} helper-authorized-write"
-                data-expense-create data-category="${a.category}" data-funding="${a.funding}">
+                data-expense-create data-entry-type="${a.type || 'expense'}" data-category="${a.category || ''}" data-funding="${a.funding || ''}">
             <span class="expense-quick-icon"><i class="ph ${a.icon}" aria-hidden="true"></i></span>
             <span class="expense-quick-copy"><strong>${a.label}</strong><small>${a.hint}</small></span>
             <i class="ph ph-arrow-right expense-quick-arrow" aria-hidden="true"></i>
@@ -111,23 +117,23 @@ function claimActionHtml(claim) {
         buttons.push(`<button type="button" class="btn btn-outline btn-xs" data-expense-action="receipt" data-id="${escapeAttr(claim.id)}" title="開啟發票／收據"><i class="ph ph-file-image"></i><span>發票</span></button>`);
     }
     buttons.push(`<button type="button" class="btn btn-outline btn-xs" data-expense-action="detail" data-id="${escapeAttr(claim.id)}" title="查看報帳內容"><i class="ph ph-eye"></i><span>詳情</span></button>`);
-    if (isReviewer() && claim.status === 'submitted') {
-        buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-success" data-expense-action="approve" data-id="${escapeAttr(claim.id)}" title="核准"><i class="ph ph-check"></i><span>核准</span></button>`);
+    if (isReviewer() && ['submitted', 'approved'].includes(claim.status)) {
+        buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-success" data-expense-action="pay" data-id="${escapeAttr(claim.id)}" title="${isIncome(claim) ? '確認收入已入帳' : '標示已付款'}"><i class="ph ph-check-circle"></i><span>${isIncome(claim) ? '確認入帳' : '標示已付款'}</span></button>`);
         buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-danger" data-expense-action="reject" data-id="${escapeAttr(claim.id)}" title="退回"><i class="ph ph-arrow-u-up-left"></i><span>退回</span></button>`);
     }
-    if (isReviewer() && claim.status === 'approved' && claim.fundingSource === 'personal') {
-        buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-primary-soft" data-expense-action="reimburse" data-id="${escapeAttr(claim.id)}" title="標記已撥款"><i class="ph ph-hand-coins"></i><span>已撥款</span></button>`);
+    if (isReviewer() || claim.submittedBy === currentSession?.user?.id) {
+        buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-danger" data-expense-action="delete" data-id="${escapeAttr(claim.id)}" title="刪除紀錄"><i class="ph ph-trash"></i><span>刪除</span></button>`);
     }
     return `<div class="row-action-group">${buttons.join('')}</div>`;
 }
 
 function filteredClaims() {
     const modeIds = currentModeBuildingIdSet(getMode());
-    return claims.filter(c => modeIds.has(c.buildingId)).filter(c => {
+    return claims.filter(c => modeIds.has(c.buildingId) && (activeBuilding === 'all' || c.buildingId === activeBuilding)).filter(c => {
         if (activeFilter === 'all') return true;
-        if (activeFilter === 'pending') return c.status === 'submitted';
-        if (activeFilter === 'payout') return c.status === 'approved' && c.fundingSource === 'personal';
-        return c.status === activeFilter;
+        if (activeFilter === 'pending') return ['submitted', 'approved'].includes(c.status);
+        if (activeFilter === 'paid') return c.status === 'reimbursed';
+        return c.status === 'rejected';
     });
 }
 
@@ -144,9 +150,9 @@ function claimsTableHtml(rows) {
                 <td><strong>${esc(c.expenseDate)}</strong><small class="expense-cell-sub">${esc(formatDateTime(c.submittedAt))} 送出</small></td>
                 <td><strong>${esc(buildingName(c.buildingId))}</strong><small class="expense-cell-sub">${esc(c.submittedByName || '—')}</small></td>
                 <td><span class="expense-category-chip tone-${category.tone}"><i class="ph ${category.icon}"></i>${category.label}</span><small class="expense-cell-sub"><i class="ph ${funding.icon}"></i> ${funding.label}</small></td>
-                <td><strong>${esc(c.merchant || '未填商家')}</strong><small class="expense-cell-sub expense-clamp">${esc(c.description || '無備註')}</small></td>
-                <td class="expense-amount">${moneyAmount(c.amount)}</td>
-                <td><span class="status-badge ${status.cls}"><i class="ph ${status.icon}"></i> ${status.label}</span>${c.invoiceId ? `<small class="expense-cell-sub">${esc(c.invoiceId)}</small>` : ''}</td>
+                <td><strong>${esc(c.merchant || (isIncome(c) ? '未填收入來源' : '未填商家'))}</strong><small class="expense-cell-sub expense-clamp">${esc(c.description || '無備註')}</small></td>
+                <td class="expense-amount ${isIncome(c) ? 'is-income' : ''}">${isIncome(c) ? '+' : ''}${moneyAmount(c.amount)}</td>
+                <td><span class="status-badge ${status.cls}"><i class="ph ${status.icon}"></i> ${status.label}</span></td>
                 <td>${claimActionHtml(c)}</td>
             </tr>`;
     }).join('');
@@ -154,12 +160,15 @@ function claimsTableHtml(rows) {
 
 function contentHtml() {
     const visible = filteredClaims();
-    const scoped = claims.filter(c => currentModeBuildingIdSet(getMode()).has(c.buildingId));
+    const scoped = claims.filter(c => currentModeBuildingIdSet(getMode()).has(c.buildingId) && (activeBuilding === 'all' || c.buildingId === activeBuilding));
     const monthKey = TODAY.slice(0, 7);
-    const monthTotal = scoped.filter(c => c.expenseDate?.startsWith(monthKey) && c.status !== 'rejected').reduce((sum, c) => sum + c.amount, 0);
-    const pendingCount = scoped.filter(c => c.status === 'submitted').length;
-    const payoutTotal = scoped.filter(c => c.status === 'approved' && c.fundingSource === 'personal').reduce((sum, c) => sum + c.amount, 0);
-    const pettyCashTotal = scoped.filter(c => c.expenseDate?.startsWith(monthKey) && c.fundingSource === 'petty_cash' && c.status !== 'rejected').reduce((sum, c) => sum + c.amount, 0);
+    const valid = scoped.filter(c => c.status !== 'rejected');
+    const monthTotal = valid.filter(c => !isIncome(c) && c.expenseDate?.startsWith(monthKey)).reduce((sum, c) => sum + c.amount, 0);
+    const pendingCount = scoped.filter(c => ['submitted', 'approved'].includes(c.status)).length;
+    const payoutTotal = valid.filter(c => !isIncome(c) && c.fundingSource === 'personal' && c.status !== 'reimbursed').reduce((sum, c) => sum + c.amount, 0);
+    const pettyIncome = valid.filter(isIncome).reduce((sum, c) => sum + c.amount, 0);
+    const pettySpent = valid.filter(c => !isIncome(c) && c.fundingSource === 'petty_cash').reduce((sum, c) => sum + c.amount, 0);
+    const buildingOptions = scopedBuildings();
 
     if (loadError) {
         return `<div class="card expense-load-error"><i class="ph ph-warning-circle"></i><strong>報帳資料載入失敗</strong><span>${esc(loadError)}</span><button type="button" class="btn btn-outline" data-expense-retry>重新載入</button></div>`;
@@ -169,8 +178,8 @@ function contentHtml() {
         <section class="expense-intro">
             <div>
                 <span class="expense-eyebrow">小幫手工作台</span>
-                <h2>拍下單據，把每筆館務花費說清楚。</h2>
-                <p>選擇館別與付款方式，上傳發票後送審；核准前不會進入正式財務報表。</p>
+                <h2>各館獨立記帳，支出與零用金一眼看清楚。</h2>
+                <p>館務報帳使用獨立報表，不會併入主帳務；收入會直接列入該館零用金。</p>
             </div>
             <div class="expense-intro-mark" aria-hidden="true"><i class="ph ph-receipt"></i><span>CLAIM</span></div>
         </section>
@@ -183,22 +192,25 @@ function contentHtml() {
         </section>
 
         <section class="expense-metrics">
-            <div><span>待審核</span><strong>${pendingCount}</strong><small>筆申請</small></div>
-            <div><span>本月已報</span><strong>${moneyAmount(monthTotal)}</strong><small>不含已退回</small></div>
-            <div><span>本月零用金</span><strong>${moneyAmount(pettyCashTotal)}</strong><small>已記錄支出</small></div>
-            <div><span>待撥代墊</span><strong>${moneyAmount(payoutTotal)}</strong><small>核准後待撥款</small></div>
+            <div><span>待處理</span><strong>${pendingCount}</strong><small>筆紀錄</small></div>
+            <div><span>本月支出</span><strong>${moneyAmount(monthTotal)}</strong><small>不含已退回</small></div>
+            <div><span>零用金餘額</span><strong>${moneyAmount(pettyIncome - pettySpent)}</strong><small>收入扣除使用</small></div>
+            <div><span>代撥代墊</span><strong>${moneyAmount(payoutTotal)}</strong><small>尚未標示付款</small></div>
         </section>
 
         <section class="card expense-ledger-card">
             <div class="expense-ledger-head">
-                <div><span class="expense-eyebrow">送審紀錄</span><h3>${isReviewer() ? '館務支出審核' : '我的報帳紀錄'}</h3></div>
-                <button type="button" class="btn btn-primary helper-authorized-write" id="expense-create-btn" data-expense-create data-category="daily_supplies" data-funding="company" data-fab="ph-camera-plus"><i class="ph ph-plus"></i> 新增報帳</button>
+                <div><span class="expense-eyebrow">各館獨立報表</span><h3>${isReviewer() ? '館務報帳管理' : '館務報帳紀錄'}</h3></div>
+                <div class="expense-ledger-actions"><button type="button" class="btn btn-outline helper-authorized-write" data-expense-create data-entry-type="income"><i class="ph ph-plus-circle"></i> 新增收入</button><button type="button" class="btn btn-primary helper-authorized-write" id="expense-create-btn" data-expense-create data-entry-type="expense" data-category="daily_supplies" data-funding="personal" data-fab="ph-camera-plus"><i class="ph ph-plus"></i> 新增支出</button></div>
+            </div>
+            <div class="expense-building-filter" aria-label="選擇館別報表">
+                <button class="${activeBuilding === 'all' ? 'active' : ''}" data-expense-building="all">全部館別</button>
+                ${buildingOptions.map(building => `<button class="${activeBuilding === building.id ? 'active' : ''}" data-expense-building="${escapeAttr(building.id)}">${esc(building.name)}</button>`).join('')}
             </div>
             <div class="filter-tabs expense-filter-tabs">
                 <button class="filter-tab ${activeFilter === 'all' ? 'active' : ''}" data-expense-filter="all">全部</button>
-                <button class="filter-tab ${activeFilter === 'pending' ? 'active' : ''}" data-expense-filter="pending">待審核 (${pendingCount})</button>
-                <button class="filter-tab ${activeFilter === 'payout' ? 'active' : ''}" data-expense-filter="payout">待撥款</button>
-                <button class="filter-tab ${activeFilter === 'approved' ? 'active' : ''}" data-expense-filter="approved">已核准</button>
+                <button class="filter-tab ${activeFilter === 'pending' ? 'active' : ''}" data-expense-filter="pending">待處理 (${pendingCount})</button>
+                <button class="filter-tab ${activeFilter === 'paid' ? 'active' : ''}" data-expense-filter="paid">已付款</button>
                 <button class="filter-tab ${activeFilter === 'rejected' ? 'active' : ''}" data-expense-filter="rejected">已退回</button>
             </div>
             <div class="table-container expense-table-wrap">
@@ -252,6 +264,10 @@ async function uploadReceipt(file) {
 }
 
 function openClaimForm(prefill = {}) {
+    if (prefill.type === 'income') {
+        openIncomeForm();
+        return;
+    }
     const buildings = scopedBuildings();
     if (!buildings.length) {
         showToast('目前沒有可報帳的授權館別，請聯絡管理員', 'warning', 5000);
@@ -259,7 +275,7 @@ function openClaimForm(prefill = {}) {
     }
     let receiptFile = null;
     let formRef = null;
-    const title = prefill.funding === 'personal' ? '個人代墊報帳' : prefill.funding === 'petty_cash' ? '零用金支出' : '新增館務支出';
+    const title = prefill.funding === 'petty_cash' ? '新增零用金支出' : '新增館務支出';
 
     openFormModal({
         title,
@@ -268,13 +284,13 @@ function openClaimForm(prefill = {}) {
             { name: 'buildingId', label: '館別', type: 'select', required: true, span: 2, options: buildings.map(b => ({ value: b.id, label: b.name })), value: buildings[0].id },
             { name: 'expenseDate', label: '支出日期', type: 'date', required: true, span: 2, value: TODAY },
             { name: 'amount', label: '本次支出金額', type: 'number', required: true, span: 2, hint: '請輸入發票或收據上的實付總額' },
-            { name: 'category', label: '支出類別', type: 'select', required: true, options: Object.entries(CATEGORY_META).map(([value, meta]) => ({ value, label: meta.label })), value: prefill.category || 'daily_supplies' },
-            { name: 'fundingSource', label: '付款方式', type: 'select', required: true, options: Object.entries(FUNDING_META).map(([value, meta]) => ({ value, label: meta.label })), value: prefill.funding || 'company' },
+            { name: 'category', label: '主要支出項目', type: 'select', required: true, options: EXPENSE_CATEGORY_OPTIONS.map(value => ({ value, label: CATEGORY_META[value].label })), value: EXPENSE_CATEGORY_OPTIONS.includes(prefill.category) ? prefill.category : 'daily_supplies' },
+            { name: 'fundingSource', label: '付款方式', type: 'select', required: true, options: FUNDING_OPTIONS.map(value => ({ value, label: FUNDING_META[value].label })), value: FUNDING_OPTIONS.includes(prefill.funding) ? prefill.funding : 'personal' },
             { name: 'merchant', label: '商家／購買處', type: 'text', span: 2, placeholder: '例：全聯、寶雅' },
             { name: 'description', label: '用途說明', type: 'textarea', required: true, span: 2, rows: 3, placeholder: '例：松山館公共區域垃圾袋 3 包' },
             { name: 'receiptUpload', type: 'placeholder', span: 2 }
         ],
-        submitLabel: '送出審核',
+        submitLabel: '新增支出',
         onFormMount: form => {
             formRef = form;
             enhanceAmountInput(form, { readbackLabel: '這筆送審金額' });
@@ -329,13 +345,64 @@ function openClaimForm(prefill = {}) {
                 };
                 const { error } = await supabase.from('expense_claims').insert(payload);
                 if (error) throw new Error(error.message);
-                showToast('報帳已送出，等待管理員審核', 'success', 4500);
+                showToast('館務支出已新增', 'success', 4500);
                 await loadClaims(document.querySelector('.view-section.active'));
             } catch (error) {
                 if (uploaded?.path) await supabase.storage.from('expense-receipts').remove([uploaded.path]);
                 showToast(`送出失敗：${error.message}`, 'danger', 7000);
                 return false;
             }
+        }
+    });
+}
+
+function openIncomeForm() {
+    const buildings = scopedBuildings();
+    if (!buildings.length) {
+        showToast('目前沒有可記帳的授權館別，請聯絡管理員', 'warning', 5000);
+        return;
+    }
+    openFormModal({
+        title: '新增零用金收入',
+        maxWidth: 560,
+        fields: [
+            { name: 'buildingId', label: '館別', type: 'select', required: true, span: 2, options: buildings.map(b => ({ value: b.id, label: b.name })), value: buildings[0].id },
+            { name: 'expenseDate', label: '收入日期', type: 'date', required: true, span: 2, value: TODAY },
+            { name: 'amount', label: '本次收入金額', type: 'number', required: true, span: 2, hint: '收入新增後會直接增加該館零用金目前金額' },
+            { name: 'merchant', label: '收入來源', type: 'select', required: true, span: 2, options: [
+                { value: '烘衣機收入', label: '烘衣機收入' },
+                { value: '其他收入', label: '其他收入' }
+            ], value: '烘衣機收入' },
+            { name: 'description', label: '備註', type: 'textarea', span: 2, rows: 3, placeholder: '例：9 月烘衣機現金收入' }
+        ],
+        submitLabel: '新增收入',
+        onFormMount: form => enhanceAmountInput(form, { readbackLabel: '這筆零用金收入' }),
+        onSubmit: async values => {
+            if (!currentSession?.user) {
+                showToast('登入狀態已過期，請重新登入', 'danger');
+                return false;
+            }
+            if (!Number.isFinite(values.amount) || values.amount <= 0) {
+                showToast('金額必須大於 0', 'danger');
+                return false;
+            }
+            const { error } = await supabase.from('expense_claims').insert({
+                building_id: values.buildingId,
+                expense_date: values.expenseDate,
+                category: 'petty_cash_income',
+                funding_source: 'petty_cash',
+                amount: Math.round(values.amount),
+                merchant: values.merchant,
+                description: values.description || null,
+                submitted_by: currentSession.user.id,
+                submitted_by_email: currentSession.user.email || ''
+            });
+            if (error) {
+                showToast(`新增收入失敗：${error.message}`, 'danger', 7000);
+                return false;
+            }
+            showToast('零用金收入已新增', 'success');
+            await loadClaims(document.querySelector('.view-section.active'));
         }
     });
 }
@@ -355,17 +422,16 @@ function showClaimDetail(claim) {
     const category = CATEGORY_META[claim.category] || CATEGORY_META.other;
     const funding = FUNDING_META[claim.fundingSource] || FUNDING_META.company;
     openDetailModal({
-        title: `報帳單 ${claim.id.slice(0, 8).toUpperCase()}`,
+        title: `${isIncome(claim) ? '收入紀錄' : '報帳單'} ${claim.id.slice(0, 8).toUpperCase()}`,
         items: [
             { label: '狀態', value: `<span class="status-badge ${status.cls}">${status.label}</span>` },
             { label: '館別', value: esc(buildingName(claim.buildingId)) },
-            { label: '支出日期', value: esc(claim.expenseDate) },
+            { label: isIncome(claim) ? '收入日期' : '支出日期', value: esc(claim.expenseDate) },
             { label: '類別', value: esc(category.label) },
-            { label: '付款方式', value: esc(funding.label) },
+            { label: isIncome(claim) ? '歸入帳戶' : '付款方式', value: esc(funding.label) },
             { label: '金額', value: `<strong>${moneyAmount(claim.amount)}</strong>` },
-            { label: '商家', value: esc(claim.merchant || '—') },
-            { label: '申請人', value: esc(claim.submittedByName || '—') },
-            { label: '正式帳目', value: esc(claim.invoiceId || '尚未建立') }
+            { label: isIncome(claim) ? '收入來源' : '商家', value: esc(claim.merchant || '—') },
+            { label: '記錄人', value: esc(claim.submittedByName || '—') }
         ],
         extraHtml: `
             <div class="expense-detail-note"><span>用途說明</span><p>${esc(claim.description || '無備註')}</p></div>
@@ -385,7 +451,7 @@ async function reviewClaim(claim, action, note = '') {
         showToast(`處理失敗：${error.message}`, 'danger', 7000);
         return false;
     }
-    const messages = { approve: '已核准並建立正式支出', reject: '已退回報帳', reimburse: '已標記撥款並結清支出' };
+    const messages = { pay: isIncome(claim) ? '已確認收入入帳' : '已標示付款', reject: '已退回報帳' };
     showToast(messages[action], 'success');
     await loadClaims(document.querySelector('.view-section.active'));
     return true;
@@ -402,26 +468,62 @@ function startReview(claim, action) {
         });
         return;
     }
-    const approve = action === 'approve';
-    const title = approve ? '核准報帳' : '確認已撥款';
-    const message = approve
-        ? `核准 <strong>${esc(buildingName(claim.buildingId))} · ${moneyAmount(claim.amount)}</strong>？<br><small style="color:var(--text-muted);">核准後會自動建立正式支出，不會重複入帳。</small>`
-        : `確認已撥付 <strong>${moneyAmount(claim.amount)}</strong> 給 ${esc(claim.submittedByName)}？<br><small style="color:var(--text-muted);">對應的正式支出將標記為已付。</small>`;
+    const title = isIncome(claim) ? '確認收入入帳' : '標示已付款';
+    const message = isIncome(claim)
+        ? `確認 <strong>${esc(buildingName(claim.buildingId))} · ${moneyAmount(claim.amount)}</strong> 已收入零用金？`
+        : `確認 <strong>${esc(buildingName(claim.buildingId))} · ${moneyAmount(claim.amount)}</strong> 已付款？<br><small style="color:var(--text-muted);">這只會更新館務報帳狀態，不會寫入主帳務。</small>`;
     openConfirm({
         title,
         message,
-        confirmLabel: approve ? '核准並入帳' : '標記已撥款',
-        onConfirm: () => reviewClaim(claim, approve ? 'approve' : 'reimburse')
+        confirmLabel: isIncome(claim) ? '確認入帳' : '標示已付款',
+        onConfirm: () => reviewClaim(claim, 'pay')
     });
+}
+
+function startDelete(claim) {
+    const label = `${buildingName(claim.buildingId)} · ${moneyAmount(claim.amount)}`;
+    openConfirm({
+        title: '第一次確認：刪除紀錄',
+        message: `要刪除 <strong>${esc(label)}</strong> 嗎？<br><small style="color:var(--text-muted);">刪除後將不再列入各館報表。</small>`,
+        confirmLabel: '繼續刪除',
+        danger: true,
+        onConfirm: () => openConfirm({
+            title: '第二次確認：正式刪除',
+            message: `請再次確認刪除這筆${isIncome(claim) ? '收入' : '報帳'}。此動作無法復原。`,
+            confirmLabel: '正式刪除',
+            danger: true,
+            onConfirm: () => deleteClaim(claim)
+        })
+    });
+}
+
+async function deleteClaim(claim) {
+    const { error } = await supabase.rpc('delete_expense_claim', { p_claim_id: claim.id });
+    if (error) {
+        showToast(`刪除失敗：${error.message}`, 'danger', 7000);
+        return false;
+    }
+    if (claim.receiptPath) {
+        const { error: receiptError } = await supabase.storage.from('expense-receipts').remove([claim.receiptPath]);
+        if (receiptError) console.warn('Receipt cleanup failed:', receiptError.message);
+    }
+    showToast('館務報帳紀錄已刪除', 'success');
+    await loadClaims(document.querySelector('.view-section.active'));
+    return true;
 }
 
 function bindActions(root) {
     root.querySelectorAll('[data-expense-create]').forEach(btn => btn.addEventListener('click', () => openClaimForm({
+        type: btn.dataset.entryType,
         category: btn.dataset.category,
         funding: btn.dataset.funding
     })));
     root.querySelectorAll('[data-expense-filter]').forEach(btn => btn.addEventListener('click', () => {
         activeFilter = btn.dataset.expenseFilter;
+        paint(root.closest('.view-section'));
+    }));
+    root.querySelectorAll('[data-expense-building]').forEach(btn => btn.addEventListener('click', () => {
+        activeBuilding = btn.dataset.expenseBuilding;
         paint(root.closest('.view-section'));
     }));
     root.querySelector('[data-expense-retry]')?.addEventListener('click', () => loadClaims(root.closest('.view-section')));
@@ -431,7 +533,8 @@ function bindActions(root) {
         const action = btn.dataset.expenseAction;
         if (action === 'receipt') openReceipt(claim);
         if (action === 'detail') showClaimDetail(claim);
-        if (['approve', 'reject', 'reimburse'].includes(action)) startReview(claim, action);
+        if (['pay', 'reject'].includes(action)) startReview(claim, action);
+        if (action === 'delete') startDelete(claim);
     }));
 }
 

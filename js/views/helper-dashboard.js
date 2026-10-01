@@ -8,15 +8,15 @@ import { moneyAmount } from '../utils/moneyDisplay.js';
 import { showToast } from '../utils/ui.js';
 
 const QUICK_ACTIONS = [
-    { category: 'daily_supplies', funding: 'company', label: '日用品', hint: '紙品、燈泡、館內補給', icon: 'ph-shopping-bag-open', tone: 'amber' },
-    { category: 'cleaning_supplies', funding: 'company', label: '清潔用品', hint: '清潔劑、垃圾袋、耗材', icon: 'ph-sparkle', tone: 'aqua' },
-    { category: 'other', funding: 'petty_cash', label: '零用金支出', hint: '從館別零用金支付', icon: 'ph-coins', tone: 'blue' },
-    { category: 'other', funding: 'personal', label: '個人代墊報帳', hint: '送審後等待核准撥款', icon: 'ph-hand-coins', tone: 'coral' }
+    { category: 'energy', funding: 'personal', label: '能源費', hint: '水、電、瓦斯等館務費用', icon: 'ph-lightning', tone: 'amber' },
+    { category: 'daily_supplies', funding: 'personal', label: '日用品', hint: '紙品、清潔品與館內補給', icon: 'ph-shopping-bag-open', tone: 'aqua' },
+    { category: 'daily_supplies', funding: 'petty_cash', label: '零用金支出', hint: '以館內現有零用金支付', icon: 'ph-coins', tone: 'blue' },
+    { type: 'income', label: '新增收入', hint: '烘衣機等收入存入零用金', icon: 'ph-money', tone: 'coral' }
 ];
 
 const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
 let selectedMonth = CURRENT_MONTH;
-let pendingClaims = [];
+let accountingClaims = [];
 let cashLoading = true;
 
 function allowedBuildingIds() {
@@ -38,7 +38,8 @@ function quickActionsHtml() {
     const canExpense = !Array.isArray(window.__helperViews) || window.__helperViews.includes('expenses');
     return QUICK_ACTIONS.map(action => `
         <button type="button" class="helper-home-quick tone-${action.tone}" data-helper-expense
-                data-category="${escapeAttr(action.category)}" data-funding="${escapeAttr(action.funding)}"
+                data-entry-type="${escapeAttr(action.type || 'expense')}"
+                data-category="${escapeAttr(action.category || '')}" data-funding="${escapeAttr(action.funding || '')}"
                 ${canExpense ? '' : 'disabled'}>
             <span class="helper-home-quick-icon"><i class="ph ${action.icon}" aria-hidden="true"></i></span>
             <span><strong>${action.label}</strong><small>${canExpense ? action.hint : '尚未開放報帳權限'}</small></span>
@@ -51,46 +52,39 @@ function cashHtml() {
     const buildingIds = allowedBuildingIds();
     const snapshot = buildPettyCashSnapshot({
         buildings: mockData.buildings,
-        invoices: mockData.invoices,
-        pendingClaims,
+        claims: accountingClaims,
         buildingIds,
         monthKey: CURRENT_MONTH
     });
-    const hasBudget = snapshot.budget > 0;
-    const usage = hasBudget ? Math.min(100, Math.max(0, (snapshot.spent / snapshot.budget) * 100)) : 0;
-    const remainingClass = snapshot.remaining < 0 ? 'is-over' : '';
+    const remainingClass = snapshot.balance < 0 ? 'is-over' : '';
 
     return `
         <div class="helper-cash-head">
             <div>
-                <span class="helper-section-kicker"><i class="ph ph-coins"></i> ${esc(monthLabel(CURRENT_MONTH))}</span>
-                <h2>零用金</h2>
+                <span class="helper-section-kicker"><i class="ph ph-chart-donut"></i> ${esc(monthLabel(CURRENT_MONTH))}</span>
+                <h2>帳務</h2>
             </div>
             <a href="#expenses" class="helper-text-link">查看紀錄 <i class="ph ph-arrow-right"></i></a>
         </div>
         <div class="helper-cash-balance ${remainingClass}">
-            <span>${hasBudget ? '目前餘額' : '目前支出'}</span>
-            <strong>${moneyAmount(hasBudget ? snapshot.remaining : snapshot.spent)}</strong>
-            <small>${hasBudget ? `本月額度 ${moneyAmount(snapshot.budget)}` : '尚未設定本月額度'}</small>
-        </div>
-        <div class="helper-cash-progress" aria-label="${hasBudget ? `已使用 ${Math.round(usage)}%` : '尚未設定額度'}">
-            <span style="width:${usage}%"></span>
+            <span>零用金目前金額</span>
+            <strong>${moneyAmount(snapshot.balance)}</strong>
+            <small>累計收入 ${moneyAmount(snapshot.income)} − 累計使用 ${moneyAmount(snapshot.pettyCashSpent)}</small>
         </div>
         <div class="helper-cash-ledger">
-            <div><span>已核准入帳</span><strong>${moneyAmount(snapshot.approved)}</strong></div>
-            <div><span>我的待審</span><strong>${moneyAmount(snapshot.pending)}</strong></div>
-            <div><span>目前支出</span><strong>${moneyAmount(snapshot.spent)}</strong></div>
+            <div><span>當月支出（總計）</span><strong>${moneyAmount(snapshot.monthExpenseTotal)}</strong></div>
+            <div><span>代撥代墊總金額</span><strong>${moneyAmount(snapshot.outstandingPersonal)}</strong></div>
+            <div><span>零用金</span><strong>${moneyAmount(snapshot.balance)}</strong><small>本月使用 ${moneyAmount(snapshot.monthSpent)}</small></div>
         </div>
-        ${cashLoading ? '<div class="helper-cash-loading"><i class="ph ph-spinner-gap"></i> 正在核對待審紀錄…</div>' : ''}
+        ${cashLoading ? '<div class="helper-cash-loading"><i class="ph ph-spinner-gap"></i> 正在核對館務帳務…</div>' : ''}
         <div class="helper-cash-buildings">
             ${snapshot.rows.map(row => `
                 <div>
                     <span>${esc(row.buildingName)}</span>
-                    <span>已用 ${moneyAmount(row.spent)}${row.pending ? ` <small>含待審 ${moneyAmount(row.pending)}</small>` : ''}</span>
+                    <span>餘額 ${moneyAmount(row.balance)}<small>本月使用 ${moneyAmount(row.monthSpent)}</small></span>
                 </div>
             `).join('') || '<p>目前沒有授權館別。</p>'}
         </div>
-        ${hasBudget ? '' : '<p class="helper-cash-note"><i class="ph ph-info"></i> 管理員可在「房屋資料 → 租金」設定各館每月零用金額度。</p>'}
     `;
 }
 
@@ -209,24 +203,19 @@ export async function initHelperDashboardActions(scope) {
             showToast('這個帳號尚未開放館務報帳權限', 'warning');
             return;
         }
-        queueExpensePrefill({ category: button.dataset.category, funding: button.dataset.funding });
+        queueExpensePrefill({ type: button.dataset.entryType, category: button.dataset.category, funding: button.dataset.funding });
         window.location.hash = 'expenses';
     }));
     bindCalendar(scope);
 
-    const start = `${CURRENT_MONTH}-01`;
-    const [year, month] = CURRENT_MONTH.split('-').map(Number);
-    const end = new Date(year, month, 0).toISOString().slice(0, 10);
     const { data, error } = await supabase
         .from('expense_claims')
-        .select('building_id,expense_date,funding_source,amount,status')
-        .gte('expense_date', start)
-        .lte('expense_date', end)
-        .eq('funding_source', 'petty_cash');
+        .select('building_id,expense_date,category,funding_source,amount,status');
     if (!error) {
-        pendingClaims = (data || []).map(row => ({
+        accountingClaims = (data || []).map(row => ({
             buildingId: row.building_id,
             expenseDate: row.expense_date,
+            category: row.category,
             fundingSource: row.funding_source,
             amount: Number(row.amount) || 0,
             status: row.status

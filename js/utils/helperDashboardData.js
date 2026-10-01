@@ -61,46 +61,57 @@ export function buildMonthCells(monthKey) {
     return cells;
 }
 
-function invoiceSpend(invoice) {
-    const paid = Number(invoice.paidAmount) || 0;
-    return paid > 0 ? paid : (Number(invoice.amount) || 0);
+function isIncludedClaim(claim) {
+    return claim?.status !== 'rejected';
 }
 
-export function buildPettyCashSnapshot({ buildings = [], invoices = [], pendingClaims = [], buildingIds = new Set(), monthKey = '' } = {}) {
+function isIncome(claim) {
+    return claim?.category === 'petty_cash_income';
+}
+
+export function buildPettyCashSnapshot({ buildings = [], claims = [], buildingIds = new Set(), monthKey = '' } = {}) {
     const rows = buildings
         .filter(b => buildingIds.has(b.id) && b.status !== 'inactive')
         .map(building => {
-            const approved = invoices
-                .filter(invoice => invoice.buildingId === building.id
-                    && invoice.direction === 'out'
-                    && invoice.paymentMethod === '零用金'
-                    && monthKeyOf(invoice.paidDate || invoice.dueDate) === monthKey)
-                .reduce((sum, invoice) => sum + invoiceSpend(invoice), 0);
-            const pending = pendingClaims
-                .filter(claim => claim.buildingId === building.id
+            const buildingClaims = claims.filter(claim => claim.buildingId === building.id && isIncludedClaim(claim));
+            const income = buildingClaims
+                .filter(isIncome)
+                .reduce((sum, claim) => sum + (Number(claim.amount) || 0), 0);
+            const pettyCashSpent = buildingClaims
+                .filter(claim => !isIncome(claim) && claim.fundingSource === 'petty_cash')
+                .reduce((sum, claim) => sum + (Number(claim.amount) || 0), 0);
+            const monthSpent = buildingClaims
+                .filter(claim => !isIncome(claim)
                     && claim.fundingSource === 'petty_cash'
-                    && claim.status === 'submitted'
                     && monthKeyOf(claim.expenseDate) === monthKey)
                 .reduce((sum, claim) => sum + (Number(claim.amount) || 0), 0);
-            const budget = Number(building.pettyCashMonthlyBudget) || 0;
-            const spent = approved + pending;
+            const monthExpenseTotal = buildingClaims
+                .filter(claim => !isIncome(claim) && monthKeyOf(claim.expenseDate) === monthKey)
+                .reduce((sum, claim) => sum + (Number(claim.amount) || 0), 0);
+            const outstandingPersonal = buildingClaims
+                .filter(claim => !isIncome(claim)
+                    && claim.fundingSource === 'personal'
+                    && claim.status !== 'reimbursed')
+                .reduce((sum, claim) => sum + (Number(claim.amount) || 0), 0);
             return {
                 buildingId: building.id,
                 buildingName: building.name,
-                budget,
-                approved,
-                pending,
-                spent,
-                remaining: budget - spent
+                income,
+                pettyCashSpent,
+                monthSpent,
+                monthExpenseTotal,
+                outstandingPersonal,
+                balance: income - pettyCashSpent
             };
         });
 
     return {
-        budget: rows.reduce((sum, row) => sum + row.budget, 0),
-        approved: rows.reduce((sum, row) => sum + row.approved, 0),
-        pending: rows.reduce((sum, row) => sum + row.pending, 0),
-        spent: rows.reduce((sum, row) => sum + row.spent, 0),
-        remaining: rows.reduce((sum, row) => sum + row.remaining, 0),
+        monthExpenseTotal: rows.reduce((sum, row) => sum + row.monthExpenseTotal, 0),
+        outstandingPersonal: rows.reduce((sum, row) => sum + row.outstandingPersonal, 0),
+        income: rows.reduce((sum, row) => sum + row.income, 0),
+        pettyCashSpent: rows.reduce((sum, row) => sum + row.pettyCashSpent, 0),
+        monthSpent: rows.reduce((sum, row) => sum + row.monthSpent, 0),
+        balance: rows.reduce((sum, row) => sum + row.balance, 0),
         rows
     };
 }

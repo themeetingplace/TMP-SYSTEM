@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { buildMonthCells, buildPettyCashSnapshot, buildStayEvents } from '../js/utils/helperDashboardData.js';
 
 const buildings = [
-    { id: 'B1', name: '甲館', status: 'active', pettyCashMonthlyBudget: 5000 },
-    { id: 'B2', name: '乙館', status: 'active', pettyCashMonthlyBudget: 3000 }
+    { id: 'B1', name: '甲館', status: 'active' },
+    { id: 'B2', name: '乙館', status: 'active' }
 ];
 const properties = [
     { name: '甲館 R1-A', buildingId: 'B1', roomNumber: 1, bedLetter: 'A' },
@@ -26,13 +26,19 @@ const snapshot = buildPettyCashSnapshot({
     buildings,
     buildingIds: new Set(['B1']),
     monthKey: '2026-10',
-    invoices: [{ buildingId: 'B1', direction: 'out', paymentMethod: '零用金', paidDate: '2026-10-02', amount: 500, paidAmount: 500 }],
-    pendingClaims: [{ buildingId: 'B1', fundingSource: 'petty_cash', status: 'submitted', expenseDate: '2026-10-03', amount: 300 }]
+    claims: [
+        { buildingId: 'B1', category: 'petty_cash_income', fundingSource: 'petty_cash', status: 'submitted', expenseDate: '2026-09-30', amount: 3000 },
+        { buildingId: 'B1', category: 'daily_supplies', fundingSource: 'petty_cash', status: 'submitted', expenseDate: '2026-10-03', amount: 300 },
+        { buildingId: 'B1', category: 'energy', fundingSource: 'personal', status: 'submitted', expenseDate: '2026-10-04', amount: 900 },
+        { buildingId: 'B1', category: 'daily_supplies', fundingSource: 'petty_cash', status: 'reimbursed', expenseDate: '2026-09-20', amount: 500 },
+        { buildingId: 'B1', category: 'daily_supplies', fundingSource: 'personal', status: 'rejected', expenseDate: '2026-10-04', amount: 700 }
+    ]
 });
-assert.equal(snapshot.budget, 5000);
-assert.equal(snapshot.approved, 500);
-assert.equal(snapshot.pending, 300);
-assert.equal(snapshot.spent, 800);
-assert.equal(snapshot.remaining, 4200);
+assert.equal(snapshot.monthExpenseTotal, 1200);
+assert.equal(snapshot.outstandingPersonal, 900);
+assert.equal(snapshot.income, 3000);
+assert.equal(snapshot.pettyCashSpent, 800);
+assert.equal(snapshot.monthSpent, 300);
+assert.equal(snapshot.balance, 2200);
 
 console.log('✓ helper dashboard data tests passed');
