@@ -111,12 +111,18 @@ function calendarHtml() {
     const cells = buildMonthCells(selectedMonth);
     const today = new Date().toISOString().slice(0, 10);
     const upcoming = events.filter(event => event.date >= today).slice(0, 5);
+    const compactDate = value => String(value || '').replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$2/$3');
+    const compactPeriod = period => String(period || '').split(' ～ ').map(compactDate).join('–');
 
     const eventHtml = event => {
         const isIn = event.type === 'checkin';
         const building = mockData.buildings.find(b => b.id === event.buildingId)?.name || '';
-        return `<a href="#occupancy" class="helper-calendar-event is-${event.type}" title="${escapeAttr(`${isIn ? '入住' : '退房'} ${event.tenant} · ${event.beds.join('、')}`)}">
-            <b>${isIn ? '入' : '退'}</b><span>${esc(event.tenant)}</span><small>${esc(building)}</small>
+        const periods = event.leasePeriods || [];
+        const periodText = periods.join('、');
+        return `<a href="#occupancy" class="helper-calendar-event is-${event.type}" title="${escapeAttr(`${isIn ? '入住' : '退房'} ${event.tenant} · ${building} ${event.beds.join('、')} · 租約 ${periodText}`)}">
+            <b>${isIn ? '入' : '退'}</b>
+            <span class="helper-calendar-event-copy"><strong>${esc(event.tenant)}</strong><em>${esc(building)} · ${esc(event.beds.join('、'))}</em></span>
+            <small><i class="ph ph-calendar-blank"></i> ${esc(periods.map(compactPeriod).join('、'))}</small>
         </a>`;
     };
 
@@ -146,7 +152,14 @@ function calendarHtml() {
         <div class="helper-upcoming">
             <strong>接下來的行程</strong>
             ${upcoming.length ? upcoming.map(event => `
-                <a href="#occupancy"><time>${event.date.slice(5).replace('-', '/')}</time><b class="is-${event.type}">${event.type === 'checkin' ? '入住' : '退房'}</b><span>${esc(event.tenant)} · ${esc(event.beds.join('、'))}</span></a>
+                <a href="#occupancy">
+                    <time>${event.date.slice(5).replace('-', '/')}</time>
+                    <b class="is-${event.type}">${event.type === 'checkin' ? '入住' : '退房'}</b>
+                    <span class="helper-upcoming-copy">
+                        <strong>${esc(event.tenant)} · ${esc(event.beds.join('、'))}</strong>
+                        <small><i class="ph ph-calendar-blank"></i> 租約 ${esc((event.leasePeriods || []).join('、'))}</small>
+                    </span>
+                </a>
             `).join('') : '<p>本月目前沒有待辦的入住或退房。</p>'}
         </div>
     `;

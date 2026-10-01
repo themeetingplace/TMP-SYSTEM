@@ -7,16 +7,26 @@ function contractBuildingId(contract, properties) {
     return properties.find(p => p.name === contract?.propertyName)?.buildingId || null;
 }
 
+function contractBedLabel(contract, properties) {
+    const property = properties.find(p => p.name === contract?.propertyName || (contract?.propertyId && p.id === contract.propertyId));
+    if (property?.roomNumber != null && property?.bedLetter) return `R${property.roomNumber}-${property.bedLetter}`;
+    const name = String(contract?.propertyName || property?.name || '').replace(/^\s*聚空間\s*-\s*/, '').trim();
+    const roomBed = name.match(/\bR[^\s·]+$/i)?.[0];
+    return roomBed || name || '未指定床位';
+}
+
 export function buildStayEvents({ contracts = [], properties = [], buildingIds = new Set(), monthKey = '' } = {}) {
     const merged = new Map();
 
     contracts.forEach(contract => {
-        if (contract.bundleParentContractId) return;
         const buildingId = contractBuildingId(contract, properties);
         if (!buildingId || !buildingIds.has(buildingId)) return;
 
         const tenant = contract.tenant || '未填住客';
-        const bed = contract.propertyName || '未指定床位';
+        const bed = contractBedLabel(contract, properties);
+        const leaseStart = contract.startDate || '';
+        const leaseEnd = contract.terminatedDate || contract.endDate || '';
+        const leasePeriod = leaseStart && leaseEnd ? `${leaseStart} ～ ${leaseEnd}` : (leaseStart || leaseEnd || '未填租約期間');
         const dates = [
             { type: 'checkin', date: contract.startDate },
             { type: 'checkout', date: contract.terminatedDate || contract.endDate }
@@ -25,8 +35,9 @@ export function buildStayEvents({ contracts = [], properties = [], buildingIds =
         dates.forEach(({ type, date }) => {
             if (!date || monthKeyOf(date) !== monthKey) return;
             const key = `${type}|${date}|${tenant}|${buildingId}`;
-            const existing = merged.get(key) || { type, date, tenant, buildingId, beds: [], contractIds: [] };
+            const existing = merged.get(key) || { type, date, tenant, buildingId, beds: [], leasePeriods: [], contractIds: [] };
             if (!existing.beds.includes(bed)) existing.beds.push(bed);
+            if (!existing.leasePeriods.includes(leasePeriod)) existing.leasePeriods.push(leasePeriod);
             if (contract.id && !existing.contractIds.includes(contract.id)) existing.contractIds.push(contract.id);
             merged.set(key, existing);
         });
