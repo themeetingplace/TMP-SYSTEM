@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.7.2';
+export const APP_VERSION = '1.7.3';
 export const APP_BUILD_DATE = '2026-10-01';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.7.3', date: '2026-10-01', notes: '移除新增支出的常用金額按鈕；手機版所有文字、日期、搜尋、下拉與多行輸入欄位統一使用至少 16px 字級，避免 iPhone Safari 點選欄位時自動放大畫面。' },
     { version: '1.7.2', date: '2026-10-01', notes: '小幫手首頁的住客行程新增床號與完整租約起迄日；多床合約會合併顯示所有床號，桌機月曆與手機近期行程同步更新。' },
     { version: '1.7.1', date: '2026-10-01', notes: '修正「總收支表 → 新增支出」仍使用舊金額欄位；現在已與館務報帳共用同一套醒目 NT$ 總額輸入、常用金額與即時回顯。' },
     { version: '1.7.0', date: '2026-10-01', notes: '新增小幫手專屬首頁：整合快速記帳、本月零用金額度／支出／餘額與授權館別的住客入住退房日曆；新增支出金額改為醒目總額輸入、常用金額與送審前回顯。' },

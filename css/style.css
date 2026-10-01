@@ -4145,25 +4145,6 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 }
 .expense-amount-control .form-input::placeholder { color: color-mix(in srgb, var(--text-muted) 45%, transparent); }
 .expense-amount-field:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent); }
-.expense-amount-tools {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-top: 0.7rem;
-}
-.expense-amount-tools > span { margin-right: 0.15rem; color: var(--text-muted); font-size: var(--text-2xs); }
-.expense-amount-tools button {
-    padding: 0.35rem 0.62rem;
-    border: 1px solid var(--border-color);
-    border-radius: 999px;
-    background: var(--color-surface);
-    color: var(--text-secondary);
-    font: 600 var(--text-xs)/1 'Outfit', 'Noto Sans TC', sans-serif;
-    cursor: pointer;
-}
-.expense-amount-tools button:hover,
-.expense-amount-tools button:focus-visible { border-color: var(--color-primary); color: var(--color-primary); outline: none; }
 .expense-amount-readback {
     display: flex;
     align-items: center;
@@ -4362,7 +4343,6 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 @media (max-width: 760px) {
     .expense-amount-field { padding: 0.85rem; }
     .expense-amount-control .form-input { font-size: 2.35rem; }
-    .expense-amount-tools > span { width: 100%; }
     .helper-home { gap: 0.75rem; }
     .helper-home-hero { min-height: 0; padding: 1.05rem 1.05rem 1.05rem 1.2rem; }
     .helper-home-hero::after { display: none; }
@@ -6005,16 +5985,6 @@ body[data-role="helper"] #expense-create-btn.helper-authorized-write { display: 
 .form-input::placeholder {
     color: var(--text-muted);
     opacity: 0.7;
-}
-
-/* iOS Safari: input font-size < 16px 會觸發 auto-zoom (画面跳一下)
-   audit: 手機 form-input 強制 ≥16px 防 zoom-in 干擾 */
-@media (max-width: 768px) {
-    .form-input,
-    .custom-select-trigger,
-    .custom-select-search-input {
-        font-size: 16px;
-    }
 }
 
 .form-input:hover:not(:focus):not(:disabled) {
@@ -9940,4 +9910,22 @@ tr.row-flash > td {
 
 .status-badge {
     white-space: nowrap !important;
+}
+
+/* iPhone Safari 會在輸入欄位字級小於 16px 時強制放大頁面。
+   全站手機表單統一保底 16px，不用 user-scalable=no，保留使用者主動縮放的無障礙能力。 */
+@media (max-width: 768px) {
+    body input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"])),
+    body select,
+    body textarea,
+    body [contenteditable="true"],
+    body .custom-select-trigger,
+    body .custom-select-search-input {
+        font-size: 16px !important;
+    }
+
+    /* 金額總額仍保留收銀機式大字，不被上方保底覆蓋。 */
+    body .expense-amount-control input.form-input {
+        font-size: 2.35rem !important;
+    }
 }

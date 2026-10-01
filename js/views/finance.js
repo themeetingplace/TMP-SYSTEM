@@ -440,8 +440,7 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
         onFormMount: (form) => {
             if (isExpense) {
                 enhanceAmountInput(form, {
-                    readbackLabel: '這筆將記入的支出',
-                    presetAmounts: [100, 500, 1000, 3000]
+                    readbackLabel: '這筆將記入的支出'
                 });
             }
             // === bundle 子合約偵測 — readonly + hint ===
