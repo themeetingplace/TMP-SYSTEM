@@ -13,6 +13,7 @@ import { getMode } from '../utils/appMode.js';
 import { moneyAmount, adjustmentBadge } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { emptyState } from '../utils/emptyState.js';
+import { enhanceAmountInput } from '../utils/amountInput.js';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -399,7 +400,7 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
             { name: 'buildingId', label: '館別', type: 'select', required: true, options: buildingOptions },
             { name: 'type', label: '項目', type: 'select', required: true, options: typeOptions },
             { name: 'contractId', label: '對應合約 (可選)', type: 'select', options: contractOptions, hint: '只屬於某合約的支出才需要綁；整館共用支出留空', span: 2, searchable: true, placeholder: '選擇合約或留空...' },
-            { name: 'amount', label: '金額', type: 'number', required: true },
+            { name: 'amount', label: '本次支出金額', type: 'number', required: true, span: 2, hint: '請輸入這筆帳務的實付總額' },
             { name: 'paymentMethod', label: '付款方式', type: 'select', options: paymentMethodOptions, value: invoice?.paymentMethod ?? defaultPaymentMethod },
             { name: 'paidDate', label: '付款日', type: 'date', required: true, value: TODAY },
             { name: 'note', label: '備註', type: 'textarea', span: 2, rows: 2 }
@@ -437,6 +438,12 @@ function showInvoiceForm(invoice = null, defaultDirection = 'in') {
         values: invoice ?? {},
         submitLabel: isEdit ? '儲存變更' : '建立',
         onFormMount: (form) => {
+            if (isExpense) {
+                enhanceAmountInput(form, {
+                    readbackLabel: '這筆將記入的支出',
+                    presetAmounts: [100, 500, 1000, 3000]
+                });
+            }
             // === bundle 子合約偵測 — readonly + hint ===
             // 若 invoice.contractId 對應的合約有 bundleParentContractId, 則該 invoice 為子合約 invoice,
             // 收款金額應在主合約 invoice 上編輯 (避免雙重記帳)

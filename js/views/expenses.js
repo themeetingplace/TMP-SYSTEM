@@ -8,6 +8,7 @@ import { openConfirm, openDetailModal, openFormModal, showToast } from '../utils
 import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { consumeExpensePrefill } from '../utils/expensePrefill.js';
+import { enhanceAmountInput } from '../utils/amountInput.js';
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const CATEGORY_META = {
@@ -250,52 +251,6 @@ async function uploadReceipt(file) {
     return { path: key, name: file.name, mime: file.type };
 }
 
-function enhanceAmountInput(form) {
-    const input = form.querySelector('[name="amount"]');
-    const group = input?.closest('.form-group');
-    if (!input || !group || group.classList.contains('expense-amount-field')) return;
-
-    group.classList.add('expense-amount-field');
-    input.setAttribute('inputmode', 'numeric');
-    input.setAttribute('min', '1');
-    input.setAttribute('step', '1');
-    input.setAttribute('autocomplete', 'off');
-    input.placeholder = '0';
-
-    const control = document.createElement('div');
-    control.className = 'expense-amount-control';
-    input.before(control);
-    control.innerHTML = '<span class="expense-amount-currency">NT$</span>';
-    control.appendChild(input);
-
-    const tools = document.createElement('div');
-    tools.className = 'expense-amount-tools';
-    tools.innerHTML = `
-        <span>常用金額</span>
-        ${[100, 300, 500, 1000].map(amount => `<button type="button" data-amount-preset="${amount}">$${amount.toLocaleString()}</button>`).join('')}
-    `;
-    control.after(tools);
-
-    const readback = document.createElement('div');
-    readback.className = 'expense-amount-readback';
-    readback.setAttribute('aria-live', 'polite');
-    readback.innerHTML = '<span><i class="ph ph-receipt"></i> 這筆送審金額</span><output>尚未輸入</output>';
-    tools.after(readback);
-
-    const update = () => {
-        const amount = Math.max(0, Number(input.value) || 0);
-        readback.querySelector('output').textContent = amount ? `NT$ ${Math.round(amount).toLocaleString('zh-TW')}` : '尚未輸入';
-        group.classList.toggle('has-amount', amount > 0);
-    };
-    input.addEventListener('input', update);
-    tools.querySelectorAll('[data-amount-preset]').forEach(button => button.addEventListener('click', () => {
-        input.value = button.dataset.amountPreset;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.focus();
-    }));
-    update();
-}
-
 function openClaimForm(prefill = {}) {
     const buildings = scopedBuildings();
     if (!buildings.length) {
@@ -322,7 +277,7 @@ function openClaimForm(prefill = {}) {
         submitLabel: '送出審核',
         onFormMount: form => {
             formRef = form;
-            enhanceAmountInput(form);
+            enhanceAmountInput(form, { readbackLabel: '這筆送審金額' });
             const ph = form.querySelector('#ph-receiptUpload');
             if (!ph) return;
             ph.innerHTML = `
