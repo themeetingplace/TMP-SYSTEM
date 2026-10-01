@@ -4104,6 +4104,294 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 .expense-detail-note p { margin: 0.35rem 0 0; color: var(--text-main); font-size: var(--text-sm); line-height: 1.6; white-space: pre-wrap; }
 .expense-detail-note.is-review { border-left: 3px solid var(--color-warning); }
 
+/* 新增支出：金額是這張單據的主角，用「收銀總額」而非普通文字欄位呈現。 */
+.expense-amount-field {
+    position: relative;
+    padding: 1rem;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 34%, var(--border-color));
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+}
+.expense-amount-field > label {
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    font-weight: 700;
+}
+.expense-amount-control {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.55rem;
+    margin-top: 0.35rem;
+    padding-bottom: 0.55rem;
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 45%, var(--border-color));
+}
+.expense-amount-currency {
+    color: var(--color-primary);
+    font: 700 var(--text-sm)/1 'Outfit', 'Noto Sans TC', sans-serif;
+}
+.expense-amount-control .form-input {
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-main);
+    font: 700 clamp(2rem, 7vw, 3rem)/1 'Outfit', 'Noto Sans TC', sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+    box-shadow: none !important;
+}
+.expense-amount-control .form-input::placeholder { color: color-mix(in srgb, var(--text-muted) 45%, transparent); }
+.expense-amount-field:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent); }
+.expense-amount-tools {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.7rem;
+}
+.expense-amount-tools > span { margin-right: 0.15rem; color: var(--text-muted); font-size: var(--text-2xs); }
+.expense-amount-tools button {
+    padding: 0.35rem 0.62rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--text-secondary);
+    font: 600 var(--text-xs)/1 'Outfit', 'Noto Sans TC', sans-serif;
+    cursor: pointer;
+}
+.expense-amount-tools button:hover,
+.expense-amount-tools button:focus-visible { border-color: var(--color-primary); color: var(--color-primary); outline: none; }
+.expense-amount-readback {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 0.75rem;
+    padding-top: 0.65rem;
+    border-top: 1px dashed var(--border-color);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+.expense-amount-readback span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.expense-amount-readback output { color: var(--text-secondary); font-weight: 700; font-variant-numeric: tabular-nums; }
+.expense-amount-field.has-amount .expense-amount-readback output { color: var(--color-primary); }
+
+/* === 小幫手首頁：值班台 ==================================================== */
+.helper-home {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
+}
+.helper-home-hero {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    min-height: 154px;
+    padding: 1.45rem 1.6rem;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--border-color));
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+}
+.helper-home-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: var(--color-primary);
+}
+.helper-home-hero::after {
+    content: '';
+    position: absolute;
+    right: 126px;
+    bottom: -35px;
+    width: 175px;
+    height: 80px;
+    border: 1px dashed color-mix(in srgb, var(--color-primary) 42%, transparent);
+    border-radius: 50%;
+    transform: rotate(-12deg);
+}
+.helper-home-shift,
+.helper-section-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--color-primary);
+    font-size: var(--text-2xs);
+    font-weight: 750;
+    letter-spacing: 0.08em;
+}
+.helper-home-hero h1 { margin: 0.35rem 0 0; font-size: clamp(1.55rem, 3vw, 2.2rem); letter-spacing: -0.035em; }
+.helper-home-hero p { margin: 0.55rem 0 0; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.6; }
+.helper-home-date {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 98px;
+    display: grid;
+    justify-items: center;
+    padding: 0.7rem;
+    border: 1px solid var(--border-color);
+    border-top: 4px solid var(--color-primary);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-md);
+}
+.helper-home-date b { color: var(--text-main); font: 700 2.5rem/1 'Outfit', sans-serif; }
+.helper-home-date span { margin-top: 0.35rem; color: var(--text-muted); font-size: var(--text-2xs); }
+.helper-home-actions,
+.helper-cash-card,
+.helper-calendar-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+}
+.helper-home-actions { padding: 1.15rem; }
+.helper-home-section-head,
+.helper-cash-head,
+.helper-calendar-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+.helper-home-section-head span { color: var(--color-primary); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.08em; }
+.helper-home-section-head h2,
+.helper-cash-head h2,
+.helper-calendar-head h2 { margin: 0.15rem 0 0; color: var(--text-main); font-size: 1.12rem; }
+.helper-home-section-head > small { color: var(--text-muted); font-size: var(--text-xs); }
+.helper-home-quick-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.7rem; margin-top: 0.85rem; }
+.helper-home-quick {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.65rem;
+    min-height: 76px;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--text-main);
+    text-align: left;
+    cursor: pointer;
+    transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+.helper-home-quick:hover { transform: translateY(-2px); border-color: var(--color-primary); box-shadow: var(--shadow-md); }
+.helper-home-quick:focus-visible { outline: 3px solid color-mix(in srgb, var(--color-primary) 25%, transparent); outline-offset: 2px; }
+.helper-home-quick:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+.helper-home-quick > span:nth-child(2) { min-width: 0; display: grid; gap: 0.2rem; }
+.helper-home-quick strong { font-size: var(--text-sm); }
+.helper-home-quick small { overflow: hidden; color: var(--text-muted); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap; }
+.helper-home-quick > .ph-arrow-up-right { color: var(--text-muted); }
+.helper-home-quick-icon { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 12px; font-size: 1.15rem; }
+.helper-home-quick.tone-amber .helper-home-quick-icon { color: #a75d00; background: #fff0d5; }
+.helper-home-quick.tone-aqua .helper-home-quick-icon { color: #087f75; background: #dff8f3; }
+.helper-home-quick.tone-blue .helper-home-quick-icon { color: #2358a6; background: #e6efff; }
+.helper-home-quick.tone-coral .helper-home-quick-icon { color: #a74135; background: #ffebe7; }
+.helper-home-workspace { display: grid; grid-template-columns: minmax(270px, 0.36fr) minmax(0, 1fr); gap: 1rem; align-items: start; min-width: 0; }
+.helper-cash-card,
+.helper-calendar-card { min-width: 0; padding: 1.15rem; }
+.helper-text-link { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--color-primary); font-size: var(--text-xs); font-weight: 650; text-decoration: none; }
+.helper-cash-balance { display: grid; gap: 0.2rem; margin-top: 1.1rem; padding: 1rem; border-radius: var(--radius-md); background: color-mix(in srgb, #2358a6 8%, var(--color-surface)); }
+.helper-cash-balance > span { color: var(--text-secondary); font-size: var(--text-xs); }
+.helper-cash-balance strong { color: #2358a6; font: 700 clamp(1.9rem, 4vw, 2.55rem)/1 'Outfit', 'Noto Sans TC', sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.035em; }
+.helper-cash-balance small { color: var(--text-muted); font-size: var(--text-2xs); }
+.helper-cash-balance.is-over { background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface)); }
+.helper-cash-balance.is-over strong { color: var(--color-danger); }
+.helper-cash-progress { overflow: hidden; height: 7px; margin: 0.75rem 0 1rem; border-radius: 999px; background: var(--bg-secondary); }
+.helper-cash-progress > span { display: block; height: 100%; border-radius: inherit; background: #2358a6; }
+.helper-cash-ledger { display: grid; grid-template-columns: 1fr 1fr; border: 1px dashed var(--border-color); border-radius: var(--radius-md); }
+.helper-cash-ledger > div { display: grid; gap: 0.2rem; padding: 0.65rem; }
+.helper-cash-ledger > div:nth-child(2) { border-left: 1px dashed var(--border-color); }
+.helper-cash-ledger > div:last-child { grid-column: 1 / -1; border-top: 1px dashed var(--border-color); }
+.helper-cash-ledger span { color: var(--text-muted); font-size: var(--text-2xs); }
+.helper-cash-ledger strong { color: var(--text-main); font: 650 var(--text-base)/1.2 'Outfit', 'Noto Sans TC', sans-serif; }
+.helper-cash-buildings { display: grid; gap: 0.45rem; margin-top: 0.9rem; }
+.helper-cash-buildings > div { display: flex; justify-content: space-between; gap: 0.75rem; padding-bottom: 0.45rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: var(--text-xs); }
+.helper-cash-buildings small { display: block; color: var(--color-warning); font-size: 0.62rem; text-align: right; }
+.helper-cash-buildings p,
+.helper-upcoming p { margin: 0; color: var(--text-muted); font-size: var(--text-xs); line-height: 1.6; }
+.helper-cash-loading { margin-top: 0.6rem; color: var(--text-muted); font-size: var(--text-2xs); }
+.helper-cash-loading i { animation: spin 0.8s linear infinite; }
+.helper-cash-note { display: flex; align-items: flex-start; gap: 0.35rem; margin: 0.8rem 0 0; color: var(--text-muted); font-size: var(--text-2xs); line-height: 1.5; }
+.helper-calendar-nav { display: inline-flex; align-items: center; overflow: hidden; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.helper-calendar-nav button { display: grid; place-items: center; min-width: 34px; height: 32px; padding: 0 0.55rem; border: 0; border-right: 1px solid var(--border-color); background: var(--color-surface); color: var(--text-secondary); font-size: var(--text-xs); cursor: pointer; }
+.helper-calendar-nav button:last-child { border-right: 0; }
+.helper-calendar-nav button:hover { color: var(--color-primary); background: var(--bg-secondary); }
+.helper-calendar-legend { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.9rem; color: var(--text-muted); font-size: var(--text-2xs); }
+.helper-calendar-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.helper-calendar-legend i { width: 8px; height: 8px; border-radius: 50%; }
+.helper-calendar-legend i.is-checkin { background: #16856f; }
+.helper-calendar-legend i.is-checkout { background: #c45e52; }
+.helper-calendar-legend a { margin-left: auto; color: var(--color-primary); text-decoration: none; }
+.helper-calendar-scroll { overflow-x: auto; margin-top: 0.55rem; padding-bottom: 0.2rem; }
+.helper-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(88px, 1fr)); min-width: 620px; border-top: 1px solid var(--border-color); border-left: 1px solid var(--border-color); }
+.helper-calendar-weekday { padding: 0.35rem; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: var(--text-2xs); font-weight: 700; text-align: center; }
+.helper-calendar-day { min-height: 92px; padding: 0.35rem; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); background: var(--color-surface); }
+.helper-calendar-day.is-empty { background: var(--bg-secondary); opacity: 0.55; }
+.helper-calendar-day > time { display: grid; place-items: center; width: 24px; height: 24px; margin-bottom: 0.2rem; color: var(--text-secondary); font: 600 var(--text-2xs)/1 'Outfit', sans-serif; }
+.helper-calendar-day.is-today > time { border-radius: 50%; background: var(--color-primary); color: white; }
+.helper-calendar-day > div { display: grid; gap: 0.2rem; }
+.helper-calendar-event { display: grid; grid-template-columns: 17px minmax(0, 1fr); align-items: center; gap: 0.2rem; padding: 0.22rem; border-radius: 4px; color: var(--text-main); font-size: 0.62rem; text-decoration: none; }
+.helper-calendar-event b { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 4px; color: white; font-size: 0.55rem; }
+.helper-calendar-event span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helper-calendar-event small { display: none; }
+.helper-calendar-event.is-checkin { background: #e7f6f2; }
+.helper-calendar-event.is-checkin b { background: #16856f; }
+.helper-calendar-event.is-checkout { background: #fff0ed; }
+.helper-calendar-event.is-checkout b { background: #c45e52; }
+.helper-upcoming { display: none; }
+
+@media (max-width: 1100px) {
+    .helper-home-quick-grid { grid-template-columns: 1fr 1fr; }
+    .helper-home-workspace { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+    .expense-amount-field { padding: 0.85rem; }
+    .expense-amount-control .form-input { font-size: 2.35rem; }
+    .expense-amount-tools > span { width: 100%; }
+    .helper-home { gap: 0.75rem; }
+    .helper-home-hero { min-height: 0; padding: 1.05rem 1.05rem 1.05rem 1.2rem; }
+    .helper-home-hero::after { display: none; }
+    .helper-home-hero p { font-size: var(--text-xs); }
+    .helper-home-date { flex-basis: 76px; }
+    .helper-home-date b { font-size: 2rem; }
+    .helper-home-actions,
+    .helper-cash-card,
+    .helper-calendar-card { padding: 0.9rem; }
+    .helper-home-section-head { align-items: flex-start; }
+    .helper-home-section-head > small { display: none; }
+    .helper-home-quick-grid { gap: 0.5rem; }
+    .helper-home-quick { min-height: 68px; padding: 0.65rem; }
+    .helper-home-quick > .ph-arrow-up-right { display: none; }
+    .helper-calendar-scroll { display: none; }
+    .helper-calendar-legend { margin-bottom: 0.75rem; }
+    .helper-upcoming { display: grid; gap: 0.45rem; padding-top: 0.8rem; border-top: 1px dashed var(--border-color); }
+    .helper-upcoming > strong { margin-bottom: 0.2rem; font-size: var(--text-xs); }
+    .helper-upcoming a { display: grid; grid-template-columns: 42px 42px minmax(0, 1fr); align-items: center; gap: 0.45rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-main); font-size: var(--text-xs); text-decoration: none; }
+    .helper-upcoming time { color: var(--text-muted); font: 600 var(--text-2xs)/1 'Outfit', sans-serif; }
+    .helper-upcoming b { padding: 0.2rem; border-radius: 4px; color: white; font-size: 0.6rem; text-align: center; }
+    .helper-upcoming b.is-checkin { background: #16856f; }
+    .helper-upcoming b.is-checkout { background: #c45e52; }
+    .helper-upcoming span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+@media (max-width: 470px) {
+    .helper-home-hero { align-items: flex-start; }
+    .helper-home-date { display: none; }
+    .helper-home-quick-grid { grid-template-columns: 1fr; }
+    .helper-home-quick small { white-space: normal; }
+    .helper-calendar-head { align-items: flex-start; }
+    .helper-calendar-nav button { min-width: 31px; padding: 0 0.4rem; }
+}
+
 /* 館務報帳是 helper 被授權的寫入例外；其他頁面繼續唯讀。 */
 body[data-role="helper"] [data-fab].helper-authorized-write,
 body[data-role="helper"] .mobile-fab.helper-authorized-write { display: inline-flex !important; }
@@ -4156,7 +4444,7 @@ body[data-role="helper"] #expense-create-btn.helper-authorized-write { display: 
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .expense-quick-card { transition: none; }
+    .expense-quick-card, .helper-home-quick { transition: none; }
 }
 /* === 續租意願通知 banner === */
 .renew-intent-banner {

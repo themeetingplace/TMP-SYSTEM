@@ -1,4 +1,5 @@
 import { renderDashboard } from './views/dashboard.js';
+import { renderHelperDashboard, initHelperDashboardActions } from './views/helper-dashboard.js';
 import { renderPropertiesHub, initPropertiesHubActions, forceHubTab } from './views/properties-hub.js';
 import { renderManagedHouse, initManagedHouseActions, showNewManagedHouseForm } from './views/managed-house.js';
 import { renderManagedOwners, initManagedOwnersActions } from './views/managed-owners.js';
@@ -40,7 +41,7 @@ const navItems = document.querySelectorAll('.nav-item');
 // 角色說明：
 //   owner / admin / viewer = 看得到全部分頁 (差別在能不能管帳號 / 寫入)
 //   helper = 小幫手 → 依帳號白名單看指定頁面；館務報帳可送審，其餘頁面維持唯讀
-//   helper 預設首頁 = 住房一覽 (#occupancy)，不給看 dashboard
+//   helper 預設首頁 = 專屬值班工作台 (#dashboard)
 // helper 能看的 view (sidebar 已把 #finance 換成 #unsettled, 全員生效)
 // 各頁內部的「新增/編輯/刪除」按鈕用 CSS hide (body[data-role="helper"])
 //
@@ -58,20 +59,26 @@ const HELPER_PAGE_ROUTES = {
 const DEFAULT_HELPER_VIEWS = Object.keys(HELPER_PAGE_ROUTES);  // 空 allowed_views = 全部 (向下相容)
 // 下面兩個在 boot 時依該 helper 的 allowed_views 重算 (applyHelperViews)
 let HELPER_ALLOWED = new Set(['dashboard', 'properties', 'occupancy', 'contracts', 'unsettled', 'expenses', 'maintenance', 'tenants']);
-let HELPER_DEFAULT_HASH = 'occupancy';
+let HELPER_DEFAULT_HASH = 'dashboard';
 // 依 view keys 算出可進入的 route 集合 + 落地頁
 function applyHelperViews(views) {
     const eff = (Array.isArray(views) && views.length) ? views : DEFAULT_HELPER_VIEWS;
     const routes = new Set();
     eff.forEach(v => (HELPER_PAGE_ROUTES[v] || []).forEach(r => routes.add(r)));
+    // 專屬首頁是小幫手的安全入口；內容仍只使用授權館別與已開放功能。
+    routes.add('dashboard');
     HELPER_ALLOWED = routes;
-    // 落地頁: 優先住房一覽, 其次租客/查帳/維修/合約/首頁 — 取第一個可進入的
-    const landingOrder = ['occupancy', 'expenses', 'tenants', 'unsettled', 'maintenance', 'contracts', 'dashboard'];
-    HELPER_DEFAULT_HASH = landingOrder.find(r => routes.has(r)) || 'occupancy';
+    HELPER_DEFAULT_HASH = 'dashboard';
     window.__helperViews = eff;
 }
+function renderHome() {
+    return window.__currentRole === 'helper' ? renderHelperDashboard() : renderDashboard();
+}
+function initHome(scope) {
+    if (window.__currentRole === 'helper') return initHelperDashboardActions(scope);
+}
 const routes = {
-    dashboard:     { title: '首頁',         group: '總覽', render: renderDashboard },
+    dashboard:     { title: '首頁',         group: '總覽', render: renderHome, init: initHome },
     properties:    { title: '物件管理',     group: '營運', render: renderPropertiesHub, init: initPropertiesHubActions, isHub: true },
     occupancy:     { title: '住房一覽',     group: '營運', render: renderPropertiesHub, init: initPropertiesHubActions, isHub: true, forceHubTab: 'occupancy' },
     contracts:     { title: '合約管理',     group: '營運', render: renderContracts,  init: initContractActions },
@@ -186,7 +193,7 @@ function handleRoute() {
     }
 
     // Dashboard 圖表
-    if (baseHash === 'dashboard' && window.initDashboardChart) {
+    if (baseHash === 'dashboard' && window.__currentRole !== 'helper' && window.initDashboardChart) {
         window.initDashboardChart();
         if (window.initDashboardInteractions) {
             window.initDashboardInteractions();

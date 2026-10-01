@@ -177,6 +177,7 @@ function renderBuildingDetail(building) {
                 ${sectionHeader('rent', 'ph-currency-circle-dollar', '租金', isRent)}
                 <div class="houses-fields-grid">
                     ${inlineField('月租金 (NT$)', building.monthlyRent, { key: 'monthlyRent', type: 'number', coerce: 'number', placeholder: '45000', disabled: !isRent })}
+                    ${inlineField('每月零用金額度 (NT$)', building.pettyCashMonthlyBudget, { key: 'pettyCashMonthlyBudget', type: 'number', coerce: 'number', placeholder: '5000', disabled: !isRent })}
                     ${inlineField('含稅', building.rentIncludesTax, {
                         key: 'rentIncludesTax', type: 'radio-pair', coerce: 'bool', disabled: !isRent,
                         options: [{ value: 'true', label: '含稅' }, { value: 'false', label: '不含稅' }]
@@ -398,6 +399,7 @@ function showHouseForm(building = null) {
 
             { name: '__section2', type: 'section', label: '租金' },
             { name: 'monthlyRent', label: '月租金 (NT$)', type: 'number', placeholder: '例：45000' },
+            { name: 'pettyCashMonthlyBudget', label: '每月零用金額度 (NT$)', type: 'number', placeholder: '例：5000' },
             { name: 'rentIncludesTax', label: '租金含稅', type: 'select', options: TAX_OPTIONS, value: building?.rentIncludesTax ? 'true' : 'false' },
             { name: 'taxReported', label: '是否報稅', type: 'select', options: BOOL_OPTIONS, value: building?.taxReported ? 'true' : 'false' },
 
@@ -418,6 +420,7 @@ function showHouseForm(building = null) {
             values.rentIncludesTax = values.rentIncludesTax === 'true' || values.rentIncludesTax === true;
             values.taxReported = values.taxReported === 'true' || values.taxReported === true;
             if (values.monthlyRent != null && values.monthlyRent !== '') values.monthlyRent = Number(values.monthlyRent);
+            if (values.pettyCashMonthlyBudget != null && values.pettyCashMonthlyBudget !== '') values.pettyCashMonthlyBudget = Number(values.pettyCashMonthlyBudget);
             if (values.areaSize != null && values.areaSize !== '') values.areaSize = Number(values.areaSize);
 
             const dup = mockData.buildings.find(b => b.name === values.name && b.id !== building?.id);
