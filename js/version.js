@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.8.0';
-export const APP_BUILD_DATE = '2026-10-01';
+export const APP_VERSION = '1.9.0';
+export const APP_BUILD_DATE = '2026-10-02';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.9.0', date: '2026-10-02', notes: '新增小幫手收帳看板：依授權館別清楚列出租客、床號、合約、最後應收與尚欠金額，區分待繳、已回報待核帳、本月已入帳；小幫手可回報匯款或無摺存款並選擇上傳證明，管理員於房租查帳確認入帳或退回，確認前不會直接改動正式帳單。' },
     { version: '1.8.0', date: '2026-10-01', notes: '館務報帳改為各館獨立報表，不再併入主帳務；移除固定零用金設定，新增能源費、日用品、個人代墊／零用金付款與烘衣機等零用金收入；小幫手首頁改顯示當月支出、代撥代墊及零用金目前金額／本月使用；管理員可標示付款或退回，小幫手與管理員刪除紀錄皆須二次確認。' },
     { version: '1.7.3', date: '2026-10-01', notes: '移除新增支出的常用金額按鈕；手機版所有文字、日期、搜尋、下拉與多行輸入欄位統一使用至少 16px 字級，避免 iPhone Safari 點選欄位時自動放大畫面。' },
     { version: '1.7.2', date: '2026-10-01', notes: '小幫手首頁的住客行程新增床號與完整租約起迄日；多床合約會合併顯示所有床號，桌機月曆與手機近期行程同步更新。' },

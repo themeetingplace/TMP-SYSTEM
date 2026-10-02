@@ -14,6 +14,7 @@ import { moneyAmount, moneyCell, adjustmentBadge } from '../utils/moneyDisplay.j
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { emptyState } from '../utils/emptyState.js';
 import { settlementPreview } from '../utils/invoiceSettlement.js';
+import { supabase } from '../supabase.js';
 
 // 類別 → type-chip class (語意色 — 跟 finance.js 同套)
 // 房租 (in) vs 租金 (out) 用 direction 分色
@@ -29,6 +30,72 @@ function typeChip(type, direction) {
 }
 
 const TODAY = new Date().toISOString().split('T')[0];
+let rentPaymentReports = [];
+let rentReportsLoaded = false;
+let rentReportsChannel = null;
+
+function pendingPaymentReport(invoiceId) {
+    return rentPaymentReports.find(report => report.invoiceId === invoiceId && report.status === 'pending') || null;
+}
+
+async function loadRentPaymentReports() {
+    const { data, error } = await supabase.from('rent_payment_reports').select('*').order('submitted_at', { ascending: false });
+    if (error) {
+        console.warn('[rent-payment-reports]', error.message);
+        return;
+    }
+    rentPaymentReports = (data || []).map(row => ({
+        id: row.id, invoiceId: row.invoice_id, buildingId: row.building_id, amount: Number(row.amount) || 0,
+        paymentDate: row.payment_date, paymentMethod: row.payment_method, note: row.note || '', status: row.status,
+        submittedByName: row.submitted_by_name || row.submitted_by_email || '', submittedAt: row.submitted_at,
+        evidencePath: row.evidence_path || '', evidenceName: row.evidence_name || ''
+    }));
+}
+
+async function confirmPaymentReport(reportId) {
+    if (!reportId) return;
+    const { error } = await supabase.rpc('review_rent_payment_report', { p_report_id: reportId, p_action: 'confirm', p_note: null });
+    if (error) {
+        console.warn('[confirm-rent-payment-report]', error.message);
+        showToast('帳款已入帳，但小幫手回報狀態同步失敗，請重新整理後再確認', 'warning', 6500);
+        return;
+    }
+    const report = rentPaymentReports.find(item => item.id === reportId);
+    if (report) report.status = 'confirmed';
+}
+
+function rejectPaymentReport(report) {
+    if (!report?.id) return;
+    openConfirm({
+        title: '退回小幫手收款回報',
+        message: `確定退回這筆 <strong>${moneyAmount(report.amount)}</strong> 的收款回報嗎？<br><br>退回後不會更動正式帳單，小幫手可以重新確認並再次回報。`,
+        confirmLabel: '確認退回',
+        onConfirm: async () => {
+            const { error } = await supabase.rpc('review_rent_payment_report', {
+                p_report_id: report.id,
+                p_action: 'reject',
+                p_note: '管理員退回，請重新確認付款資料'
+            });
+            if (error) {
+                showToast(`退回失敗：${error.message}`, 'danger', 6500);
+                return false;
+            }
+            report.status = 'rejected';
+            showToast('已退回小幫手收款回報，正式帳單未變更', 'success');
+            refreshView();
+        }
+    });
+}
+
+async function openPaymentProof(report) {
+    if (!report?.evidencePath) return;
+    const { data, error } = await supabase.storage.from('rent-payment-proofs').createSignedUrl(report.evidencePath, 300);
+    if (error || !data?.signedUrl) {
+        showToast(`開啟付款證明失敗：${error?.message || '無法取得連結'}`, 'danger');
+        return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener');
+}
 
 function buildingName(id) {
     return mockData.buildings.find(b => b.id === id)?.name || '—';
@@ -44,6 +111,9 @@ export function renderUnsettled() {
     const unsettled = filterInvoicesByMode(mockData.invoices)
         .filter(i => isUnsettled(i) && i.direction === 'in')
         .sort((a, b) => {
+            const ar = pendingPaymentReport(a.id) ? 0 : 1;
+            const br = pendingPaymentReport(b.id) ? 0 : 1;
+            if (ar !== br) return ar - br;
             // 已回報末5碼待核對的排最前面 — 客戶已回應, 需要小編優先核對入帳
             const av = (a.bankLast5 && !a.bankVerified) ? 0 : 1;
             const bv = (b.bankLast5 && !b.bankVerified) ? 0 : 1;
@@ -61,7 +131,7 @@ export function renderUnsettled() {
         const due = (i.amount || 0) - (i.discount || 0);
         return s + Math.max(0, due - (i.paidAmount || 0));
     }, 0);
-    const awaitVerifyCount = unsettled.filter(i => i.bankLast5 && !i.bankVerified).length;
+    const awaitVerifyCount = unsettled.filter(i => (i.bankLast5 && !i.bankVerified) || pendingPaymentReport(i.id)).length;
 
     // 各館未結筆數 (依當前 mode 篩 — 共居/代管不混)
     const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
@@ -74,6 +144,7 @@ export function renderUnsettled() {
     });
 
     const tableRows = unsettled.map(inv => {
+        const helperReport = pendingPaymentReport(inv.id);
         const overdue = isOverdue(inv);
         const dirBadge = inv.direction === 'in'
             ? '<span class="status-badge danger" style="font-size: var(--text-2xs);"><i class="ph ph-arrow-down"></i> 應收</span>'
@@ -93,12 +164,15 @@ export function renderUnsettled() {
         const statusAttrs = [inv.direction];
         if (overdue) statusAttrs.push('逾期');
         if (inv.bankLast5 && !inv.bankVerified) statusAttrs.push('待核對');
+        if (helperReport) statusAttrs.push('待核對 小幫手回報');
         const statusAttr = statusAttrs.join(' ');
 
         const searchText = [inv.id, inv.type, inv.tenant || '', inv.contractId || '', buildingName(inv.buildingId), inv.bankLast5 || ''].join(' ').toLowerCase();
 
         // 末 5 碼徽章
-        const bankBadge = inv.bankLast5
+        const bankBadge = helperReport
+            ? `<div class="bank-last5-badge pending helper-payment-report-badge"><i class="ph ph-hand-coins"></i><span>小幫手回報</span><strong>${moneyAmount(helperReport.amount)}</strong><small>${escapeHtml(helperReport.paymentDate || '')} · ${helperReport.paymentMethod === 'cash_deposit' ? '無摺存款' : helperReport.paymentMethod === 'transfer' ? '匯款' : '其他'}</small></div>`
+            : inv.bankLast5
             ? `<div class="bank-last5-badge ${inv.bankVerified ? 'verified' : 'pending'}">
                    <i class="ph ${inv.bankVerified ? 'ph-check-circle' : 'ph-warning'}"></i>
                    末5碼 <strong>${inv.bankLast5}</strong>
@@ -119,7 +193,9 @@ export function renderUnsettled() {
         const dueText = overdue
             ? `應結 ${inv.dueDate || '—'} · 逾期`
             : `應結 ${inv.dueDate || '—'}`;
-        const bank5Chip = inv.bankLast5
+        const bank5Chip = helperReport
+            ? `<span class="c-chip warn"><i class="ph ph-hand-coins"></i> 小幫手回報 ${moneyAmount(helperReport.amount)} · 待核</span>`
+            : inv.bankLast5
             ? `<span class="c-chip ${inv.bankVerified ? 'success' : 'warn'}"><i class="ph ${inv.bankVerified ? 'ph-shield-check' : 'ph-shield-warning'}"></i> 末5碼 ${inv.bankLast5}${!inv.bankVerified ? ' · 待核' : ''}</span>`
             : '';
         const partialChip = isPartial
@@ -128,9 +204,9 @@ export function renderUnsettled() {
         const discountChip = inv.discount
             ? `<span class="c-chip ${Number(inv.discount) < 0 ? 'info' : 'warn'}"><i class="ph ph-tag"></i> ${adjustmentBadge(inv.discount, { showLabel: false })}</span>`
             : '';
-        const primaryBtn = (inv.bankLast5 && !inv.bankVerified)
+        const primaryBtn = ((inv.bankLast5 && !inv.bankVerified) || helperReport)
             ? `<button class="btn-primary unsettled-action" data-action="verify" data-id="${inv.id}">
-                  <i class="ph ph-shield-check"></i> 核對結帳
+                  <i class="ph ph-shield-check"></i> ${helperReport ? '核對小幫手回報' : '核對結帳'}
                </button>`
             : `<button class="btn-primary unsettled-action" data-action="settle" data-id="${inv.id}">
                   <i class="ph ph-check"></i> 結帳
@@ -166,10 +242,11 @@ export function renderUnsettled() {
                 <td>${bankBadge}</td>
                 <td>
                     ${rowActionGroup(
-                        (inv.bankLast5 && !inv.bankVerified
-                            ? rowAction({ action: 'verify', id: inv.id, icon: 'ph-shield-check', title: '核對銀行末 5 碼後結帳', label: '核對結帳', variant: 'success', className: 'unsettled-action' })
+                        ((inv.bankLast5 && !inv.bankVerified) || helperReport
+                            ? rowAction({ action: 'verify', id: inv.id, icon: 'ph-shield-check', title: helperReport ? '核對小幫手收款回報' : '核對銀行末 5 碼後結帳', label: helperReport ? '核對回報' : '核對結帳', variant: 'success', className: 'unsettled-action' })
                             : rowAction({ action: 'settle', id: inv.id, icon: 'ph-check', title: `標記為${inv.direction === 'in' ? '已收' : '已付'}`, label: '結帳', variant: 'success', className: 'unsettled-action' })
                         )
+                        + (helperReport ? rowAction({ action: 'reject-helper-report', id: inv.id, icon: 'ph-arrow-u-up-left', title: '退回小幫手收款回報', label: '退回回報', className: 'unsettled-action' }) : '')
                         + rowAction({ action: 'remind', id: inv.id, icon: 'ph-bell', title: inv.direction === 'in' ? '預覽催繳訊息' : '記錄通知', label: inv.direction === 'in' ? '催繳' : '記錄通知', className: 'unsettled-action' })
                         + rowAction({ action: 'edit', id: inv.id, icon: 'ph-pencil', title: '編輯', label: '編輯', className: 'unsettled-action' })
                         + rowAction({ action: 'delete', id: inv.id, icon: 'ph-trash', title: '刪除', label: '刪除', variant: 'danger', className: 'unsettled-action' })
@@ -203,6 +280,7 @@ export function renderUnsettled() {
                         </div>
                         <div class="c-actions">
                             ${primaryBtn}
+                            ${helperReport ? `<button class="btn-icon unsettled-action" data-action="reject-helper-report" data-id="${inv.id}" title="退回小幫手收款回報"><i class="ph ph-arrow-u-up-left"></i></button>` : ''}
                             <button class="btn-icon unsettled-action" data-action="remind" data-id="${inv.id}" title="${inv.direction === 'in' ? '預覽催繳訊息' : '記錄通知'}"><i class="ph ph-bell"></i></button>
                             <button class="btn-icon unsettled-action" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
                             <button class="btn-icon unsettled-action danger" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
@@ -224,7 +302,7 @@ export function renderUnsettled() {
             <div class="card metric-card ${awaitVerifyCount > 0 ? 'highlight-warning' : ''}">
                 <div class="metric-header"><span>待核對</span><div class="metric-icon warning"><i class="ph ph-shield-warning"></i></div></div>
                 <div class="metric-value" style="color: ${awaitVerifyCount > 0 ? 'var(--color-warning)' : 'var(--text-main)'};">${awaitVerifyCount}</div>
-                <div class="metric-subtext">客戶已回報末 5 碼</div>
+                <div class="metric-subtext">租客或小幫手已回報付款</div>
             </div>
             <div class="card metric-card ${overdueCount > 0 ? 'highlight-danger' : ''}">
                 <div class="metric-header"><span>逾期項目</span><div class="metric-icon danger"><i class="ph ph-clock-afternoon"></i></div></div>
@@ -313,18 +391,19 @@ export function renderUnsettled() {
 function showVerifyModal(id) {
     const inv = mockData.invoices.find(x => x.id === id);
     if (!inv) return;
+    const helperReport = pendingPaymentReport(id);
 
     const due = (inv.amount || 0) - (inv.discount || 0);
     const alreadyPaid = inv.paidAmount || 0;
     const remaining = Math.max(0, due - alreadyPaid);
 
     openFormModal({
-        title: '🛡 核對結帳',
+        title: helperReport ? '🛡 核對小幫手收款回報' : '🛡 核對結帳',
         maxWidth: 440,
         fields: [
-            { name: 'bankLast5_displayed', label: '租客回報的末 5 碼', type: 'text', value: inv.bankLast5, hint: '對照銀行 App 用', span: 2 },
-            { name: 'receivedAmount', label: '銀行 App 實際入帳金額', type: 'number', required: true, value: remaining, hint: `應收 $${due.toLocaleString()}${alreadyPaid > 0 ? ` · 已收 $${alreadyPaid.toLocaleString()} · 尚欠 $${remaining.toLocaleString()}` : ''}`, span: 2 },
-            { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: TODAY, span: 2 }
+            { name: 'bankLast5_displayed', label: helperReport ? '小幫手回報內容' : '租客回報的末 5 碼', type: 'text', value: helperReport ? `${helperReport.paymentMethod === 'cash_deposit' ? '無摺存款' : helperReport.paymentMethod === 'transfer' ? '匯款' : '其他'} · ${moneyAmount(helperReport.amount)}` : inv.bankLast5, hint: helperReport ? `${helperReport.submittedByName || '小幫手'}於 ${helperReport.paymentDate || '未填日期'} 回報${helperReport.note ? ` · ${helperReport.note}` : ''}` : '對照銀行 App 用', span: 2 },
+            { name: 'receivedAmount', label: '銀行 App 實際入帳金額', type: 'number', required: true, value: helperReport ? Math.min(helperReport.amount, remaining) : remaining, hint: `應收 $${due.toLocaleString()}${alreadyPaid > 0 ? ` · 已收 $${alreadyPaid.toLocaleString()} · 尚欠 $${remaining.toLocaleString()}` : ''}`, span: 2 },
+            { name: 'paidDate', label: '入帳日', type: 'date', required: true, value: helperReport?.paymentDate || TODAY, span: 2 }
         ],
         values: {},
         submitLabel: '確認結帳',
@@ -336,9 +415,13 @@ function showVerifyModal(id) {
                 displayed.style.cursor = 'not-allowed';
                 displayed.style.fontWeight = '700';
                 displayed.style.letterSpacing = '0.15em';
+                if (helperReport?.evidencePath) {
+                    displayed.closest('.form-group')?.insertAdjacentHTML('beforeend', `<button type="button" class="btn btn-outline" data-open-helper-proof style="margin-top:0.55rem;"><i class="ph ph-file-image"></i> 開啟付款證明</button>`);
+                    form.querySelector('[data-open-helper-proof]')?.addEventListener('click', () => openPaymentProof(helperReport));
+                }
             }
         },
-        onSubmit: (values) => {
+        onSubmit: async (values) => {
             const receivedThisTime = Number(values.receivedAmount);
             if (!Number.isFinite(receivedThisTime) || receivedThisTime < 0) {
                 showToast('入帳金額不正確', 'danger');
@@ -353,8 +436,10 @@ function showVerifyModal(id) {
                 paidAmount: newPaidAmount,
                 paidDate: values.paidDate,
                 bankVerified: true,
+                ...(helperReport ? { paymentMethod: helperReport.paymentMethod === 'cash_deposit' ? '無摺存款' : helperReport.paymentMethod === 'transfer' ? '匯款' : '其他' } : {}),
                 status: deriveInvoiceStatus(patched)
             });
+            if (helperReport) await confirmPaymentReport(helperReport.id);
             showToast(`✅ ${inv.id} 已入帳 $${receivedThisTime.toLocaleString()}`, 'success');
             // Q4 入帳即發 — 跟 settleInvoice 共用 helper
             maybeAutoSendContract(patched);
@@ -1095,7 +1180,21 @@ ${locationLine}
     });
 }
 
-export function initUnsettledActions(scope) {
+export async function initUnsettledActions(scope) {
+    if (!rentReportsLoaded) {
+        await loadRentPaymentReports();
+        rentReportsLoaded = true;
+        if (!rentReportsChannel) {
+            rentReportsChannel = supabase.channel('admin-rent-payment-reports')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'rent_payment_reports' }, async () => {
+                    await loadRentPaymentReports();
+                    if (window.location.hash === '#unsettled') refreshView();
+                })
+                .subscribe();
+        }
+        refreshView();
+        return;
+    }
     scope.querySelector('#btn-new-unsettled')?.addEventListener('click', () => showUnsettledForm());
     scope.querySelector('#btn-gen-monthly')?.addEventListener('click', () => backfillContractInvoices());
 
@@ -1116,6 +1215,7 @@ export function initUnsettledActions(scope) {
             if (!inv) return;
             if (action === 'settle') settleInvoice(id);
             if (action === 'verify') showVerifyModal(id);
+            if (action === 'reject-helper-report') rejectPaymentReport(pendingPaymentReport(id));
             if (action === 'edit') showUnsettledForm(inv);
             if (action === 'delete') deleteUnsettled(id);
             if (action === 'remind') remindUnsettled(id);
