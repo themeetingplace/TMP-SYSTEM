@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildRentCollectionRows, rentCollectionCounts } from '../js/utils/helperRentCollectionData.js';
+import { buildRentCollectionRows, rentCollectionCounts, rentCollectionStatusMeta } from '../js/utils/helperRentCollectionData.js';
 
 const rows = buildRentCollectionRows({
     today: '2026-10-02',
@@ -22,4 +22,6 @@ assert.deepEqual(rows.map(row => [row.id, row.status, row.remaining]), [
 ]);
 assert.equal(rows[0].property, 'R1-A');
 assert.deepEqual(rentCollectionCounts(rows), { overdue: 1, due_soon: 0, reported: 1, upcoming: 0, paid: 1 });
+assert.equal(rentCollectionStatusMeta('reported').label, '已回報・待核帳');
+assert.equal(rentCollectionStatusMeta('overdue').label, '逾期未繳');
 console.log('helper rent collection checks passed');

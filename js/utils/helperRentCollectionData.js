@@ -81,3 +81,11 @@ export function rentCollectionCounts(rows = []) {
         return counts;
     }, { overdue: 0, due_soon: 0, reported: 0, upcoming: 0, paid: 0 });
 }
+
+export function rentCollectionStatusMeta(status) {
+    if (status === 'overdue') return { label: '逾期未繳', icon: 'ph-warning-circle', cls: 'danger' };
+    if (status === 'reported') return { label: '已回報・待核帳', icon: 'ph-hourglass-medium', cls: 'reported' };
+    if (status === 'paid') return { label: '已入帳', icon: 'ph-check-circle', cls: 'paid' };
+    if (status === 'due_soon') return { label: '即將到期', icon: 'ph-clock-countdown', cls: 'soon' };
+    return { label: '待繳費', icon: 'ph-calendar-blank', cls: 'upcoming' };
+}

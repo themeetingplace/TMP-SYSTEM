@@ -15,6 +15,8 @@ import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { emptyState } from '../utils/emptyState.js';
 import { settlementPreview } from '../utils/invoiceSettlement.js';
 import { supabase } from '../supabase.js';
+import { buildRentCollectionRows, rentCollectionStatusMeta } from '../utils/helperRentCollectionData.js';
+import { openRentPaymentReportForm } from '../utils/rentPaymentReportForm.js';
 
 // 類別 → type-chip class (語意色 — 跟 finance.js 同套)
 // 房租 (in) vs 租金 (out) 用 direction 分色
@@ -105,7 +107,31 @@ function isOverdue(inv) {
     return inv.dueDate && new Date(inv.dueDate) < new Date(TODAY);
 }
 
+function collectionRowForInvoice(invoice) {
+    if (!invoice) return null;
+    return buildRentCollectionRows({
+        invoices: [invoice],
+        reports: rentPaymentReports,
+        contracts: mockData.contracts,
+        buildings: mockData.buildings,
+        buildingIds: new Set([invoice.buildingId]),
+        today: TODAY
+    }).find(row => row.id === invoice.id) || null;
+}
+
+function reportPaymentFromRentCheck(invoice) {
+    const row = collectionRowForInvoice(invoice);
+    if (!row || row.status === 'reported' || row.remaining <= 0) return;
+    openRentPaymentReportForm(row, {
+        onSaved: async () => {
+            await loadRentPaymentReports();
+            refreshView();
+        }
+    });
+}
+
 export function renderUnsettled() {
+    const isHelper = window.__currentRole === 'helper';
     // 待結帳款只追蹤「租客應收」(direction='in')
     // 公司支出 (水電/房東租金/薪水…) 通常是付完才登記，直接記在「總收支表」即可
     const unsettled = filterInvoicesByMode(mockData.invoices)
@@ -132,6 +158,7 @@ export function renderUnsettled() {
         return s + Math.max(0, due - (i.paidAmount || 0));
     }, 0);
     const awaitVerifyCount = unsettled.filter(i => (i.bankLast5 && !i.bankVerified) || pendingPaymentReport(i.id)).length;
+    const waitingPaymentCount = Math.max(0, unsettled.length - awaitVerifyCount);
 
     // 各館未結筆數 (依當前 mode 篩 — 共居/代管不混)
     const targetMode = getMode() === 'managed' ? 'managed' : 'cohousing';
@@ -146,6 +173,10 @@ export function renderUnsettled() {
     const tableRows = unsettled.map(inv => {
         const helperReport = pendingPaymentReport(inv.id);
         const overdue = isOverdue(inv);
+        const awaitingReview = Boolean(helperReport || (inv.bankLast5 && !inv.bankVerified));
+        const collectionRow = collectionRowForInvoice(inv);
+        const collectionStatus = awaitingReview ? 'reported' : (collectionRow?.status || (overdue ? 'overdue' : 'upcoming'));
+        const collectionMeta = rentCollectionStatusMeta(collectionStatus);
         const dirBadge = inv.direction === 'in'
             ? '<span class="status-badge danger" style="font-size: var(--text-2xs);"><i class="ph ph-arrow-down"></i> 應收</span>'
             : '<span class="status-badge warning" style="font-size: var(--text-2xs);"><i class="ph ph-arrow-up"></i> 應付</span>';
@@ -162,9 +193,10 @@ export function renderUnsettled() {
 
         // 狀態 attr：方向 + (待核對 / 逾期)
         const statusAttrs = [inv.direction];
-        if (overdue) statusAttrs.push('逾期');
-        if (inv.bankLast5 && !inv.bankVerified) statusAttrs.push('待核對');
-        if (helperReport) statusAttrs.push('待核對 小幫手回報');
+        if (overdue) statusAttrs.push('逾期未繳');
+        if (!awaitingReview) statusAttrs.push('待繳費');
+        if (inv.bankLast5 && !inv.bankVerified) statusAttrs.push('待核帳');
+        if (helperReport) statusAttrs.push('待核帳 小幫手回報');
         const statusAttr = statusAttrs.join(' ');
 
         const searchText = [inv.id, inv.type, inv.tenant || '', inv.contractId || '', buildingName(inv.buildingId), inv.bankLast5 || ''].join(' ').toLowerCase();
@@ -185,9 +217,7 @@ export function renderUnsettled() {
             ? (inv.tenant || '—')
             : (inv.contractId ? `合約 ${inv.contractId}` : '整館共用');
         const placeName = inv.propertyName ? inv.propertyName.replace('聚空間 - ', '') : buildingName(inv.buildingId);
-        const heroBadge = inv.direction === 'in'
-            ? '<span class="status-badge danger">應收</span>'
-            : '<span class="status-badge warning">應付</span>';
+        const heroBadge = `<span class="rent-collection-state is-${collectionMeta.cls}"><i class="ph ${collectionMeta.icon}"></i> ${collectionMeta.label}</span>`;
         const heroAmtClass = inv.direction === 'in' ? 'expense' : 'expense';  // 都用紅 (應收/應付都是「未到手」)
         const dueChipCls = overdue ? 'c-chip danger' : 'c-chip';
         const dueText = overdue
@@ -204,22 +234,41 @@ export function renderUnsettled() {
         const discountChip = inv.discount
             ? `<span class="c-chip ${Number(inv.discount) < 0 ? 'info' : 'warn'}"><i class="ph ph-tag"></i> ${adjustmentBadge(inv.discount, { showLabel: false })}</span>`
             : '';
-        const primaryBtn = ((inv.bankLast5 && !inv.bankVerified) || helperReport)
-            ? `<button class="btn-primary unsettled-action" data-action="verify" data-id="${inv.id}">
-                  <i class="ph ph-shield-check"></i> ${helperReport ? '核對小幫手回報' : '核對結帳'}
-               </button>`
-            : `<button class="btn-primary unsettled-action" data-action="settle" data-id="${inv.id}">
-                  <i class="ph ph-check"></i> 結帳
-               </button>`;
+        const primaryBtn = isHelper
+            ? (awaitingReview
+                ? '<span class="rent-report-waiting"><i class="ph ph-hourglass-medium"></i> 等待管理員核帳</span>'
+                : `<button class="btn-primary rent-report-action unsettled-action" data-action="report-payment" data-id="${inv.id}"><i class="ph ph-receipt"></i> 回報住客已繳</button>`)
+            : (((inv.bankLast5 && !inv.bankVerified) || helperReport)
+                ? `<button class="btn-primary unsettled-action" data-action="verify" data-id="${inv.id}">
+                      <i class="ph ph-shield-check"></i> ${helperReport ? '核對小幫手回報' : '核對結帳'}
+                   </button>`
+                : `<button class="btn-primary unsettled-action" data-action="settle" data-id="${inv.id}">
+                      <i class="ph ph-check"></i> 結帳
+                   </button>`);
+
+        const desktopActions = isHelper
+            ? (awaitingReview
+                ? '<span class="rent-report-waiting"><i class="ph ph-hourglass-medium"></i> 等待管理員核帳</span>'
+                : `<button type="button" class="btn btn-primary btn-xs unsettled-action rent-report-action" data-action="report-payment" data-id="${inv.id}"><i class="ph ph-receipt"></i><span>回報住客已繳</span></button>`)
+            : rowActionGroup(
+                (((inv.bankLast5 && !inv.bankVerified) || helperReport)
+                    ? rowAction({ action: 'verify', id: inv.id, icon: 'ph-shield-check', title: helperReport ? '核對小幫手收款回報' : '核對銀行末 5 碼後結帳', label: helperReport ? '核對回報' : '核對結帳', variant: 'success', className: 'unsettled-action' })
+                    : rowAction({ action: 'settle', id: inv.id, icon: 'ph-check', title: '標記為已收', label: '結帳', variant: 'success', className: 'unsettled-action' }))
+                + (helperReport ? rowAction({ action: 'reject-helper-report', id: inv.id, icon: 'ph-arrow-u-up-left', title: '退回小幫手收款回報', label: '退回回報', className: 'unsettled-action' }) : '')
+                + rowAction({ action: 'remind', id: inv.id, icon: 'ph-bell', title: '預覽催繳訊息', label: '催繳', className: 'unsettled-action' })
+                + rowAction({ action: 'edit', id: inv.id, icon: 'ph-pencil', title: '編輯', label: '編輯', className: 'unsettled-action' })
+                + rowAction({ action: 'delete', id: inv.id, icon: 'ph-trash', title: '刪除', label: '刪除', variant: 'danger', className: 'unsettled-action' })
+            );
 
         const remaining = Math.max(0, due - paid);
         return `
-            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="row-desktop ${overdue ? 'is-overdue-row' : ''} ${inv.bankLast5 && !inv.bankVerified ? 'is-await-verify-row' : ''}">
-                <td><input type="checkbox" class="row-check" data-id="${inv.id}"></td>
+            <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="row-desktop rent-ledger-row is-${collectionMeta.cls} ${overdue ? 'is-overdue-row' : ''} ${(inv.bankLast5 && !inv.bankVerified) || helperReport ? 'is-await-verify-row' : ''}">
+                <td>${isHelper ? '' : `<input type="checkbox" class="row-check" data-id="${inv.id}">`}</td>
                 <td>
                     <div style="display: flex; flex-direction: column;">
                         <strong style="font-size: var(--text-base);">${inv.id}</strong>
                         <span style="font-size: var(--text-xs); color: var(--text-muted);">${buildingName(inv.buildingId)} · ${inv.type}</span>
+                        <span class="rent-collection-state is-${collectionMeta.cls}"><i class="ph ${collectionMeta.icon}"></i> ${collectionMeta.label}</span>
                     </div>
                 </td>
                 <td>${target}</td>
@@ -241,21 +290,12 @@ export function renderUnsettled() {
                 </td>
                 <td>${bankBadge}</td>
                 <td>
-                    ${rowActionGroup(
-                        ((inv.bankLast5 && !inv.bankVerified) || helperReport
-                            ? rowAction({ action: 'verify', id: inv.id, icon: 'ph-shield-check', title: helperReport ? '核對小幫手收款回報' : '核對銀行末 5 碼後結帳', label: helperReport ? '核對回報' : '核對結帳', variant: 'success', className: 'unsettled-action' })
-                            : rowAction({ action: 'settle', id: inv.id, icon: 'ph-check', title: `標記為${inv.direction === 'in' ? '已收' : '已付'}`, label: '結帳', variant: 'success', className: 'unsettled-action' })
-                        )
-                        + (helperReport ? rowAction({ action: 'reject-helper-report', id: inv.id, icon: 'ph-arrow-u-up-left', title: '退回小幫手收款回報', label: '退回回報', className: 'unsettled-action' }) : '')
-                        + rowAction({ action: 'remind', id: inv.id, icon: 'ph-bell', title: inv.direction === 'in' ? '預覽催繳訊息' : '記錄通知', label: inv.direction === 'in' ? '催繳' : '記錄通知', className: 'unsettled-action' })
-                        + rowAction({ action: 'edit', id: inv.id, icon: 'ph-pencil', title: '編輯', label: '編輯', className: 'unsettled-action' })
-                        + rowAction({ action: 'delete', id: inv.id, icon: 'ph-trash', title: '刪除', label: '刪除', variant: 'danger', className: 'unsettled-action' })
-                    )}
+                    ${desktopActions}
                 </td>
             </tr>
             <tr data-row-id="${inv.id}" data-status="${statusAttr}" data-building="${buildingName(inv.buildingId)}" data-search="${searchText}" class="row-mobile-card ${overdue ? 'is-overdue-row' : ''}">
                 <td colspan="8">
-                    <div class="entity-mobile-card">
+                    <div class="entity-mobile-card rent-ledger-mobile is-${collectionMeta.cls}">
                         <div class="c-hero-equal">
                             <div class="c-hero-who">
                                 <div class="c-hero-tenant">${escapeHtml(tenantName)}</div>
@@ -280,10 +320,10 @@ export function renderUnsettled() {
                         </div>
                         <div class="c-actions">
                             ${primaryBtn}
-                            ${helperReport ? `<button class="btn-icon unsettled-action" data-action="reject-helper-report" data-id="${inv.id}" title="退回小幫手收款回報"><i class="ph ph-arrow-u-up-left"></i></button>` : ''}
-                            <button class="btn-icon unsettled-action" data-action="remind" data-id="${inv.id}" title="${inv.direction === 'in' ? '預覽催繳訊息' : '記錄通知'}"><i class="ph ph-bell"></i></button>
+                            ${!isHelper && helperReport ? `<button class="btn-icon unsettled-action" data-action="reject-helper-report" data-id="${inv.id}" title="退回小幫手收款回報"><i class="ph ph-arrow-u-up-left"></i></button>` : ''}
+                            ${!isHelper ? `<button class="btn-icon unsettled-action" data-action="remind" data-id="${inv.id}" title="預覽催繳訊息"><i class="ph ph-bell"></i></button>
                             <button class="btn-icon unsettled-action" data-action="edit" data-id="${inv.id}" title="編輯"><i class="ph ph-pencil"></i></button>
-                            <button class="btn-icon unsettled-action danger" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>
+                            <button class="btn-icon unsettled-action danger" data-action="delete" data-id="${inv.id}" title="刪除"><i class="ph ph-trash"></i></button>` : ''}
                         </div>
                     </div>
                 </td>
@@ -295,17 +335,17 @@ export function renderUnsettled() {
         ${renderFinanceSubTabs('unsettled')}
         <div class="metrics-grid">
             <div class="card metric-card">
-                <div class="metric-header"><span>應收未結</span><div class="metric-icon danger"><i class="ph ph-arrow-down-right"></i></div></div>
+                <div class="metric-header"><span>待繳金額</span><div class="metric-icon danger"><i class="ph ph-arrow-down-right"></i></div></div>
                 <div class="metric-value" style="color: var(--color-danger);">$${inSum.toLocaleString()}</div>
-                <div class="metric-subtext">${unsettled.length} 筆租客未繳</div>
+                <div class="metric-subtext">${waitingPaymentCount} 筆待繳費</div>
             </div>
             <div class="card metric-card ${awaitVerifyCount > 0 ? 'highlight-warning' : ''}">
-                <div class="metric-header"><span>待核對</span><div class="metric-icon warning"><i class="ph ph-shield-warning"></i></div></div>
+                <div class="metric-header"><span>待核帳</span><div class="metric-icon warning"><i class="ph ph-shield-warning"></i></div></div>
                 <div class="metric-value" style="color: ${awaitVerifyCount > 0 ? 'var(--color-warning)' : 'var(--text-main)'};">${awaitVerifyCount}</div>
                 <div class="metric-subtext">租客或小幫手已回報付款</div>
             </div>
             <div class="card metric-card ${overdueCount > 0 ? 'highlight-danger' : ''}">
-                <div class="metric-header"><span>逾期項目</span><div class="metric-icon danger"><i class="ph ph-clock-afternoon"></i></div></div>
+                <div class="metric-header"><span>逾期未繳</span><div class="metric-icon danger"><i class="ph ph-clock-afternoon"></i></div></div>
                 <div class="metric-value" style="color: ${overdueCount > 0 ? 'var(--color-danger)' : 'var(--text-main)'};">${overdueCount}</div>
                 <div class="metric-subtext">需要立即處理</div>
             </div>
@@ -352,8 +392,9 @@ export function renderUnsettled() {
             <div class="filter-tabs mb-4">
                 <span class="filter-tab-label">狀態</span>
                 <button class="filter-tab active" data-filter-value="all" data-filter-group="status">全部 (${unsettled.length})</button>
-                <button class="filter-tab" data-filter-value="待核對" data-filter-group="status">⚠ 待核對 (${awaitVerifyCount})</button>
-                <button class="filter-tab" data-filter-value="逾期" data-filter-group="status">逾期 (${overdueCount})</button>
+                <button class="filter-tab" data-filter-value="待繳費" data-filter-group="status">待繳費 (${waitingPaymentCount})</button>
+                <button class="filter-tab" data-filter-value="待核帳" data-filter-group="status">待核帳 (${awaitVerifyCount})</button>
+                <button class="filter-tab" data-filter-value="逾期未繳" data-filter-group="status">逾期未繳 (${overdueCount})</button>
             </div>
 
             <div class="table-container">
@@ -369,7 +410,7 @@ export function renderUnsettled() {
                         <col style="width: 22%;">
                     </colgroup>
                     <thead><tr>
-                        <th><input type="checkbox" id="check-all"></th>
+                        <th>${isHelper ? '' : '<input type="checkbox" id="check-all">'}</th>
                         <th>帳單</th><th>對象</th><th style="text-align: right;">應收金額</th><th style="text-align: right;">已收金額</th><th>應結日</th><th>銀行末 5 碼</th><th>操作</th>
                     </tr></thead>
                     <tbody>${tableRows || emptyState({ mode: 'table-row', colspan: 8, icon: 'ph-check-circle', title: '所有帳款都已結清', hint: '目前沒有待結款項' })}</tbody>
@@ -1215,6 +1256,7 @@ export async function initUnsettledActions(scope) {
             if (!inv) return;
             if (action === 'settle') settleInvoice(id);
             if (action === 'verify') showVerifyModal(id);
+            if (action === 'report-payment') reportPaymentFromRentCheck(inv);
             if (action === 'reject-helper-report') rejectPaymentReport(pendingPaymentReport(id));
             if (action === 'edit') showUnsettledForm(inv);
             if (action === 'delete') deleteUnsettled(id);
