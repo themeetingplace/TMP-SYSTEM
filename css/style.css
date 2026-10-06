@@ -4446,6 +4446,17 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 .rent-report-action { white-space: nowrap; }
 body[data-role="helper"] .rent-report-action { display: inline-flex !important; }
 
+/* 租客詳細資料：入住紀錄的合約繳款摘要 */
+.tenant-history-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.tenant-history-scroll table { min-width: 710px; }
+.tenant-payment-cell { min-width: 154px; vertical-align: middle; }
+.tenant-payment-meta { margin-top: 0.28rem; color: var(--text-muted); font-size: var(--text-2xs); line-height: 1.45; }
+.tenant-payment-meta strong { color: var(--color-danger); font-weight: 700; }
+
 @media (max-width: 600px) {
     .rent-ledger-mobile { position: relative; overflow: hidden; padding-left: 1.15rem; }
     .rent-ledger-mobile::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--text-muted); }

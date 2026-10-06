@@ -6,6 +6,7 @@ import { moneyAmount } from '../utils/moneyDisplay.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { entityCard } from '../utils/entityCard.js';
 import { emptyState } from '../utils/emptyState.js';
+import { contractPaymentStatus } from '../utils/contractPaymentStatus.js';
 
 const TENANT_STATUSES = ['居住中', '待入住', '已退租'];
 
@@ -259,16 +260,24 @@ export function showTenantDetails(id) {
     };
 
     const historyRows = allContracts.length === 0
-        ? emptyState({ mode: "table-row", colspan: 5, icon: "ph-file-text", title: "尚無入住紀錄", hint: "此租客目前沒有任何合約紀錄" })
+        ? emptyState({ mode: "table-row", colspan: 6, icon: "ph-file-text", title: "尚無入住紀錄", hint: "此租客目前沒有任何合約紀錄" })
         : allContracts.map(c => {
             const s = stateLabel(c);
             const sus = isAmountSuspect(c);
+            const payment = contractPaymentStatus(c.id, mockData.invoices, today);
             const amountCell = sus.suspect
                 ? `<td style="text-align: right; font-weight: 500; font-style: italic; color: var(--text-muted);" title="⚠ ${sus.reason}（歷史資料，僅供參考）">
                        ${moneyAmount(c.amount || 0)}
                        <i class="ph ph-warning-circle" style="color: var(--color-warning, #b8871f); margin-left: 0.25rem; font-size: 0.9em; vertical-align: -1px;"></i>
                    </td>`
                 : `<td style="text-align: right; font-weight: 600;">${moneyAmount(c.amount || 0)}</td>`;
+            const paymentMeta = payment.code === 'none'
+                ? '<small>尚未建立房租帳單</small>'
+                : payment.code === 'paid'
+                    ? `<small>已收 ${moneyAmount(payment.paid)}／應收 ${moneyAmount(payment.due)}</small>`
+                    : payment.code === 'partial'
+                        ? `<small>已收 ${moneyAmount(payment.paid)}／應收 ${moneyAmount(payment.due)}<br><strong>尚欠 ${moneyAmount(payment.balance)}</strong>${payment.overdue ? ' · 已逾期' : ''}</small>`
+                        : `<small>應收 ${moneyAmount(payment.due)}${payment.overdue ? `<br><strong>尚欠 ${moneyAmount(payment.balance)}</strong>` : ''}</small>`;
             return `
                 <tr>
                     <td style="font-family: monospace; font-size: var(--text-xs);">${c.id}</td>
@@ -276,6 +285,10 @@ export function showTenantDetails(id) {
                     <td style="font-size: var(--text-xs); color: var(--text-secondary);">${c.startDate || '—'} ~ ${c.endDate || '—'}</td>
                     ${amountCell}
                     <td><span class="status-badge ${s.cls}" style="font-size: var(--text-2xs);">${s.text}</span></td>
+                    <td class="tenant-payment-cell">
+                        <span class="status-badge ${payment.cls}" style="font-size: var(--text-2xs);">${payment.label}</span>
+                        <div class="tenant-payment-meta">${paymentMeta}</div>
+                    </td>
                 </tr>
             `;
         }).join('');
@@ -286,7 +299,7 @@ export function showTenantDetails(id) {
                 <i class="ph ph-clock-counter-clockwise"></i> 入住紀錄
                 <span style="font-size: var(--text-2xs); color: var(--text-muted); font-weight: 400;">共 ${allContracts.length} 筆</span>
             </h3>
-            <div style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+            <div class="tenant-history-scroll">
                 <table style="width: 100%; border-collapse: collapse; font-size: var(--text-sm);">
                     <thead>
                         <tr style="background: var(--bg-tertiary);">
@@ -295,6 +308,7 @@ export function showTenantDetails(id) {
                             <th style="padding: 0.45rem 0.6rem; text-align: left; color: var(--text-muted); font-weight: 600;">期間</th>
                             <th style="padding: 0.45rem 0.6rem; text-align: right; color: var(--text-muted); font-weight: 600;">月租</th>
                             <th style="padding: 0.45rem 0.6rem; text-align: left; color: var(--text-muted); font-weight: 600;">狀態</th>
+                            <th style="padding: 0.45rem 0.6rem; text-align: left; color: var(--text-muted); font-weight: 600;">繳款狀況</th>
                         </tr>
                     </thead>
                     <tbody>${historyRows}</tbody>
@@ -315,7 +329,7 @@ export function showTenantDetails(id) {
 
     openDetailModal({
         title: '租客詳細資料',
-        maxWidth: 640,
+        maxWidth: 780,
         items: [
             { label: '租客編號', value: t.id },
             { label: '姓名', value: t.name },
