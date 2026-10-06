@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.9.4';
+export const APP_VERSION = '1.9.5';
 export const APP_BUILD_DATE = '2026-10-06';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.9.5', date: '2026-10-06', notes: '調整租客入住紀錄排版，每筆合約固定為單一橫列；繳款狀態與已收、應收或尚欠金額改為同一行精簡顯示，避免表格列高因資訊換行而不一致。' },
     { version: '1.9.4', date: '2026-10-06', notes: '租客詳細資料的入住紀錄新增繳款狀況：顯示已繳清、部分繳款、待繳、逾期未繳或尚無帳單，並列出已收、應收與尚欠金額；同合約存在歷史重複帳單時以最新房租帳單為準。' },
     { version: '1.9.3', date: '2026-10-06', notes: '房租查帳的每筆應收帳款新增合約期間：桌機顯示於租客／床位下方，手機顯示為獨立期間標籤；舊帳單若未保存期間會自動回查所屬合約起訖日。' },
     { version: '1.9.2', date: '2026-10-06', notes: '移除 LINE 訊息含「匯款／轉帳／匯款帳號」時自動回覆「房租匯款帳號，小編會盡快提供」的規則及其管理員通知；租客單獨回傳銀行末 5 碼的正式對帳流程維持不變。' },

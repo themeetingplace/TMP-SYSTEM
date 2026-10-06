@@ -272,12 +272,12 @@ export function showTenantDetails(id) {
                    </td>`
                 : `<td style="text-align: right; font-weight: 600;">${moneyAmount(c.amount || 0)}</td>`;
             const paymentMeta = payment.code === 'none'
-                ? '<small>尚未建立房租帳單</small>'
+                ? ''
                 : payment.code === 'paid'
-                    ? `<small>已收 ${moneyAmount(payment.paid)}／應收 ${moneyAmount(payment.due)}</small>`
+                    ? `<small>已收 ${moneyAmount(payment.paid)}</small>`
                     : payment.code === 'partial'
-                        ? `<small>已收 ${moneyAmount(payment.paid)}／應收 ${moneyAmount(payment.due)}<br><strong>尚欠 ${moneyAmount(payment.balance)}</strong>${payment.overdue ? ' · 已逾期' : ''}</small>`
-                        : `<small>應收 ${moneyAmount(payment.due)}${payment.overdue ? `<br><strong>尚欠 ${moneyAmount(payment.balance)}</strong>` : ''}</small>`;
+                        ? `<small>已收 ${moneyAmount(payment.paid)}／<strong>尚欠 ${moneyAmount(payment.balance)}</strong>${payment.overdue ? ' · 已逾期' : ''}</small>`
+                        : `<small>應收 ${moneyAmount(payment.due)}</small>`;
             return `
                 <tr>
                     <td style="font-family: monospace; font-size: var(--text-xs);">${c.id}</td>
@@ -287,7 +287,7 @@ export function showTenantDetails(id) {
                     <td><span class="status-badge ${s.cls}" style="font-size: var(--text-2xs);">${s.text}</span></td>
                     <td class="tenant-payment-cell">
                         <span class="status-badge ${payment.cls}" style="font-size: var(--text-2xs);">${payment.label}</span>
-                        <div class="tenant-payment-meta">${paymentMeta}</div>
+                        ${paymentMeta ? `<span class="tenant-payment-meta">${paymentMeta}</span>` : ''}
                     </td>
                 </tr>
             `;

@@ -4452,9 +4452,15 @@ body[data-role="helper"] .rent-report-action { display: inline-flex !important; 
     border: 1px solid var(--border-color);
     border-radius: 8px;
 }
-.tenant-history-scroll table { min-width: 710px; }
-.tenant-payment-cell { min-width: 154px; vertical-align: middle; }
-.tenant-payment-meta { margin-top: 0.28rem; color: var(--text-muted); font-size: var(--text-2xs); line-height: 1.45; }
+.tenant-history-scroll table { min-width: 760px; }
+.tenant-history-scroll th,
+.tenant-history-scroll td { white-space: nowrap; }
+.tenant-payment-cell {
+    min-width: 220px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.tenant-payment-meta { margin-left: 0.35rem; color: var(--text-muted); font-size: var(--text-2xs); line-height: 1.2; }
 .tenant-payment-meta strong { color: var(--color-danger); font-weight: 700; }
 
 @media (max-width: 600px) {
