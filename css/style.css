@@ -4422,6 +4422,18 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 .rent-ledger-row.is-danger > td:first-child::before { background: var(--color-danger); }
 .rent-ledger-row.is-reported > td:first-child::before { background: var(--color-warning); }
 .rent-ledger-row.is-soon > td:first-child::before { background: #d58a1f; }
+.rent-ledger-target { display: grid; gap: 0.35rem; }
+.rent-contract-period {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.28rem;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    line-height: 1.35;
+}
+.rent-contract-period i { color: var(--color-primary); font-size: 0.88rem; }
+.rent-contract-period strong { color: var(--text-secondary); font-weight: 650; font-variant-numeric: tabular-nums; }
 .rent-report-waiting {
     display: inline-flex;
     align-items: center;
@@ -4443,6 +4455,12 @@ body[data-role="helper"] .rent-report-action { display: inline-flex !important; 
     .entity-mobile-card .c-actions .rent-report-action { background: var(--color-primary); }
     .entity-mobile-card .c-actions .rent-report-action:active { background: var(--color-primary-hover); }
     .entity-mobile-card .c-actions .rent-report-waiting { flex: 1 1 auto; min-height: 36px; }
+    .entity-mobile-card .c-chip.rent-period-chip {
+        flex-basis: 100%;
+        width: fit-content;
+        border-radius: var(--radius-md);
+        font-variant-numeric: tabular-nums;
+    }
 }
 .helper-report-summary { display: grid; gap: 0.25rem; padding: 0.9rem; border-left: 4px solid var(--color-primary); border-radius: 0 var(--radius-md) var(--radius-md) 0; background: var(--bg-secondary); }
 .helper-report-summary span,

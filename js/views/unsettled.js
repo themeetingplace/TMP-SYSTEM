@@ -17,6 +17,7 @@ import { settlementPreview } from '../utils/invoiceSettlement.js';
 import { supabase } from '../supabase.js';
 import { buildRentCollectionRows, rentCollectionStatusMeta } from '../utils/helperRentCollectionData.js';
 import { openRentPaymentReportForm } from '../utils/rentPaymentReportForm.js';
+import { resolveInvoiceContractPeriod } from '../utils/invoicePeriod.js';
 
 // 類別 → type-chip class (語意色 — 跟 finance.js 同套)
 // 房租 (in) vs 租金 (out) 用 direction 分色
@@ -190,6 +191,7 @@ export function renderUnsettled() {
         const paid = inv.paidAmount || 0;
         const balance = Math.max(0, due - paid);
         const isPartial = paid > 0 && paid < due;
+        const contractPeriod = resolveInvoiceContractPeriod(inv, mockData.contracts);
 
         // 狀態 attr：方向 + (待核對 / 逾期)
         const statusAttrs = [inv.direction];
@@ -199,7 +201,7 @@ export function renderUnsettled() {
         if (helperReport) statusAttrs.push('待核帳 小幫手回報');
         const statusAttr = statusAttrs.join(' ');
 
-        const searchText = [inv.id, inv.type, inv.tenant || '', inv.contractId || '', buildingName(inv.buildingId), inv.bankLast5 || ''].join(' ').toLowerCase();
+        const searchText = [inv.id, inv.type, inv.tenant || '', inv.contractId || '', buildingName(inv.buildingId), inv.bankLast5 || '', contractPeriod.label].join(' ').toLowerCase();
 
         // 末 5 碼徽章
         const bankBadge = helperReport
@@ -271,7 +273,12 @@ export function renderUnsettled() {
                         <span class="rent-collection-state is-${collectionMeta.cls}"><i class="ph ${collectionMeta.icon}"></i> ${collectionMeta.label}</span>
                     </div>
                 </td>
-                <td>${target}</td>
+                <td>
+                    <div class="rent-ledger-target">
+                        <div>${target}</div>
+                        <div class="rent-contract-period"><i class="ph ph-calendar-dots"></i><span>合約期間</span><strong>${escapeHtml(contractPeriod.label)}</strong></div>
+                    </div>
+                </td>
                 <td style="text-align: right;">
                     <div style="font-weight: 700; font-size: var(--text-base);">$${due.toLocaleString()}</div>
                     ${inv.discount ? `<div style="margin-top: 0.2rem;">${adjustmentBadge(inv.discount)}</div>` : ''}
@@ -313,6 +320,7 @@ export function renderUnsettled() {
                         <div class="c-divider"></div>
                         <div class="c-chips">
                             <span class="c-chip"><i class="ph ph-hash"></i> ${inv.id}</span>
+                            <span class="c-chip rent-period-chip"><i class="ph ph-calendar-dots"></i> 合約 ${escapeHtml(contractPeriod.label)}</span>
                             <span class="${dueChipCls}"><i class="ph ph-calendar"></i> ${dueText}</span>
                             ${bank5Chip}
                             ${partialChip}
