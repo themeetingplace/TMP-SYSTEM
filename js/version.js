@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.9.6';
+export const APP_VERSION = '1.10.0';
 export const APP_BUILD_DATE = '2026-10-17';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.0', date: '2026-10-17', notes: '重整館務報帳角色流程：Owner／Admin 預設進入待審核帳款，審核通過後再依個人代墊、零用金或收入選擇已付款、從房費扣除、確認零用金支出或確認收入；處理方式會保存並顯示於小幫手帳表。管理員畫面改為審核優先，小幫手保留快速記帳與請款追蹤，並移除原獨立報表說明文字。' },
     { version: '1.9.6', date: '2026-10-17', notes: '統一調整側邊選單的頁面選取樣式：保留淺色選取底與主色圖示／文字，移除最左側深色強調線；展開及收合選單同步套用。' },
     { version: '1.9.5', date: '2026-10-06', notes: '調整租客入住紀錄排版，每筆合約固定為單一橫列；繳款狀態與已收、應收或尚欠金額改為同一行精簡顯示，避免表格列高因資訊換行而不一致。' },
     { version: '1.9.4', date: '2026-10-06', notes: '租客詳細資料的入住紀錄新增繳款狀況：顯示已繳清、部分繳款、待繳、逾期未繳或尚無帳單，並列出已收、應收與尚欠金額；同合約存在歷史重複帳單時以最新房租帳單為準。' },

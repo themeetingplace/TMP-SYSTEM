@@ -9,6 +9,12 @@ import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { consumeExpensePrefill } from '../utils/expensePrefill.js';
 import { enhanceAmountInput } from '../utils/amountInput.js';
+import {
+    expenseClaimMatchesFilter,
+    expenseClaimStatusMeta,
+    expenseReviewerActions,
+    isExpenseIncome
+} from '../utils/expenseClaimWorkflow.js';
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const CATEGORY_META = {
@@ -35,13 +41,14 @@ let activeFilter = 'all';
 let activeBuilding = 'all';
 let currentSession = null;
 let realtimeChannel = null;
+let initializedFilterRole = '';
 
 function isReviewer() {
     return ['owner', 'admin'].includes(window.__currentRole);
 }
 
 function isIncome(claim) {
-    return claim?.category === 'petty_cash_income';
+    return isExpenseIncome(claim);
 }
 
 function buildingName(id) {
@@ -76,14 +83,9 @@ function normalizeClaim(row) {
         reviewedByEmail: row.reviewed_by_email || '',
         reviewedAt: row.reviewed_at,
         reviewNote: row.review_note || '',
+        settlementMethod: row.settlement_method || '',
         invoiceId: row.invoice_id || ''
     };
-}
-
-function statusMeta(claim) {
-    if (claim.status === 'submitted' || claim.status === 'approved') return { label: isIncome(claim) ? '待確認' : '待付款', cls: 'warning', icon: 'ph-clock-countdown' };
-    if (claim.status === 'rejected') return { label: '已退回', cls: 'danger', icon: 'ph-arrow-u-up-left' };
-    return { label: isIncome(claim) ? '已入帳' : '已付款', cls: 'success', icon: 'ph-check-circle' };
 }
 
 function formatDateTime(value) {
@@ -117,9 +119,25 @@ function claimActionHtml(claim) {
         buttons.push(`<button type="button" class="btn btn-outline btn-xs" data-expense-action="receipt" data-id="${escapeAttr(claim.id)}" title="開啟發票／收據"><i class="ph ph-file-image"></i><span>發票</span></button>`);
     }
     buttons.push(`<button type="button" class="btn btn-outline btn-xs" data-expense-action="detail" data-id="${escapeAttr(claim.id)}" title="查看報帳內容"><i class="ph ph-eye"></i><span>詳情</span></button>`);
-    if (isReviewer() && ['submitted', 'approved'].includes(claim.status)) {
-        buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-success" data-expense-action="pay" data-id="${escapeAttr(claim.id)}" title="${isIncome(claim) ? '確認收入已入帳' : '標示已付款'}"><i class="ph ph-check-circle"></i><span>${isIncome(claim) ? '確認入帳' : '標示已付款'}</span></button>`);
-        buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-danger" data-expense-action="reject" data-id="${escapeAttr(claim.id)}" title="退回"><i class="ph ph-arrow-u-up-left"></i><span>退回</span></button>`);
+    if (isReviewer()) {
+        const actions = expenseReviewerActions(claim);
+        if (actions.includes('approve')) {
+            buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-success" data-expense-action="approve" data-id="${escapeAttr(claim.id)}" title="審核通過，進入付款處理"><i class="ph ph-check-circle"></i><span>審核通過</span></button>`);
+        }
+        if (actions.includes('pay')) {
+            buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-success" data-expense-action="pay" data-id="${escapeAttr(claim.id)}" title="確認款項已支付"><i class="ph ph-bank"></i><span>已付款</span></button>`);
+        }
+        if (actions.includes('rent_deduction')) {
+            buttons.push(`<button type="button" class="btn btn-outline btn-xs expense-rent-deduction" data-expense-action="rent_deduction" data-id="${escapeAttr(claim.id)}" title="記錄為從小幫手房費扣除"><i class="ph ph-house-line"></i><span>從房費扣除</span></button>`);
+        }
+        if (actions.includes('confirm')) {
+            const label = isIncome(claim) ? '確認收入' : '確認零用金支出';
+            const icon = isIncome(claim) ? 'ph-money' : 'ph-coins';
+            buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-success" data-expense-action="confirm" data-id="${escapeAttr(claim.id)}" title="${label}"><i class="ph ${icon}"></i><span>${label}</span></button>`);
+        }
+        if (actions.includes('reject')) {
+            buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-danger" data-expense-action="reject" data-id="${escapeAttr(claim.id)}" title="退回"><i class="ph ph-arrow-u-up-left"></i><span>退回</span></button>`);
+        }
     }
     if (isReviewer() || claim.submittedBy === currentSession?.user?.id) {
         buttons.push(`<button type="button" class="btn btn-outline btn-xs btn-danger" data-expense-action="delete" data-id="${escapeAttr(claim.id)}" title="刪除紀錄"><i class="ph ph-trash"></i><span>刪除</span></button>`);
@@ -129,22 +147,20 @@ function claimActionHtml(claim) {
 
 function filteredClaims() {
     const modeIds = currentModeBuildingIdSet(getMode());
-    return claims.filter(c => modeIds.has(c.buildingId) && (activeBuilding === 'all' || c.buildingId === activeBuilding)).filter(c => {
-        if (activeFilter === 'all') return true;
-        if (activeFilter === 'pending') return ['submitted', 'approved'].includes(c.status);
-        if (activeFilter === 'paid') return c.status === 'reimbursed';
-        return c.status === 'rejected';
-    });
+    return claims
+        .filter(c => modeIds.has(c.buildingId) && (activeBuilding === 'all' || c.buildingId === activeBuilding))
+        .filter(c => expenseClaimMatchesFilter(c, activeFilter));
 }
 
 function claimsTableHtml(rows) {
     if (!rows.length) {
-        return `<tr><td colspan="7"><div class="expense-empty"><i class="ph ph-receipt"></i><strong>目前沒有符合的報帳</strong><span>點上方快速入口建立第一筆。</span></div></td></tr>`;
+        const hint = isReviewer() ? '目前篩選條件下沒有需要處理的帳款。' : '點上方快速入口建立第一筆。';
+        return `<tr><td colspan="7"><div class="expense-empty"><i class="ph ph-receipt"></i><strong>目前沒有符合的報帳</strong><span>${hint}</span></div></td></tr>`;
     }
     return rows.map(c => {
         const category = CATEGORY_META[c.category] || CATEGORY_META.other;
         const funding = FUNDING_META[c.fundingSource] || FUNDING_META.company;
-        const status = statusMeta(c);
+        const status = expenseClaimStatusMeta(c);
         return `
             <tr data-status="${esc(c.status)}" data-search="${escapeAttr([c.merchant, c.description, c.submittedByName, buildingName(c.buildingId)].join(' ').toLowerCase())}">
                 <td><strong>${esc(c.expenseDate)}</strong><small class="expense-cell-sub">${esc(formatDateTime(c.submittedAt))} 送出</small></td>
@@ -159,12 +175,22 @@ function claimsTableHtml(rows) {
 }
 
 function contentHtml() {
+    const roleKey = isReviewer() ? 'reviewer' : 'helper';
+    if (initializedFilterRole !== roleKey) {
+        activeFilter = isReviewer() ? 'pending' : 'all';
+        initializedFilterRole = roleKey;
+    }
     const visible = filteredClaims();
     const scoped = claims.filter(c => currentModeBuildingIdSet(getMode()).has(c.buildingId) && (activeBuilding === 'all' || c.buildingId === activeBuilding));
     const monthKey = TODAY.slice(0, 7);
     const valid = scoped.filter(c => c.status !== 'rejected');
     const monthTotal = valid.filter(c => !isIncome(c) && c.expenseDate?.startsWith(monthKey)).reduce((sum, c) => sum + c.amount, 0);
-    const pendingCount = scoped.filter(c => ['submitted', 'approved'].includes(c.status)).length;
+    const reviewCount = scoped.filter(c => c.status === 'submitted').length;
+    const actionCount = scoped.filter(c => c.status === 'approved').length;
+    const completedCount = scoped.filter(c => c.status === 'reimbursed').length;
+    const rejectedCount = scoped.filter(c => c.status === 'rejected').length;
+    const pendingCount = reviewCount + actionCount;
+    const pendingAmount = scoped.filter(c => ['submitted', 'approved'].includes(c.status) && !isIncome(c)).reduce((sum, c) => sum + c.amount, 0);
     const payoutTotal = valid.filter(c => !isIncome(c) && c.fundingSource === 'personal' && c.status !== 'reimbursed').reduce((sum, c) => sum + c.amount, 0);
     const pettyIncome = valid.filter(isIncome).reduce((sum, c) => sum + c.amount, 0);
     const pettySpent = valid.filter(c => !isIncome(c) && c.fundingSource === 'petty_cash').reduce((sum, c) => sum + c.amount, 0);
@@ -175,47 +201,56 @@ function contentHtml() {
     }
 
     return `
-        <section class="expense-intro">
+        <section class="expense-intro ${isReviewer() ? 'is-reviewer' : ''}">
             <div>
-                <span class="expense-eyebrow">小幫手工作台</span>
-                <h2>各館獨立記帳，支出與零用金一眼看清楚。</h2>
-                <p>館務報帳使用獨立報表，不會併入主帳務；收入會直接列入該館零用金。</p>
+                <span class="expense-eyebrow">${isReviewer() ? '審核工作台' : '小幫手工作台'}</span>
+                <h2>${isReviewer() ? '待審核帳款與請款處理' : '拍下單據，留下每筆館務收支。'}</h2>
+                <p>${isReviewer() ? '先核對館別、單據與金額，再決定付款、從房費扣除或退回補件。' : '支出送出後，可在下方追蹤審核、付款與房費扣除狀態。'}</p>
             </div>
-            <div class="expense-intro-mark" aria-hidden="true"><i class="ph ph-receipt"></i><span>CLAIM</span></div>
+            <div class="expense-intro-mark" aria-hidden="true"><i class="ph ${isReviewer() ? 'ph-stamp' : 'ph-receipt'}"></i><span>${isReviewer() ? 'REVIEW' : 'CLAIM'}</span></div>
         </section>
 
-        <section class="expense-quick-section" aria-labelledby="expense-quick-title">
+        ${!isReviewer() ? `<section class="expense-quick-section" aria-labelledby="expense-quick-title">
             <h3 class="expense-quick-title" id="expense-quick-title">快速新增記帳</h3>
             <div class="expense-quick-grid">
                 ${quickActionHtml()}
             </div>
-        </section>
+        </section>` : ''}
 
         <section class="expense-metrics">
-            <div><span>待處理</span><strong>${pendingCount}</strong><small>筆紀錄</small></div>
-            <div><span>本月支出</span><strong>${moneyAmount(monthTotal)}</strong><small>不含已退回</small></div>
-            <div><span>零用金餘額</span><strong>${moneyAmount(pettyIncome - pettySpent)}</strong><small>收入扣除使用</small></div>
-            <div><span>代撥代墊</span><strong>${moneyAmount(payoutTotal)}</strong><small>尚未標示付款</small></div>
+            ${isReviewer() ? `
+                <div class="is-attention"><span>待審核</span><strong>${reviewCount}</strong><small>筆新申請</small></div>
+                <div><span>待處理</span><strong>${actionCount}</strong><small>筆已通過申請</small></div>
+                <div><span>待處理金額</span><strong>${moneyAmount(pendingAmount)}</strong><small>不含收入</small></div>
+                <div><span>已完成</span><strong>${completedCount}</strong><small>筆請款紀錄</small></div>
+            ` : `
+                <div><span>待處理</span><strong>${pendingCount}</strong><small>筆紀錄</small></div>
+                <div><span>本月支出</span><strong>${moneyAmount(monthTotal)}</strong><small>不含已退回</small></div>
+                <div><span>零用金餘額</span><strong>${moneyAmount(pettyIncome - pettySpent)}</strong><small>收入扣除使用</small></div>
+                <div><span>代撥代墊</span><strong>${moneyAmount(payoutTotal)}</strong><small>尚未完成請款</small></div>
+            `}
         </section>
 
         <section class="card expense-ledger-card">
             <div class="expense-ledger-head">
-                <div><span class="expense-eyebrow">各館獨立報表</span><h3>${isReviewer() ? '館務報帳管理' : '館務報帳紀錄'}</h3></div>
-                <div class="expense-ledger-actions"><button type="button" class="btn btn-outline helper-authorized-write" data-expense-create data-entry-type="income"><i class="ph ph-plus-circle"></i> 新增收入</button><button type="button" class="btn btn-primary helper-authorized-write" id="expense-create-btn" data-expense-create data-entry-type="expense" data-category="daily_supplies" data-funding="personal" data-fab="ph-camera-plus"><i class="ph ph-plus"></i> 新增支出</button></div>
+                <div><span class="expense-eyebrow">${isReviewer() ? '小幫手支出帳表' : '各館報帳紀錄'}</span><h3>${isReviewer() ? '審核與請款狀態' : '館務報帳紀錄'}</h3></div>
+                ${!isReviewer() ? `<div class="expense-ledger-actions"><button type="button" class="btn btn-outline helper-authorized-write" data-expense-create data-entry-type="income"><i class="ph ph-plus-circle"></i> 新增收入</button><button type="button" class="btn btn-primary helper-authorized-write" id="expense-create-btn" data-expense-create data-entry-type="expense" data-category="daily_supplies" data-funding="personal" data-fab="ph-camera-plus"><i class="ph ph-plus"></i> 新增支出</button></div>` : ''}
             </div>
             <div class="expense-building-filter" aria-label="選擇館別報表">
                 <button class="${activeBuilding === 'all' ? 'active' : ''}" data-expense-building="all">全部館別</button>
                 ${buildingOptions.map(building => `<button class="${activeBuilding === building.id ? 'active' : ''}" data-expense-building="${escapeAttr(building.id)}">${esc(building.name)}</button>`).join('')}
             </div>
             <div class="filter-tabs expense-filter-tabs">
+                ${isReviewer() ? `<button class="filter-tab ${activeFilter === 'pending' ? 'active' : ''}" data-expense-filter="pending">待處理總覽 (${pendingCount})</button>` : ''}
+                <button class="filter-tab ${activeFilter === 'review' ? 'active' : ''}" data-expense-filter="review">待審核 (${reviewCount})</button>
+                <button class="filter-tab ${activeFilter === 'action' ? 'active' : ''}" data-expense-filter="action">已通過待處理 (${actionCount})</button>
+                <button class="filter-tab ${activeFilter === 'completed' ? 'active' : ''}" data-expense-filter="completed">已完成 (${completedCount})</button>
+                <button class="filter-tab ${activeFilter === 'rejected' ? 'active' : ''}" data-expense-filter="rejected">已退回 (${rejectedCount})</button>
                 <button class="filter-tab ${activeFilter === 'all' ? 'active' : ''}" data-expense-filter="all">全部</button>
-                <button class="filter-tab ${activeFilter === 'pending' ? 'active' : ''}" data-expense-filter="pending">待處理 (${pendingCount})</button>
-                <button class="filter-tab ${activeFilter === 'paid' ? 'active' : ''}" data-expense-filter="paid">已付款</button>
-                <button class="filter-tab ${activeFilter === 'rejected' ? 'active' : ''}" data-expense-filter="rejected">已退回</button>
             </div>
             <div class="table-container expense-table-wrap">
                 <table class="data-table expense-table">
-                    <thead><tr><th>日期</th><th>館別／申請人</th><th>類別／付款</th><th>內容</th><th>金額</th><th>狀態</th><th>操作</th></tr></thead>
+                    <thead><tr><th>日期</th><th>館別／申請人</th><th>類別／付款</th><th>內容</th><th>金額</th><th>請款狀態</th><th>操作</th></tr></thead>
                     <tbody>${isLoading ? `<tr><td colspan="7"><div class="expense-empty"><i class="ph ph-circle-notch expense-spin"></i><strong>正在載入報帳…</strong></div></td></tr>` : claimsTableHtml(visible)}</tbody>
                 </table>
             </div>
@@ -418,7 +453,7 @@ async function openReceipt(claim) {
 }
 
 function showClaimDetail(claim) {
-    const status = statusMeta(claim);
+    const status = expenseClaimStatusMeta(claim);
     const category = CATEGORY_META[claim.category] || CATEGORY_META.other;
     const funding = FUNDING_META[claim.fundingSource] || FUNDING_META.company;
     openDetailModal({
@@ -431,8 +466,10 @@ function showClaimDetail(claim) {
             { label: isIncome(claim) ? '歸入帳戶' : '付款方式', value: esc(funding.label) },
             { label: '金額', value: `<strong>${moneyAmount(claim.amount)}</strong>` },
             { label: isIncome(claim) ? '收入來源' : '商家', value: esc(claim.merchant || '—') },
-            { label: '記錄人', value: esc(claim.submittedByName || '—') }
-        ],
+            { label: '記錄人', value: esc(claim.submittedByName || '—') },
+            claim.reviewedByEmail ? { label: '處理人', value: esc(claim.reviewedByEmail) } : null,
+            claim.reviewedAt ? { label: '處理時間', value: esc(formatDateTime(claim.reviewedAt)) } : null
+        ].filter(Boolean),
         extraHtml: `
             <div class="expense-detail-note"><span>用途說明</span><p>${esc(claim.description || '無備註')}</p></div>
             ${claim.reviewNote ? `<div class="expense-detail-note is-review"><span>審核備註</span><p>${esc(claim.reviewNote)}</p></div>` : ''}
@@ -451,7 +488,13 @@ async function reviewClaim(claim, action, note = '') {
         showToast(`處理失敗：${error.message}`, 'danger', 7000);
         return false;
     }
-    const messages = { pay: isIncome(claim) ? '已確認收入入帳' : '已標示付款', reject: '已退回報帳' };
+    const messages = {
+        approve: '審核通過，已移至待處理',
+        pay: '已標示付款',
+        rent_deduction: '已記錄為從房費扣除',
+        confirm: isIncome(claim) ? '已確認收入' : '已確認零用金支出',
+        reject: '已退回報帳'
+    };
     showToast(messages[action], 'success');
     await loadClaims(document.querySelector('.view-section.active'));
     return true;
@@ -468,15 +511,35 @@ function startReview(claim, action) {
         });
         return;
     }
-    const title = isIncome(claim) ? '確認收入入帳' : '標示已付款';
-    const message = isIncome(claim)
-        ? `確認 <strong>${esc(buildingName(claim.buildingId))} · ${moneyAmount(claim.amount)}</strong> 已收入零用金？`
-        : `確認 <strong>${esc(buildingName(claim.buildingId))} · ${moneyAmount(claim.amount)}</strong> 已付款？<br><small style="color:var(--text-muted);">這只會更新館務報帳狀態，不會寫入主帳務。</small>`;
+    const summary = `<strong>${esc(buildingName(claim.buildingId))} · ${moneyAmount(claim.amount)}</strong>`;
+    const config = {
+        approve: {
+            title: '審核通過',
+            message: `確認 ${summary} 的單據與金額正確，移至待處理？`,
+            confirmLabel: '審核通過'
+        },
+        pay: {
+            title: '標示已付款',
+            message: `確認 ${summary} 已付款給申請人？`,
+            confirmLabel: '標示已付款'
+        },
+        rent_deduction: {
+            title: '從房費扣除',
+            message: `確認 ${summary} 改由小幫手的房費扣除？<br><small style="color:var(--text-muted);">完成後，申請人會在請款狀態看到「從房費扣除」。</small>`,
+            confirmLabel: '確認從房費扣除'
+        },
+        confirm: {
+            title: isIncome(claim) ? '確認收入' : '確認零用金支出',
+            message: isIncome(claim)
+                ? `確認 ${summary} 的零用金收入已核對？`
+                : `確認 ${summary} 已由該館零用金支出？`,
+            confirmLabel: isIncome(claim) ? '確認收入' : '確認零用金支出'
+        }
+    }[action];
+    if (!config) return;
     openConfirm({
-        title,
-        message,
-        confirmLabel: isIncome(claim) ? '確認入帳' : '標示已付款',
-        onConfirm: () => reviewClaim(claim, 'pay')
+        ...config,
+        onConfirm: () => reviewClaim(claim, action)
     });
 }
 
@@ -533,7 +596,7 @@ function bindActions(root) {
         const action = btn.dataset.expenseAction;
         if (action === 'receipt') openReceipt(claim);
         if (action === 'detail') showClaimDetail(claim);
-        if (['pay', 'reject'].includes(action)) startReview(claim, action);
+        if (['approve', 'pay', 'rent_deduction', 'confirm', 'reject'].includes(action)) startReview(claim, action);
         if (action === 'delete') startDelete(claim);
     }));
 }
