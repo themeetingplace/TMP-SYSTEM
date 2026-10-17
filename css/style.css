@@ -457,8 +457,6 @@ body[data-role="helper"] #btn-new-owner {
     background-color: var(--color-primary-light);
     color: var(--color-primary);
     font-weight: 600;
-    box-shadow: inset 3px 0 0 var(--color-primary);
-    padding-left: calc(0.875rem + 3px);
 }
 
 .nav-item:focus-visible {
@@ -559,7 +557,7 @@ body[data-role="helper"] #btn-new-owner {
 .nav-item.is-hidden { display: none; }
 
 .sidebar.is-collapsed .nav-item.active {
-    /* 收合狀態下沒有左 padding 文字，indicator 還是用 inset shadow */
+    /* 收合狀態保留淺色選取底，不額外顯示左側強調線 */
     padding-left: 0;
 }
 
