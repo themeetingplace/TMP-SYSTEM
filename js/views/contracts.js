@@ -22,6 +22,7 @@ import { initAdjustmentsWidget } from '../utils/adjustmentsWidget.js';
 import { buildTermOptions as buildTermOptionsUtil, initTermSelector } from '../utils/termSelector.js';
 import { findRenewalSuccessor, hasContractRenewed } from '../utils/renewalSuccessor.js';
 import { contractReceivableSummary, latestContractRentInvoice } from '../utils/invoicePaymentSummary.js';
+import { buildContractLineMessage } from '../utils/contractLineMessage.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
@@ -1680,7 +1681,7 @@ export async function sendContractToLine(id) {
 
         showToast('推送到 LINE…', 'info');
         await pushToTenant(tenant.id, {
-            message: `${c.tenant} 您好，這是您的合約 (${c.id})\n租期：${c.startDate} ~ ${c.endDate}\n月租：$${(c.amount || 0).toLocaleString()}\n\n連結 24 小時內有效`,
+            message: buildContractLineMessage(c, getContractInvoice(c)),
             fileUrl,
             fileName: filename
         });

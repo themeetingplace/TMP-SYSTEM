@@ -1,12 +1,14 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.0';
-export const APP_BUILD_DATE = '2026-10-17';
+export const APP_VERSION = '1.10.2';
+export const APP_BUILD_DATE = '2026-10-19';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.2', date: '2026-10-19', notes: '更新 LINE 預約看房與續租繳款文字：看房訊息強調填寫表單及回報姓名並保留原有 emoji；續租通知補上館別床號、應繳金額、合約期間、月租細項、指定收款帳號及查帳後傳送合約說明。' },
+    { version: '1.10.1', date: '2026-10-19', notes: '更新 LINE 合約發送文字：顯示租客、合約編號、租期與該期實際已繳費用，並加入下載填寫後回傳的提示；24 小時有效期限只在主訊息顯示一次，下載連結訊息不再重複。' },
     { version: '1.10.0', date: '2026-10-17', notes: '重整館務報帳角色流程：Owner／Admin 預設進入待審核帳款，審核通過後再依個人代墊、零用金或收入選擇已付款、從房費扣除、確認零用金支出或確認收入；處理方式會保存並顯示於小幫手帳表。管理員畫面改為審核優先，小幫手保留快速記帳與請款追蹤，並移除原獨立報表說明文字。' },
     { version: '1.9.6', date: '2026-10-17', notes: '統一調整側邊選單的頁面選取樣式：保留淺色選取底與主色圖示／文字，移除最左側深色強調線；展開及收合選單同步套用。' },
     { version: '1.9.5', date: '2026-10-06', notes: '調整租客入住紀錄排版，每筆合約固定為單一橫列；繳款狀態與已收、應收或尚欠金額改為同一行精簡顯示，避免表格列高因資訊換行而不一致。' },

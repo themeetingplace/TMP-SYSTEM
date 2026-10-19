@@ -8,6 +8,8 @@
 import { mockData, applyRentRules, leaseEndISO } from '../data.js';
 import { invoiceAdjustments, invoiceDueAmount } from './invoicePaymentSummary.js';
 
+const PAYMENT_ACCOUNT = '台新銀行(812)／敦南分行／戶名：陳麒峰／帳號：28881003694287';
+
 function findRentInvoice(contract) {
     if (!contract?.id) return null;
     return mockData.invoices
@@ -100,21 +102,23 @@ export function buildPaymentNoticeMessage(contract, opts = {}) {
 
     // === 組訊息 ===
     const greeting = includeRenewalGreeting
-        ? `感謝您回覆續租!\n\n🔄 已為您建立續租合約 ${contract.id}`
+        ? `感謝您回覆續租！\n\n🔄 已為您建立續租合約 ${contract.id}`
         : `📄 合約 ${contract.id} 繳款通知`;
 
-    const message = `${contract.tenant} 您好 ☺️
+    const message = `${contract.tenant}您好 ☺️
 
 ${greeting}
 📍 ${propertyShort}
 
-🔔 應繳金額: NT$${dueAmount.toLocaleString()}
-📅 合約期間: ${periodSlash}
-月租金：$${monthlyRent.toLocaleString()}${adjLines ? '\n細項:\n' + adjLines : ''}
+🔔 應繳金額：NT$${dueAmount.toLocaleString()}
+📅 合約期間：${periodSlash}
+月租金：$${monthlyRent.toLocaleString()}${adjLines ? '\n細項：\n' + adjLines : ''}
 ${formulaLine}
+收款帳號：
+${PAYMENT_ACCOUNT}
 
-繳款完成後, 請回傳「銀行帳戶末 5 碼」(5 位數字), 系統會自動記錄 ✨
-入帳後合約 PDF 會自動寄給您.`;
+繳款完成後，請回傳「銀行帳戶末 5 碼」(5 位數字就好)，
+系統會自動記錄，查帳確認後會再傳送合約給您 ✨`;
 
     return { message, dueAmount, dueDate, period };
 }

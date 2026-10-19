@@ -645,11 +645,11 @@ async function handleMessage(event: any) {
 在台北打拼，回到冷冰冰的房間總覺得有點寂寞嗎？
 聚空間想成為你最有人情味的家 🏡
 
-請點下方按鈕填寫表單讓我們了解您的需求，填寫完後請告知填表的名字！
+請點下方按鈕【填寫表單】讓我們了解您的需求，填寫完後請【告知填表的名字】！
 小編會盡快回復您~`,
                 quickReply: {
                     items: [
-                        { type: 'action', action: { type: 'uri', label: '📝 預約看房表單', uri: 'https://forms.gle/p1HrmZtFQf5by1EU6' } },
+                        { type: 'action', action: { type: 'uri', label: '📝 填寫表單', uri: 'https://forms.gle/p1HrmZtFQf5by1EU6' } },
                         { type: 'action', action: { type: 'message', label: '💬 找小編', text: '找小編' } }
                     ]
                 }
