@@ -4,7 +4,7 @@ import { currentModeBuildingIdSet } from '../utils/modeFilter.js';
 import { buildMonthCells, buildPettyCashSnapshot, buildStayEvents } from '../utils/helperDashboardData.js';
 import { buildRentCollectionRows, rentCollectionCounts, rentCollectionStatusMeta } from '../utils/helperRentCollectionData.js';
 import { queueExpensePrefill } from '../utils/expensePrefill.js';
-import { escapeHtml as esc } from '../utils/escape.js';
+import { escapeHtml as esc, escapeAttr } from '../utils/escape.js';
 import { moneyAmount } from '../utils/moneyDisplay.js';
 import { openRentPaymentReportForm } from '../utils/rentPaymentReportForm.js';
 import { showToast } from '../utils/ui.js';

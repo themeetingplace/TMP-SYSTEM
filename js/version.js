@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.4';
+export const APP_VERSION = '1.10.5';
 export const APP_BUILD_DATE = '2026-10-20';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.5', date: '2026-10-20', notes: '修正小幫手登入後首頁無法顯示：補齊快速記帳與住客行程元件所需的安全屬性轉義工具，避免專屬工作台渲染中斷。' },
     { version: '1.10.4', date: '2026-10-20', notes: '首頁「回覆處理」改為直接開啟合約管理的「已回覆待處理」清單，可逐筆續租、退租或暫緩，並保留批次修改租金、建約與發送；續租編輯儲存後也可立即發送 LINE 繳款通知。' },
     { version: '1.10.3', date: '2026-10-20', notes: '首頁末五碼待核對只保留仍欠款、合約存在且尚未核對的帳單；已結清或孤立舊資料會自動移除，並新增單筆「已處理」按鈕，可清除提醒而不誤改入帳金額。' },
     { version: '1.10.2', date: '2026-10-19', notes: '更新 LINE 預約看房與續租繳款文字：看房訊息強調填寫表單及回報姓名並保留原有 emoji；續租通知補上館別床號、應繳金額、合約期間、月租細項、指定收款帳號及查帳後傳送合約說明。' },

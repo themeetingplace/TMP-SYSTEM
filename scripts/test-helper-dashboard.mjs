@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { buildMonthCells, buildPettyCashSnapshot, buildStayEvents } from '../js/utils/helperDashboardData.js';
+
+const helperDashboardSource = readFileSync(new URL('../js/views/helper-dashboard.js', import.meta.url), 'utf8');
+assert.match(
+    helperDashboardSource,
+    /import\s*\{[^}]*escapeHtml\s+as\s+esc\s*,\s*escapeAttr[^}]*\}\s*from\s*['"]\.\.\/utils\/escape\.js['"]/,
+    '小幫手首頁使用 escapeAttr 時必須明確匯入，避免渲染整頁中斷'
+);
 
 const buildings = [
     { id: 'B1', name: '甲館', status: 'active' },
