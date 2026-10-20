@@ -11,6 +11,7 @@ import { findRenewalAskCandidates, findRenewalAskCandidatesNoLine } from '../uti
 import { findRenewalConfirmCandidates, findDeclinePendingCandidates } from '../utils/autoRenewalProcessor.js';
 import { previewRenewalFor } from '../utils/paymentNoticeMessage.js';
 import { findRenewalSuccessor, hasContractRenewed } from '../utils/renewalSuccessor.js';
+import { isDashboardVerificationCandidate } from '../utils/dashboardVerification.js';
 import { confirmTerminate } from './contracts.js';
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
@@ -146,8 +147,9 @@ function buildRenewalPipelineCard(invoices) {
     ].sort((a, b) => String(a.endDate || '').localeCompare(String(b.endDate || '')));
     const renewCandidates = findRenewalConfirmCandidates().filter(inScope);
     const declineCandidates = findDeclinePendingCandidates().filter(inScope);
+    const contractIds = new Set(mockData.contracts.map(c => c.id));
     const verifyCandidates = invoices.filter(inv =>
-        inv.direction === 'in' && inv.bankLast5 && !inv.bankVerified
+        isDashboardVerificationCandidate(inv, contractIds)
     );
 
     const grandTotal = askCandidates.length + askNoLineCandidates.length + renewCandidates.length + declineCandidates.length + verifyCandidates.length;
@@ -277,10 +279,13 @@ function buildRenewalPipelineCard(invoices) {
         ${items.map(inv => {
             const due = (Number(inv.amount) || 0) - (Number(inv.discount) || 0);
             return `
-                <div class="rp-row">
+                <div class="rp-row rp-row--verify">
                     <span class="rp-bed">${bedCode(inv.propertyName)}</span>
                     <span class="rp-tenant">${inv.tenant || ''}</span>
                     <span class="rp-detail">$${due.toLocaleString()} · 末5碼 <strong>${inv.bankLast5}</strong></span>
+                    <button type="button" class="rp-verify-done" data-invoice-id="${esc(inv.id)}" data-write title="只移除這筆末五碼待核對提醒，不會自動入帳">
+                        <i class="ph ph-check"></i> 已處理
+                    </button>
                 </div>
             `;
         }).join('')}
@@ -845,6 +850,38 @@ window.initDashboardInteractions = function() {
         btn.addEventListener('click', () => {
             const id = btn.dataset.contractId;
             if (id) confirmTerminate(id);
+        });
+    });
+
+    // 步驟③「已處理」只結束首頁的末五碼待核對提醒；不改金額、不自動入帳。
+    // 真正收到款項仍應使用「前往核對」完成結帳，避免把清提醒誤當成收款。
+    document.querySelectorAll('.rp-verify-done').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.invoiceId;
+            const invoice = mockData.invoices.find(inv => inv.id === id);
+            if (!invoice) {
+                refreshView();
+                showToast('這筆帳單已不存在，已從首頁移除', 'info', 3000);
+                return;
+            }
+
+            openConfirm({
+                title: '將末五碼提醒標示為已處理？',
+                message: `將從首頁移除 <strong>${esc(invoice.id)}</strong> 的末五碼待核對提醒。<br><br><span style="color:var(--text-muted);">這個操作不會入帳，也不會更改應收金額；若已收到款項，請改用「前往核對」完成結帳。</span>`,
+                confirmLabel: '確認已處理',
+                onConfirm: () => {
+                    const updated = store.updateInvoice(invoice.id, {
+                        bankLast5: null,
+                        bankVerified: false
+                    });
+                    if (!updated) {
+                        showToast('更新失敗，請稍後再試', 'error');
+                        return false;
+                    }
+                    refreshView();
+                    showToast(`${invoice.id} 的末五碼提醒已處理`, 'success', 3500);
+                }
+            });
         });
     });
 
