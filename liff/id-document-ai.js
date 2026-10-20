@@ -71,7 +71,22 @@
         };
     }
 
-    const api = { classifyIdDocumentText };
+    function validateIdDocumentGate({ hasFront, hasBack, frontVerdict, backVerdict }) {
+        if (!hasFront) return { ok: false, code: 'front_missing' };
+        if (!frontVerdict || frontVerdict === 'checking') return { ok: false, code: 'checking' };
+        if (frontVerdict === 'unavailable') return { ok: false, code: 'unavailable' };
+        if (frontVerdict !== 'likely') return { ok: false, code: 'not_id_document' };
+
+        // 護照照片頁不需要背面；但使用者若有上傳背面，也必須通過相同驗證。
+        if (hasBack) {
+            if (!backVerdict || backVerdict === 'checking') return { ok: false, code: 'checking' };
+            if (backVerdict === 'unavailable') return { ok: false, code: 'unavailable' };
+            if (backVerdict !== 'likely') return { ok: false, code: 'not_id_document' };
+        }
+        return { ok: true, code: 'verified' };
+    }
+
+    const api = { classifyIdDocumentText, validateIdDocumentGate };
     root.IdDocumentAI = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
-<script src="./id-document-ai.js?v=20261020a"></script>
+<script src="./id-document-ai.js?v=20261020b"></script>
 <style>
     :root {
         --brand: #ff8859;
@@ -341,9 +341,9 @@ const STRINGS = {
         cardStatusDone: '✓ 已加浮水印 ({sizeKB} KB)',
         aiChecking: 'AI 判讀中…',
         aiLikely: '✓ AI：看起來是身分證件',
-        aiUncertain: '⚠ AI：無法確認，請人工確認',
-        aiUnlikely: '⚠ AI：看起來不像身分證件',
-        aiUnavailable: 'AI 暫時無法判讀，請人工確認',
+        aiUncertain: '⚠ AI：無法確認，請重新上傳清晰完整的證件',
+        aiUnlikely: '⚠ AI：看起來不像身分證件，請重新上傳',
+        aiUnavailable: '⚠ AI 暫時無法判讀，請稍後重新上傳',
         btnSubmit: '送出登記',
         btnSubmitting: '送出中…',
         btnProcessing: '處理證件照片…',
@@ -354,6 +354,9 @@ const STRINGS = {
         doneBody: '您的資料已送出，LINE 也綁定完成<br>之後合約 / 帳單通知會傳到這裡 ✨',
         doneClose: '關閉視窗',
         errIdFrontMissing: '請至少上傳證件正面照片',
+        errIdAiChecking: 'AI 正在判讀證件，請稍候完成後再送出',
+        errIdAiRejected: 'AI 無法確認上傳的是身分證件，請重新拍攝或上傳清晰、完整的身分證／護照／居留證',
+        errIdAiUnavailable: 'AI 證件驗證暫時無法使用，請確認網路後重新上傳證件',
         errSubmitFailed: '送出失敗：{msg}',
         errWatermarkFailed: '圖片處理失敗：{msg}',
         errLiffInit: 'LIFF 初始化失敗：{msg}\n\ncode: {code}\nURL: {url}\n\n請聯絡小編並附上這段訊息',
@@ -391,9 +394,9 @@ const STRINGS = {
         cardStatusDone: '✓ Watermarked ({sizeKB} KB)',
         aiChecking: 'AI is checking…',
         aiLikely: '✓ AI: This looks like an identity document',
-        aiUncertain: '⚠ AI: Unable to confirm; please check manually',
-        aiUnlikely: '⚠ AI: This may not be an identity document',
-        aiUnavailable: 'AI check unavailable; please check manually',
+        aiUncertain: '⚠ AI: Unable to confirm. Please upload a clear, complete ID again',
+        aiUnlikely: '⚠ AI: This does not look like an identity document. Please upload again',
+        aiUnavailable: '⚠ AI check unavailable. Please try uploading again later',
         btnSubmit: 'Submit',
         btnSubmitting: 'Submitting…',
         btnProcessing: 'Processing ID photo…',
@@ -404,6 +407,9 @@ const STRINGS = {
         doneBody: 'Your info is submitted and your LINE account is linked.<br>Future contracts &amp; invoices will be sent here ✨',
         doneClose: 'Close',
         errIdFrontMissing: 'Please upload the front of your ID at minimum.',
+        errIdAiChecking: 'AI is still checking your ID. Please wait before submitting.',
+        errIdAiRejected: 'AI could not verify this as an identity document. Please upload a clear, complete ID card, passport, or residence permit.',
+        errIdAiUnavailable: 'AI ID verification is temporarily unavailable. Check your connection and upload the document again.',
         errSubmitFailed: 'Submit failed: {msg}',
         errWatermarkFailed: 'Image processing failed: {msg}',
         errLiffInit: 'LIFF init failed: {msg}\n\ncode: {code}\nURL: {url}\n\nPlease contact the admin with this message.',
@@ -852,9 +858,22 @@ async function handleSubmit(profile) {
     const btn = document.getElementById('submitBtn');
     const msg = document.getElementById('msg-area');
 
-    // 驗證證件正面已上傳 (反面選填，外籍租客只傳護照)
-    if (!idCardImages.front) {
-        msg.innerHTML = `<div class="msg error">${t('errIdFrontMissing')}</div>`;
+    // 正面必傳且一定要通過裝置端 AI 證件驗證；護照照片頁可不傳背面。
+    // 若有傳背面，背面也必須通過，避免用任意圖片補欄位。
+    const idGate = window.IdDocumentAI?.validateIdDocumentGate?.({
+        hasFront: Boolean(idCardImages.front),
+        hasBack: Boolean(idCardImages.back),
+        frontVerdict: idCardAnalysis.front?.verdict,
+        backVerdict: idCardAnalysis.back?.verdict
+    }) || { ok: false, code: 'unavailable' };
+    if (!idGate.ok) {
+        const errorKey = {
+            front_missing: 'errIdFrontMissing',
+            checking: 'errIdAiChecking',
+            unavailable: 'errIdAiUnavailable',
+            not_id_document: 'errIdAiRejected'
+        }[idGate.code] || 'errIdAiRejected';
+        msg.innerHTML = `<div class="msg error">${t(errorKey)}</div>`;
         return;
     }
 
