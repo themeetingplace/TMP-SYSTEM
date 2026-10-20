@@ -254,7 +254,6 @@ function openAdminForm(admin = null) {
             if (phFeatures) {
                 phFeatures.innerHTML = `
                     <label style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem;">首頁功能</label>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">多數小幫手不需處理收租，預設不顯示；有需要再單獨開啟。</div>
                     <div style="display: grid; gap: 0.5rem;">
                         ${HELPER_FEATURE_CHOICES.map(feature => `<label style="display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.65rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer;">
                             <input type="checkbox" class="helper-feature-chk" value="${escapeAttr(feature.key)}" ${preCheckedViews.has(feature.key) ? 'checked' : ''} style="margin-top:0.15rem;">

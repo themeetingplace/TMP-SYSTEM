@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.6';
+export const APP_VERSION = '1.10.7';
 export const APP_BUILD_DATE = '2026-10-20';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.7', date: '2026-10-20', notes: '精簡小幫手帳號權限設定畫面，移除首頁收租功能上方的預設說明提示。' },
     { version: '1.10.6', date: '2026-10-20', notes: '小幫手首頁的「收租進度」改為獨立帳號權限且預設隱藏；Owner 可在帳號管理編輯小幫手時，依個別需求開啟「顯示首頁收租進度」。' },
     { version: '1.10.5', date: '2026-10-20', notes: '修正小幫手登入後首頁無法顯示：補齊快速記帳與住客行程元件所需的安全屬性轉義工具，避免專屬工作台渲染中斷。' },
     { version: '1.10.4', date: '2026-10-20', notes: '首頁「回覆處理」改為直接開啟合約管理的「已回覆待處理」清單，可逐筆續租、退租或暫緩，並保留批次修改租金、建約與發送；續租編輯儲存後也可立即發送 LINE 繳款通知。' },

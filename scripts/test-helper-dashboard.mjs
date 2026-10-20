@@ -14,6 +14,7 @@ assert.ok(helperDashboardSource.includes("canViewRentCollection() ? `<section cl
 const adminUsersSource = readFileSync(new URL('../js/views/admin-users.js', import.meta.url), 'utf8');
 assert.ok(adminUsersSource.includes("key: 'dashboard_rent_collection'"), '帳號管理必須提供首頁收租進度權限');
 assert.ok(adminUsersSource.includes('class="helper-feature-chk"'), '首頁功能權限必須可由管理員勾選');
+assert.ok(!adminUsersSource.includes('多數小幫手不需處理收租'), '帳號管理不應顯示已移除的收租提示詞');
 
 const buildings = [
     { id: 'B1', name: '甲館', status: 'active' },
