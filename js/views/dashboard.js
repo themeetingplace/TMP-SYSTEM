@@ -8,7 +8,7 @@ import { getChartColors } from '../utils/chartTheme.js';
 import { modeFilteredData, currentModeBuildingIdSet } from '../utils/modeFilter.js';
 import { getMode } from '../utils/appMode.js';
 import { findRenewalAskCandidates, findRenewalAskCandidatesNoLine } from '../utils/renewalAskFallback.js';
-import { findRenewalConfirmCandidates, findDeclinePendingCandidates } from '../utils/autoRenewalProcessor.js';
+import { findRenewalConfirmCandidates, findDeclinePendingCandidates, findInquiryPendingCandidates } from '../utils/autoRenewalProcessor.js';
 import { previewRenewalFor } from '../utils/paymentNoticeMessage.js';
 import { findRenewalSuccessor, hasContractRenewed } from '../utils/renewalSuccessor.js';
 import { isDashboardVerificationCandidate } from '../utils/dashboardVerification.js';
@@ -147,12 +147,14 @@ function buildRenewalPipelineCard(invoices) {
     ].sort((a, b) => String(a.endDate || '').localeCompare(String(b.endDate || '')));
     const renewCandidates = findRenewalConfirmCandidates().filter(inScope);
     const declineCandidates = findDeclinePendingCandidates().filter(inScope);
+    const inquiryCandidates = findInquiryPendingCandidates().filter(inScope);
     const contractIds = new Set(mockData.contracts.map(c => c.id));
     const verifyCandidates = invoices.filter(inv =>
         isDashboardVerificationCandidate(inv, contractIds)
     );
 
-    const grandTotal = askCandidates.length + askNoLineCandidates.length + renewCandidates.length + declineCandidates.length + verifyCandidates.length;
+    const replyCount = renewCandidates.length + declineCandidates.length + inquiryCandidates.length;
+    const grandTotal = askCandidates.length + askNoLineCandidates.length + replyCount + verifyCandidates.length;
 
     // 抓床號 (例: "聚空間 - 古亭2館 R2-B" → "R2-B")
     const bedCode = (propertyName) => (propertyName || '').match(/R\d+-[A-Z]/)?.[0] || '—';
@@ -243,7 +245,8 @@ function buildRenewalPipelineCard(invoices) {
     // === 步驟② 回覆處理 — 要續 (預估新期間+金額, 跟真的送出時同算法) / 不續 (點了直接開退租) ===
     const replyItems = [
         ...renewCandidates.map(c => ({ ...c, _intent: 'renew' })),
-        ...declineCandidates.map(c => ({ ...c, _intent: 'decline' }))
+        ...declineCandidates.map(c => ({ ...c, _intent: 'decline' })),
+        ...inquiryCandidates.map(c => ({ ...c, _intent: 'inquiry' }))
     ];
     const replyGroups = groupByBuilding(replyItems, c => c.propertyName);
     const replyRows = (groups) => Array.from(groups.entries()).map(([building, items]) => `
@@ -257,6 +260,16 @@ function buildRenewalPipelineCard(invoices) {
                         <span class="rp-bed">${bedCode(c.propertyName)}</span>
                         <span class="rp-tenant">${c.tenant}</span>
                         <span class="rp-detail">新期間 ${newStart}~${newEnd} · 應繳 <strong style="color: var(--color-success);">$${dueAmount.toLocaleString()}</strong></span>
+                    </div>
+                `;
+            }
+            if (c._intent === 'inquiry') {
+                return `
+                    <div class="rp-row rp-row--reply">
+                        <span class="rp-intent" style="color:var(--color-info); background:var(--color-info-light);">有問題</span>
+                        <span class="rp-bed">${bedCode(c.propertyName)}</span>
+                        <span class="rp-tenant">${c.tenant}</span>
+                        <span class="rp-detail">請逐筆聯絡確認續租需求</span>
                     </div>
                 `;
             }
@@ -294,7 +307,7 @@ function buildRenewalPipelineCard(invoices) {
     const stepsHtml = `
         <div class="rp-steps">
             ${renderStep({ num: 1, icon: 'ph-chat-circle-dots', label: '待發通知', color: 'var(--color-info)', count: askCandidates.length, displayCount: askDisplayCandidates.length, actionLabel: '前往發送', actionId: 'btn-ask-renewal', groups: askGroups, rowsHtml: askRows, emptyLabel: '沒有待發送的通知', extraHtml: askNoLineHtml })}
-            ${renderStep({ num: 2, icon: 'ph-chats-circle', label: '回覆處理', color: 'var(--color-warning)', count: renewCandidates.length + declineCandidates.length, actionLabel: '前往確認', actionId: renewCandidates.length > 0 ? 'btn-confirm-renewals' : '', groups: replyGroups, rowsHtml: replyRows, emptyLabel: '沒有待處理的回覆' })}
+            ${renderStep({ num: 2, icon: 'ph-chats-circle', label: '回覆處理', color: 'var(--color-warning)', count: replyCount, actionLabel: '查看回覆', actionId: replyCount > 0 ? 'goto-renewal-replies' : '', groups: replyGroups, rowsHtml: replyRows, emptyLabel: '沒有待處理的回覆' })}
             ${renderStep({ num: 3, icon: 'ph-shield-check', label: '待核對', color: 'var(--color-success)', count: verifyCandidates.length, actionLabel: '前往核對', actionId: 'goto-unsettled', groups: verifyGroups, rowsHtml: verifyRows, emptyLabel: '沒有待核對的款項' })}
         </div>
     `;
@@ -828,8 +841,9 @@ window.initDashboardInteractions = function() {
         });
     });
 
-    // 續租與收款流程卡片 → 前往對應頁面並自動點開對應的勾選 modal
-    // (goto-unsettled 是特例: 直接導頁, 不是模擬點某顆按鈕)
+    // 續租與收款流程卡片 → 前往對應頁面。
+    // 回覆處理直接開「已回覆待處理」清單，不強迫先進批次 modal；
+    // 合約頁仍保留「批次修改並發送」，也可逐筆續租／退租／暫緩。
     document.querySelectorAll('.renewal-pending-action').forEach(btn => {
         btn.addEventListener('click', () => {
             const targetBtnId = btn.dataset.goto;
@@ -840,6 +854,14 @@ window.initDashboardInteractions = function() {
             }
             window.location.hash = 'contracts';
             setTimeout(() => {
+                if (targetBtnId === 'goto-renewal-replies') {
+                    const scope = document.querySelector('.view-section.active') || document;
+                    // 先清除之前留在合約頁的其他篩選，確保所有已回覆項目都看得到。
+                    scope.querySelector('.filter-tab[data-filter-value="all"]:not([data-filter-group])')?.click();
+                    scope.querySelector('[data-filter-value="replied"][data-filter-group="renew"]')?.click();
+                    scope.querySelector('.renewal-reply-list-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    return;
+                }
                 document.getElementById(targetBtnId)?.click();
             }, 400);
         });

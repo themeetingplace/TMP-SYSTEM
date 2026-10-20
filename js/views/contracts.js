@@ -344,6 +344,7 @@ export function renderContracts() {
         decline: activeIntentCount('decline'),
         inquiry: activeIntentCount('inquiry')
     };
+    const repliedRenewCount = renewCounts.renew + renewCounts.decline + renewCounts.inquiry;
     const anyRenewIntent = renewCounts.asking + renewCounts.renew + renewCounts.decline + renewCounts.inquiry;
 
     // 從 propertyName 抽館別 (e.g. "聚空間 - 松山館 R1-A" → "松山館")
@@ -417,7 +418,10 @@ export function renderContracts() {
                 ? `<span class="status-badge info contract-action" data-action="unbundle-self" data-id="${c.id}" style="font-size: var(--text-2xs); margin-left: 0.25rem; cursor: pointer;" title="此合約已併入 ${esc(c.bundleParentContractId)} 收款，點擊解除">🔗 子 → ${esc(c.bundleParentContractId)}</span>`
                 : '');
         const cbDisabled = isArchived || c.paymentChannel === 'platform';
-        const sharedDataAttrs = `data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${isArchived ? 'none' : (c.renewIntent || 'none')}" data-channel="${esc(c.paymentChannel || 'self')}" data-tenant="${escapeAttr(c.tenant || '')}" data-building="${esc(mockData.properties.find(p => p.name === c.propertyName)?.buildingId || '')}" data-search="${escapeAttr(searchText)}"`;
+        const renewFilterValues = isArchived
+            ? 'none'
+            : `${c.renewIntent || 'none'} ${hasIntent ? 'replied' : ''}`.trim();
+        const sharedDataAttrs = `data-row-id="${esc(c.id)}" data-status="${esc(lifecycle)}" data-area="${esc(areaName)}" data-renew="${renewFilterValues}" data-channel="${esc(c.paymentChannel || 'self')}" data-tenant="${escapeAttr(c.tenant || '')}" data-building="${esc(mockData.properties.find(p => p.name === c.propertyName)?.buildingId || '')}" data-search="${escapeAttr(searchText)}"`;
 
         // ===== Mobile card 共用資料 =====
         const mobileChips = [
@@ -506,8 +510,8 @@ export function renderContracts() {
                     <button class="btn btn-outline" id="btn-ask-renewal" title="掃描 14 天內到期的合約，可勾選要問誰">
                         <i class="ph ph-chat-circle-dots"></i> 詢問續租
                     </button>
-                    <button class="btn btn-outline" id="btn-confirm-renewals" title="已在 LINE 回覆續租但還沒建約的, 勾選確認後建約+發繳款通知">
-                        <i class="ph ph-check-circle"></i> 確認續約
+                    <button class="btn btn-outline" id="btn-confirm-renewals" title="批次調整已回覆續租的租金，確認後建立合約並發送繳款通知">
+                        <i class="ph ph-stack"></i> 批次修改並發送
                     </button>
                     <button class="btn btn-primary" id="btn-new-contract" data-fab="ph-file-plus">
                         <i class="ph ph-plus"></i> 建立合約
@@ -544,9 +548,10 @@ export function renderContracts() {
             ` : ''}
 
             ${anyRenewIntent > 0 ? `
-                <div class="filter-tabs mb-2">
+                <div class="filter-tabs mb-2 renewal-reply-list-anchor">
                     <span class="filter-tab-label">續租意願</span>
                     <button class="filter-tab active" data-filter-value="all" data-filter-group="renew">全部 (${enriched.length})</button>
+                    ${repliedRenewCount > 0 ? `<button class="filter-tab" data-filter-value="replied" data-filter-group="renew">📥 已回覆待處理 (${repliedRenewCount})</button>` : ''}
                     ${renewCounts.asking > 0 ? `<button class="filter-tab" data-filter-value="asking" data-filter-group="renew">⏳ 待回覆 (${renewCounts.asking})</button>` : ''}
                     ${renewCounts.renew > 0 ? `<button class="filter-tab" data-filter-value="renew" data-filter-group="renew">✅ 要續租 (${renewCounts.renew})</button>` : ''}
                     ${renewCounts.decline > 0 ? `<button class="filter-tab" data-filter-value="decline" data-filter-group="renew">❌ 不續租 (${renewCounts.decline})</button>` : ''}
@@ -1697,6 +1702,57 @@ export async function sendContractToLine(id) {
 
 // === 三種決策動作 ===
 
+async function sendRenewalPaymentNotice(contract) {
+    if (!contract) return false;
+    const tenantName = String(contract.tenant || '').trim();
+    const tenant = mockData.tenants.find(t => String(t.name || '').trim() === tenantName && t.lineUserId)
+        || mockData.tenants.find(t => String(t.name || '').trim() === tenantName);
+    if (!tenant?.lineUserId) {
+        showToast(`${contract.tenant} 未綁 LINE，無法發送繳款通知`, 'warning', 5000);
+        return false;
+    }
+
+    const rentInv = getContractInvoice(contract);
+    const { message } = buildPaymentNoticeMessage(contract, {
+        includeRenewalGreeting: true,
+        invoice: rentInv
+    });
+
+    showToast(`推送繳款通知給 ${contract.tenant}…`, 'info', 3000);
+    try {
+        await pushToTenant(tenant.id, { message, invoiceId: rentInv?.id });
+        showToast(`✅ 已推送繳款通知給 ${contract.tenant}`, 'success', 4000);
+        return true;
+    } catch (e) {
+        console.warn('[renewal-payment-notice]', e);
+        showToast(`推送繳款通知失敗：${e.message}`, 'warning', 6000);
+        return false;
+    }
+}
+
+function promptRenewalPaymentNotice(contract) {
+    if (!contract) return;
+    const rentInv = getContractInvoice(contract);
+    const { dueAmount } = buildPaymentNoticeMessage(contract, {
+        includeRenewalGreeting: true,
+        invoice: rentInv
+    });
+    openConfirm({
+        title: `續租合約 ${esc(contract.id)} 已儲存`,
+        message: `已完成 <strong>${esc(contract.tenant)}</strong> 的續租資料。<br><br>
+            <div style="padding:0.75rem; border-radius:var(--radius-md); background:var(--color-background); line-height:1.8;">
+                <div><strong>床位：</strong>${esc(contract.propertyName?.replace('聚空間 - ', '') || '—')}</div>
+                <div><strong>期間：</strong>${esc(contract.startDate || '—')} ~ ${esc(contract.endDate || '—')}</div>
+                <div><strong>應繳：</strong><span style="color:var(--color-success); font-weight:700;">$${dueAmount.toLocaleString()}</span></div>
+            </div><br>
+            現在直接將繳款通知發送到租客 LINE，不需要再回列表尋找這份合約。`,
+        confirmLabel: '立即發送繳款通知',
+        cancelLabel: '稍後再發送',
+        maxWidth: 520,
+        onConfirm: () => sendRenewalPaymentNotice(contract)
+    });
+}
+
 export function confirmRenew(id) {
     const c = mockData.contracts.find(x => x.id === id);
     if (!c) return;
@@ -1747,27 +1803,9 @@ export function confirmRenew(id) {
                 close();
                 refreshView();
                 if (!notify) return;
-                const t = mockData.tenants.find(x => x.name === newC.tenant && x.lineUserId)
-                       || mockData.tenants.find(x => x.name === newC.tenant);
-                if (!t?.lineUserId) {
-                    showToast(`${newC.tenant} 未綁 LINE, 無法自動推繳款通知`, 'warning', 5000);
-                    return;
-                }
-                // 一律用合約當下資料組訊息 (見 utils/paymentNoticeMessage.js)
-                const rentInv = getContractInvoice(newC);
-                const { message } = buildPaymentNoticeMessage(newC, {
-                    includeRenewalGreeting: true,
-                    invoice: rentInv
-                });
                 setTimeout(() => {
-                    showToast(`推繳款通知給 ${newC.tenant}…`, 'info', 3000);
-                    pushToTenant(t.id, { message, invoiceId: rentInv?.id })
-                        .then(() => showToast(`✅ 已推繳款通知給 ${newC.tenant}`, 'success', 4000))
-                        .catch(e => {
-                            console.warn('[auto-notify-after-renew]', e);
-                            showToast(`推繳款通知失敗：${e.message}`, 'warning', 6000);
-                        });
-                }, 800);
+                    sendRenewalPaymentNotice(newC);
+                }, 300);
             };
 
             overlay.querySelector('[data-action="renew-only"]')?.addEventListener('click', () => doRenew(false));
@@ -1782,7 +1820,11 @@ export function confirmRenew(id) {
                 showToast(`已建立新合約 ${result.newContract.id}，請編輯細節`, 'success');
                 close();
                 setTimeout(() => {
-                    showContractForm(result.newContract);
+                    showContractForm(result.newContract, {
+                        onSaved: (saved) => {
+                            if (saved) setTimeout(() => promptRenewalPaymentNotice(saved), 220);
+                        }
+                    });
                 }, 150);
             });
         }

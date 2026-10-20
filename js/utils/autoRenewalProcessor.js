@@ -52,6 +52,18 @@ export function findDeclinePendingCandidates() {
     });
 }
 
+// 找出「續租有問題」且尚待管理員逐筆聯絡確認的合約。
+export function findInquiryPendingCandidates() {
+    return mockData.contracts.filter(c => {
+        if (c.renewIntent !== 'inquiry') return false;
+        if (c.renewalState !== 'active') return false;
+        if (c.pendingTerminationDate) return false;
+        if (c.contractType && c.contractType !== 'cohousing') return false;
+        if (c.bundleParentContractId) return false;
+        return true;
+    });
+}
+
 // 對指定的合約執行: 建續租合約 + apply rentRules + 發繳款通知 LINE
 // renewals: 陣列, 元素可以是純 id 字串 (沿用舊合約金額) 或 { id, amount } (admin 在
 //   確認 modal 調過月租, 用調整後的金額建約)
