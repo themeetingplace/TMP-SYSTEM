@@ -38,12 +38,21 @@ const HELPER_VIEW_CHOICES = [
     { key: 'tenants',     label: '租客清單' }
 ];
 const ALL_HELPER_VIEW_KEYS = HELPER_VIEW_CHOICES.map(v => v.key);
+// 首頁內的敏感／非必要區塊獨立控管，不跟「可進入哪些頁面」綁在一起。
+// 空 allowed_views 仍代表舊版預設頁面全開，但首頁收租進度預設關閉。
+const HELPER_FEATURE_CHOICES = [
+    { key: 'dashboard_rent_collection', label: '顯示首頁收租進度', hint: '顯示誰要繳、繳多少，並可回報住客已繳' }
+];
 // 列表顯示某小幫手可看哪些頁面 (空 allowed_views = 全部)
 function helperViewsLabel(views) {
-    const arr = (Array.isArray(views) && views.length) ? views : ALL_HELPER_VIEW_KEYS;
-    const isAll = arr.length === ALL_HELPER_VIEW_KEYS.length;
-    const names = arr.map(k => (HELPER_VIEW_CHOICES.find(v => v.key === k)?.label) || k);
-    return `<div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.15rem;">頁面：${isAll ? '全部' : esc(names.join('、'))}</div>`;
+    const raw = (Array.isArray(views) && views.length) ? views : ALL_HELPER_VIEW_KEYS;
+    const pageKeys = raw.filter(key => ALL_HELPER_VIEW_KEYS.includes(key));
+    const isAll = ALL_HELPER_VIEW_KEYS.every(key => pageKeys.includes(key));
+    const names = pageKeys.map(k => HELPER_VIEW_CHOICES.find(v => v.key === k)?.label || k);
+    const featureNames = HELPER_FEATURE_CHOICES.filter(feature => raw.includes(feature.key)).map(feature => feature.label);
+    return `
+        <div style="font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.15rem;">頁面：${isAll ? '全部' : esc(names.join('、') || '僅首頁')}</div>
+        <div style="font-size: var(--text-2xs); color: ${featureNames.length ? 'var(--color-success)' : 'var(--text-muted)'}; margin-top: 0.15rem;">首頁收租：${featureNames.length ? '顯示' : '隱藏'}</div>`;
 }
 
 let cachedAdmins = [];
@@ -211,6 +220,7 @@ function openAdminForm(admin = null) {
     fields.push({ name: 'display_name', label: '顯示名稱', type: 'text', required: false, span: 2, placeholder: '例：王經理', value: admin?.display_name || '' });
     fields.push({ name: 'role', label: '角色', type: 'select', required: true, value: admin?.role || 'admin', options: roleOptions });
     fields.push({ name: 'allowedViews', type: 'placeholder', span: 2 });
+    fields.push({ name: 'allowedFeatures', type: 'placeholder', span: 2 });
     fields.push({ name: 'allowedBuildings', type: 'placeholder', span: 2 });
 
     let formEl = null;
@@ -229,6 +239,7 @@ function openAdminForm(admin = null) {
             formEl = form;
             const roleSelect = form.querySelector('[name="role"]');
             const phViews = form.querySelector('#ph-allowedViews');
+            const phFeatures = form.querySelector('#ph-allowedFeatures');
             if (phViews) {
                 phViews.innerHTML = `
                     <label style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem;">可看的頁面</label>
@@ -236,6 +247,18 @@ function openAdminForm(admin = null) {
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                         ${HELPER_VIEW_CHOICES.map(v => `<label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer;">
                             <input type="checkbox" class="helper-view-chk" value="${escapeAttr(v.key)}" ${preCheckedViews.has(v.key) ? 'checked' : ''}> ${esc(v.label)}
+                        </label>`).join('')}
+                    </div>
+                `;
+            }
+            if (phFeatures) {
+                phFeatures.innerHTML = `
+                    <label style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem;">首頁功能</label>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">多數小幫手不需處理收租，預設不顯示；有需要再單獨開啟。</div>
+                    <div style="display: grid; gap: 0.5rem;">
+                        ${HELPER_FEATURE_CHOICES.map(feature => `<label style="display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.65rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer;">
+                            <input type="checkbox" class="helper-feature-chk" value="${escapeAttr(feature.key)}" ${preCheckedViews.has(feature.key) ? 'checked' : ''} style="margin-top:0.15rem;">
+                            <span><strong style="display:block; font-size:0.9rem;">${esc(feature.label)}</strong><small style="color:var(--text-muted);">${esc(feature.hint)}</small></span>
                         </label>`).join('')}
                     </div>
                 `;
@@ -259,6 +282,7 @@ function openAdminForm(admin = null) {
                 const show = roleSelect?.value === 'helper';
                 if (ph) ph.style.display = show ? '' : 'none';
                 if (phViews) phViews.style.display = show ? '' : 'none';
+                if (phFeatures) phFeatures.style.display = show ? '' : 'none';
             };
             roleSelect?.addEventListener('change', syncVisible);
             syncVisible();
@@ -270,7 +294,10 @@ function openAdminForm(admin = null) {
                 ? Array.from(formEl?.querySelectorAll('.helper-bld-chk:checked') || []).map(c => c.value)
                 : [];
             const allowed_views = role === 'helper'
-                ? Array.from(formEl?.querySelectorAll('.helper-view-chk:checked') || []).map(c => c.value)
+                ? [
+                    ...Array.from(formEl?.querySelectorAll('.helper-view-chk:checked') || []).map(c => c.value),
+                    ...Array.from(formEl?.querySelectorAll('.helper-feature-chk:checked') || []).map(c => c.value)
+                  ]
                 : [];
 
             if (isEdit) {

@@ -29,6 +29,11 @@ function allowedBuildingIds() {
     return currentModeBuildingIdSet('cohousing');
 }
 
+function canViewRentCollection() {
+    return Array.isArray(window.__helperViews)
+        && window.__helperViews.includes('dashboard_rent_collection');
+}
+
 function monthLabel(monthKey) {
     const [year, month] = monthKey.split('-').map(Number);
     return `${year} 年 ${month} 月`;
@@ -251,7 +256,7 @@ export function renderHelperDashboard() {
                 <section class="helper-cash-card" data-helper-cash>${cashHtml()}</section>
                 <section class="helper-calendar-card" data-helper-calendar>${calendarHtml()}</section>
             </div>
-            <section class="helper-rent-card" data-helper-rent>${rentCollectionHtml()}</section>
+            ${canViewRentCollection() ? `<section class="helper-rent-card" data-helper-rent>${rentCollectionHtml()}</section>` : ''}
         </div>`;
 }
 
@@ -309,7 +314,7 @@ export async function initHelperDashboardActions(scope) {
         window.location.hash = 'expenses';
     }));
     bindCalendar(scope);
-    bindRentCollection(scope);
+    if (canViewRentCollection()) bindRentCollection(scope);
 
     const { data, error } = await supabase
         .from('expense_claims')
@@ -327,8 +332,8 @@ export async function initHelperDashboardActions(scope) {
     cashLoading = false;
     const cash = scope.querySelector('[data-helper-cash]');
     if (cash) cash.innerHTML = cashHtml();
-    await loadPaymentReports(scope);
-    if (!paymentReportChannel) {
+    if (canViewRentCollection()) await loadPaymentReports(scope);
+    if (canViewRentCollection() && !paymentReportChannel) {
         paymentReportChannel = supabase.channel('helper-rent-payment-reports')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'rent_payment_reports' }, () => {
                 const activeScope = document.querySelector('.view-section.active');

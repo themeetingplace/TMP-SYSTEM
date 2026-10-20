@@ -8,6 +8,12 @@ assert.match(
     /import\s*\{[^}]*escapeHtml\s+as\s+esc\s*,\s*escapeAttr[^}]*\}\s*from\s*['"]\.\.\/utils\/escape\.js['"]/,
     '小幫手首頁使用 escapeAttr 時必須明確匯入，避免渲染整頁中斷'
 );
+assert.ok(helperDashboardSource.includes("window.__helperViews.includes('dashboard_rent_collection')"), '首頁收租進度必須由獨立小幫手權限控制');
+assert.ok(helperDashboardSource.includes("canViewRentCollection() ? `<section class=\"helper-rent-card\""), '未開權限時不應渲染首頁收租進度');
+
+const adminUsersSource = readFileSync(new URL('../js/views/admin-users.js', import.meta.url), 'utf8');
+assert.ok(adminUsersSource.includes("key: 'dashboard_rent_collection'"), '帳號管理必須提供首頁收租進度權限');
+assert.ok(adminUsersSource.includes('class="helper-feature-chk"'), '首頁功能權限必須可由管理員勾選');
 
 const buildings = [
     { id: 'B1', name: '甲館', status: 'active' },
