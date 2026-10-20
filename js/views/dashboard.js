@@ -12,6 +12,11 @@ import { findRenewalConfirmCandidates, findDeclinePendingCandidates, findInquiry
 import { previewRenewalFor } from '../utils/paymentNoticeMessage.js';
 import { findRenewalSuccessor, hasContractRenewed } from '../utils/renewalSuccessor.js';
 import { isDashboardVerificationCandidate } from '../utils/dashboardVerification.js';
+import {
+    getDismissedNotificationIds,
+    listTenantRegistrationNotifications,
+    markNotificationRead
+} from '../utils/tenantRegistrationNotifications.js';
 import { confirmTerminate } from './contracts.js';
 
 // 提取館別名稱（例如：聚空間 - 松山館 R1-A → 松山館）
@@ -335,6 +340,48 @@ function buildMaintenanceTodos(maintenances) {
         }));
 }
 
+function buildTenantRegistrationAlert() {
+    const registrations = listTenantRegistrationNotifications(mockData.tenants, {
+        dismissedIds: getDismissedNotificationIds()
+    });
+    if (!registrations.length) return '';
+
+    const shown = registrations.slice(0, 5);
+    return `
+        <section class="card tenant-registration-alert" aria-labelledby="tenant-registration-alert-title">
+            <div class="tenant-registration-alert-head">
+                <div>
+                    <h2 class="card-title" id="tenant-registration-alert-title"><i class="ph-fill ph-bell-ringing"></i> 新的住客登記</h2>
+                    <p>住客已完成資料填寫、LINE 綁定與證件驗證，請查看並接續處理。</p>
+                </div>
+                <span class="status-badge warning">${registrations.length} 筆未讀</span>
+            </div>
+            <div class="tenant-registration-alert-list">
+                ${shown.map(({ id, tenant }) => {
+                    const boundAt = new Date(tenant.lineBoundAt);
+                    const timeLabel = Number.isNaN(boundAt.getTime())
+                        ? '剛完成'
+                        : boundAt.toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+                    return `
+                        <div class="tenant-registration-alert-item">
+                            <div class="tenant-registration-alert-avatar">${esc((tenant.name || '?').charAt(0))}</div>
+                            <div class="tenant-registration-alert-info">
+                                <strong>${esc(tenant.name || '未命名住客')}</strong>
+                                <span>${esc(tenant.phone || '未填電話')} · ${esc(timeLabel)} 完成 LINE 綁定</span>
+                            </div>
+                            <div class="tenant-registration-alert-actions">
+                                <button type="button" class="btn btn-outline tenant-registration-read" data-notification-id="${esc(id)}">已讀</button>
+                                <button type="button" class="btn btn-primary tenant-registration-view" data-notification-id="${esc(id)}" data-tenant-id="${esc(tenant.id)}">查看資料</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            ${registrations.length > 1 ? `<button type="button" class="tenant-registration-read-all">全部標示已讀</button>` : ''}
+        </section>
+    `;
+}
+
 export function renderDashboard() {
     // 依當前 mode (共居/代管) 篩出對應 buildings 的子集
     const mode = getMode();
@@ -360,6 +407,7 @@ export function renderDashboard() {
     
     const financeTodos = buildFinanceTodos(invoices);  // helper 版用
     const maintenanceTodos = buildMaintenanceTodos(maintenances);
+    const tenantRegistrationAlert = buildTenantRegistrationAlert();
     
     const selectedPropertyData = emptyBedsByProperty[firstProperty] || { total: 0, active: 0, snoozed: 0, vacant: 0, vacantByGender: { '男': 0, '女': 0, '不限': 0 } };
 
@@ -413,6 +461,7 @@ export function renderDashboard() {
     //   所以這裡 isHelper 一律當 false, 讓 helper 也渲染完整 admin 版儀表板。
     const isHelper = false;
     return `
+        ${tenantRegistrationAlert}
         ${checkBanner}
         <div class="metrics-grid${isHelper ? ' metrics-grid--3col' : ''}">
             <a href="${isHelper ? '#occupancy' : '#properties'}" class="card metric-card metric-link" title="點擊前往${isHelper ? '房況一覽' : '物件管理'}">
@@ -706,6 +755,31 @@ let emptyBedsChart = null;
 const VACANCY_PICK_KEY = 'pms-dashboard-vacancy-building';
 
 window.initDashboardInteractions = function() {
+    document.querySelectorAll('.tenant-registration-view').forEach(btn => {
+        btn.addEventListener('click', () => {
+            markNotificationRead(btn.dataset.notificationId);
+            window.refreshNotifications?.();
+            window.openEntity?.('tenant', btn.dataset.tenantId);
+        });
+    });
+
+    document.querySelectorAll('.tenant-registration-read').forEach(btn => {
+        btn.addEventListener('click', () => {
+            markNotificationRead(btn.dataset.notificationId);
+            window.refreshNotifications?.();
+            refreshView();
+        });
+    });
+
+    document.querySelector('.tenant-registration-read-all')?.addEventListener('click', () => {
+        listTenantRegistrationNotifications(mockData.tenants, {
+            dismissedIds: getDismissedNotificationIds()
+        }).forEach(item => markNotificationRead(item.id));
+        window.refreshNotifications?.();
+        refreshView();
+        showToast('新的住客登記通知已全部標示為已讀', 'success', 3000);
+    });
+
     // 切換頁面回來時銷毀舊 chart instance（canvas 已被 re-render 替換）
     if (emptyBedsChart) {
         try { emptyBedsChart.destroy(); } catch (e) {}

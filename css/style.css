@@ -10021,6 +10021,124 @@ textarea.form-input {
     color: var(--text-muted);
 }
 
+.notification-btn.has-unread .ph-bell {
+    color: var(--color-primary);
+}
+
+/* 管理首頁：新住客完成 LIFF 登記 */
+.tenant-registration-alert {
+    border: 1px solid color-mix(in srgb, var(--color-primary) 32%, var(--border-color));
+    background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)), var(--color-surface) 58%);
+}
+
+.tenant-registration-alert-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.9rem;
+}
+
+.tenant-registration-alert-head .card-title {
+    margin-bottom: 0.25rem;
+    color: var(--color-primary);
+}
+
+.tenant-registration-alert-head p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+}
+
+.tenant-registration-alert-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.tenant-registration-alert-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+}
+
+.tenant-registration-alert-avatar {
+    width: 2.4rem;
+    height: 2.4rem;
+    flex: 0 0 2.4rem;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-full);
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+.tenant-registration-alert-info {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.tenant-registration-alert-info span {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+
+.tenant-registration-alert-actions {
+    display: flex;
+    gap: 0.45rem;
+    flex-shrink: 0;
+}
+
+.tenant-registration-alert-actions .btn {
+    padding: 0.4rem 0.7rem;
+    font-size: var(--text-xs);
+}
+
+.tenant-registration-read-all {
+    display: block;
+    margin: 0.75rem 0 0 auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: var(--text-xs);
+    cursor: pointer;
+}
+
+.tenant-registration-read-all:hover {
+    color: var(--color-primary);
+    text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+    .tenant-registration-alert-head,
+    .tenant-registration-alert-item {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .tenant-registration-alert-avatar {
+        display: none;
+    }
+
+    .tenant-registration-alert-actions {
+        width: 100%;
+    }
+
+    .tenant-registration-alert-actions .btn {
+        flex: 1;
+    }
+}
+
 /* Global search results */
 .global-search-results {
     position: absolute;

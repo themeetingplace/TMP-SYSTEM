@@ -1,5 +1,13 @@
 // 頂部全域搜尋 + 通知中心
 import { mockData } from '../data.js';
+import { showToast } from './ui.js';
+import {
+    detectNewTenantRegistrations,
+    getDismissedNotificationIds,
+    listTenantRegistrationNotifications,
+    markNotificationRead,
+    saveDismissedNotificationIds
+} from './tenantRegistrationNotifications.js';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -142,13 +150,11 @@ function escapeRegex(s) {
 }
 
 // === 通知中心 ===
-const NOTIF_DISMISS_KEY = 'pms-notif-dismissed';
 function getDismissedIds() {
-    try { return new Set(JSON.parse(localStorage.getItem(NOTIF_DISMISS_KEY) || '[]')); }
-    catch { return new Set(); }
+    return getDismissedNotificationIds();
 }
 function saveDismissedIds(set) {
-    try { localStorage.setItem(NOTIF_DISMISS_KEY, JSON.stringify([...set])); } catch {}
+    saveDismissedNotificationIds(set);
 }
 
 export function initNotifications() {
@@ -156,6 +162,8 @@ export function initNotifications() {
     if (!btn) return;
 
     let panel = null;
+    let registrationSnapshotPrimed = false;
+    let knownRegistrationIds = new Set();
 
     function close() {
         panel?.remove();
@@ -165,6 +173,23 @@ export function initNotifications() {
     function buildNotifications() {
         const dismissed = getDismissedIds();
         const notifications = [];
+        // 新完成的住客登記（只給管理端；小幫手不處理身分資料）
+        if (window.__currentRole !== 'helper') {
+            listTenantRegistrationNotifications(mockData.tenants, { dismissedIds: dismissed }).forEach(item => {
+                const tenant = item.tenant;
+                notifications.push({
+                    id: item.id,
+                    icon: 'ph-user-plus',
+                    color: 'var(--color-primary)',
+                    title: `新住客登記：${tenant.name || '未命名住客'}`,
+                    meta: `${tenant.phone || '未填電話'} · 已完成 LINE 綁定`,
+                    link: 'tenants',
+                    entityType: 'tenant',
+                    entityId: tenant.id,
+                    markReadOnOpen: true
+                });
+            });
+        }
         // 逾期帳單
         mockData.invoices.filter(inv =>
             inv.status === '欠繳' && new Date(inv.dueDate) < new Date(TODAY)
@@ -234,7 +259,7 @@ export function initNotifications() {
                     <button type="button" data-action="clear-all" style="background: transparent; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.25rem 0.6rem; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer;">全部清除</button>
                 </div>
                 ${items.map(n => `
-                    <div class="notification-item" data-link="${n.link}" data-notif-id="${escapeHtml(n.id)}" style="position: relative;">
+                    <div class="notification-item" data-link="${n.link}" data-notif-id="${escapeHtml(n.id)}" data-entity-type="${escapeHtml(n.entityType || '')}" data-entity-id="${escapeHtml(n.entityId || '')}" data-mark-read="${n.markReadOnOpen ? 'true' : 'false'}" style="position: relative;">
                         <div style="display: flex; gap: 0.75rem; padding-right: 1.5rem;">
                             <i class="ph-fill ${n.icon}" style="color: ${n.color}; font-size: 1.25rem; flex-shrink: 0;"></i>
                             <div style="flex: 1; min-width: 0;">
@@ -261,9 +286,7 @@ export function initNotifications() {
             dbtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const id = dbtn.dataset.dismissId;
-                const dismissed = getDismissedIds();
-                dismissed.add(id);
-                saveDismissedIds(dismissed);
+                markNotificationRead(id);
                 open();  // 重新 render
             });
         });
@@ -280,7 +303,14 @@ export function initNotifications() {
             item.addEventListener('click', (e) => {
                 if (e.target.closest('[data-action="dismiss"]')) return;
                 const link = item.dataset.link;
-                if (link) window.location.hash = link;
+                if (item.dataset.markRead === 'true') {
+                    markNotificationRead(item.dataset.notifId);
+                    refreshBadge();
+                }
+                const entityType = item.dataset.entityType;
+                const entityId = item.dataset.entityId;
+                if (entityType && entityId && window.openEntity) window.openEntity(entityType, entityId);
+                else if (link) window.location.hash = link;
                 close();
             });
         });
@@ -298,11 +328,45 @@ export function initNotifications() {
         }
     });
 
-    // 初始更新 badge
-    const badge = btn.querySelector('.badge');
-    if (badge) {
+    function refreshBadge() {
+        const badge = btn.querySelector('.badge');
+        if (!badge) return;
         const count = buildNotifications().length;
         badge.textContent = count;
-        if (count === 0) badge.style.display = 'none';
+        badge.style.display = count > 0 ? '' : 'none';
+        btn.classList.toggle('has-unread', count > 0);
     }
+
+    function syncRegistrationSnapshot({ notify = false } = {}) {
+        const { items, currentIds } = detectNewTenantRegistrations(knownRegistrationIds, mockData.tenants);
+        if (registrationSnapshotPrimed && notify && window.__currentRole !== 'helper') {
+            items.forEach(item => {
+                const tenant = item.tenant;
+                const toast = showToast(`🔔 新住客登記：${tenant.name || '未命名住客'} 已完成 LINE 綁定`, 'info', 8000);
+                toast.style.cursor = 'pointer';
+                toast.title = '點擊查看住客資料';
+                toast.addEventListener('click', () => {
+                    markNotificationRead(item.id);
+                    refreshBadge();
+                    window.openEntity?.('tenant', tenant.id);
+                });
+            });
+        }
+        knownRegistrationIds = currentIds;
+        registrationSnapshotPrimed = true;
+    }
+
+    window.refreshNotifications = refreshBadge;
+    window.markNotificationRead = markNotificationRead;
+    window.addEventListener('bms:data-changed', (event) => {
+        const isInitialPull = !registrationSnapshotPrimed && event.detail?.source === 'pull';
+        syncRegistrationSnapshot({ notify: !isInitialPull });
+        refreshBadge();
+    });
+
+    // init 時 mockData 可能還沒完成雲端 pull；第一次 data-changed 只建立基準，不彈舊資料。
+    if (Array.isArray(mockData.tenants) && mockData.tenants.some(t => t?.lineBoundAt)) {
+        syncRegistrationSnapshot();
+    }
+    refreshBadge();
 }
