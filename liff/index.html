@@ -10,6 +10,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
+<script src="./id-document-ai.js?v=20261020a"></script>
 <style>
     :root {
         --brand: #ff8859;
@@ -217,6 +219,24 @@
         color: var(--success);
         font-weight: 600;
     }
+    .id-ai-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.25rem;
+        min-height: 1.15rem;
+        margin-top: 0.3rem;
+        padding: 0.22rem 0.35rem;
+        border-radius: 999px;
+        font-size: 0.62rem;
+        font-weight: 600;
+        line-height: 1.3;
+    }
+    .id-ai-status.is-checking { color: #8a5c0a; background: #fff4d8; }
+    .id-ai-status.is-likely { color: var(--success); background: rgba(34, 148, 110, 0.1); }
+    .id-ai-status.is-uncertain { color: #8a5c0a; background: #fff4d8; }
+    .id-ai-status.is-unlikely { color: var(--danger); background: rgba(177, 53, 53, 0.1); }
+    .id-ai-status.is-unavailable { color: var(--text-muted); background: rgba(107, 114, 128, 0.1); }
     .id-upload-banner {
         background: rgba(34, 148, 110, 0.08);
         border-left: 3px solid var(--success);
@@ -319,6 +339,11 @@ const STRINGS = {
         cardLabelFrontShort: '正面',
         cardLabelBackShort: '反面',
         cardStatusDone: '✓ 已加浮水印 ({sizeKB} KB)',
+        aiChecking: 'AI 判讀中…',
+        aiLikely: '✓ AI：看起來是身分證件',
+        aiUncertain: '⚠ AI：無法確認，請人工確認',
+        aiUnlikely: '⚠ AI：看起來不像身分證件',
+        aiUnavailable: 'AI 暫時無法判讀，請人工確認',
         btnSubmit: '送出登記',
         btnSubmitting: '送出中…',
         btnProcessing: '處理證件照片…',
@@ -364,6 +389,11 @@ const STRINGS = {
         cardLabelFrontShort: 'Front',
         cardLabelBackShort: 'Back',
         cardStatusDone: '✓ Watermarked ({sizeKB} KB)',
+        aiChecking: 'AI is checking…',
+        aiLikely: '✓ AI: This looks like an identity document',
+        aiUncertain: '⚠ AI: Unable to confirm; please check manually',
+        aiUnlikely: '⚠ AI: This may not be an identity document',
+        aiUnavailable: 'AI check unavailable; please check manually',
         btnSubmit: 'Submit',
         btnSubmitting: 'Submitting…',
         btnProcessing: 'Processing ID photo…',
@@ -631,10 +661,22 @@ function restoreFormValues(values) {
 async function handleIdCardChange(input, file) {
     if (!file) return;
     const side = input.dataset.side;
+    const requestId = ++idCardAnalysisRequest[side];
+    idCardAnalysis[side] = { verdict: 'checking' };
     try {
         const watermarked = await addWatermark(file);
         idCardImages[side] = watermarked;
         applyIdPreview(side, watermarked);
+        analyzeIdDocument(file, side).then(result => {
+            if (requestId !== idCardAnalysisRequest[side]) return;
+            idCardAnalysis[side] = result;
+            renderIdAnalysisStatus(side);
+        }).catch(err => {
+            console.warn('[id-document-ai] unavailable:', err);
+            if (requestId !== idCardAnalysisRequest[side]) return;
+            idCardAnalysis[side] = { verdict: 'unavailable' };
+            renderIdAnalysisStatus(side);
+        });
     } catch (err) {
         console.error('[watermark] failed:', err);
         showSubmitMessage(t('errWatermarkFailed', { msg: err.message }), 'error');
@@ -652,6 +694,7 @@ function applyIdPreview(side, blob) {
         <img src="${previewUrl}" class="id-upload-preview" alt="${side}">
         <div class="id-upload-label">${shortLabel}</div>
         <div class="id-upload-status">${t('cardStatusDone', { sizeKB: Math.round(blob.size / 1024) })}</div>
+        ${idAnalysisStatusHtml(side)}
     `;
     card.classList.add('has-file');
     const newInput = card.querySelector('input[type="file"]');
@@ -660,6 +703,71 @@ function applyIdPreview(side, blob) {
 
 // 已上傳浮水印照片 (in-memory，submit 時轉 base64 傳給 Edge Function)
 const idCardImages = { front: null, back: null };
+const idCardAnalysis = { front: null, back: null };
+const idCardAnalysisRequest = { front: 0, back: 0 };
+let idOcrWorkerPromise = null;
+let idOcrQueue = Promise.resolve();
+
+function idAnalysisStatusHtml(side) {
+    const verdict = idCardAnalysis[side]?.verdict || 'checking';
+    const labels = {
+        checking: 'aiChecking',
+        likely: 'aiLikely',
+        uncertain: 'aiUncertain',
+        unlikely: 'aiUnlikely',
+        unavailable: 'aiUnavailable'
+    };
+    return `<div class="id-ai-status is-${verdict}" data-id-ai-status="${side}">${t(labels[verdict] || 'aiUnavailable')}</div>`;
+}
+
+function renderIdAnalysisStatus(side) {
+    const target = document.querySelector(`[data-id-ai-status="${side}"]`);
+    if (target) target.outerHTML = idAnalysisStatusHtml(side);
+}
+
+async function getIdOcrWorker() {
+    if (!window.Tesseract?.createWorker) throw new Error('OCR engine unavailable');
+    if (!idOcrWorkerPromise) {
+        idOcrWorkerPromise = window.Tesseract.createWorker('eng+chi_tra', 1, {
+            workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/worker.min.js',
+            corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0',
+            langPath: 'https://tessdata.projectnaptha.com/4.0.0'
+        }).catch(err => {
+            idOcrWorkerPromise = null;
+            throw err;
+        });
+    }
+    return idOcrWorkerPromise;
+}
+
+async function prepareOcrCanvas(file) {
+    const img = await fileToImage(file);
+    const maxDim = 1200;
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas;
+}
+
+async function analyzeIdDocument(file, side) {
+    const task = async () => {
+        const [worker, canvas] = await Promise.all([getIdOcrWorker(), prepareOcrCanvas(file)]);
+        const result = await worker.recognize(canvas);
+        return window.IdDocumentAI.classifyIdDocumentText(result?.data?.text || '', { side });
+    };
+    const queued = idOcrQueue.then(task, task);
+    idOcrQueue = queued.catch(() => undefined);
+    return queued;
+}
+
+window.addEventListener('pagehide', () => {
+    if (!idOcrWorkerPromise) return;
+    idOcrWorkerPromise.then(worker => worker.terminate()).catch(() => undefined);
+    idOcrWorkerPromise = null;
+});
 
 function showSubmitMessage(text, type) {
     const msg = document.getElementById('msg-area');

@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.7';
+export const APP_VERSION = '1.10.8';
 export const APP_BUILD_DATE = '2026-10-20';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.8', date: '2026-10-20', notes: '住客 LINE 綁定的證件上傳加入裝置端 AI 輔助判讀：辨識身分證、護照與居留證特徵，顯示像證件／無法確認／不像證件；原圖不會額外傳送給外部 AI，且不以 AI 結果自動拒絕登記。' },
     { version: '1.10.7', date: '2026-10-20', notes: '精簡小幫手帳號權限設定畫面，移除首頁收租功能上方的預設說明提示。' },
     { version: '1.10.6', date: '2026-10-20', notes: '小幫手首頁的「收租進度」改為獨立帳號權限且預設隱藏；Owner 可在帳號管理編輯小幫手時，依個別需求開啟「顯示首頁收租進度」。' },
     { version: '1.10.5', date: '2026-10-20', notes: '修正小幫手登入後首頁無法顯示：補齊快速記帳與住客行程元件所需的安全屬性轉義工具，避免專屬工作台渲染中斷。' },
