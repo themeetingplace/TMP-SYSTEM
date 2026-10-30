@@ -380,12 +380,21 @@ export const fromDb = {
         enabled: r.enabled !== false,
         note: r.note ?? ''
     }),
-    contractTemplate: r => ({
-        buildingId: r.building_id,
-        fileName: r.file_name,
-        pdfBase64: r.pdf_base64,
-        uploadedAt: r.uploaded_at
-    }),
+    contractTemplate: r => {
+        const template = {
+            buildingId: r.building_id,
+            fileName: r.file_name,
+            uploadedAt: r.uploaded_at,
+            updatedAt: r.updated_at
+        };
+        // 一般同步刻意不查 1–4 MB 的 pdf_base64。只有按下產生／檢查合約時，
+        // contractTemplateLoader 才會按館別載入；若查詢真的有帶此欄位才更新記憶體。
+        if (Object.prototype.hasOwnProperty.call(r, 'pdf_base64')) {
+            template.pdfBase64 = r.pdf_base64;
+            template.pdfLoaded = Boolean(r.pdf_base64);
+        }
+        return template;
+    },
     // === 代管模式 (sql/20-managed-mode-schema-2026-06-17.sql) ===
     owner: r => ({
         id: r.id,

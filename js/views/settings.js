@@ -7,6 +7,7 @@ import { getMode } from '../utils/appMode.js';
 import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { emptyState } from '../utils/emptyState.js';
 import { escapeHtml } from '../utils/escape.js';
+import { ensureContractTemplatePdf } from '../utils/contractTemplateLoader.js';
 
 const GENDER_OPTIONS = ['男', '女', '不限'];
 const STATUS_OPTIONS = [
@@ -866,9 +867,9 @@ function renderContractTemplatesTab() {
     const rows = buildings.map(b => {
         const tpl = templates.find(t => t.buildingId === b.id);
         const uploaded = tpl ? new Date(tpl.uploadedAt).toLocaleString('zh-TW', { hour12: false }) : null;
-        // 防呆: pdfBase64 可能是 null (雲端同步沒回傳) — 顯示 0 KB + 損壞 badge
-        const isBroken = tpl && (!tpl.pdfBase64 || tpl.pdfBase64.length < 200);
-        const sizeKB = tpl?.pdfBase64 ? Math.round(tpl.pdfBase64.length * 0.75 / 1024) : 0;
+        // PDF 本體改成需要時才載入；設定清單只同步輕量 metadata。
+        const loadedSizeKB = tpl?.pdfBase64 ? Math.round(tpl.pdfBase64.length * 0.75 / 1024) : null;
+        const sizeLabel = loadedSizeKB == null ? '需要時載入' : `${loadedSizeKB} KB`;
 
         return `
             <tr>
@@ -879,8 +880,8 @@ function renderContractTemplatesTab() {
                 <td>
                     ${tpl
                         ? `<div style="display: flex; flex-direction: column;">
-                                <span style="font-weight: 500; font-size: var(--text-base);"><i class="ph ph-file-pdf" style="color: ${isBroken ? 'var(--color-danger)' : 'var(--color-success)'};"></i> ${tpl.fileName}${isBroken ? ' <span style="background: rgba(177,53,53,0.12); color: var(--color-danger); padding: 0.1rem 0.45rem; border-radius: 99px; font-size: var(--text-2xs); font-weight: 600; margin-left: 0.3rem;">⚠ 內容遺失</span>' : ''}</span>
-                                <span style="font-size: var(--text-xs); color: ${isBroken ? 'var(--color-danger)' : 'var(--text-muted)'};">${sizeKB} KB · ${uploaded}${isBroken ? ' · 請先刪除後重新上傳' : ''}</span>
+                                <span style="font-weight: 500; font-size: var(--text-base);"><i class="ph ph-file-pdf" style="color: var(--color-success);"></i> ${tpl.fileName}</span>
+                                <span style="font-size: var(--text-xs); color: var(--text-muted);">${sizeLabel} · ${uploaded}</span>
                            </div>`
                         : '<span style="color: var(--text-muted); font-size: var(--text-base);">尚未上傳樣板</span>'
                     }
@@ -968,15 +969,13 @@ function renderContractTemplatesTab() {
 
 // 樣板測試套版（用範例值）
 async function testFillTemplate(buildingId) {
-    const tpl = store.getContractTemplate(buildingId);
+    const templateMeta = store.getContractTemplate(buildingId);
     const building = mockData.buildings.find(b => b.id === buildingId);
-    if (!tpl || !building) return;
-    if (!tpl.pdfBase64) {
-        showToast('樣板資料不完整 (PDF 內容缺失)，請重新上傳', 'danger', 5000);
-        return;
-    }
+    if (!templateMeta || !building) return;
 
     try {
+        if (!templateMeta.pdfBase64) showToast('載入此館合約樣板中…', 'info');
+        const tpl = await ensureContractTemplatePdf(buildingId);
         const result = await fillContractPdf(tpl.pdfBase64, {
             bed_no: 'R1-A',
             tenant_name: '王大明',
@@ -996,13 +995,11 @@ async function testFillTemplate(buildingId) {
 }
 
 async function inspectTemplate(buildingId) {
-    const tpl = store.getContractTemplate(buildingId);
-    if (!tpl) return;
-    if (!tpl.pdfBase64) {
-        showToast('樣板資料不完整 (PDF 內容缺失)，請重新上傳', 'danger', 5000);
-        return;
-    }
+    const templateMeta = store.getContractTemplate(buildingId);
+    if (!templateMeta) return;
     try {
+        if (!templateMeta.pdfBase64) showToast('載入此館合約樣板中…', 'info');
+        const tpl = await ensureContractTemplatePdf(buildingId);
         const fields = await listPdfFields(tpl.pdfBase64);
         if (fields.length === 0) {
             openConfirm({

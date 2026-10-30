@@ -23,6 +23,7 @@ import { buildTermOptions as buildTermOptionsUtil, initTermSelector } from '../u
 import { findRenewalSuccessor, hasContractRenewed } from '../utils/renewalSuccessor.js';
 import { contractReceivableSummary, latestContractRentInvoice } from '../utils/invoicePaymentSummary.js';
 import { buildContractLineMessage } from '../utils/contractLineMessage.js';
+import { ensureContractTemplatePdf } from '../utils/contractTemplateLoader.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
@@ -1615,18 +1616,16 @@ async function downloadContractPdf(id) {
     if (!c) return;
 
     const buildingId = getContractBuildingId(c);
-    const tpl = store.getContractTemplate(buildingId);
-    if (!tpl) {
+    const templateMeta = store.getContractTemplate(buildingId);
+    if (!templateMeta) {
         const building = mockData.buildings.find(b => b.id === buildingId);
         showToast(`「${building?.name || '此館'}」尚未上傳合約樣板，請至 系統設定 → 合約範本 上傳`, 'warning', 5000);
         return;
     }
-    if (!tpl.pdfBase64) {
-        showToast(`合約樣板資料不完整 (PDF 內容缺失)，請至 系統設定 → 合約範本 重新上傳`, 'danger', 5000);
-        return;
-    }
 
     try {
+        if (!templateMeta.pdfBase64) showToast('載入此館合約樣板中…', 'info');
+        const tpl = await ensureContractTemplatePdf(buildingId);
         const values = buildPdfFieldValues(c);
         const { bytes, filledFields, missingFields } = await fillContractPdf(tpl.pdfBase64, values);
 
@@ -1664,18 +1663,16 @@ export async function sendContractToLine(id) {
     }
 
     const buildingId = getContractBuildingId(c);
-    const tpl = store.getContractTemplate(buildingId);
-    if (!tpl) {
+    const templateMeta = store.getContractTemplate(buildingId);
+    if (!templateMeta) {
         showToast(`此館尚未上傳合約樣板`, 'warning');
         return;
     }
-    if (!tpl.pdfBase64) {
-        showToast(`合約樣板資料不完整 (PDF 內容缺失)，請重新上傳`, 'danger', 5000);
-        return;
-    }
 
-    showToast('產生 PDF 中…', 'info');
     try {
+        if (!templateMeta.pdfBase64) showToast('載入此館合約樣板中…', 'info');
+        const tpl = await ensureContractTemplatePdf(buildingId);
+        showToast('產生 PDF 中…', 'info');
         const values = buildPdfFieldValues(c);
         const { bytes, missingFields } = await fillContractPdf(tpl.pdfBase64, values);
         warnMissingMoneyFields(missingFields);

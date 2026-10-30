@@ -25,6 +25,16 @@ assert.equal(
     'likely',
     '台灣身分證背面欄位應判為像證件'
 );
+assert.equal(
+    classifyIdDocumentText('地址 臺北市信義區松仁路 役別 免役', { side: 'back' }).verdict,
+    'likely',
+    '證件反面應依地址與役別等背面欄位判讀，不得要求大頭照'
+);
+assert.equal(
+    classifyIdDocumentText('統一發票 品名 咖啡 小計 100 TOTAL 100 THANK YOU', { side: 'back' }).verdict,
+    'unlikely',
+    '發票不得因文字量足夠而被誤判為證件反面'
+);
 assert.notEqual(
     classifyIdDocumentText('便利商店 發票 TOTAL 500 THANK YOU').verdict,
     'likely',
@@ -82,6 +92,11 @@ assert.equal(
     false,
     '有上傳背面時，背面也必須通過驗證'
 );
+assert.equal(
+    validateIdDocumentGate({ hasFront: true, hasBack: true, frontVerdict: 'likely', backVerdict: 'uncertain' }).ok,
+    false,
+    '反面不要求大頭照，但無法辨識出反面欄位時仍不可直接繞過驗證'
+);
 
 const liffSource = readFileSync(new URL('../liff/index.html', import.meta.url), 'utf8');
 assert.ok(liffSource.includes('tesseract.js@6.0.1'), 'LIFF 必須載入固定版本的裝置端 OCR');
@@ -91,5 +106,6 @@ assert.ok(liffSource.includes('validateIdDocumentGate'), '送出前必須強制�
 assert.ok(liffSource.includes('errIdAiRejected'), 'AI 判定不是證件時必須顯示阻擋訊息');
 assert.ok(liffSource.includes('manualIdFallback'), 'AI 失敗畫面必須提供已將證件交給小編的人工補件聲明');
 assert.ok(liffSource.includes('待管理員補件'), '人工補件路徑必須清楚標示後台待處理狀態');
+assert.ok(liffSource.includes('不檢查大頭照'), '反面判讀提示必須明確說明不檢查大頭照');
 
 console.log('ID document AI classifier regression checks passed');

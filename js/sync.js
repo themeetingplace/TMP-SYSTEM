@@ -31,6 +31,9 @@ import { TABLES, SMALL_TABLES, LARGE_TABLES } from './db-mapping.js';
 
 const LAST_SYNC_KEY = 'pms-last-sync';
 const LEGACY_LAST_SYNC_KEY = 'bms-last-sync';
+const CONTRACT_TEMPLATE_METADATA_COLUMNS = 'building_id,file_name,uploaded_at,created_at,updated_at';
+const FOREGROUND_RECONCILE_MIN_MS = 5 * 60 * 1000;
+const FULL_RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 // 一次性 migrate：新 key 沒值就讀舊 key (bms-last-sync) 並刪舊
 (function migrateLastSyncKey() {
@@ -117,11 +120,11 @@ function emit() { listeners.forEach(fn => { try { fn({ ...state }); } catch {} }
 function setStatus(s, error = null) {
     state.status = s;
     state.error = error;
-    if (s === 'idle') {
-        state.lastSync = new Date().toISOString();
-        localStorage.setItem(LAST_SYNC_KEY, state.lastSync);
-    }
     emit();
+}
+function markPullComplete(cursor) {
+    state.lastSync = cursor;
+    localStorage.setItem(LAST_SYNC_KEY, cursor);
 }
 export function onSyncChange(fn) {
     listeners.add(fn);
@@ -139,25 +142,33 @@ export function syncStatus() { return { ...state }; }
 // 為什麼不做「全部成功才 commit」(rollback)：那會造成單表失敗時，整個本機停留在 data.js
 // 的 demo 預設 (含「王大明」等假資料)，UI 直接看到 mock 跑出來 — 比讓部分表更新還糟。
 let pullInFlight = null;
-export async function pullAll() {
+let lastFullPullAt = 0;
+export async function pullAll({ mode = 'full', reason = 'manual' } = {}) {
     if (pullInFlight) return pullInFlight;
     pullInFlight = (async () => {
         if (!navigator.onLine) { setStatus('offline'); throw new Error('離線'); }
         setStatus('pulling');
         const lastPullAt = state.lastSync || '1970-01-01T00:00:00Z';
-        console.group(`[sync] pull (lastSync = ${lastPullAt})`);
+        const pullCursor = new Date().toISOString();
+        const incremental = mode === 'incremental' && Boolean(state.lastSync);
+        console.group(`[sync] ${incremental ? 'incremental' : 'full'} pull (${reason}, cursor = ${lastPullAt})`);
         const tableErrors = [];
         try {
             for (const t of TABLES) {
                 try {
-                    const { data, error } = await supabase.from(t.key).select('*');
+                    const columns = t.src === 'contractTemplates'
+                        ? CONTRACT_TEMPLATE_METADATA_COLUMNS
+                        : '*';
+                    let query = supabase.from(t.key).select(columns);
+                    if (incremental) query = query.gt('updated_at', lastPullAt);
+                    const { data, error } = await query;
                     if (error) throw new Error(error.message);
 
                     const pkJs = t.pk === 'building_id' ? 'buildingId' : 'id';
                     if (!Array.isArray(mockData[t.src])) mockData[t.src] = [];
                     const localById = new Map();
                     mockData[t.src].forEach(r => localById.set(r[pkJs], r));
-                    const remoteIds = new Set((data || []).map(r => r[t.pk]));
+                    const remoteIds = incremental ? null : new Set((data || []).map(r => r[t.pk]));
 
                     const dirtySet = dirtyRows[t.src];
                     let added = 0, replaced = 0, preserved = 0;
@@ -180,12 +191,15 @@ export async function pullAll() {
                             replaced++;
                         }
                     });
-                    // 雲端優先：本機有但雲端沒有 → 刪掉本機 (清掉 mockData demo 殘留)
-                    const beforeLen = mockData[t.src].length;
-                    mockData[t.src] = mockData[t.src].filter(r =>
-                        remoteIds.has(r[pkJs]) || dirtySet?.has(r[pkJs])
-                    );
-                    const removed = beforeLen - mockData[t.src].length;
+                    // 只有完整同步能用 remoteIds 判斷刪除；增量同步的缺席不代表遠端已刪。
+                    let removed = 0;
+                    if (!incremental) {
+                        const beforeLen = mockData[t.src].length;
+                        mockData[t.src] = mockData[t.src].filter(r =>
+                            remoteIds.has(r[pkJs]) || dirtySet?.has(r[pkJs])
+                        );
+                        removed = beforeLen - mockData[t.src].length;
+                    }
                     console.log(`  ⬇ ${t.key}: +${added} / ↺${replaced} / 🛡${preserved} / 🗑${removed}`);
                 } catch (tableErr) {
                     // 單表失敗：log 但不打斷其他表
@@ -197,6 +211,8 @@ export async function pullAll() {
             window.dispatchEvent(new CustomEvent('bms:data-changed', { detail: { source: 'pull' } }));
             if (tableErrors.length === 0) {
                 firstPullDone = true;  // ✅ bootstrap pull 過關，允許 push (防資料復活第一道閘)
+                markPullComplete(pullCursor);
+                if (!incremental) lastFullPullAt = Date.now();
                 setStatus('idle');
                 console.log('✅ pull 完成 (firstPullDone=true，push 解鎖)');
             } else {
@@ -343,7 +359,12 @@ async function pushLarge() {
                 continue;
             }
             if (rows.length === 0) continue;
-            const { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
+            const returnColumns = t.src === 'contractTemplates'
+                ? CONTRACT_TEMPLATE_METADATA_COLUMNS
+                : '*';
+            const { data: returned, error } = await supabase.from(t.key)
+                .upsert(rows, { onConflict: t.pk })
+                .select(returnColumns);
             if (error) {
                 console.error(`[sync] ${t.key} push 失敗:`, error);
                 console.error(`  失敗的 rows (${rows.length} 筆):`, rows);
@@ -468,6 +489,7 @@ function isOwnRowEcho(table, id, incomingUpdatedAt) {
 
 // === Realtime — 訂閱所有表 ===
 let realtimeChannel = null;
+let realtimeEverSubscribed = false;
 
 // P1-11: 斷線重試
 // audit: 加上限 10 次 (auth 過期 / 雲端異常時不無限重連耗電池)
@@ -497,19 +519,31 @@ function scheduleReconnect() {
 
 function startRealtime() {
     if (realtimeChannel) return;
-    realtimeChannel = supabase
-        .channel('bms-all-tables')
-        .on('postgres_changes', { event: '*', schema: 'public' }, handleRealtimeChange)
-        .subscribe(status => {
+    // 合約 PDF 樣板列含大型 base64，不訂閱其完整 row；其 metadata 於完整／增量同步取得，
+    // 真正 PDF 由使用者操作時按館別 lazy-load，避免一次更新向每個開啟分頁廣播數 MB。
+    let channel = supabase.channel('bms-small-tables');
+    SMALL_TABLES.forEach(t => {
+        channel = channel.on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: t.key },
+            handleRealtimeChange
+        );
+    });
+    realtimeChannel = channel.subscribe(status => {
             const wasConnected = state.realtimeConnected;
             state.realtimeConnected = (status === 'SUBSCRIBED');
             console.log(`[sync] Realtime: ${status}`);
             emit();
             if (status === 'SUBSCRIBED') {
+                const isReconnect = realtimeEverSubscribed && !wasConnected;
+                realtimeEverSubscribed = true;
                 reconnectAttempt = 0;  // 連上了重置重試次數
                 clearTimeout(reconnectTimer);
                 // 重連回來後拉一次最新資料 (期間可能有別人改了)
-                if (!wasConnected && state.lastSync) pullAll().catch(e => console.warn('[reconnect] pull 失敗:', e));
+                if (isReconnect && state.lastSync) {
+                    pullAll({ mode: 'incremental', reason: 'realtime-reconnect' })
+                        .catch(e => console.warn('[reconnect] pull 失敗:', e));
+                }
             } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
                 scheduleReconnect();
             }
@@ -621,7 +655,7 @@ function stopRealtime() {
 // === Bootstrap：開機呼叫，必拉完才回 ===
 export async function bootstrap() {
     try {
-        await pullAll();
+        await pullAll({ mode: 'full', reason: 'bootstrap' });
         // pullAll 會保留 dirty journal 中的本機 row；確認雲端可讀後立刻補送。
         if (hasDirtyRows()) await pushAll();
         startRealtime();
@@ -670,14 +704,24 @@ async function reconcileDevices(reason) {
     if (!firstPullDone && reason !== 'online') return;
     if (reconcileInFlight) return reconcileInFlight;
     const now = Date.now();
-    if (reason !== 'online' && now - lastReconcileAt < 2000) return;
+    const foreground = reason === 'focus' || reason === 'visible';
+    if (foreground && now - lastReconcileAt < FOREGROUND_RECONCILE_MIN_MS) return;
     lastReconcileAt = now;
     reconcileInFlight = (async () => {
         console.log(`[sync] 跨裝置重新核對 (${reason})`);
         // App 若在離線狀態啟動，恢復網路後要先完成首次 pull，才能安全補推本機資料。
-        if (!firstPullDone) await pullAll();
+        if (!firstPullDone) {
+            await pullAll({ mode: 'full', reason });
+            return;
+        }
         if (hasDirtyRows()) await pushAll();
-        await pullAll();
+        // Realtime 正常連線代表前景期間的變更已逐筆收到；不要每次點回瀏覽器就下載全部資料。
+        if (foreground && state.realtimeConnected) {
+            console.log(`[sync] 略過前景 pull：Realtime 已連線 (${reason})`);
+            return;
+        }
+        const needsFullReconcile = Date.now() - lastFullPullAt >= FULL_RECONCILE_INTERVAL_MS;
+        await pullAll({ mode: needsFullReconcile ? 'full' : 'incremental', reason });
         startRealtime();
     })().catch(e => {
         console.warn(`[sync] 跨裝置重新核對失敗 (${reason}):`, e);

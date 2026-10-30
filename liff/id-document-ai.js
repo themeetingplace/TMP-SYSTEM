@@ -51,15 +51,43 @@
         score += Math.min(4, fieldCount);
         if (fieldCount >= 2) signals.push('identity_fields');
 
+        const readableChars = compact.replace(/</g, '').length;
+        const receiptSignals = countMatches(text, [
+            /統一發票/, /電子發票/, /收據/, /交易明細/, /品名/, /小計/, /稅額/,
+            /\bTOTAL\b/, /THANK YOU/, /RECEIPT/
+        ]);
+
         if (side === 'back') {
-            const backCount = countMatches(text, [/父/, /母/, /配偶/, /役別/, /地址/, /戶籍地址/, /PLACE OF BIRTH/, /ADDRESS/]);
-            // 背面本來就較少出現「身分證」標題；三個以上典型欄位視為足夠強的證件訊號。
-            score += Math.min(4, backCount);
-            if (backCount >= 2) signals.push('back_fields');
+            // 身分證反面通常沒有照片、證號或「國民身分證」標題，不能沿用正面的判斷門檻。
+            // 改看背面專屬欄位；中英文、常見 OCR 變體都納入。
+            const backPatterns = [
+                /父(?:親|[：:\s])?|\bFATHER\b/,
+                /母(?:親|[：:\s])?|\bMOTHER\b/,
+                /配偶|\bSPOUSE\b/,
+                /役別|兵役|免役|MILITARY SERVICE/,
+                /出生地|PLACE OF BIRTH/,
+                /戶籍地址|戶籍|住址|地址|\bADDRESS\b/,
+                /初領|補領|換領|發證地點|核發機關|ISSUING AUTHORITY/
+            ];
+            const backCount = countMatches(text, backPatterns);
+            score += Math.min(6, backCount * 2);
+            if (backCount >= 1) signals.push('back_fields');
+
+            // 兩個背面欄位，或一個欄位搭配可讀文字，就足以判定為合理的證件背面。
+            // 明顯是發票／收據且沒有任何背面欄位時仍拒絕。
+            if (receiptSignals >= 2 && backCount === 0) {
+                return { verdict: 'unlikely', confidence: 0.9, signals: ['receipt_like'] };
+            }
+            if (backCount >= 2 || (backCount >= 1 && readableChars >= 10)) {
+                return {
+                    verdict: 'likely',
+                    confidence: Math.max(0.72, Math.min(0.99, (score + readableChars / 12) / 8)),
+                    signals
+                };
+            }
         }
 
         // 有一定文字量但沒有強證據時，只回「無法確認」，不武斷判成非證件。
-        const readableChars = compact.replace(/</g, '').length;
         let verdict = 'unlikely';
         if (score >= 4) verdict = 'likely';
         else if (score >= 2 || readableChars >= 24) verdict = 'uncertain';
@@ -81,6 +109,8 @@
         // 護照照片頁不需要背面；但使用者若有上傳背面，也必須通過相同驗證。
         if (hasBack) {
             if (!backVerdict || backVerdict === 'checking') return { ok: false, code: 'checking' };
+            // 背面使用自己的欄位辨識規則，不要求大頭照；仍須明確判定為 likely，
+            // 避免任意文字圖片因為「無法確認」而繞過證件驗證。
             backFailed = backVerdict !== 'likely';
         }
 

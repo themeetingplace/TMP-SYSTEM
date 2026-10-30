@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
-<script src="./id-document-ai.js?v=20261030a"></script>
+<script src="./id-document-ai.js?v=20261030b"></script>
 <style>
     :root {
         --brand: #ff8859;
@@ -390,6 +390,7 @@ const STRINGS = {
         cardStatusDone: '✓ 已加浮水印 ({sizeKB} KB)',
         aiChecking: 'AI 判讀中…',
         aiLikely: '✓ AI：看起來是身分證件',
+        aiBackAccepted: '✓ AI：已辨識為證件反面（不檢查大頭照）',
         aiUncertain: '⚠ AI：無法確認，請重新上傳清晰完整的證件',
         aiUnlikely: '⚠ AI：看起來不像身分證件，請重新上傳',
         aiUnavailable: '⚠ AI 暫時無法判讀，請稍後重新上傳',
@@ -448,6 +449,7 @@ const STRINGS = {
         cardStatusDone: '✓ Watermarked ({sizeKB} KB)',
         aiChecking: 'AI is checking…',
         aiLikely: '✓ AI: This looks like an identity document',
+        aiBackAccepted: '✓ AI: ID back accepted (portrait not required)',
         aiUncertain: '⚠ AI: Unable to confirm. Please upload a clear, complete ID again',
         aiUnlikely: '⚠ AI: This does not look like an identity document. Please upload again',
         aiUnavailable: '⚠ AI check unavailable. Please try uploading again later',
@@ -803,7 +805,10 @@ function idAnalysisStatusHtml(side) {
         unlikely: 'aiUnlikely',
         unavailable: 'aiUnavailable'
     };
-    return `<div class="id-ai-status is-${verdict}" data-id-ai-status="${side}">${t(labels[verdict] || 'aiUnavailable')}</div>`;
+    const acceptedBack = side === 'back' && verdict === 'likely';
+    const displayVerdict = acceptedBack ? 'likely' : verdict;
+    const labelKey = acceptedBack ? 'aiBackAccepted' : (labels[verdict] || 'aiUnavailable');
+    return `<div class="id-ai-status is-${displayVerdict}" data-id-ai-status="${side}">${t(labelKey)}</div>`;
 }
 
 function renderIdAnalysisStatus(side) {
