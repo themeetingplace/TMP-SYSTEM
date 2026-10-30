@@ -14,7 +14,7 @@
 
     // 僅判斷「影像是否像可接受的身分證件」，不抽取、不回傳姓名或證號。
     // 支援：台灣身分證、護照、居留證；side=back 時會接受證件背面常見欄位。
-    function classifyIdDocumentText(rawText, { side = 'front' } = {}) {
+    function classifyIdDocumentText(rawText, { side = 'front', imageAspectRatio = 0 } = {}) {
         const text = normalizeText(rawText);
         const compact = text.replace(/[^A-Z0-9\u3400-\u9FFF<]/g, '');
         let score = 0;
@@ -84,10 +84,23 @@
             if (receiptSignals >= 2 && backCount === 0) {
                 return { verdict: 'unlikely', confidence: 0.9, signals: ['receipt_like'] };
             }
-            if (backCount >= 2 || (backCount >= 1 && readableChars >= 10)) {
+            if (backCount >= 1) {
                 return {
                     verdict: 'likely',
                     confidence: Math.max(0.72, Math.min(0.99, (score + readableChars / 12) / 8)),
+                    signals
+                };
+            }
+
+            // 手機拍攝證件反面時，中文小字常被 OCR 誤讀，未必能完整保留欄位名稱。
+            // 若影像比例接近卡片／證件、仍讀得到一定文字，且沒有發票特徵，就視為合理反面。
+            const normalizedRatio = Number(imageAspectRatio) || 0;
+            const documentLikeShape = normalizedRatio >= 1.2 && normalizedRatio <= 1.9;
+            if (documentLikeShape && readableChars >= 8 && receiptSignals === 0) {
+                signals.push('document_shape_text');
+                return {
+                    verdict: 'likely',
+                    confidence: Math.max(0.68, Math.min(0.88, 0.62 + readableChars / 120)),
                     signals
                 };
             }

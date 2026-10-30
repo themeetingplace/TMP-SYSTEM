@@ -46,7 +46,12 @@ assert.equal(
     '證件反面應依地址與役別等背面欄位判讀，不得要求大頭照'
 );
 assert.equal(
-    classifyIdDocumentText('統一發票 品名 咖啡 小計 100 TOTAL 100 THANK YOU', { side: 'back' }).verdict,
+    classifyIdDocumentText('王大明 林小美 臺北市 110', { side: 'back', imageAspectRatio: 1.58 }).verdict,
+    'likely',
+    '手機 OCR 未讀到欄位名稱時，證件比例加上足夠可讀文字仍應接受反面'
+);
+assert.equal(
+    classifyIdDocumentText('統一發票 品名 咖啡 小計 100 TOTAL 100 THANK YOU', { side: 'back', imageAspectRatio: 1.58 }).verdict,
     'unlikely',
     '發票不得因文字量足夠而被誤判為證件反面'
 );
@@ -117,6 +122,8 @@ const liffSource = readFileSync(new URL('../liff/index.html', import.meta.url), 
 assert.ok(liffSource.includes('tesseract.js@6.0.1'), 'LIFF 必須載入固定版本的裝置端 OCR');
 assert.ok(liffSource.includes('AI：看起來是身分證件'), '上傳區必須顯示 AI 判讀結果');
 assert.ok(liffSource.includes('idOcrQueue'), '正反面 OCR 必須排隊，避免同一 worker 併發衝突');
+assert.ok(liffSource.includes('prepareEnhancedBackCanvas'), '反面第一次失敗時必須以旋轉高對比影像重判');
+assert.ok(liffSource.includes('maxDim = 1800'), '證件 OCR 必須保留足夠解析度以辨識反面小字');
 assert.ok(liffSource.includes('validateIdDocumentGate'), '送出前必須強制檢查 AI 證件驗證結果');
 assert.ok(liffSource.includes('errIdAiRejected'), 'AI 判定不是證件時必須顯示阻擋訊息');
 assert.ok(liffSource.includes('manualIdFallback'), 'AI 失敗畫面必須提供已將證件交給小編的人工補件聲明');

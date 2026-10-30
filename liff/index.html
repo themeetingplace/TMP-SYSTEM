@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
-<script src="./id-document-ai.js?v=20261030c"></script>
+<script src="./id-document-ai.js?v=20261030d"></script>
 <style>
     :root {
         --brand: #ff8859;
@@ -855,7 +855,7 @@ async function getIdOcrWorker() {
 
 async function prepareOcrCanvas(file) {
     const img = await fileToImage(file);
-    const maxDim = 1200;
+    const maxDim = 1800;
     const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(img.width * scale));
@@ -865,11 +865,35 @@ async function prepareOcrCanvas(file) {
     return canvas;
 }
 
+function prepareEnhancedBackCanvas(sourceCanvas) {
+    const canvas = document.createElement('canvas');
+    canvas.width = sourceCanvas.width;
+    canvas.height = sourceCanvas.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(Math.PI);
+    ctx.filter = 'grayscale(1) contrast(1.8)';
+    ctx.drawImage(sourceCanvas, -canvas.width / 2, -canvas.height / 2);
+    ctx.restore();
+    return canvas;
+}
+
 async function analyzeIdDocument(file, side) {
     const task = async () => {
         const [worker, canvas] = await Promise.all([getIdOcrWorker(), prepareOcrCanvas(file)]);
-        const result = await worker.recognize(canvas);
-        return window.IdDocumentAI.classifyIdDocumentText(result?.data?.text || '', { side });
+        const imageAspectRatio = Math.max(canvas.width, canvas.height) / Math.max(1, Math.min(canvas.width, canvas.height));
+        const firstResult = await worker.recognize(canvas);
+        const firstText = firstResult?.data?.text || '';
+        const firstVerdict = window.IdDocumentAI.classifyIdDocumentText(firstText, { side, imageAspectRatio });
+        if (side !== 'back' || firstVerdict.verdict === 'likely') return firstVerdict;
+
+        // 反面第一次沒讀到欄位時，自動以旋轉 180°、灰階高對比再辨識一次。
+        // 合併兩次 OCR 文字後判斷，避免手機方向或反光造成誤判。
+        const enhancedCanvas = prepareEnhancedBackCanvas(canvas);
+        const retryResult = await worker.recognize(enhancedCanvas);
+        const combinedText = `${firstText}\n${retryResult?.data?.text || ''}`;
+        return window.IdDocumentAI.classifyIdDocumentText(combinedText, { side, imageAspectRatio });
     };
     const queued = idOcrQueue.then(task, task);
     idOcrQueue = queued.catch(() => undefined);
