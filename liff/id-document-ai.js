@@ -23,7 +23,10 @@
         const strongPatterns = [
             /中華民國/, /國民身分證/, /身分證/, /護照/, /居留證/,
             /REPUBLIC OF CHINA/, /NATIONAL IDENTIFICATION/, /IDENTITY CARD/,
-            /PASSPORT/, /RESIDENT CERTIFICATE/, /ALIEN RESIDENT/, /RESIDENCE PERMIT/
+            /PASSPORT/, /RESIDENT CERTIFICATE/, /ALIEN RESIDENT/, /RESIDENCE PERMIT/,
+            /RESIDENCE CARD/, /PERMANENT RESIDENT/, /AUFENTHALTSTITEL/,
+            /(?:TITRE|CARTE) DE S[ÉE]JOUR/, /PERMISO DE RESIDENCIA/,
+            /PERMESSO DI SOGGIORNO/, /在留カード/, /外國人登錄證|외국인등록증/
         ];
         const strongCount = countMatches(text, strongPatterns);
         if (strongCount) {
@@ -45,7 +48,9 @@
 
         const fieldPatterns = [
             /姓名/, /出生日期/, /出生地/, /國籍/, /性別/, /發證日期/, /有效日期/, /統一證號/,
-            /\bNAME\b/, /DATE OF BIRTH/, /NATIONALITY/, /\bSEX\b/, /DATE OF ISSUE/, /DATE OF EXPIRY/, /PERSONAL NO/
+            /\bNAME\b/, /DATE OF BIRTH/, /NATIONALITY/, /\bSEX\b/, /DATE OF ISSUE/, /DATE OF EXPIRY/, /PERSONAL NO/,
+            /氏名/, /生年月日/, /国籍/, /性別/, /有効期間/,
+            /성명/, /생년월일/, /국적/, /성별/, /유효기간/
         ];
         const fieldCount = countMatches(text, fieldPatterns);
         score += Math.min(4, fieldCount);
@@ -67,7 +72,8 @@
                 /役別|兵役|免役|MILITARY SERVICE/,
                 /出生地|PLACE OF BIRTH/,
                 /戶籍地址|戶籍|住址|地址|\bADDRESS\b/,
-                /初領|補領|換領|發證地點|核發機關|ISSUING AUTHORITY/
+                /初領|補領|換領|發證地點|核發機關|ISSUING AUTHORITY/,
+                /備註|注意事項|\bNOTES?\b|OBSERVATIONS?|在留資格|許可類型|PERMIT TYPE/
             ];
             const backCount = countMatches(text, backPatterns);
             score += Math.min(6, backCount * 2);

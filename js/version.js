@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.12';
+export const APP_VERSION = '1.10.13';
 export const APP_BUILD_DATE = '2026-10-30';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.13', date: '2026-10-30', notes: '擴充證件 AI：各國護照可依 PASSPORT 與國際 MRZ 機讀碼辨識；居留證新增 Residence Card、Permanent Resident 及德、法、西、義、日、韓常見名稱。正反面都依證件文字與欄位判讀，不以大頭照作為唯一條件。' },
     { version: '1.10.12', date: '2026-10-30', notes: '身分證 AI 改為正反面分開辨識，反面依父母、配偶、役別、出生地、地址與核發資訊判定，不再要求大頭照。同步同時降低 Supabase 用量：合約 PDF 改為實際使用時才按館別下載、Realtime 排除大型 PDF，前景切換節流並以增量資料核對。' },
     { version: '1.10.11', date: '2026-10-30', notes: '住客證件 AI 判讀失敗時新增人工補件備援：住客可聲明已把證件傳給小編並先完成 LINE 登記，後台會標示待管理員補件；管理員可在租客詳細資料直接上傳或更換證件正反面，圖片會自動加上用途浮水印。' },
     { version: '1.10.10', date: '2026-10-20', notes: '住客完成新的 LINE 綁定登記後，管理首頁新增未讀提醒卡、右上角通知中心項目與即時彈出提示；可直接查看住客資料或標示已讀，小幫手帳號不顯示此管理通知。' },

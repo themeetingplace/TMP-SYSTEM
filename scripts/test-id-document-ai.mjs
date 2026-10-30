@@ -16,9 +16,24 @@ assert.equal(
     '護照與 MRZ 特徵應判為像證件'
 );
 assert.equal(
+    classifyIdDocumentText('日本国旅券 JAPAN PASSPORT P<JPNYAMADA<<TARO<<<<<<<<<<<<').verdict,
+    'likely',
+    '各國護照照片頁應依 PASSPORT 與 MRZ 通過，不得只看大頭照'
+);
+assert.equal(
     classifyIdDocumentText('ALIEN RESIDENT CERTIFICATE NAME DATE OF BIRTH NATIONALITY').verdict,
     'likely',
     '居留證特徵應判為像證件'
+);
+assert.equal(
+    classifyIdDocumentText('AUFENTHALTSTITEL RESIDENCE PERMIT NAME DATE OF BIRTH').verdict,
+    'likely',
+    '常見外國居留證英文或當地名稱應通過'
+);
+assert.equal(
+    classifyIdDocumentText('在留カード 氏名 生年月日 国籍・地域').verdict,
+    'likely',
+    '日本居留證常見名稱應通過'
 );
 assert.equal(
     classifyIdDocumentText('父 王先生 母 林女士 配偶 無 地址 台北市', { side: 'back' }).verdict,
