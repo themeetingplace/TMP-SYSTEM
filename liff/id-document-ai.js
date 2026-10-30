@@ -71,18 +71,26 @@
         };
     }
 
-    function validateIdDocumentGate({ hasFront, hasBack, frontVerdict, backVerdict }) {
+    function validateIdDocumentGate({ hasFront, hasBack, frontVerdict, backVerdict, manualFallback = false }) {
         if (!hasFront) return { ok: false, code: 'front_missing' };
         if (!frontVerdict || frontVerdict === 'checking') return { ok: false, code: 'checking' };
-        if (frontVerdict === 'unavailable') return { ok: false, code: 'unavailable' };
-        if (frontVerdict !== 'likely') return { ok: false, code: 'not_id_document' };
+
+        const frontFailed = frontVerdict !== 'likely';
+        let backFailed = false;
 
         // 護照照片頁不需要背面；但使用者若有上傳背面，也必須通過相同驗證。
         if (hasBack) {
             if (!backVerdict || backVerdict === 'checking') return { ok: false, code: 'checking' };
-            if (backVerdict === 'unavailable') return { ok: false, code: 'unavailable' };
-            if (backVerdict !== 'likely') return { ok: false, code: 'not_id_document' };
+            backFailed = backVerdict !== 'likely';
         }
+
+        // AI 已完成但無法確認時，允許住客明確聲明「已把證件交給小編」，
+        // 後台會留下待補件狀態；沒有先選證件、或仍在判讀中時不可使用備援。
+        if ((frontFailed || backFailed) && manualFallback) return { ok: true, code: 'manual_review' };
+        if (frontVerdict === 'unavailable' || (hasBack && backVerdict === 'unavailable')) {
+            return { ok: false, code: 'unavailable' };
+        }
+        if (frontFailed || backFailed) return { ok: false, code: 'not_id_document' };
         return { ok: true, code: 'verified' };
     }
 

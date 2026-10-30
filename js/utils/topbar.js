@@ -182,7 +182,7 @@ export function initNotifications() {
                     icon: 'ph-user-plus',
                     color: 'var(--color-primary)',
                     title: `新住客登記：${tenant.name || '未命名住客'}`,
-                    meta: `${tenant.phone || '未填電話'} · 已完成 LINE 綁定`,
+                    meta: `${tenant.phone || '未填電話'} · ${tenant.idCardStatus === 'pending_admin_upload' ? '待管理員補證件' : '已完成 LINE 綁定'}`,
                     link: 'tenants',
                     entityType: 'tenant',
                     entityId: tenant.id,
@@ -342,7 +342,13 @@ export function initNotifications() {
         if (registrationSnapshotPrimed && notify && window.__currentRole !== 'helper') {
             items.forEach(item => {
                 const tenant = item.tenant;
-                const toast = showToast(`🔔 新住客登記：${tenant.name || '未命名住客'} 已完成 LINE 綁定`, 'info', 8000);
+                const toast = showToast(
+                    tenant.idCardStatus === 'pending_admin_upload'
+                        ? `🔔 新住客登記：${tenant.name || '未命名住客'} 已綁定，等待管理員補上證件`
+                        : `🔔 新住客登記：${tenant.name || '未命名住客'} 已完成 LINE 綁定`,
+                    'info',
+                    8000
+                );
                 toast.style.cursor = 'pointer';
                 toast.title = '點擊查看住客資料';
                 toast.addEventListener('click', () => {

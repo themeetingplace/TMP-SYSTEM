@@ -317,15 +317,32 @@ export function showTenantDetails(id) {
         </div>
     `;
 
-    // 身分證 hash 連結 — 點開時走 signed URL，避免 detail modal 開著時 URL 過期
-    const idCardHtml = (t.idCardFrontPath || t.idCardBackPath)
-        ? `<div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-              <span class="status-badge success" style="font-size: var(--text-2xs);"><i class="ph-fill ph-check-circle"></i> 已上傳</span>
-              ${t.idCardFrontPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="view-id-card" data-path="${t.idCardFrontPath}" data-side="正面"><i class="ph ph-eye"></i> 正面</button>` : ''}
-              ${t.idCardBackPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="view-id-card" data-path="${t.idCardBackPath}" data-side="反面"><i class="ph ph-eye"></i> 反面</button>` : ''}
-              ${t.idCardUploadedAt ? `<small style="color: var(--text-muted); font-size: var(--text-2xs);">${t.idCardUploadedAt.slice(0, 10)} 上傳</small>` : ''}
-           </div>`
-        : '<span style="color: var(--text-muted)">未上傳</span>';
+    // 身分證狀態 + 後台人工補件。AI 失敗的住客會明確顯示「待管理員補件」。
+    const idCardStatus = t.idCardStatus || (t.idCardFrontPath ? 'uploaded' : 'missing');
+    const idStatusBadge = idCardStatus === 'uploaded'
+        ? '<span class="status-badge success" style="font-size: var(--text-2xs);"><i class="ph-fill ph-check-circle"></i> 已上傳</span>'
+        : idCardStatus === 'pending_admin_upload'
+            ? '<span class="status-badge warning" style="font-size: var(--text-2xs);"><i class="ph-fill ph-warning-circle"></i> 待管理員補件</span>'
+            : '<span class="status-badge muted" style="font-size: var(--text-2xs);"><i class="ph ph-file-dashed"></i> 未上傳</span>';
+    const fallbackTime = t.idCardFallbackDeclaredAt
+        ? `<small style="color: var(--color-warning-text); font-size: var(--text-2xs);">住客於 ${esc(String(t.idCardFallbackDeclaredAt).slice(0, 10))} 表示已將證件傳給小編</small>`
+        : '';
+    const idCardHtml = `
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            ${idStatusBadge}
+            ${t.idCardFrontPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="view-id-card" data-path="${escapeAttr(t.idCardFrontPath)}" data-side="正面"><i class="ph ph-eye"></i> 查看正面</button>` : ''}
+            ${t.idCardBackPath ? `<button class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: var(--text-xs);" data-action="view-id-card" data-path="${escapeAttr(t.idCardBackPath)}" data-side="反面"><i class="ph ph-eye"></i> 查看反面</button>` : ''}
+            <label class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: var(--text-xs); cursor: pointer;">
+                <input type="file" accept="image/jpeg,image/png,image/webp" data-action="upload-id-card" data-side="front" hidden>
+                <i class="ph ph-upload-simple"></i> ${t.idCardFrontPath ? '更換正面' : '上傳正面'}
+            </label>
+            <label class="btn btn-outline" style="padding: 0.25rem 0.55rem; font-size: var(--text-xs); cursor: pointer;">
+                <input type="file" accept="image/jpeg,image/png,image/webp" data-action="upload-id-card" data-side="back" hidden>
+                <i class="ph ph-upload-simple"></i> ${t.idCardBackPath ? '更換反面' : '上傳反面'}
+            </label>
+            ${t.idCardUploadedAt ? `<small style="color: var(--text-muted); font-size: var(--text-2xs);">${esc(String(t.idCardUploadedAt).slice(0, 10))} 上傳</small>` : ''}
+            ${fallbackTime}
+        </div>`;
 
     openDetailModal({
         title: '租客詳細資料',
@@ -353,6 +370,21 @@ export function showTenantDetails(id) {
         onMount: (overlay, close) => {
             overlay.querySelectorAll('[data-action="view-id-card"]').forEach(btn => {
                 btn.addEventListener('click', () => openIdCard(btn.dataset.path, btn.dataset.side));
+            });
+            overlay.querySelectorAll('[data-action="upload-id-card"]').forEach(input => {
+                input.addEventListener('change', async () => {
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    input.disabled = true;
+                    try {
+                        await uploadTenantIdCard(t, input.dataset.side, file);
+                        close();
+                        refreshView();
+                        setTimeout(() => showTenantDetails(id), 80);
+                    } finally {
+                        input.disabled = false;
+                    }
+                });
             });
             overlay.querySelector('[data-action="merge-line"]')?.addEventListener('click', () => {
                 showLineMergePicker(id);
@@ -530,6 +562,109 @@ async function openIdCard(path, side) {
         console.error('[openIdCard]', e);
         const { showToast } = await import('../utils/ui.js');
         showToast(`無法開啟身分證${side}：${e.message}`, 'danger', 5000);
+    }
+}
+
+// 管理員人工補件：後台收到住客傳來的證件後，加上同一套用途浮水印再存入 private bucket。
+async function watermarkAdminIdCard(file) {
+    const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowed.has(file?.type)) throw new Error('僅接受 JPG、PNG 或 WEBP 圖片');
+    if (file.size > 12 * 1024 * 1024) throw new Error('圖片不可超過 12 MB');
+
+    const url = URL.createObjectURL(file);
+    let img;
+    try {
+        img = await new Promise((resolve, reject) => {
+            const el = new Image();
+            el.onload = () => resolve(el);
+            el.onerror = () => reject(new Error('無法讀取圖片，請改用 JPG 或 PNG'));
+            el.src = url;
+        });
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+
+    const maxDim = 1800;
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const text = '僅供聚空間合約使用';
+    const fontSize = Math.max(18, Math.round(Math.min(canvas.width, canvas.height) * 0.06));
+    const range = Math.max(canvas.width, canvas.height) * 1.4;
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(-Math.PI / 6);
+    ctx.font = `bold ${fontSize}px "Microsoft JhengHei", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let y = -range; y < range; y += fontSize * 2.6) {
+        for (let x = -range; x < range; x += fontSize * (text.length + 4)) {
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+            ctx.lineWidth = Math.max(2, fontSize * 0.08);
+            ctx.strokeText(text, x, y);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+            ctx.fillText(text, x, y);
+        }
+    }
+    ctx.restore();
+
+    return new Promise((resolve, reject) => canvas.toBlob(
+        blob => blob ? resolve(blob) : reject(new Error('圖片處理失敗')),
+        'image/jpeg',
+        0.88
+    ));
+}
+
+async function uploadTenantIdCard(tenant, side, file) {
+    if (!tenant || !['front', 'back'].includes(side)) return;
+    const sideLabel = side === 'front' ? '正面' : '反面';
+    try {
+        showToast(`正在處理${sideLabel}證件…`, 'info', 2500);
+        const blob = await watermarkAdminIdCard(file);
+        const { supabase } = await import('../supabase.js');
+        const path = `${tenant.id}/${side}_admin_${Date.now()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+            .from('id-cards')
+            .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+        if (uploadError) throw uploadError;
+
+        const nowIso = new Date().toISOString();
+        const frontPath = side === 'front' ? path : (tenant.idCardFrontPath || null);
+        const backPath = side === 'back' ? path : (tenant.idCardBackPath || null);
+        const nextStatus = frontPath ? 'uploaded' : (tenant.idCardStatus || 'missing');
+        const dbPatch = {
+            id_card_front_path: frontPath,
+            id_card_back_path: backPath,
+            id_card_uploaded_at: nowIso,
+            id_card_status: nextStatus
+        };
+        const { error: updateError } = await supabase.from('tenants').update(dbPatch).eq('id', tenant.id);
+        if (updateError) {
+            await supabase.storage.from('id-cards').remove([path]);
+            throw updateError;
+        }
+
+        const oldPath = side === 'front' ? tenant.idCardFrontPath : tenant.idCardBackPath;
+        store.updateTenant(tenant.id, {
+            idCardFrontPath: frontPath,
+            idCardBackPath: backPath,
+            idCardUploadedAt: nowIso,
+            idCardStatus: nextStatus
+        });
+        if (oldPath && oldPath !== path) {
+            supabase.storage.from('id-cards').remove([oldPath]).then(({ error }) => {
+                if (error) console.warn('[replaceIdCard] old file cleanup failed:', error);
+            });
+        }
+        showToast(`${tenant.name} 的證件${sideLabel}已上傳`, 'success', 4000);
+    } catch (e) {
+        console.error('[uploadTenantIdCard]', e);
+        showToast(`證件${sideLabel}上傳失敗：${e.message}`, 'danger', 6000);
+        throw e;
     }
 }
 

@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
-<script src="./id-document-ai.js?v=20261020b"></script>
+<script src="./id-document-ai.js?v=20261030a"></script>
 <style>
     :root {
         --brand: #ff8859;
@@ -248,6 +248,55 @@
         line-height: 1.55;
     }
     .id-upload-banner strong { color: var(--success); }
+    .id-manual-fallback {
+        margin-top: 0.75rem;
+        padding: 0.8rem;
+        border: 1px solid #e9c36a;
+        border-radius: 8px;
+        background: #fffaf0;
+        color: var(--text-main);
+    }
+    .id-manual-fallback[hidden] { display: none; }
+    .id-manual-fallback-title {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #7a5000;
+    }
+    .id-manual-fallback p {
+        margin: 0.35rem 0 0.65rem;
+        font-size: 0.72rem;
+        line-height: 1.55;
+        color: var(--text-muted);
+    }
+    .id-manual-fallback-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.55rem;
+        padding: 0.65rem;
+        border: 1px solid #ead9b2;
+        border-radius: 7px;
+        background: #fff;
+        cursor: pointer;
+        font-size: 0.76rem;
+        font-weight: 600;
+        line-height: 1.5;
+    }
+    .id-manual-fallback-check input {
+        width: 18px;
+        height: 18px;
+        margin: 0.05rem 0 0;
+        flex: 0 0 auto;
+        accent-color: var(--brand);
+    }
+    .id-manual-fallback-hint {
+        margin-top: 0.5rem;
+        font-size: 0.68rem;
+        line-height: 1.5;
+        color: #8a5c0a;
+    }
 
     /* === 語言切換器 (右上 pill toggle) === */
     .lang-switch {
@@ -344,6 +393,10 @@ const STRINGS = {
         aiUncertain: '⚠ AI：無法確認，請重新上傳清晰完整的證件',
         aiUnlikely: '⚠ AI：看起來不像身分證件，請重新上傳',
         aiUnavailable: '⚠ AI 暫時無法判讀，請稍後重新上傳',
+        manualFallbackTitle: 'AI 判讀仍失敗？',
+        manualFallbackBody: '如果你已經把身分證件傳給小編，可以改由管理員從後台補上。',
+        manualFallbackCheck: '我已告知小編 AI 判讀失敗，並已將身分證件傳給小編',
+        manualFallbackHint: '勾選後可先完成登記；後台會標示「待管理員補件」，管理員補上證件後才算完成。',
         btnSubmit: '送出登記',
         btnSubmitting: '送出中…',
         btnProcessing: '處理證件照片…',
@@ -352,6 +405,7 @@ const STRINGS = {
         doneTitle: '登記完成！',
         doneGreeting: '{name} 您好',
         doneBody: '您的資料已送出，LINE 也綁定完成<br>之後合約 / 帳單通知會傳到這裡 ✨',
+        doneBodyManual: '您的資料已送出，LINE 也綁定完成<br>證件已標示為待管理員補件，請確認已傳給小編 ✨',
         doneClose: '關閉視窗',
         errIdFrontMissing: '請至少上傳證件正面照片',
         errIdAiChecking: 'AI 正在判讀證件，請稍候完成後再送出',
@@ -397,6 +451,10 @@ const STRINGS = {
         aiUncertain: '⚠ AI: Unable to confirm. Please upload a clear, complete ID again',
         aiUnlikely: '⚠ AI: This does not look like an identity document. Please upload again',
         aiUnavailable: '⚠ AI check unavailable. Please try uploading again later',
+        manualFallbackTitle: 'AI check still failing?',
+        manualFallbackBody: 'If you have already sent your identity document to the admin, they can upload it from the back office.',
+        manualFallbackCheck: 'I told the admin that the AI check failed and sent my identity document to them',
+        manualFallbackHint: 'You may finish registration after checking this box. Your record will remain “Pending admin upload” until the document is added.',
         btnSubmit: 'Submit',
         btnSubmitting: 'Submitting…',
         btnProcessing: 'Processing ID photo…',
@@ -405,6 +463,7 @@ const STRINGS = {
         doneTitle: 'Registration Complete!',
         doneGreeting: 'Hello {name}',
         doneBody: 'Your info is submitted and your LINE account is linked.<br>Future contracts &amp; invoices will be sent here ✨',
+        doneBodyManual: 'Your info is submitted and your LINE account is linked.<br>Your ID is pending admin upload. Please make sure you sent it to the admin ✨',
         doneClose: 'Close',
         errIdFrontMissing: 'Please upload the front of your ID at minimum.',
         errIdAiChecking: 'AI is still checking your ID. Please wait before submitting.',
@@ -629,6 +688,15 @@ function renderForm(profile) {
                         <div class="id-upload-hint">${t('cardHintBack')}</div>
                     </label>
                 </div>
+                <div class="id-manual-fallback" id="id-manual-fallback" hidden>
+                    <div class="id-manual-fallback-title"><span aria-hidden="true">↪</span> ${t('manualFallbackTitle')}</div>
+                    <p>${t('manualFallbackBody')}</p>
+                    <label class="id-manual-fallback-check">
+                        <input type="checkbox" name="manualIdFallback" value="true">
+                        <span>${t('manualFallbackCheck')}</span>
+                    </label>
+                    <div class="id-manual-fallback-hint">${t('manualFallbackHint')}</div>
+                </div>
             </div>
 
             <div id="msg-area"></div>
@@ -646,12 +714,16 @@ function renderForm(profile) {
     document.querySelectorAll('.id-upload-card input[type="file"]').forEach(input => {
         input.addEventListener('change', (e) => handleIdCardChange(input, e.target.files[0]));
     });
+    updateManualFallbackVisibility();
 }
 
 function snapshotFormValues() {
     const form = document.getElementById('form');
     if (!form) return null;
-    return Object.fromEntries(new FormData(form).entries());
+    return {
+        ...Object.fromEntries(new FormData(form).entries()),
+        __manualIdFallbackChecked: Boolean(form.elements.manualIdFallback?.checked)
+    };
 }
 
 function restoreFormValues(values) {
@@ -659,9 +731,14 @@ function restoreFormValues(values) {
     const form = document.getElementById('form');
     if (!form) return;
     Object.keys(values).forEach(k => {
+        if (k === '__manualIdFallbackChecked') return;
         const el = form.elements[k];
         if (el && values[k]) el.value = values[k];
     });
+    if (form.elements.manualIdFallback) {
+        form.elements.manualIdFallback.checked = Boolean(values.__manualIdFallbackChecked);
+    }
+    updateManualFallbackVisibility();
 }
 
 async function handleIdCardChange(input, file) {
@@ -669,6 +746,9 @@ async function handleIdCardChange(input, file) {
     const side = input.dataset.side;
     const requestId = ++idCardAnalysisRequest[side];
     idCardAnalysis[side] = { verdict: 'checking' };
+    const fallbackCheckbox = document.querySelector('[name="manualIdFallback"]');
+    if (fallbackCheckbox) fallbackCheckbox.checked = false;
+    updateManualFallbackVisibility();
     try {
         const watermarked = await addWatermark(file);
         idCardImages[side] = watermarked;
@@ -729,6 +809,28 @@ function idAnalysisStatusHtml(side) {
 function renderIdAnalysisStatus(side) {
     const target = document.querySelector(`[data-id-ai-status="${side}"]`);
     if (target) target.outerHTML = idAnalysisStatusHtml(side);
+    updateManualFallbackVisibility();
+}
+
+function updateManualFallbackVisibility() {
+    const panel = document.getElementById('id-manual-fallback');
+    if (!panel) return;
+    const frontVerdict = idCardAnalysis.front?.verdict;
+    const backVerdict = idCardAnalysis.back?.verdict;
+    const frontFinishedAndFailed = Boolean(idCardImages.front)
+        && Boolean(frontVerdict)
+        && frontVerdict !== 'checking'
+        && frontVerdict !== 'likely';
+    const backFinishedAndFailed = Boolean(idCardImages.back)
+        && Boolean(backVerdict)
+        && backVerdict !== 'checking'
+        && backVerdict !== 'likely';
+    const show = frontFinishedAndFailed || backFinishedAndFailed;
+    panel.hidden = !show;
+    if (!show) {
+        const checkbox = panel.querySelector('[name="manualIdFallback"]');
+        if (checkbox) checkbox.checked = false;
+    }
 }
 
 async function getIdOcrWorker() {
@@ -858,13 +960,16 @@ async function handleSubmit(profile) {
     const btn = document.getElementById('submitBtn');
     const msg = document.getElementById('msg-area');
 
-    // 正面必傳且一定要通過裝置端 AI 證件驗證；護照照片頁可不傳背面。
-    // 若有傳背面，背面也必須通過，避免用任意圖片補欄位。
+    const manualFallbackChecked = Boolean(form.elements.manualIdFallback?.checked);
+
+    // 正常流程仍要求裝置端 AI 通過；只有 AI 已完成且判讀失敗時，
+    // 才能由住客明確聲明「已將證件傳給小編」，改走後台人工補件。
     const idGate = window.IdDocumentAI?.validateIdDocumentGate?.({
         hasFront: Boolean(idCardImages.front),
         hasBack: Boolean(idCardImages.back),
         frontVerdict: idCardAnalysis.front?.verdict,
-        backVerdict: idCardAnalysis.back?.verdict
+        backVerdict: idCardAnalysis.back?.verdict,
+        manualFallback: manualFallbackChecked
     }) || { ok: false, code: 'unavailable' };
     if (!idGate.ok) {
         const errorKey = {
@@ -894,8 +999,10 @@ async function handleSubmit(profile) {
             throw Object.assign(new Error('無法取得 LINE 登入憑證 (請確認是從 LINE 開啟連結)'), { authFail: true });
         }
         btn.textContent = t('btnProcessing');
-        const idCardFrontB64 = await blobToBase64(idCardImages.front);
-        const idCardBackB64  = idCardImages.back ? await blobToBase64(idCardImages.back) : null;
+        const manualIdFallback = idGate.code === 'manual_review';
+        // 人工補件路徑不把 AI 無法確認的影像存入正式證件欄；管理員會從後台上傳已核對的版本。
+        const idCardFrontB64 = manualIdFallback ? null : await blobToBase64(idCardImages.front);
+        const idCardBackB64  = manualIdFallback || !idCardImages.back ? null : await blobToBase64(idCardImages.back);
 
         // 用 closure 包起來方便客戶選 claim 後重 POST 不用再上傳一次身分證
         const callEdge = async (claimTenantId) => {
@@ -913,6 +1020,7 @@ async function handleSubmit(profile) {
                     form: data,
                     idCardFront: idCardFrontB64,
                     idCardBack: idCardBackB64,
+                    manualIdFallback,
                     ...(claimTenantId ? { claimTenantId } : {})
                 })
             });
@@ -939,11 +1047,11 @@ async function handleSubmit(profile) {
                     if (cMsg) cMsg.innerHTML = `<div class="msg error">${t('errSubmitFailed', { msg: r2body.error || r2.status })}</div>`;
                     return;
                 }
-                renderDone(profile, data);
+                renderDone(profile, data, { manualReview: r2body.idCardStatus === 'pending_admin_upload' });
             });
             return;
         }
-        renderDone(profile, data);
+        renderDone(profile, data, { manualReview: result.idCardStatus === 'pending_admin_upload' });
     } catch (e) {
         if (e && e.authFail) {
             // LINE 驗證失敗 — 顯示「重新登入 LINE」按鈕 (清 cached token → 拿新的)
@@ -1027,15 +1135,15 @@ function renderClaimChoice(profile, data, candidates, onPick) {
     });
 }
 
-function renderDone(profile, data) {
-    _currentRender = () => renderDone(profile, data);
+function renderDone(profile, data, { manualReview = false } = {}) {
+    _currentRender = () => renderDone(profile, data, { manualReview });
     document.getElementById('root').innerHTML = `
         <div class="done-screen">
             <div class="done-icon">✅</div>
             <h1>${t('doneTitle')}</h1>
             <p style="color: var(--text-muted); margin: 1rem 0;">
                 ${t('doneGreeting', { name: profile.displayName })}<br>
-                ${t('doneBody')}
+                ${t(manualReview ? 'doneBodyManual' : 'doneBody')}
             </p>
             <button class="submit" onclick="liff.closeWindow()" style="max-width: 200px; margin: 1rem auto 0;">${t('doneClose')}</button>
         </div>

@@ -357,7 +357,9 @@ window.fixDuplicateTenants = async (apply = false) => {
                         lineBoundAt: src.lineBoundAt,
                         idCardFrontPath: src.idCardFrontPath || mockData.tenants[dstIdx].idCardFrontPath,
                         idCardBackPath: src.idCardBackPath || mockData.tenants[dstIdx].idCardBackPath,
-                        idCardUploadedAt: src.idCardUploadedAt || mockData.tenants[dstIdx].idCardUploadedAt
+                        idCardUploadedAt: src.idCardUploadedAt || mockData.tenants[dstIdx].idCardUploadedAt,
+                        idCardStatus: src.idCardStatus || mockData.tenants[dstIdx].idCardStatus,
+                        idCardFallbackDeclaredAt: src.idCardFallbackDeclaredAt || mockData.tenants[dstIdx].idCardFallbackDeclaredAt
                     };
                 }
             }

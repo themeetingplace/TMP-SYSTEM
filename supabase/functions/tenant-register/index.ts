@@ -148,7 +148,11 @@ serve(async (req) => {
     }
 
     try {
-        const { idToken, userId, displayName, pictureUrl, form, idCardFront, idCardBack, claimTenantId } = await req.json();
+        const {
+            idToken, userId, displayName, pictureUrl, form,
+            idCardFront, idCardBack, manualIdFallback, claimTenantId
+        } = await req.json();
+        const usesManualIdFallback = manualIdFallback === true;
 
         // 1. 驗 LINE ID Token
         if (!idToken || !userId) {
@@ -192,19 +196,20 @@ serve(async (req) => {
             throw new Error('手機格式錯誤 (台灣請填 09XXXXXXXX，海外請以 + 開頭加國碼)');
         }
 
-        // 證件正面必填，反面選填 (外籍租客只傳護照)
-        if (!idCardFront) {
+        // 正常流程證件正面必填；AI 判讀失敗且住客已把證件交給小編時，
+        // 可先建立「待管理員補件」紀錄，不接收該張未通過判讀的影像。
+        if (!usesManualIdFallback && !idCardFront) {
             throw new Error('請至少上傳證件正面照片');
         }
-        if (idCardFront.length < 1000) {
+        if (!usesManualIdFallback && idCardFront.length < 1000) {
             throw new Error('證件正面資料異常，請重新拍照上傳');
         }
-        if (idCardBack && idCardBack.length < 1000) {
+        if (!usesManualIdFallback && idCardBack && idCardBack.length < 1000) {
             throw new Error('證件反面資料異常，請重新拍照上傳');
         }
         // 過大保護 — 每張 base64 < 4 MB
         const MAX_B64 = 4 * 1024 * 1024;
-        if (idCardFront.length > MAX_B64 || (idCardBack && idCardBack.length > MAX_B64)) {
+        if (!usesManualIdFallback && (idCardFront.length > MAX_B64 || (idCardBack && idCardBack.length > MAX_B64))) {
             throw new Error('證件照片過大，請以較低畫質重拍');
         }
 
@@ -305,6 +310,10 @@ serve(async (req) => {
                 line_bound_at: nowIso,
                 source: existing.source || 'LIFF'
             };
+            if (usesManualIdFallback && !existing.id_card_front_path) {
+                updates.id_card_status = 'pending_admin_upload';
+                updates.id_card_fallback_declared_at = nowIso;
+            }
             if (mergedBy === 'name' || mergedBy === 'claim') {
                 updates.phone = phone;  // 用 LIFF 提供的 phone (原本 phone 沒對到才落到 name/claim 路徑)
             }
@@ -337,29 +346,60 @@ serve(async (req) => {
                 line_user_id: userId,
                 line_display_name: displayName || null,
                 line_picture_url: pictureUrl || null,
-                line_bound_at: nowIso
+                line_bound_at: nowIso,
+                id_card_status: usesManualIdFallback ? 'pending_admin_upload' : 'missing',
+                id_card_fallback_declared_at: usesManualIdFallback ? nowIso : null
             });
             if (insErr) throw new Error(`建立租客失敗：${insErr.message}`);
             tenantId = newId;
         }
 
-        // 7. 上傳證件 (浮水印照) 到 id-cards bucket → 寫回 tenants
-        //    反面可選 — 沒傳就只上傳正面
+        // 7. 正常流程上傳浮水印證件；人工備援則保留待管理員補件狀態。
         let frontPath: string | null = null;
         let backPath: string | null = null;
-        try {
-            frontPath = await uploadIdCard(tenantId, 'front', idCardFront);
-            if (idCardBack) {
-                backPath = await uploadIdCard(tenantId, 'back', idCardBack);
+        let idCardStatus = usesManualIdFallback ? 'pending_admin_upload' : 'missing';
+        if (usesManualIdFallback) {
+            if (existing?.id_card_front_path) {
+                frontPath = existing.id_card_front_path;
+                backPath = existing.id_card_back_path || null;
+                idCardStatus = 'uploaded';
+            } else {
+                const { error: pendingErr } = await supabase.from('tenants').update({
+                    id_card_status: 'pending_admin_upload',
+                    id_card_fallback_declared_at: nowIso
+                }).eq('id', tenantId);
+                if (pendingErr) throw new Error(`建立待補證件狀態失敗：${pendingErr.message}`);
             }
-            await supabase.from('tenants').update({
-                id_card_front_path: frontPath,
-                id_card_back_path: backPath,
-                id_card_uploaded_at: nowIso
-            }).eq('id', tenantId);
-        } catch (uploadErr: any) {
-            // 上傳失敗不阻斷主流程，記錄錯誤；tenant 已建好可手動補
-            console.error('[tenant-register] id-card upload fail:', uploadErr);
+        } else {
+            try {
+                frontPath = await uploadIdCard(tenantId, 'front', idCardFront);
+                if (idCardBack) {
+                    backPath = await uploadIdCard(tenantId, 'back', idCardBack);
+                }
+                idCardStatus = 'uploaded';
+                const { error: idUpdateErr } = await supabase.from('tenants').update({
+                    id_card_front_path: frontPath,
+                    id_card_back_path: backPath,
+                    id_card_uploaded_at: nowIso,
+                    id_card_status: 'uploaded'
+                }).eq('id', tenantId);
+                if (idUpdateErr) throw idUpdateErr;
+            } catch (uploadErr: any) {
+                // 上傳失敗不讓綁定資料消失，但後台必須明確看到待補件，不可誤認為完成。
+                idCardStatus = 'pending_admin_upload';
+                const orphanPaths = [frontPath, backPath].filter(Boolean) as string[];
+                if (orphanPaths.length) {
+                    await supabase.storage.from('id-cards').remove(orphanPaths);
+                    frontPath = null;
+                    backPath = null;
+                }
+                const { error: pendingErr } = await supabase.from('tenants').update({
+                    id_card_status: 'pending_admin_upload',
+                    id_card_fallback_declared_at: nowIso
+                }).eq('id', tenantId);
+                if (pendingErr) throw new Error(`證件上傳失敗，且無法建立待補件狀態：${pendingErr.message}`);
+                console.error('[tenant-register] id-card upload fail:', uploadErr);
+            }
         }
 
         // 8. log 到 line_messages 給管理員追蹤
@@ -373,13 +413,18 @@ serve(async (req) => {
                         : mergedBy === 'claim' ? ' — 客戶自選合約 (claim)'
                         : ' — 更新舊客')
                     : ' — 新客'
-            }${frontPath ? ' · 含身分證照' : ''}`,
-            raw: { form, profile: { displayName, pictureUrl }, idCardUploaded: !!frontPath, mergedBy }
+            }${idCardStatus === 'uploaded' ? ' · 含身分證照' : ' · ⚠ 待管理員補證件（住客已傳小編）'}`,
+            raw: {
+                form, profile: { displayName, pictureUrl },
+                idCardUploaded: idCardStatus === 'uploaded',
+                idCardStatus, manualIdFallback: usesManualIdFallback, mergedBy
+            }
         });
 
         return new Response(JSON.stringify({
             ok: true, tenantId, isNew: !existing,
-            idCardUploaded: !!(frontPath && backPath)
+            idCardUploaded: idCardStatus === 'uploaded',
+            idCardStatus
         }), {
             headers: { 'Content-Type': 'application/json', ...corsHeaders() }
         });

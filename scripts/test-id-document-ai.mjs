@@ -45,7 +45,37 @@ assert.equal(
 assert.equal(
     validateIdDocumentGate({ hasFront: true, hasBack: false, frontVerdict: 'unavailable' }).ok,
     false,
-    'AI 無法使用時不可繞過驗證'
+    'AI 無法使用且未聲明人工補件時不可繞過驗證'
+);
+assert.deepEqual(
+    validateIdDocumentGate({
+        hasFront: true,
+        hasBack: false,
+        frontVerdict: 'uncertain',
+        manualFallback: true
+    }),
+    { ok: true, code: 'manual_review' },
+    'AI 無法確認、且住客已聲明把證件交給小編時，可進入人工補件流程'
+);
+assert.equal(
+    validateIdDocumentGate({
+        hasFront: false,
+        hasBack: false,
+        frontVerdict: 'unlikely',
+        manualFallback: true
+    }).ok,
+    false,
+    '沒有先選擇證件照片時不可直接勾選人工補件'
+);
+assert.equal(
+    validateIdDocumentGate({
+        hasFront: true,
+        hasBack: false,
+        frontVerdict: 'checking',
+        manualFallback: true
+    }).ok,
+    false,
+    'AI 還在判讀時不可提前改走人工補件'
 );
 assert.equal(
     validateIdDocumentGate({ hasFront: true, hasBack: true, frontVerdict: 'likely', backVerdict: 'unlikely' }).ok,
@@ -59,5 +89,7 @@ assert.ok(liffSource.includes('AI：看起來是身分證件'), '上傳區必須
 assert.ok(liffSource.includes('idOcrQueue'), '正反面 OCR 必須排隊，避免同一 worker 併發衝突');
 assert.ok(liffSource.includes('validateIdDocumentGate'), '送出前必須強制檢查 AI 證件驗證結果');
 assert.ok(liffSource.includes('errIdAiRejected'), 'AI 判定不是證件時必須顯示阻擋訊息');
+assert.ok(liffSource.includes('manualIdFallback'), 'AI 失敗畫面必須提供已將證件交給小編的人工補件聲明');
+assert.ok(liffSource.includes('待管理員補件'), '人工補件路徑必須清楚標示後台待處理狀態');
 
 console.log('ID document AI classifier regression checks passed');

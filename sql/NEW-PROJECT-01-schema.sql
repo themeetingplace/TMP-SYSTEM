@@ -326,7 +326,9 @@ create table if not exists public.tenants (
   note text,
   id_card_front_path text,
   id_card_back_path text,
-  id_card_uploaded_at timestamp with time zone
+  id_card_uploaded_at timestamp with time zone,
+  id_card_status text not null default 'missing',
+  id_card_fallback_declared_at timestamp with time zone
 );
 
 -- ===== 3. primary key / unique / check =====
@@ -353,6 +355,7 @@ alter table public.rent_rules add constraint rent_rules_pkey PRIMARY KEY (id);
 alter table public.settlements add constraint settlements_pkey PRIMARY KEY (id);
 alter table public.tenant_sources add constraint tenant_sources_pkey PRIMARY KEY (id);
 alter table public.tenants add constraint tenants_pkey PRIMARY KEY (id);
+alter table public.tenants add constraint tenants_id_card_status_check CHECK ((id_card_status = ANY (ARRAY['missing'::text, 'pending_admin_upload'::text, 'uploaded'::text])));
 
 -- ===== 4. foreign keys =====
 alter table public.buildings add constraint buildings_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES owners(id) ON DELETE SET NULL;

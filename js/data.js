@@ -1604,6 +1604,16 @@ export const store = {
             idCardFrontPath: choices.idCard === 'source' ? (source.idCardFrontPath ?? '') : choices.idCard === 'target' ? (target.idCardFrontPath ?? '') : prefer(target.idCardFrontPath, source.idCardFrontPath),
             idCardBackPath: choices.idCard === 'source' ? (source.idCardBackPath ?? '') : choices.idCard === 'target' ? (target.idCardBackPath ?? '') : prefer(target.idCardBackPath, source.idCardBackPath),
             idCardUploadedAt: choices.idCard === 'source' ? (source.idCardUploadedAt ?? '') : choices.idCard === 'target' ? (target.idCardUploadedAt ?? '') : prefer(target.idCardUploadedAt, source.idCardUploadedAt),
+            idCardStatus: choices.idCard === 'source'
+                ? (source.idCardStatus ?? (source.idCardFrontPath ? 'uploaded' : 'missing'))
+                : choices.idCard === 'target'
+                    ? (target.idCardStatus ?? (target.idCardFrontPath ? 'uploaded' : 'missing'))
+                    : prefer(target.idCardStatus, source.idCardStatus) || (prefer(target.idCardFrontPath, source.idCardFrontPath) ? 'uploaded' : 'missing'),
+            idCardFallbackDeclaredAt: choices.idCard === 'source'
+                ? (source.idCardFallbackDeclaredAt ?? '')
+                : choices.idCard === 'target'
+                    ? (target.idCardFallbackDeclaredAt ?? '')
+                    : prefer(target.idCardFallbackDeclaredAt, source.idCardFallbackDeclaredAt),
             // note 合併 (原兩邊 note + 捨棄的姓名備註)
             note: [target.note, source.note ? `[合併自 ${source.id}] ${source.note}` : '', nicknameNote].filter(Boolean).join('\n')
         };

@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.10';
-export const APP_BUILD_DATE = '2026-10-20';
+export const APP_VERSION = '1.10.11';
+export const APP_BUILD_DATE = '2026-10-30';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.11', date: '2026-10-30', notes: '住客證件 AI 判讀失敗時新增人工補件備援：住客可聲明已把證件傳給小編並先完成 LINE 登記，後台會標示待管理員補件；管理員可在租客詳細資料直接上傳或更換證件正反面，圖片會自動加上用途浮水印。' },
     { version: '1.10.10', date: '2026-10-20', notes: '住客完成新的 LINE 綁定登記後，管理首頁新增未讀提醒卡、右上角通知中心項目與即時彈出提示；可直接查看住客資料或標示已讀，小幫手帳號不顯示此管理通知。' },
     { version: '1.10.9', date: '2026-10-20', notes: '住客 LINE 綁定改為強制 AI 證件驗證：證件正面必須判定為身分證件才可完成登記；若有上傳背面，背面也必須通過，判讀中、無法判讀或不像證件皆會要求重新上傳。' },
     { version: '1.10.8', date: '2026-10-20', notes: '住客 LINE 綁定的證件上傳加入裝置端 AI 輔助判讀：辨識身分證、護照與居留證特徵，顯示像證件／無法確認／不像證件；原圖不會額外傳送給外部 AI，且不以 AI 結果自動拒絕登記。' },

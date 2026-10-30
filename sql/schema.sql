@@ -84,6 +84,12 @@ CREATE TABLE tenants (
     current_property   text,            -- 目前居住的 property name (反正規化)
     status             text,            -- '居住中' | '待入住' | '已退租'
     emergency_contact  text,
+    id_card_front_path text,
+    id_card_back_path  text,
+    id_card_uploaded_at timestamptz,
+    id_card_status     text NOT NULL DEFAULT 'missing'
+        CHECK (id_card_status IN ('missing', 'pending_admin_upload', 'uploaded')),
+    id_card_fallback_declared_at timestamptz,
     created_at         timestamptz DEFAULT now(),
     updated_at         timestamptz DEFAULT now()
 );

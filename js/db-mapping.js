@@ -64,7 +64,9 @@ export const toDb = {
         note: t.note ?? null,
         id_card_front_path: t.idCardFrontPath ?? null,
         id_card_back_path: t.idCardBackPath ?? null,
-        id_card_uploaded_at: t.idCardUploadedAt ?? null
+        id_card_uploaded_at: t.idCardUploadedAt ?? null,
+        id_card_status: t.idCardStatus ?? (t.idCardFrontPath ? 'uploaded' : 'missing'),
+        id_card_fallback_declared_at: t.idCardFallbackDeclaredAt ?? null
     }),
     contract: c => ({
         id: c.id,
@@ -276,7 +278,9 @@ export const fromDb = {
         note: r.note,
         idCardFrontPath: r.id_card_front_path,
         idCardBackPath: r.id_card_back_path,
-        idCardUploadedAt: r.id_card_uploaded_at
+        idCardUploadedAt: r.id_card_uploaded_at,
+        idCardStatus: r.id_card_status || (r.id_card_front_path ? 'uploaded' : 'missing'),
+        idCardFallbackDeclaredAt: r.id_card_fallback_declared_at
     }),
     contract: r => ({
         id: r.id,

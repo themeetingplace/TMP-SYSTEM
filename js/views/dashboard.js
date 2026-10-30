@@ -347,12 +347,15 @@ function buildTenantRegistrationAlert() {
     if (!registrations.length) return '';
 
     const shown = registrations.slice(0, 5);
+    const pendingDocumentCount = registrations.filter(({ tenant }) => tenant.idCardStatus === 'pending_admin_upload').length;
     return `
         <section class="card tenant-registration-alert" aria-labelledby="tenant-registration-alert-title">
             <div class="tenant-registration-alert-head">
                 <div>
                     <h2 class="card-title" id="tenant-registration-alert-title"><i class="ph-fill ph-bell-ringing"></i> 新的住客登記</h2>
-                    <p>住客已完成資料填寫、LINE 綁定與證件驗證，請查看並接續處理。</p>
+                    <p>${pendingDocumentCount
+                        ? `住客已完成資料填寫與 LINE 綁定，其中 ${pendingDocumentCount} 筆等待管理員補上證件。`
+                        : '住客已完成資料填寫、LINE 綁定與證件驗證，請查看並接續處理。'}</p>
                 </div>
                 <span class="status-badge warning">${registrations.length} 筆未讀</span>
             </div>
@@ -367,7 +370,7 @@ function buildTenantRegistrationAlert() {
                             <div class="tenant-registration-alert-avatar">${esc((tenant.name || '?').charAt(0))}</div>
                             <div class="tenant-registration-alert-info">
                                 <strong>${esc(tenant.name || '未命名住客')}</strong>
-                                <span>${esc(tenant.phone || '未填電話')} · ${esc(timeLabel)} 完成 LINE 綁定</span>
+                                <span>${esc(tenant.phone || '未填電話')} · ${esc(timeLabel)} 完成 LINE 綁定${tenant.idCardStatus === 'pending_admin_upload' ? ' · ⚠ 待補證件' : ''}</span>
                             </div>
                             <div class="tenant-registration-alert-actions">
                                 <button type="button" class="btn btn-outline tenant-registration-read" data-notification-id="${esc(id)}">已讀</button>
