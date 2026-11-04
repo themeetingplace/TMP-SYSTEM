@@ -120,14 +120,22 @@ assert.equal(
 
 const liffSource = readFileSync(new URL('../liff/index.html', import.meta.url), 'utf8');
 assert.ok(liffSource.includes('tesseract.js@6.0.1'), 'LIFF 必須載入固定版本的裝置端 OCR');
-assert.ok(liffSource.includes('AI：看起來是身分證件'), '上傳區必須顯示 AI 判讀結果');
+assert.ok(liffSource.includes('✓ 證件內容清楚'), '上傳區必須以一般使用者文字顯示證件檢查結果');
 assert.ok(liffSource.includes('idOcrQueue'), '正反面 OCR 必須排隊，避免同一 worker 併發衝突');
-assert.ok(liffSource.includes('prepareEnhancedBackCanvas'), '反面第一次失敗時必須以旋轉高對比影像重判');
+assert.ok(liffSource.includes('prepareEnhancedOcrCanvas'), '第一次失敗時必須以高對比影像重判');
 assert.ok(liffSource.includes('maxDim = 1800'), '證件 OCR 必須保留足夠解析度以辨識反面小字');
 assert.ok(liffSource.includes('validateIdDocumentGate'), '送出前必須強制檢查 AI 證件驗證結果');
 assert.ok(liffSource.includes('errIdAiRejected'), 'AI 判定不是證件時必須顯示阻擋訊息');
 assert.ok(liffSource.includes('manualIdFallback'), 'AI 失敗畫面必須提供已將證件交給小編的人工補件聲明');
 assert.ok(liffSource.includes('待管理員補件'), '人工補件路徑必須清楚標示後台待處理狀態');
-assert.ok(liffSource.includes('不檢查大頭照'), '反面判讀提示必須明確說明不檢查大頭照');
+assert.ok(!liffSource.includes('AI 判讀'), '住客畫面不得再顯示 AI 判讀技術提示');
+assert.ok(!liffSource.includes('不檢查大頭照'), '住客畫面不得顯示大頭照判斷技術提示');
+assert.ok(!liffSource.includes('portrait not required'), '英文畫面不得顯示大頭照判斷技術提示');
+
+assert.ok(liffSource.includes('cropperjs@1.6.2'), '證件上傳必須載入固定版本的圖片裁切工具');
+assert.ok(liffSource.includes('getCroppedCanvas'), '圖片編輯器必須能輸出裁切後影像');
+assert.ok(liffSource.includes("cropper?.rotate(-90)"), '圖片編輯器必須支援向左旋轉');
+assert.ok(liffSource.includes("cropper?.rotate(90)"), '圖片編輯器必須支援向右旋轉');
+assert.ok(liffSource.includes('idCardSources'), '裁切後必須保留無浮水印來源供再次調整');
 
 console.log('ID document AI classifier regression checks passed');

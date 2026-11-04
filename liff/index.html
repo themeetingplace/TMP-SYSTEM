@@ -9,9 +9,11 @@
 <title>聚空間 — 住客資料登記</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
-<script src="./id-document-ai.js?v=20261030d"></script>
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+<script src="./id-document-ai.js?v=20261104a"></script>
 <style>
     :root {
         --brand: #ff8859;
@@ -219,6 +221,34 @@
         color: var(--success);
         font-weight: 600;
     }
+    .id-upload-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.35rem;
+        margin-top: 0.45rem;
+        position: relative;
+        z-index: 2;
+    }
+    .id-upload-action {
+        min-height: 34px;
+        padding: 0.35rem 0.25rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--text-main);
+        font: 600 0.68rem/1.2 inherit;
+        cursor: pointer;
+    }
+    .id-upload-action.is-primary {
+        border-color: rgba(255, 136, 89, 0.45);
+        color: #c64e21;
+        background: rgba(255, 136, 89, 0.08);
+    }
+    .id-upload-card.has-file input[type="file"] {
+        width: 1px;
+        height: 1px;
+        pointer-events: none;
+    }
     .id-ai-status {
         display: flex;
         align-items: center;
@@ -296,6 +326,89 @@
         font-size: 0.68rem;
         line-height: 1.5;
         color: #8a5c0a;
+    }
+
+    /* === 證件圖片編輯器：手機採滿版底部工作區，讓裁切範圍保持清楚 === */
+    .id-editor-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        background: rgba(12, 16, 24, 0.72);
+        backdrop-filter: blur(4px);
+    }
+    .id-editor {
+        width: min(100%, 560px);
+        max-height: 94dvh;
+        overflow: auto;
+        background: #fff;
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.22);
+    }
+    .id-editor-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1rem 0.8rem;
+    }
+    .id-editor-title { margin: 0; font-size: 1.02rem; font-weight: 700; }
+    .id-editor-subtitle { margin: 0.2rem 0 0; color: var(--text-muted); font-size: 0.75rem; }
+    .id-editor-close {
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: #fff;
+        color: var(--text-main);
+        font-size: 1.15rem;
+        cursor: pointer;
+    }
+    .id-editor-stage {
+        height: min(54dvh, 410px);
+        min-height: 300px;
+        background: #111722;
+        overflow: hidden;
+    }
+    .id-editor-stage img { display: block; max-width: 100%; }
+    .id-editor-tools {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.55rem;
+        padding: 0.8rem 1rem 0;
+    }
+    .id-editor-tool {
+        min-height: 44px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: #f8f9fb;
+        color: var(--text-main);
+        font: 600 0.78rem/1.2 inherit;
+        cursor: pointer;
+    }
+    .id-editor-foot {
+        display: grid;
+        grid-template-columns: minmax(90px, 0.7fr) 1.3fr;
+        gap: 0.65rem;
+        padding: 0.8rem 1rem max(1rem, env(safe-area-inset-bottom));
+    }
+    .id-editor-cancel, .id-editor-apply {
+        min-height: 48px;
+        border-radius: 9px;
+        font: 700 0.9rem/1 inherit;
+        cursor: pointer;
+    }
+    .id-editor-cancel { border: 1px solid var(--border); background: #fff; color: var(--text-main); }
+    .id-editor-apply { border: 0; background: var(--brand); color: #fff; }
+    .id-editor-apply:disabled { opacity: 0.55; cursor: wait; }
+    .cropper-view-box { outline: 2px solid var(--brand); outline-color: rgba(255, 136, 89, 0.9); }
+    .cropper-line, .cropper-point { background-color: var(--brand); }
+
+    @media (min-width: 600px) {
+        .id-editor-backdrop { align-items: center; padding: 1.5rem; }
+        .id-editor { border-radius: 18px; }
     }
 
     /* === 語言切換器 (右上 pill toggle) === */
@@ -388,15 +501,25 @@ const STRINGS = {
         cardLabelFrontShort: '正面',
         cardLabelBackShort: '反面',
         cardStatusDone: '✓ 已加浮水印 ({sizeKB} KB)',
-        aiChecking: 'AI 判讀中…',
-        aiLikely: '✓ AI：看起來是身分證件',
-        aiBackAccepted: '✓ AI：已辨識為證件反面（不檢查大頭照）',
-        aiUncertain: '⚠ AI：無法確認，請重新上傳清晰完整的證件',
-        aiUnlikely: '⚠ AI：看起來不像身分證件，請重新上傳',
-        aiUnavailable: '⚠ AI 暫時無法判讀，請稍後重新上傳',
-        manualFallbackTitle: 'AI 判讀仍失敗？',
+        editImage: '裁切／旋轉',
+        replaceImage: '重新上傳',
+        editorTitle: '調整{side}照片',
+        editorSubtitle: '拖曳裁切框保留完整證件，文字方向要保持正向',
+        editorRotateLeft: '↶ 左轉 90°',
+        editorRotateRight: '↷ 右轉 90°',
+        editorReset: '重設',
+        editorCancel: '取消',
+        editorApply: '使用這張照片',
+        editorUnavailable: '圖片編輯器載入失敗，請重新開啟頁面後再試',
+        aiChecking: '檢查證件中…',
+        aiLikely: '✓ 證件內容清楚',
+        aiBackAccepted: '✓ 證件反面清楚',
+        aiUncertain: '⚠ 無法確認內容，請裁切後重試或重新上傳',
+        aiUnlikely: '⚠ 無法辨識為有效證件，請重新上傳',
+        aiUnavailable: '⚠ 暫時無法檢查，請稍後重新上傳',
+        manualFallbackTitle: '證件仍無法確認？',
         manualFallbackBody: '如果你已經把身分證件傳給小編，可以改由管理員從後台補上。',
-        manualFallbackCheck: '我已告知小編 AI 判讀失敗，並已將身分證件傳給小編',
+        manualFallbackCheck: '我已告知小編證件無法確認，並已將身分證件傳給小編',
         manualFallbackHint: '勾選後可先完成登記；後台會標示「待管理員補件」，管理員補上證件後才算完成。',
         btnSubmit: '送出登記',
         btnSubmitting: '送出中…',
@@ -409,9 +532,9 @@ const STRINGS = {
         doneBodyManual: '您的資料已送出，LINE 也綁定完成<br>證件已標示為待管理員補件，請確認已傳給小編 ✨',
         doneClose: '關閉視窗',
         errIdFrontMissing: '請至少上傳證件正面照片',
-        errIdAiChecking: 'AI 正在判讀證件，請稍候完成後再送出',
-        errIdAiRejected: 'AI 無法確認上傳的是身分證件，請重新拍攝或上傳清晰、完整的身分證／護照／居留證',
-        errIdAiUnavailable: 'AI 證件驗證暫時無法使用，請確認網路後重新上傳證件',
+        errIdAiChecking: '正在檢查證件，請稍候完成後再送出',
+        errIdAiRejected: '無法確認上傳的是有效證件，請裁切並調正方向，或重新上傳清晰完整的身分證／護照／居留證',
+        errIdAiUnavailable: '證件檢查暫時無法使用，請確認網路後重新上傳證件',
         errSubmitFailed: '送出失敗：{msg}',
         errWatermarkFailed: '圖片處理失敗：{msg}',
         errLiffInit: 'LIFF 初始化失敗：{msg}\n\ncode: {code}\nURL: {url}\n\n請聯絡小編並附上這段訊息',
@@ -447,15 +570,25 @@ const STRINGS = {
         cardLabelFrontShort: 'Front',
         cardLabelBackShort: 'Back',
         cardStatusDone: '✓ Watermarked ({sizeKB} KB)',
-        aiChecking: 'AI is checking…',
-        aiLikely: '✓ AI: This looks like an identity document',
-        aiBackAccepted: '✓ AI: ID back accepted (portrait not required)',
-        aiUncertain: '⚠ AI: Unable to confirm. Please upload a clear, complete ID again',
-        aiUnlikely: '⚠ AI: This does not look like an identity document. Please upload again',
-        aiUnavailable: '⚠ AI check unavailable. Please try uploading again later',
-        manualFallbackTitle: 'AI check still failing?',
+        editImage: 'Crop / rotate',
+        replaceImage: 'Upload again',
+        editorTitle: 'Adjust {side} photo',
+        editorSubtitle: 'Keep the full document inside the crop box and make sure the text is upright',
+        editorRotateLeft: '↶ Rotate left',
+        editorRotateRight: '↷ Rotate right',
+        editorReset: 'Reset',
+        editorCancel: 'Cancel',
+        editorApply: 'Use this photo',
+        editorUnavailable: 'The image editor could not load. Reopen this page and try again.',
+        aiChecking: 'Checking document…',
+        aiLikely: '✓ Document is clear',
+        aiBackAccepted: '✓ Document back is clear',
+        aiUncertain: '⚠ Content could not be confirmed. Crop or upload again',
+        aiUnlikely: '⚠ This could not be identified as a valid document',
+        aiUnavailable: '⚠ Document check unavailable. Please try again later',
+        manualFallbackTitle: 'Still unable to confirm the document?',
         manualFallbackBody: 'If you have already sent your identity document to the admin, they can upload it from the back office.',
-        manualFallbackCheck: 'I told the admin that the AI check failed and sent my identity document to them',
+        manualFallbackCheck: 'I told the admin that the document could not be confirmed and sent it to them',
         manualFallbackHint: 'You may finish registration after checking this box. Your record will remain “Pending admin upload” until the document is added.',
         btnSubmit: 'Submit',
         btnSubmitting: 'Submitting…',
@@ -468,9 +601,9 @@ const STRINGS = {
         doneBodyManual: 'Your info is submitted and your LINE account is linked.<br>Your ID is pending admin upload. Please make sure you sent it to the admin ✨',
         doneClose: 'Close',
         errIdFrontMissing: 'Please upload the front of your ID at minimum.',
-        errIdAiChecking: 'AI is still checking your ID. Please wait before submitting.',
-        errIdAiRejected: 'AI could not verify this as an identity document. Please upload a clear, complete ID card, passport, or residence permit.',
-        errIdAiUnavailable: 'AI ID verification is temporarily unavailable. Check your connection and upload the document again.',
+        errIdAiChecking: 'Your document is still being checked. Please wait before submitting.',
+        errIdAiRejected: 'This could not be confirmed as a valid document. Crop and straighten it, or upload a clear, complete ID card, passport, or residence permit.',
+        errIdAiUnavailable: 'Document checking is temporarily unavailable. Check your connection and upload again.',
         errSubmitFailed: 'Submit failed: {msg}',
         errWatermarkFailed: 'Image processing failed: {msg}',
         errLiffInit: 'LIFF init failed: {msg}\n\ncode: {code}\nURL: {url}\n\nPlease contact the admin with this message.',
@@ -746,16 +879,29 @@ function restoreFormValues(values) {
 async function handleIdCardChange(input, file) {
     if (!file) return;
     const side = input.dataset.side;
+    input.value = '';
+    try {
+        const editedImage = await openIdImageEditor(file, side);
+        if (!editedImage) return;
+        await processIdCardImage(side, editedImage);
+    } catch (err) {
+        console.error('[id-image-editor] failed:', err);
+        showSubmitMessage(err.message || t('errWatermarkFailed', { msg: 'image editor failed' }), 'error');
+    }
+}
+
+async function processIdCardImage(side, sourceImage) {
     const requestId = ++idCardAnalysisRequest[side];
     idCardAnalysis[side] = { verdict: 'checking' };
+    idCardSources[side] = sourceImage;
     const fallbackCheckbox = document.querySelector('[name="manualIdFallback"]');
     if (fallbackCheckbox) fallbackCheckbox.checked = false;
     updateManualFallbackVisibility();
     try {
-        const watermarked = await addWatermark(file);
+        const watermarked = await addWatermark(sourceImage);
         idCardImages[side] = watermarked;
         applyIdPreview(side, watermarked);
-        analyzeIdDocument(file, side).then(result => {
+        analyzeIdDocument(sourceImage, side).then(result => {
             if (requestId !== idCardAnalysisRequest[side]) return;
             idCardAnalysis[side] = result;
             renderIdAnalysisStatus(side);
@@ -771,6 +917,132 @@ async function handleIdCardChange(input, file) {
     }
 }
 
+function openIdImageEditor(imageBlob, side) {
+    return new Promise((resolve, reject) => {
+        if (!window.Cropper) {
+            reject(new Error(t('editorUnavailable')));
+            return;
+        }
+
+        const shortLabel = t(side === 'front' ? 'cardLabelFrontShort' : 'cardLabelBackShort');
+        const objectUrl = URL.createObjectURL(imageBlob);
+        const previousOverflow = document.body.style.overflow;
+        const backdrop = document.createElement('div');
+        backdrop.className = 'id-editor-backdrop';
+        backdrop.setAttribute('role', 'dialog');
+        backdrop.setAttribute('aria-modal', 'true');
+        backdrop.setAttribute('aria-label', t('editorTitle', { side: shortLabel }));
+        backdrop.innerHTML = `
+            <section class="id-editor">
+                <header class="id-editor-head">
+                    <div>
+                        <h2 class="id-editor-title">${t('editorTitle', { side: shortLabel })}</h2>
+                        <p class="id-editor-subtitle">${t('editorSubtitle')}</p>
+                    </div>
+                    <button type="button" class="id-editor-close" aria-label="${t('editorCancel')}">×</button>
+                </header>
+                <div class="id-editor-stage"><img src="${objectUrl}" alt=""></div>
+                <div class="id-editor-tools">
+                    <button type="button" class="id-editor-tool" data-editor-action="rotate-left">${t('editorRotateLeft')}</button>
+                    <button type="button" class="id-editor-tool" data-editor-action="reset">${t('editorReset')}</button>
+                    <button type="button" class="id-editor-tool" data-editor-action="rotate-right">${t('editorRotateRight')}</button>
+                </div>
+                <footer class="id-editor-foot">
+                    <button type="button" class="id-editor-cancel">${t('editorCancel')}</button>
+                    <button type="button" class="id-editor-apply">${t('editorApply')}</button>
+                </footer>
+            </section>`;
+
+        document.body.appendChild(backdrop);
+        document.body.style.overflow = 'hidden';
+        const image = backdrop.querySelector('.id-editor-stage img');
+        const applyButton = backdrop.querySelector('.id-editor-apply');
+        let cropper = null;
+        let settled = false;
+
+        const cleanup = () => {
+            document.removeEventListener('keydown', onKeyDown);
+            cropper?.destroy();
+            URL.revokeObjectURL(objectUrl);
+            backdrop.remove();
+            document.body.style.overflow = previousOverflow;
+        };
+        const finish = value => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(value);
+        };
+        const fail = error => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(error);
+        };
+        const onKeyDown = event => {
+            if (event.key === 'Escape') finish(null);
+        };
+        document.addEventListener('keydown', onKeyDown);
+
+        image.addEventListener('load', () => {
+            cropper = new window.Cropper(image, {
+                viewMode: 1,
+                dragMode: 'move',
+                autoCropArea: 0.92,
+                background: false,
+                responsive: true,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false
+            });
+        }, { once: true });
+        image.addEventListener('error', () => {
+            fail(new Error(t('editorUnavailable')));
+        }, { once: true });
+
+        backdrop.querySelector('.id-editor-close').addEventListener('click', () => finish(null));
+        backdrop.querySelector('.id-editor-cancel').addEventListener('click', () => finish(null));
+        backdrop.querySelector('[data-editor-action="rotate-left"]').addEventListener('click', () => cropper?.rotate(-90));
+        backdrop.querySelector('[data-editor-action="rotate-right"]').addEventListener('click', () => cropper?.rotate(90));
+        backdrop.querySelector('[data-editor-action="reset"]').addEventListener('click', () => cropper?.reset());
+        applyButton.addEventListener('click', () => {
+            if (!cropper) return;
+            applyButton.disabled = true;
+            const canvas = cropper.getCroppedCanvas({
+                maxWidth: 2200,
+                maxHeight: 2200,
+                fillColor: '#fff',
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high'
+            });
+            if (!canvas) {
+                applyButton.disabled = false;
+                return;
+            }
+            canvas.toBlob(blob => {
+                if (blob) finish(blob);
+                else applyButton.disabled = false;
+            }, 'image/jpeg', 0.94);
+        });
+    });
+}
+
+async function editExistingIdCard(side) {
+    const sourceImage = idCardSources[side];
+    if (!sourceImage) return;
+    try {
+        const editedImage = await openIdImageEditor(sourceImage, side);
+        if (editedImage) await processIdCardImage(side, editedImage);
+    } catch (err) {
+        console.error('[id-image-editor] failed:', err);
+        showSubmitMessage(err.message || t('editorUnavailable'), 'error');
+    }
+}
+
 // 把已上傳照片渲染成 preview 卡 — i18n re-render 跟「換選照片」共用
 function applyIdPreview(side, blob) {
     const card = document.getElementById(side === 'front' ? 'id-card-front' : 'id-card-back');
@@ -783,14 +1055,29 @@ function applyIdPreview(side, blob) {
         <div class="id-upload-label">${shortLabel}</div>
         <div class="id-upload-status">${t('cardStatusDone', { sizeKB: Math.round(blob.size / 1024) })}</div>
         ${idAnalysisStatusHtml(side)}
+        <div class="id-upload-actions">
+            <button type="button" class="id-upload-action is-primary" data-id-edit>${t('editImage')}</button>
+            <button type="button" class="id-upload-action" data-id-replace>${t('replaceImage')}</button>
+        </div>
     `;
     card.classList.add('has-file');
     const newInput = card.querySelector('input[type="file"]');
     newInput.addEventListener('change', (ev) => handleIdCardChange(newInput, ev.target.files[0]));
+    card.querySelector('[data-id-edit]').addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        editExistingIdCard(side);
+    });
+    card.querySelector('[data-id-replace]').addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        newInput.click();
+    });
 }
 
 // 已上傳浮水印照片 (in-memory，submit 時轉 base64 傳給 Edge Function)
 const idCardImages = { front: null, back: null };
+const idCardSources = { front: null, back: null };
 const idCardAnalysis = { front: null, back: null };
 const idCardAnalysisRequest = { front: 0, back: 0 };
 let idOcrWorkerPromise = null;
@@ -865,16 +1152,19 @@ async function prepareOcrCanvas(file) {
     return canvas;
 }
 
-function prepareEnhancedBackCanvas(sourceCanvas) {
+function prepareEnhancedOcrCanvas(sourceCanvas, { rotate180 = false } = {}) {
     const canvas = document.createElement('canvas');
     canvas.width = sourceCanvas.width;
     canvas.height = sourceCanvas.height;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.rotate(Math.PI);
+    if (rotate180) {
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(Math.PI);
+        ctx.translate(-canvas.width / 2, -canvas.height / 2);
+    }
     ctx.filter = 'grayscale(1) contrast(1.8)';
-    ctx.drawImage(sourceCanvas, -canvas.width / 2, -canvas.height / 2);
+    ctx.drawImage(sourceCanvas, 0, 0);
     ctx.restore();
     return canvas;
 }
@@ -886,11 +1176,11 @@ async function analyzeIdDocument(file, side) {
         const firstResult = await worker.recognize(canvas);
         const firstText = firstResult?.data?.text || '';
         const firstVerdict = window.IdDocumentAI.classifyIdDocumentText(firstText, { side, imageAspectRatio });
-        if (side !== 'back' || firstVerdict.verdict === 'likely') return firstVerdict;
+        if (firstVerdict.verdict === 'likely') return firstVerdict;
 
-        // 反面第一次沒讀到欄位時，自動以旋轉 180°、灰階高對比再辨識一次。
-        // 合併兩次 OCR 文字後判斷，避免手機方向或反光造成誤判。
-        const enhancedCanvas = prepareEnhancedBackCanvas(canvas);
+        // 第一次未通過時以灰階高對比重讀；反面再自動旋轉 180°，
+        // 合併兩次文字結果，降低方向、陰影與反光造成的辨識失敗。
+        const enhancedCanvas = prepareEnhancedOcrCanvas(canvas, { rotate180: side === 'back' });
         const retryResult = await worker.recognize(enhancedCanvas);
         const combinedText = `${firstText}\n${retryResult?.data?.text || ''}`;
         return window.IdDocumentAI.classifyIdDocumentText(combinedText, { side, imageAspectRatio });
@@ -991,7 +1281,7 @@ async function handleSubmit(profile) {
 
     const manualFallbackChecked = Boolean(form.elements.manualIdFallback?.checked);
 
-    // 正常流程仍要求裝置端 AI 通過；只有 AI 已完成且判讀失敗時，
+    // 正常流程仍要求裝置端證件檢查通過；只有檢查完成且無法確認時，
     // 才能由住客明確聲明「已將證件傳給小編」，改走後台人工補件。
     const idGate = window.IdDocumentAI?.validateIdDocumentGate?.({
         hasFront: Boolean(idCardImages.front),
@@ -1029,7 +1319,7 @@ async function handleSubmit(profile) {
         }
         btn.textContent = t('btnProcessing');
         const manualIdFallback = idGate.code === 'manual_review';
-        // 人工補件路徑不把 AI 無法確認的影像存入正式證件欄；管理員會從後台上傳已核對的版本。
+        // 人工補件路徑不把無法確認的影像存入正式證件欄；管理員會從後台上傳已核對的版本。
         const idCardFrontB64 = manualIdFallback ? null : await blobToBase64(idCardImages.front);
         const idCardBackB64  = manualIdFallback || !idCardImages.back ? null : await blobToBase64(idCardImages.back);
 
