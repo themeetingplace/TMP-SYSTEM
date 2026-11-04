@@ -1680,11 +1680,16 @@ export async function sendContractToLine(id) {
 
         showToast('上傳到雲端…', 'info');
         const { url: fileUrl } = await uploadPdfToStorage(filename, bytes);
+        const downloadPageUrl = new URL('/contract-download/', window.location.origin);
+        downloadPageUrl.searchParams.set('file', fileUrl);
+        downloadPageUrl.searchParams.set('name', filename);
 
         showToast('推送到 LINE…', 'info');
         await pushToTenant(tenant.id, {
             message: buildContractLineMessage(c, getContractInvoice(c)),
-            fileUrl,
+            // 舊版 line-push 會顯示此頁面連結；新版則會包成 Flex 下載按鈕。
+            // 兩種情況都先進入可預覽合約內容的安全下載頁。
+            fileUrl: downloadPageUrl.toString(),
             fileName: filename
         });
 

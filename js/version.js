@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.15';
+export const APP_VERSION = '1.10.16';
 export const APP_BUILD_DATE = '2026-11-04';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.16', date: '2026-11-04', notes: 'LINE 合約連結改為專用下載頁，開啟後會直接顯示合約 PDF 內容、檔名與 24 小時期限；確認內容後可按醒目的「下載 PDF」，也能切換全螢幕查看。' },
     { version: '1.10.15', date: '2026-11-04', notes: '住客證件上傳新增裁切、左右旋轉、重設與重新編輯；裁切後以高解析度及高對比再次檢查，提高手機照片、反光與方向不正時的辨識率。住客畫面改用單純的證件狀態文字，移除判讀技術與照片特徵說明。' },
     { version: '1.10.14', date: '2026-10-30', notes: '修正手機上傳身分證反面仍可能判讀失敗：OCR 解析度提高至 1800px，第一次未通過會自動以旋轉 180 度、灰階高對比重判；反面同時結合證件比例與可讀文字，不再要求欄位名稱必須被完整辨識，發票與收據排除規則維持。' },
     { version: '1.10.13', date: '2026-10-30', notes: '擴充證件格式：各國護照可依 PASSPORT 與國際 MRZ 機讀碼辨識；居留證新增 Residence Card、Permanent Resident 及德、法、西、義、日、韓常見名稱。' },

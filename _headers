@@ -24,6 +24,11 @@
 /js/*
   Cache-Control: no-cache, must-revalidate, max-age=0
 
+# 合約下載頁的 URL 內含 24 小時 signed URL，不保存頁面快取也不傳送 referrer。
+/contract-download/*
+  Cache-Control: no-store, no-cache, must-revalidate
+  Referrer-Policy: no-referrer
+
 # LIFF 子目錄 — 因為要被 LINE 嵌 iframe，X-Frame-Options 改 SAMEORIGIN
 /liff/*
   X-Frame-Options: SAMEORIGIN
