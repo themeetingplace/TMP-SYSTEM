@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <style>
         :root {
             --coral: #ff8555;
@@ -88,7 +89,7 @@
         .expiry svg { flex: 0 0 auto; margin-top: 2px; }
         .preview-shell {
             flex: 1 1 auto;
-            min-height: 320px;
+            min-height: 0;
             margin: 0 14px;
             overflow: hidden;
             border: 1px solid #d7dbe2;
@@ -109,14 +110,41 @@
         }
         .preview-label span:last-child { color: var(--success); }
         .pdf-preview {
-            display: block;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
             width: 100%;
             height: calc(100% - 38px);
-            border: 0;
+            padding: 12px;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            background: #dfe2e7;
+        }
+        .pdf-page {
+            display: block;
+            max-width: 100%;
+            height: auto;
             background: #fff;
+            box-shadow: 0 3px 12px rgba(32, 36, 45, .16);
+        }
+        .preview-message {
+            display: grid;
+            place-items: center;
+            width: 100%;
+            min-height: 180px;
+            padding: 24px;
+            text-align: center;
+            color: var(--muted);
+            background: #fff;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.7;
         }
         .action-panel {
             flex: 0 0 auto;
+            position: relative;
+            z-index: 5;
             padding: 14px 20px max(16px, env(safe-area-inset-bottom));
             background: #fff;
             border-top: 1px solid var(--line);
@@ -163,7 +191,7 @@
         @media (max-width: 420px) {
             .download-card { height: calc(100dvh - 18px); border-radius: 14px; }
             .content { padding: 14px 14px 10px; }
-            .preview-shell { margin: 0 9px; min-height: 280px; }
+            .preview-shell { margin: 0 9px; min-height: 0; }
             .action-panel { padding: 11px 14px max(12px, env(safe-area-inset-bottom)); }
             .action { min-height: 50px; font-size: 15px; }
         }
@@ -184,7 +212,9 @@
             </div>
             <div class="preview-shell">
                 <div class="preview-label"><span>合約內容預覽</span><span>安全連結</span></div>
-                <iframe class="pdf-preview" id="pdf-preview" title="合約 PDF 內容"></iframe>
+                <div class="pdf-preview" id="pdf-preview" aria-label="合約 PDF 內容">
+                    <div class="preview-message">正在載入合約內容…</div>
+                </div>
             </div>
             <div class="action-panel">
                 <div class="action-grid">
@@ -225,7 +255,39 @@
             invalidView.hidden = false;
         } else {
             document.getElementById('filename').textContent = filename;
-            document.getElementById('pdf-preview').src = fileUrl;
+            renderPdfPreview();
+        }
+
+        async function renderPdfPreview() {
+            const container = document.getElementById('pdf-preview');
+            try {
+                if (!window.pdfjsLib) throw new Error('PDF viewer unavailable');
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                const loadingTask = window.pdfjsLib.getDocument({ url: fileUrl, withCredentials: false });
+                const pdf = await loadingTask.promise;
+                container.innerHTML = '';
+
+                for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                    const page = await pdf.getPage(pageNumber);
+                    const baseViewport = page.getViewport({ scale: 1 });
+                    const availableWidth = Math.max(240, container.clientWidth - 24);
+                    const cssScale = Math.min(1.6, availableWidth / baseViewport.width);
+                    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+                    const renderViewport = page.getViewport({ scale: cssScale * pixelRatio });
+                    const canvas = document.createElement('canvas');
+                    canvas.className = 'pdf-page';
+                    canvas.width = Math.ceil(renderViewport.width);
+                    canvas.height = Math.ceil(renderViewport.height);
+                    canvas.style.width = `${Math.floor(renderViewport.width / pixelRatio)}px`;
+                    canvas.style.height = `${Math.floor(renderViewport.height / pixelRatio)}px`;
+                    canvas.setAttribute('aria-label', `合約第 ${pageNumber} 頁，共 ${pdf.numPages} 頁`);
+                    container.appendChild(canvas);
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport: renderViewport }).promise;
+                }
+            } catch (error) {
+                console.warn('[contract-preview]', error);
+                container.innerHTML = '<div class="preview-message">合約預覽暫時無法載入，仍可使用下方按鈕下載或全螢幕開啟。</div>';
+            }
         }
 
         previewButton.addEventListener('click', () => {

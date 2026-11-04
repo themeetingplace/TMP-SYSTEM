@@ -9,7 +9,10 @@ assert.match(contractsSource, /fileUrl: downloadPageUrl\.toString\(\)/, '即使 
 
 assert.match(pageSource, /id="download-button"[^>]*>下載 PDF</, '下載頁必須有醒目的下載 PDF 主按鈕');
 assert.match(pageSource, /id="pdf-preview"/, '下載頁開啟後必須立即顯示 PDF 內容');
-assert.match(pageSource, /document\.getElementById\('pdf-preview'\)\.src = fileUrl/, 'PDF 預覽必須使用本次 signed URL');
+assert.match(pageSource, /pdfjs-dist@3\.11\.174/, 'PDF 預覽必須固定使用經驗證的 PDF.js 版本');
+assert.match(pageSource, /pdfjsLib\.getDocument\(\{ url: fileUrl/, 'PDF 預覽必須使用本次 signed URL');
+assert.match(pageSource, /className = 'pdf-page'/, 'PDF 必須由頁面自行繪製，避免手機檢視器接管整頁');
+assert.doesNotMatch(pageSource, /<iframe[^>]+id="pdf-preview"/, 'PDF 預覽不得使用會被 LINE 手機檢視器接管的 iframe');
 assert.match(pageSource, /id="preview-button"[^>]*>全螢幕開啟</, '下載頁必須提供全螢幕開啟選項');
 assert.match(pageSource, /mkatwwouurwxlruisqwe\.supabase\.co/, '下載頁只接受目前專案的 Storage 網址');
 assert.match(pageSource, /\/storage\/v1\/object\/sign\/contract-pdfs\//, '下載頁只接受合約 bucket 的 signed URL');
