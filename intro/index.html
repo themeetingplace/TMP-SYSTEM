@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="聚空間 PMS：整合共居與代管、住房、合約、帳務、LINE、館務報帳與營運報表的一站式租賃管理系統。">
+    <meta property="og:title" content="聚空間 PMS｜一套看懂完整租賃營運">
+    <meta property="og:description" content="從空床、入住、收款到續租與報表，把日常營運放在同一套流程裡。">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://themeetingplace-pms.pages.dev/assets/logo-full.png">
+    <title>聚空間 PMS｜完整功能介紹</title>
+    <link rel="icon" href="../assets/logo-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        :root {
+            --coral: #ff8355;
+            --coral-dark: #e75c2d;
+            --coral-soft: #fff0e9;
+            --ink: #1d2430;
+            --ink-2: #303947;
+            --muted: #6f7785;
+            --canvas: #f4f6f8;
+            --paper: #ffffff;
+            --line: #e4e7ec;
+            --mint: #2ea57d;
+            --mint-soft: #e9f8f3;
+            --blue: #5875df;
+            --blue-soft: #edf1ff;
+            --amber: #d59b28;
+            --dark: #171e29;
+            --radius: 22px;
+            --shadow: 0 22px 65px rgba(25, 34, 48, .12);
+        }
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            overflow-x: hidden;
+            color: var(--ink);
+            background: var(--canvas);
+            font-family: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            line-height: 1.65;
+        }
+        a { color: inherit; }
+        button, a { -webkit-tap-highlight-color: transparent; }
+        .wrap { width: min(1180px, calc(100% - 40px)); margin-inline: auto; }
+        .topbar {
+            position: fixed;
+            inset: 0 0 auto;
+            z-index: 50;
+            height: 72px;
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,.88);
+            border-bottom: 1px solid rgba(228,231,236,.8);
+            backdrop-filter: blur(18px);
+        }
+        .topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+        .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+        .brand img { width: 38px; height: 38px; object-fit: contain; }
+        .brand-copy { display: flex; flex-direction: column; line-height: 1.1; }
+        .brand-copy strong { font-size: 16px; }
+        .brand-copy span { margin-top: 4px; color: var(--muted); font: 600 10px/1 Outfit, sans-serif; letter-spacing: .12em; }
+        .nav { display: flex; align-items: center; gap: 26px; }
+        .nav a { color: #525b69; font-size: 14px; font-weight: 600; text-decoration: none; }
+        .nav a:hover { color: var(--coral-dark); }
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 46px;
+            padding: 0 18px;
+            border: 0;
+            border-radius: 11px;
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .button.primary { color: #fff; background: var(--coral); box-shadow: 0 10px 25px rgba(231,92,45,.22); }
+        .button.primary:hover { background: var(--coral-dark); }
+        .button.dark { color: #fff; background: var(--dark); }
+        .button.ghost { color: var(--ink); background: #fff; border: 1px solid var(--line); }
+
+        .hero {
+            position: relative;
+            overflow: hidden;
+            padding: 144px 0 86px;
+            color: #fff;
+            background: var(--dark);
+        }
+        .hero::before {
+            content: "";
+            position: absolute;
+            inset: -20% -10% auto auto;
+            width: 650px;
+            height: 650px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,131,85,.24), transparent 67%);
+            pointer-events: none;
+        }
+        .hero-grid { position: relative; display: grid; grid-template-columns: minmax(0,.86fr) minmax(0,1.14fr); align-items: center; gap: 62px; }
+        .hero-grid > * { min-width: 0; }
+        .eyebrow { margin: 0 0 16px; color: var(--coral); font: 700 12px/1 Outfit, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+        .hero h1 { margin: 0; font-size: clamp(42px, 6vw, 74px); line-height: 1.05; letter-spacing: -.045em; }
+        .hero h1 span { display: block; color: #ffb493; }
+        .hero-lede { max-width: 580px; margin: 24px 0 30px; color: #c7ced8; font-size: 17px; line-height: 1.85; }
+        .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+        .hero .button.ghost { color: #fff; background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.18); }
+        .hero-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+        .hero-tag { padding: 7px 11px; color: #c7ced8; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; font-size: 12px; }
+
+        .browser {
+            position: relative;
+            min-width: 0;
+            width: 100%;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,.14);
+            border-radius: 20px;
+            background: #f6f7f9;
+            box-shadow: 0 38px 90px rgba(0,0,0,.34);
+            transform: perspective(1200px) rotateY(-3deg) rotateX(1deg);
+        }
+        .browser-bar { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 13px; background: #fff; border-bottom: 1px solid #e6e8ec; }
+        .browser-dot { width: 7px; height: 7px; border-radius: 50%; background: #d8dce2; }
+        .browser-url { width: 46%; height: 15px; margin-left: 8px; border-radius: 999px; background: #f0f2f5; }
+        .app-shell { display: grid; grid-template-columns: 112px minmax(0,1fr); min-height: 460px; color: var(--ink); }
+        .mini-side { padding: 18px 11px; color: #aab2bf; background: #222a36; }
+        .mini-logo { width: 30px; height: 30px; margin: 0 0 24px 7px; border-radius: 9px; background: var(--coral); }
+        .mini-nav { height: 8px; margin: 13px 6px; border-radius: 999px; background: rgba(255,255,255,.13); }
+        .mini-nav.active { height: 28px; margin-inline: 0; background: rgba(255,131,85,.2); border-left: 3px solid var(--coral); }
+        .mini-content { min-width: 0; padding: 22px; }
+        .mock-heading { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
+        .mock-heading h3 { margin: 0; font-size: 18px; }
+        .mock-heading span { color: #8b93a0; font-size: 10px; }
+        .metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 9px; }
+        .metric { padding: 12px; border: 1px solid #e6e8ec; border-radius: 10px; background: #fff; }
+        .metric small { display: block; color: #87909e; font-size: 8px; }
+        .metric strong { display: block; margin-top: 5px; font: 700 19px/1 Outfit, sans-serif; }
+        .metric i { float: right; color: var(--coral); font-size: 14px; }
+        .pipeline { margin-top: 13px; padding: 15px; border: 1px solid #e6e8ec; border-radius: 12px; background: #fff; }
+        .pipeline-title { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; }
+        .pipeline-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 10px; }
+        .pipe { padding: 9px; border-radius: 8px; background: #f5f7fa; }
+        .pipe b { display: block; color: var(--blue); font: 700 16px/1 Outfit; }
+        .pipe span { color: #7d8694; font-size: 8px; }
+        .mock-bottom { display: grid; grid-template-columns: 1.2fr .8fr; gap: 10px; margin-top: 10px; }
+        .occupancy-mini, .chart-mini { padding: 12px; border: 1px solid #e6e8ec; border-radius: 10px; background: #fff; }
+        .bed-row { display: grid; grid-template-columns: 30px repeat(5,1fr); gap: 3px; margin-top: 5px; }
+        .bed-row span { height: 11px; border-radius: 3px; background: #eaf5f1; }
+        .bed-row span:nth-child(1) { background: #f0f2f5; }
+        .bed-row:nth-child(3) span:nth-child(4), .bed-row:nth-child(5) span:nth-child(5) { background: #ffe9df; }
+        .bars { display: flex; align-items: flex-end; gap: 7px; height: 76px; padding-top: 12px; }
+        .bars i { flex: 1; border-radius: 3px 3px 0 0; background: #ffd4c2; }
+        .bars i:nth-child(2) { height: 50%; }.bars i:nth-child(3) { height: 72%; }.bars i:nth-child(4) { height: 60%; }.bars i:nth-child(5) { height: 91%; }.bars i:nth-child(6) { height: 78%; }
+
+        .trust-strip { background: #fff; border-bottom: 1px solid var(--line); }
+        .trust-inner { display: grid; grid-template-columns: repeat(3,1fr); }
+        .trust-item { display: flex; align-items: center; gap: 14px; padding: 24px 26px; border-right: 1px solid var(--line); }
+        .trust-item:last-child { border-right: 0; }
+        .trust-item i { color: var(--coral); font-size: 25px; }
+        .trust-item strong { display: block; font-size: 14px; }
+        .trust-item span { color: var(--muted); font-size: 12px; }
+
+        section { scroll-margin-top: 80px; }
+        .section { padding: 100px 0; }
+        .section.white { background: #fff; }
+        .section.dark { color: #fff; background: var(--dark); }
+        .section-head { max-width: 720px; margin-bottom: 42px; }
+        .kicker { margin: 0 0 10px; color: var(--coral-dark); font: 700 12px/1 Outfit, sans-serif; letter-spacing: .16em; text-transform: uppercase; }
+        .section.dark .kicker { color: #ffad89; }
+        .section h2 { margin: 0; font-size: clamp(32px, 4vw, 52px); line-height: 1.18; letter-spacing: -.035em; }
+        .section-head p { margin: 17px 0 0; color: var(--muted); font-size: 16px; }
+        .section.dark .section-head p { color: #aeb7c4; }
+
+        .workflow { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--line); }
+        .step { position: relative; min-height: 260px; padding: 28px; background: #fff; }
+        .step-number { color: var(--coral); font: 700 13px/1 Outfit; letter-spacing: .12em; }
+        .step h3 { margin: 36px 0 9px; font-size: 20px; }
+        .step p { margin: 0; color: var(--muted); font-size: 14px; }
+        .step-icon { position: absolute; right: 22px; top: 22px; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; color: var(--coral-dark); background: var(--coral-soft); font-size: 21px; }
+        .step-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
+        .step-tags span { padding: 5px 8px; border-radius: 999px; color: #66707e; background: #f3f5f7; font-size: 10px; }
+
+        .showcase { display: grid; gap: 24px; }
+        .showcase-row { display: grid; grid-template-columns: 1.08fr .92fr; gap: 24px; }
+        .showcase-row.reverse { grid-template-columns: .92fr 1.08fr; }
+        .showcase-copy { display: flex; flex-direction: column; justify-content: center; padding: 34px; }
+        .showcase-copy .num { color: var(--coral); font: 700 12px/1 Outfit; letter-spacing: .15em; }
+        .showcase-copy h3 { margin: 16px 0 10px; font-size: 28px; line-height: 1.28; }
+        .showcase-copy p { margin: 0; color: var(--muted); font-size: 14px; }
+        .check-list { display: grid; gap: 10px; margin: 22px 0 0; padding: 0; list-style: none; }
+        .check-list li { display: flex; gap: 9px; font-size: 13px; font-weight: 600; }
+        .check-list i { margin-top: 3px; color: var(--mint); }
+        .ui-card { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: #f8f9fb; box-shadow: 0 15px 40px rgba(30,40,55,.08); }
+        .ui-top { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 16px; background: #fff; border-bottom: 1px solid var(--line); }
+        .ui-top strong { font-size: 13px; }
+        .ui-top span { color: var(--muted); font-size: 10px; }
+        .matrix { padding: 16px; overflow: hidden; }
+        .matrix-head, .matrix-row { display: grid; grid-template-columns: 54px repeat(6,1fr); gap: 4px; align-items: center; }
+        .matrix-head { margin-bottom: 5px; color: #8b93a0; font-size: 8px; text-align: center; }
+        .matrix-row { margin-bottom: 5px; }
+        .matrix-row b { font-size: 9px; }
+        .cell { height: 28px; display: grid; place-items: center; border-radius: 5px; color: #34765f; background: #e8f5f0; font-size: 7px; font-weight: 700; }
+        .cell.due { color: #a76510; background: #fff2d8; }
+        .cell.late { color: #a43e3e; background: #fde7e7; }
+        .cell.empty { color: #9aa1ad; background: #edf0f3; }
+        .wizard { padding: 20px; }
+        .wizard-steps { display: flex; gap: 6px; margin-bottom: 18px; }
+        .wizard-steps span { flex: 1; height: 5px; border-radius: 99px; background: #e3e6eb; }
+        .wizard-steps span.done { background: var(--mint); }.wizard-steps span.current { background: var(--coral); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .fake-field { padding: 10px; border: 1px solid #dfe3e8; border-radius: 8px; background: #fff; }
+        .fake-field small { display: block; color: #9199a5; font-size: 8px; }.fake-field b { font-size: 11px; }
+        .receivable { margin-top: 12px; padding: 14px; border: 1px solid #ffb797; border-left: 4px solid var(--coral); border-radius: 10px; background: #fff9f6; }
+        .receivable small { color: #7e8794; font-size: 9px; }.receivable strong { display: block; color: var(--coral-dark); font: 700 26px/1.2 Outfit; }
+        .finance-table { padding: 14px; }
+        .finance-row { display: grid; grid-template-columns: 1fr .8fr .7fr .65fr; gap: 10px; padding: 11px 8px; border-bottom: 1px solid #e9ebef; font-size: 9px; }
+        .finance-row.head { color: #8a929f; font-weight: 700; background: #f3f5f7; border-radius: 7px; }
+        .badge { justify-self: start; padding: 3px 7px; border-radius: 999px; font-size: 8px; font-weight: 700; }
+        .badge.green { color: #24775b; background: #e3f5ee; }.badge.red { color: #a33c3c; background: #fde7e7; }.badge.amber { color: #9a680b; background: #fff0cc; }
+        .report-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
+        .report-kpi { padding: 14px; border-radius: 10px; background: #fff; border: 1px solid #e5e8ec; }
+        .report-kpi span { color: #818996; font-size: 8px; }.report-kpi strong { display: block; margin-top: 4px; font: 700 20px/1 Outfit; }
+        .trend { grid-column: 1 / -1; height: 150px; display: flex; align-items: flex-end; gap: 12px; padding: 18px 16px 10px; border: 1px solid #e5e8ec; border-radius: 10px; background: #fff; }
+        .trend i { flex: 1; min-height: 20px; border-radius: 5px 5px 0 0; background: linear-gradient(#ff9b70, #ffd8c7); }
+        .trend i:nth-child(2){height:50%}.trend i:nth-child(3){height:72%}.trend i:nth-child(4){height:64%}.trend i:nth-child(5){height:88%}.trend i:nth-child(6){height:76%}
+
+        .line-grid { display: grid; grid-template-columns: .72fr 1.28fr; gap: 70px; align-items: center; }
+        .phone { width: min(330px,100%); margin-inline: auto; padding: 12px; border: 1px solid rgba(255,255,255,.15); border-radius: 38px; background: #0e141d; box-shadow: 0 28px 70px rgba(0,0,0,.36); }
+        .phone-screen { overflow: hidden; min-height: 590px; border-radius: 29px; background: #edf0f3; }
+        .phone-head { padding: 22px 18px 13px; text-align: center; color: #fff; background: #667481; font-size: 13px; font-weight: 700; }
+        .chat { padding: 17px 13px; }
+        .bubble { max-width: 88%; margin-bottom: 10px; padding: 10px 12px; border-radius: 15px; font-size: 11px; line-height: 1.55; }
+        .bubble.them { background: #fff; border-top-left-radius: 4px; }.bubble.me { margin-left: auto; background: #cce7ff; border-top-right-radius: 4px; }
+        .download-bubble { margin-top: 8px; padding: 12px; border-radius: 13px; background: #fff; }
+        .download-bubble b { display: block; font-size: 11px; }.download-bubble small { color: #7b8491; font-size: 8px; }
+        .download-bubble span { display: block; margin-top: 9px; padding: 8px; text-align: center; color: #fff; background: var(--coral); border-radius: 7px; font-size: 9px; font-weight: 700; }
+        .line-features { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 28px; }
+        .line-feature { padding: 18px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: rgba(255,255,255,.05); }
+        .line-feature i { color: #ffad89; font-size: 22px; }.line-feature h3 { margin: 9px 0 4px; font-size: 15px; }.line-feature p { margin: 0; color: #aeb7c4; font-size: 12px; }
+
+        .role-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 26px; }
+        .helper-board { padding: 22px; border-radius: var(--radius); background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow); }
+        .helper-hero { padding: 18px; border: 1px solid #ffd8c7; border-radius: 14px; background: #fff7f3; }
+        .helper-hero small { color: var(--coral-dark); font-weight: 700; }.helper-hero h3 { margin: 5px 0 0; font-size: 21px; }
+        .quick-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin-top: 12px; }
+        .quick { padding: 13px 9px; text-align: center; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 10px; font-weight: 700; }
+        .quick i { display: block; margin-bottom: 7px; color: var(--coral); font-size: 21px; }
+        .helper-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; margin-top: 12px; }
+        .helper-stat { padding: 12px; border-radius: 10px; background: #f5f7f9; }.helper-stat small{color:#818a97;font-size:8px}.helper-stat strong{display:block;font:700 17px/1.3 Outfit}
+        .roles { display: grid; gap: 10px; }
+        .role { display: grid; grid-template-columns: 44px 1fr; gap: 13px; padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+        .role-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: var(--coral-dark); background: var(--coral-soft); font-size: 21px; }
+        .role h3 { margin: 0; font-size: 15px; }.role p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+
+        .managed-grid { display: grid; grid-template-columns: .95fr 1.05fr; gap: 28px; align-items: stretch; }
+        .managed-copy { padding: 38px; border-radius: var(--radius); color: #fff; background: var(--blue); }
+        .managed-copy h3 { margin: 0 0 14px; font-size: 31px; line-height: 1.28; }.managed-copy p{color:#e1e7ff}.managed-copy .check-list i{color:#fff}
+        .owner-ui { padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
+        .owner-title { display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.owner-title b{font-size:15px}.owner-title span{color:var(--blue);font-size:10px;font-weight:700}
+        .owner-card { padding: 14px; margin-top: 9px; border: 1px solid #e4e8f4; border-radius: 11px; background: #f8f9ff; }
+        .owner-card-head {display:flex;justify-content:space-between;gap:10px}.owner-card h4{margin:0;font-size:13px}.owner-card small{color:#7d8695;font-size:9px}
+        .owner-kpis {display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.owner-kpis div{padding:9px;background:#fff;border-radius:8px}.owner-kpis span{display:block;color:#8a93a0;font-size:7px}.owner-kpis b{font:700 14px/1.3 Outfit}
+
+        .module-ledger { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+        .module { padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+        .module i { color: var(--coral); font-size: 24px; }.module h3 { margin: 11px 0 8px; font-size: 16px; }.module ul { margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; }.module li { margin-top: 6px; }
+
+        .security { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        .security-card { padding: 28px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+        .security-card > i { color: var(--mint); font-size: 30px; }.security-card h3{margin:12px 0 8px}.security-card p{margin:0;color:var(--muted);font-size:13px}
+
+        .cta { padding: 86px 0; color: #fff; background: var(--coral); }
+        .cta-inner { display: flex; align-items: center; justify-content: space-between; gap: 30px; }
+        .cta h2 { max-width: 680px; margin: 0; font-size: clamp(32px,5vw,56px); line-height: 1.15; letter-spacing: -.035em; }
+        .cta p { margin: 13px 0 0; color: #fff0e9; }
+        .cta .button { flex: 0 0 auto; }
+        footer { padding: 30px 0; color: #78818e; background: #fff; font-size: 12px; }
+        .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+
+        .reveal { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; }
+        .reveal.in { opacity: 1; transform: none; }
+        @media (max-width: 900px) {
+            .nav a:not(.button) { display: none; }
+            .hero-grid, .line-grid, .role-grid, .managed-grid { grid-template-columns: 1fr; }
+            .hero-grid { gap: 46px; }.browser { transform: none; }
+            .workflow { grid-template-columns: 1fr 1fr; }
+            .showcase-row, .showcase-row.reverse { grid-template-columns: 1fr; }
+            .showcase-row.reverse .showcase-copy { order: 2; }
+            .module-ledger { grid-template-columns: 1fr 1fr; }
+            .line-grid { gap: 42px; }
+        }
+        @media (max-width: 620px) {
+            .wrap { width: min(calc(100% - 24px), 1180px); }
+            .topbar { height: 64px; }.brand-copy span{display:none}.nav{gap:8px}.nav .button{min-height:40px;padding:0 12px;font-size:12px}
+            .hero { padding: 112px 0 64px; }.hero h1{font-size:38px;line-height:1.1}.hero-lede{font-size:15px}.hero-grid{gap:36px}
+            .app-shell { grid-template-columns: 72px minmax(0,1fr); min-height: 390px; }.mini-content{padding:13px}.metrics{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.mock-bottom{display:none}.mini-side{padding-inline:8px}
+            .trust-inner, .workflow, .module-ledger, .security { grid-template-columns: 1fr; }
+            .trust-item { border-right:0;border-bottom:1px solid var(--line); }.trust-item:last-child{border-bottom:0}
+            .section { padding: 72px 0; }.section h2{font-size:35px}.section-head{margin-bottom:30px}
+            .step{min-height:220px}.showcase-copy{padding:20px 6px}.matrix{overflow-x:auto}.matrix-head,.matrix-row{min-width:500px}
+            .line-features{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr 1fr}.helper-stats{grid-template-columns:1fr}.report-panel{grid-template-columns:1fr}.trend{grid-column:auto}
+            .owner-kpis{grid-template-columns:1fr}.cta-inner{align-items:flex-start;flex-direction:column}.footer-inner{align-items:flex-start;flex-direction:column}
+        }
+        @media (prefers-reduced-motion: reduce) { html{scroll-behavior:auto}.reveal{opacity:1;transform:none;transition:none} }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="wrap topbar-inner">
+            <a class="brand" href="#top" aria-label="聚空間 PMS 介紹首頁">
+                <img src="../assets/logo-icon.png" alt="">
+                <span class="brand-copy"><strong>聚空間 PMS</strong><span>PROPERTY MANAGEMENT</span></span>
+            </a>
+            <nav class="nav" aria-label="頁面導覽">
+                <a href="#workflow">營運流程</a><a href="#interfaces">介面展示</a><a href="#line">LINE 協作</a><a href="#modules">完整功能</a>
+                <a class="button primary" href="../">登入系統 <i class="ph ph-arrow-up-right"></i></a>
+            </nav>
+        </div>
+    </header>
+
+    <main id="top">
+        <section class="hero">
+            <div class="wrap hero-grid">
+                <div>
+                    <p class="eyebrow">THE MEETING PLACE · PMS</p>
+                    <h1>把租賃日常，<span>放回同一張營運地圖。</span></h1>
+                    <p class="hero-lede">從空床、入住、合約、收款，到續租、館務報帳與屋主結算。聚空間 PMS 將共居與代管的每個動作串成可以追蹤、確認、交接的完整流程。</p>
+                    <div class="hero-actions"><a class="button primary" href="#interfaces">查看介面展示</a><a class="button ghost" href="#modules">瀏覽完整功能</a></div>
+                    <div class="hero-tags"><span class="hero-tag">共居營運</span><span class="hero-tag">房屋代管</span><span class="hero-tag">LINE 自動化</span><span class="hero-tag">手機工作台</span></div>
+                </div>
+                <div class="browser" aria-label="PMS 首頁介面示意">
+                    <div class="browser-bar"><i class="browser-dot"></i><i class="browser-dot"></i><i class="browser-dot"></i><i class="browser-url"></i></div>
+                    <div class="app-shell">
+                        <aside class="mini-side"><div class="mini-logo"></div><div class="mini-nav active"></div><div class="mini-nav"></div><div class="mini-nav"></div><div class="mini-nav"></div><div class="mini-nav"></div></aside>
+                        <div class="mini-content">
+                            <div class="mock-heading"><h3>營運總覽</h3><span>所有館別 · 本月</span></div>
+                            <div class="metrics"><div class="metric"><i class="ph ph-bed"></i><small>入住床位</small><strong>—</strong></div><div class="metric"><i class="ph ph-wallet"></i><small>本月實收</small><strong>$—</strong></div><div class="metric"><i class="ph ph-clock-countdown"></i><small>待處理</small><strong>—</strong></div><div class="metric"><i class="ph ph-wrench"></i><small>維修事項</small><strong>—</strong></div></div>
+                            <div class="pipeline"><div class="pipeline-title"><b>續租與收款流程</b><span>依館別整理</span></div><div class="pipeline-grid"><div class="pipe"><b>1</b><span>待發通知</span></div><div class="pipe"><b>2</b><span>回覆處理</span></div><div class="pipe"><b>3</b><span>待核對</span></div></div></div>
+                            <div class="mock-bottom"><div class="occupancy-mini"><b style="font-size:9px">各館房況</b><div class="bed-row"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="bed-row"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="bed-row"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="bed-row"><span></span><span></span><span></span><span></span><span></span><span></span></div></div><div class="chart-mini"><b style="font-size:9px">收入趨勢</b><div class="bars"><i style="height:36%"></i><i></i><i></i><i></i><i></i><i></i></div></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="trust-strip"><div class="wrap trust-inner"><div class="trust-item"><i class="ph ph-arrows-left-right"></i><div><strong>共居與代管分流</strong><span>同一套系統，資料與流程清楚隔離</span></div></div><div class="trust-item"><i class="ph ph-device-mobile"></i><div><strong>桌機與手機一致</strong><span>管理員與小幫手都能找到同一個入口</span></div></div><div class="trust-item"><i class="ph ph-chat-circle-text"></i><div><strong>LINE 串起住客流程</strong><span>登記、續租、繳款、報修與合約傳送</span></div></div></div></div>
+
+        <section class="section" id="workflow"><div class="wrap"><div class="section-head reveal"><p class="kicker">One connected workflow</p><h2>從一張空床開始，直到款項入帳。</h2><p>每一步都沿用上一個步驟的資料，不必在住房、合約與帳務之間反覆重新輸入。</p></div><div class="workflow reveal">
+            <article class="step"><span class="step-number">01 · 房況</span><span class="step-icon"><i class="ph ph-buildings"></i></span><h3>看見空床與入住</h3><p>以館別、房間與床位矩陣掌握租期、空床、即將退房與繳費狀態。</p><div class="step-tags"><span>住房一覽</span><span>物件管理</span><span>入住退房</span></div></article>
+            <article class="step"><span class="step-number">02 · 合約</span><span class="step-icon"><i class="ph ph-file-text"></i></span><h3>建立完整合約</h3><p>三步驟設定租期、月租、加減項與最後應收，並自動產生對應帳單。</p><div class="step-tags"><span>續約</span><span>換床</span><span>PDF 套版</span></div></article>
+            <article class="step"><span class="step-number">03 · 收款</span><span class="step-icon"><i class="ph ph-receipt"></i></span><h3>追蹤每筆應收</h3><p>辨識未繳、部分入帳、已繳清與逾期；末五碼回報直接進入待核對流程。</p><div class="step-tags"><span>房租查帳</span><span>拆帳</span><span>催繳</span></div></article>
+            <article class="step"><span class="step-number">04 · 分析</span><span class="step-icon"><i class="ph ph-chart-line-up"></i></span><h3>回到營運決策</h3><p>用入住率、實收、支出、淨利與趨勢，回看每館和整體營運表現。</p><div class="step-tags"><span>各館報表</span><span>財務分析</span><span>PDF 匯出</span></div></article>
+        </div></div></section>
+
+        <section class="section white" id="interfaces"><div class="wrap"><div class="section-head reveal"><p class="kicker">Interface showcase</p><h2>一眼辨識狀態，下一步就在資料旁邊。</h2><p>介面以日常任務為中心：該續租、該核帳、哪張床會空、最後應收多少，都不需要離開當前情境。</p></div><div class="showcase">
+            <div class="showcase-row reveal"><div class="ui-card"><div class="ui-top"><strong>住房一覽</strong><span>日期 × 床位 × 帳款狀態</span></div><div class="matrix"><div class="matrix-head"><b>床位</b><span>9/01</span><span>9/15</span><span>10/01</span><span>10/15</span><span>11/01</span><span>11/15</span></div><div class="matrix-row"><b>R1-A</b><span class="cell">已繳清</span><span class="cell">租住中</span><span class="cell due">待繳</span><span class="cell due">到期近</span><span class="cell empty">空床</span><span class="cell empty">空床</span></div><div class="matrix-row"><b>R1-B</b><span class="cell">租住中</span><span class="cell">已繳清</span><span class="cell">租住中</span><span class="cell late">逾期</span><span class="cell late">待核帳</span><span class="cell">租住中</span></div><div class="matrix-row"><b>R2-C</b><span class="cell empty">空床</span><span class="cell empty">空床</span><span class="cell">新入住</span><span class="cell">租住中</span><span class="cell">已繳清</span><span class="cell">租住中</span></div><div class="matrix-row"><b>R3-D</b><span class="cell">租住中</span><span class="cell">已繳清</span><span class="cell">租住中</span><span class="cell">租住中</span><span class="cell due">待續租</span><span class="cell empty">空床</span></div></div></div><div class="showcase-copy"><span class="num">INTERFACE 01</span><h3>房況不是一張名單，而是一條時間軸。</h3><p>點日期即可看合約與繳款狀態；合約編號能直接前往合約管理，不必再重新搜尋。</p><ul class="check-list"><li><i class="ph-fill ph-check-circle"></i>依館別、日期與床位呈現租住狀態</li><li><i class="ph-fill ph-check-circle"></i>即將到期直接續租、退租或暫緩</li><li><i class="ph-fill ph-check-circle"></i>管理員與小幫手套用各自館別權限</li></ul></div></div>
+            <div class="showcase-row reverse reveal"><div class="showcase-copy"><span class="num">INTERFACE 02</span><h3>合約條件與最後應收，分開講清楚。</h3><p>新增、入住與編輯共用相同三步驟。合約期、自訂到期日、月租與加減項都有即時預覽。</p><ul class="check-list"><li><i class="ph-fill ph-check-circle"></i>月租 × 合約期 + 加項 − 折扣完整列式</li><li><i class="ph-fill ph-check-circle"></i>能源費等租金規則自動套用，可單筆取消</li><li><i class="ph-fill ph-check-circle"></i>PDF 套版、LINE 發送與 24 小時安全下載</li></ul></div><div class="ui-card"><div class="ui-top"><strong>新增入住 · 合約條件</strong><span>步驟 2 / 3</span></div><div class="wizard"><div class="wizard-steps"><span class="done"></span><span class="current"></span><span></span></div><div class="form-row"><div class="fake-field"><small>入住日期</small><b>2026-11-01</b></div><div class="fake-field"><small>合約期</small><b>自訂到期日</b></div></div><div class="form-row"><div class="fake-field"><small>最終到期日</small><b>2026-12-01</b></div><div class="fake-field"><small>月租金</small><b>NT$ 8,000</b></div></div><div class="receivable"><small>最後應收 · 自動計算</small><strong>NT$ 8,500</strong><small>月租 $8,000 × 1 個月 ＋ 能源費 $500</small></div></div></div></div>
+            <div class="showcase-row reveal"><div class="ui-card"><div class="ui-top"><strong>房租查帳</strong><span>應收、已收與尚欠同步顯示</span></div><div class="finance-table"><div class="finance-row head"><b>租客／期間</b><b>最後應收</b><b>已入帳</b><b>狀態</b></div><div class="finance-row"><b>陳先生<br><small>11/01–12/01</small></b><span>$8,500</span><span>$8,500</span><span class="badge green">已繳清</span></div><div class="finance-row"><b>林小姐<br><small>11/03–12/03</small></b><span>$9,350</span><span>$9,000</span><span class="badge amber">尚欠 $350</span></div><div class="finance-row"><b>王先生<br><small>10/28–11/28</small></b><span>$8,200</span><span>$0</span><span class="badge red">逾期未繳</span></div><div class="finance-row"><b>Lee<br><small>11/05–12/05</small></b><span>$7,700</span><span>$0</span><span class="badge amber">待繳</span></div></div></div><div class="showcase-copy"><span class="num">INTERFACE 03</span><h3>每筆款項，都回答三個數字。</h3><p>最後應收、已入帳與尚欠固定同時出現。部分入帳拆帳時只處理差額，不會重新抓回全額。</p><ul class="check-list"><li><i class="ph-fill ph-check-circle"></i>末五碼待核對與實際入帳金額</li><li><i class="ph-fill ph-check-circle"></i>催繳前先預覽完整 LINE 文字</li><li><i class="ph-fill ph-check-circle"></i>租客入住紀錄同步顯示繳款狀況</li></ul></div></div>
+            <div class="showcase-row reverse reveal"><div class="showcase-copy"><span class="num">INTERFACE 04</span><h3>報表不是另一套資料，而是營運的下一層。</h3><p>共居與代管各自計算資料範圍，能從全局一路切到單館，檢查入住率、收入與支出來源。</p><ul class="check-list"><li><i class="ph-fill ph-check-circle"></i>出租率、預期／實收、空床損失</li><li><i class="ph-fill ph-check-circle"></i>月、季、年與自訂區間比較</li><li><i class="ph-fill ph-check-circle"></i>趨勢、館別交叉與 PDF 匯出</li></ul></div><div class="ui-card"><div class="ui-top"><strong>營運分析</strong><span>全部共居館 · 本季</span></div><div class="report-panel"><div class="report-kpi"><span>平均入住率</span><strong>—%</strong></div><div class="report-kpi"><span>營運淨額</span><strong>$—</strong></div><div class="report-kpi"><span>本期收入</span><strong>$—</strong></div><div class="report-kpi"><span>本期支出</span><strong>$—</strong></div><div class="trend"><i style="height:38%"></i><i></i><i></i><i></i><i></i><i></i></div></div></div></div>
+        </div></div></section>
+
+        <section class="section dark" id="line"><div class="wrap line-grid"><div class="phone reveal"><div class="phone-screen"><div class="phone-head">聚空間 THE MEETING PLACE</div><div class="chat"><div class="bubble them">您好，這是您的合約（CXXX）<br>租期：2026/11/01～2026/12/01<br>本期已繳費用：NT$ 8,500<br><br>連結 24 小時內有效<br>請下載後填寫，完成後回傳給我們 🙌🏻</div><div class="download-bubble"><b>合約_CXXX_租客.pdf</b><small>連結 24 小時內有效</small><span>下載合約 PDF</span></div><div class="bubble me">12345</div><div class="bubble them">已收到您的銀行帳戶末 5 碼，小編核對後會通知您。</div></div></div></div><div class="reveal"><div class="section-head"><p class="kicker">LINE collaboration</p><h2>住客不用學系統，也能進入正確流程。</h2><p>住客繼續使用熟悉的 LINE；系統負責把登記、回覆、末五碼與報修整理到管理畫面。</p></div><div class="line-features"><article class="line-feature"><i class="ph ph-identification-card"></i><h3>住客登記與證件</h3><p>LINE 登入、證件裁切旋轉、浮水印與後台人工補件。</p></article><article class="line-feature"><i class="ph ph-arrows-clockwise"></i><h3>續租意願</h3><p>14 天詢問、回覆清單、人工確認建約，避免重複合約。</p></article><article class="line-feature"><i class="ph ph-bank"></i><h3>末五碼核帳</h3><p>租客回傳 5 位數字，直接附到最近未繳帳款等待核對。</p></article><article class="line-feature"><i class="ph ph-file-pdf"></i><h3>合約預覽與下載</h3><p>安全連結顯示完整 PDF，下載入口清楚且 24 小時有效。</p></article><article class="line-feature"><i class="ph ph-wrench"></i><h3>快速報修</h3><p>「維修：問題」自動建立維修單並回傳案件編號。</p></article><article class="line-feature"><i class="ph ph-user-focus"></i><h3>保留人工客服</h3><p>已綁定住客的一般訊息保持安靜，讓小編自然接手對話。</p></article></div></div></div></section>
+
+        <section class="section" id="roles"><div class="wrap"><div class="section-head reveal"><p class="kicker">Role-based workspace</p><h2>每個角色，只看到自己真正要處理的工作。</h2><p>Owner 與 Admin 負責營運與審核；小幫手依館別授權，在手機上完成現場任務。</p></div><div class="role-grid"><div class="helper-board reveal"><div class="helper-hero"><small>小幫手工作台</small><h3>快速記帳，也看得懂今天誰入住。</h3></div><div class="quick-grid"><div class="quick"><i class="ph ph-package"></i>日用品</div><div class="quick"><i class="ph ph-sparkle"></i>清潔用品</div><div class="quick"><i class="ph ph-wallet"></i>零用金</div><div class="quick"><i class="ph ph-hand-coins"></i>個人代墊</div></div><div class="helper-stats"><div class="helper-stat"><small>當月支出</small><strong>$—</strong></div><div class="helper-stat"><small>代撥代墊</small><strong>$—</strong></div><div class="helper-stat"><small>零用金目前金額</small><strong>$—</strong></div></div></div><div class="roles reveal"><article class="role"><span class="role-icon"><i class="ph ph-crown"></i></span><div><h3>Owner</h3><p>完整管理、帳號權限、報帳審核與跨館決策。</p></div></article><article class="role"><span class="role-icon"><i class="ph ph-user-gear"></i></span><div><h3>Admin</h3><p>處理入住、合約、收款、維修、租客與營運報表。</p></div></article><article class="role"><span class="role-icon"><i class="ph ph-hands-clapping"></i></span><div><h3>Helper</h3><p>依授權館別查看行程、快速記帳、報帳與選配收租進度。</p></div></article></div></div></div></section>
+
+        <section class="section white" id="managed"><div class="wrap"><div class="section-head reveal"><p class="kicker">Managed properties</p><h2>代管有自己的資料邊界與屋主視角。</h2><p>代管房屋不會混入共居帳務；從屋主委託、房屋設定、租賃合約到每月結算，各自保留清楚脈絡。</p></div><div class="managed-grid"><div class="managed-copy reveal"><h3>同一套操作習慣，兩套獨立營運資料。</h3><p>切換到代管模式後，導覽與分析只取代管房屋，館務報帳等共居專用功能不會出現。</p><ul class="check-list"><li><i class="ph-fill ph-check-circle"></i>代管房屋資料、收租與管理費設定</li><li><i class="ph-fill ph-check-circle"></i>屋主委託合約與住客租賃合約</li><li><i class="ph-fill ph-check-circle"></i>屋主清單、月結算與委託諮詢</li><li><i class="ph-fill ph-check-circle"></i>代管專屬入住率與分析報表</li></ul></div><div class="owner-ui reveal"><div class="owner-title"><b>屋主月結算</b><span>代管模式</span></div><article class="owner-card"><div class="owner-card-head"><div><h4>示意屋主 · 中山區物件</h4><small>2026 年 11 月結算</small></div><span class="badge green">已確認</span></div><div class="owner-kpis"><div><span>本月租金</span><b>$—</b></div><div><span>代管費</span><b>$—</b></div><div><span>應撥屋主</span><b>$—</b></div></div></article><article class="owner-card"><div class="owner-card-head"><div><h4>示意屋主 · 松山區物件</h4><small>2026 年 11 月結算</small></div><span class="badge amber">待核對</span></div><div class="owner-kpis"><div><span>本月租金</span><b>$—</b></div><div><span>修繕支出</span><b>$—</b></div><div><span>應撥屋主</span><b>$—</b></div></div></article></div></div></div></section>
+
+        <section class="section" id="modules"><div class="wrap"><div class="section-head reveal"><p class="kicker">Complete capability map</p><h2>一頁看完完整模組。</h2><p>以下功能皆由同一套租客、物件、合約與帳務資料串接；示意內容不使用真實住客資料。</p></div><div class="module-ledger">
+            <article class="module reveal"><i class="ph ph-house-line"></i><h3>首頁與待辦</h3><ul><li>續租與收款三步流程</li><li>空床、維修、末五碼提醒</li><li>新住客登記通知中心</li><li>全域搜尋與快速定位</li></ul></article>
+            <article class="module reveal"><i class="ph ph-buildings"></i><h3>房屋與住房</h3><ul><li>館別／房間／床位結構</li><li>日期式住房矩陣</li><li>入住、退房與排定退租</li><li>中途換床與跨館限制</li></ul></article>
+            <article class="module reveal"><i class="ph ph-file-text"></i><h3>合約管理</h3><ul><li>三步驟新增與編輯</li><li>合約期、自訂到期日</li><li>續約、終止與歷史關聯</li><li>PDF 套版、發送與簽署檔</li></ul></article>
+            <article class="module reveal"><i class="ph ph-calculator"></i><h3>帳務與收租</h3><ul><li>收入支出與房租查帳</li><li>最後應收、已收與尚欠</li><li>部分入帳、拆帳與催繳</li><li>租金加項規則與補帳單</li></ul></article>
+            <article class="module reveal"><i class="ph ph-receipt"></i><h3>館務報帳</h3><ul><li>日用品、清潔、零用金、代墊</li><li>發票收據上傳與私有存取</li><li>審核、退回、已付款、房費扣除</li><li>收入轉入各館零用金</li></ul></article>
+            <article class="module reveal"><i class="ph ph-users-three"></i><h3>租客與證件</h3><ul><li>租客詳細資料與入住歷史</li><li>繳款狀況同步呈現</li><li>LINE 綁定與重複資料合併</li><li>證件裁切、旋轉、浮水印與補件</li></ul></article>
+            <article class="module reveal"><i class="ph ph-wrench"></i><h3>維修追蹤</h3><ul><li>LINE 自動建立或手動新增</li><li>待處理、處理中、已完成</li><li>施工備註與費用紀錄</li><li>完成費用同步館別支出</li></ul></article>
+            <article class="module reveal"><i class="ph ph-chart-pie-slice"></i><h3>營運報表</h3><ul><li>入住率、收入、支出與淨利</li><li>館別、期間與財務交叉分析</li><li>預期實收、空床損失、趨勢</li><li>明細下鑽與 PDF 匯出</li></ul></article>
+            <article class="module reveal"><i class="ph ph-key"></i><h3>權限與系統</h3><ul><li>Google 登入與管理員白名單</li><li>角色、館別、頁面與功能授權</li><li>共居／代管資料隔離</li><li>雲端同步、離線快取與跨裝置更新</li></ul></article>
+        </div></div></section>
+
+        <section class="section white"><div class="wrap"><div class="section-head reveal"><p class="kicker">Data & safety</p><h2>讓自動化更快，也保留人工確認。</h2><p>重要動作不偷跑：續約、催繳、入帳、刪除與報帳都保留清楚的確認點。</p></div><div class="security"><article class="security-card reveal"><i class="ph ph-shield-check"></i><h3>資料與連結保護</h3><p>發票、證件與合約檔案採私有儲存與限時連結；證件照片自動加入用途浮水印，只有授權角色能查看。</p></article><article class="security-card reveal"><i class="ph ph-arrows-clockwise"></i><h3>跨裝置與雲端同步</h3><p>手機與電腦共享同一份雲端資料；前景切換、斷線恢復與大型 PDF 採增量及按需載入，兼顧一致性與用量。</p></article></div></div></section>
+
+        <section class="cta"><div class="wrap cta-inner"><div><h2>把下一個待辦，放在你現在看的資料旁邊。</h2><p>聚空間 PMS · 共居與房屋代管的日常營運工作台</p></div><a class="button dark" href="../">進入 PMS 系統 <i class="ph ph-arrow-right"></i></a></div></section>
+    </main>
+    <footer><div class="wrap footer-inner"><span>© 2026 聚空間 THE MEETING PLACE</span><span>本頁介面與數字皆為去識別化示意，不含真實住客資料。</span></div></footer>
+    <script>
+        const revealItems = document.querySelectorAll('.reveal');
+        if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            const observer = new IntersectionObserver(entries => entries.forEach(entry => {
+                if (entry.isIntersecting) { entry.target.classList.add('in'); observer.unobserve(entry.target); }
+            }), { threshold: 0.08, rootMargin: '0px 0px -30px' });
+            revealItems.forEach(item => observer.observe(item));
+        } else {
+            revealItems.forEach(item => item.classList.add('in'));
+        }
+    </script>
+</body>
+</html>

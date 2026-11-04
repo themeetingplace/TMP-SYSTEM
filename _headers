@@ -29,6 +29,9 @@
   Cache-Control: no-store, no-cache, must-revalidate
   Referrer-Policy: no-referrer
 
+/intro/*
+  Cache-Control: no-cache, must-revalidate, max-age=0
+
 # LIFF 子目錄 — 因為要被 LINE 嵌 iframe，X-Frame-Options 改 SAMEORIGIN
 /liff/*
   X-Frame-Options: SAMEORIGIN

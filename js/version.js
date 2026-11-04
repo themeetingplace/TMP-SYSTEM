@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.17';
+export const APP_VERSION = '1.10.18';
 export const APP_BUILD_DATE = '2026-11-04';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.18', date: '2026-11-04', notes: '新增公開的一頁式 PMS 完整功能介紹：以去識別化介面示意呈現住房、合約、帳務、LINE、小幫手、報表、代管、維修、租客與權限流程；登入畫面同步加入介紹入口。' },
     { version: '1.10.17', date: '2026-11-04', notes: '修正 LINE／iPhone 開啟合約時由內建 PDF 檢視器接管整頁、看不到下載按鈕：改由下載頁自行繪製每一頁合約預覽，並將「下載 PDF」與「全螢幕開啟」固定保留在預覽下方。' },
     { version: '1.10.16', date: '2026-11-04', notes: 'LINE 合約連結改為專用下載頁，開啟後會直接顯示合約 PDF 內容、檔名與 24 小時期限；確認內容後可按醒目的「下載 PDF」，也能切換全螢幕查看。' },
     { version: '1.10.15', date: '2026-11-04', notes: '住客證件上傳新增裁切、左右旋轉、重設與重新編輯；裁切後以高解析度及高對比再次檢查，提高手機照片、反光與方向不正時的辨識率。住客畫面改用單純的證件狀態文字，移除判讀技術與照片特徵說明。' },

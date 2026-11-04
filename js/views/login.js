@@ -32,6 +32,10 @@ export function showLogin() {
                 </svg>
                 <span>使用 Google 帳號登入</span>
             </button>
+            <a class="auth-intro-link" href="intro/">
+                <i class="ph ph-layout"></i>
+                查看 PMS 完整功能與介面
+            </a>
             <div id="auth-error" class="auth-error" hidden></div>
             <div class="auth-footer">
                 <i class="ph ph-info"></i>

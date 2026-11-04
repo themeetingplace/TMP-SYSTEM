@@ -1229,6 +1229,22 @@ body[data-role="helper"] #btn-new-owner {
 }
 .auth-google svg { flex-shrink: 0; }
 
+.auth-intro-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+    margin-top: 0.75rem;
+    padding: 0.65rem;
+    color: var(--color-primary-dark, #d96537);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+}
+.auth-intro-link:hover { background: rgba(255, 136, 89, 0.08); }
+
 .auth-divider {
     position: relative;
     text-align: center;
