@@ -244,7 +244,13 @@ export function renderHelperDashboard() {
                     <h1>${esc(name)}，早安</h1>
                     <p>記錄館務花費、核對零用金，並掌握最近的入住與退房。</p>
                 </div>
-                <div class="helper-home-date"><b>${new Date().getDate()}</b><span>${new Intl.DateTimeFormat('zh-TW', { month: 'long', weekday: 'short' }).format(new Date())}</span></div>
+                <div class="helper-home-hero-tools">
+                    <a class="helper-duty-link" href="https://garbage-duty.pages.dev/" target="_blank" rel="noopener noreferrer">
+                        <span><i class="ph ph-trash"></i><strong>垃圾值日表</strong></span>
+                        <i class="ph ph-arrow-up-right" aria-hidden="true"></i>
+                    </a>
+                    <div class="helper-home-date"><b>${new Date().getDate()}</b><span>${new Intl.DateTimeFormat('zh-TW', { month: 'long', weekday: 'short' }).format(new Date())}</span></div>
+                </div>
             </section>
 
             <section class="helper-home-actions" aria-labelledby="helper-quick-title">

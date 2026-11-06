@@ -462,7 +462,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
     });
     initGlobalSearch();
-    initNotifications();
+    await initNotifications();
 
     // 4. 雲端優先：開機先拉一次 Supabase 才渲染
     showBootLoading();

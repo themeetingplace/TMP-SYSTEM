@@ -15,7 +15,8 @@ import { isDashboardVerificationCandidate } from '../utils/dashboardVerification
 import {
     getDismissedNotificationIds,
     listTenantRegistrationNotifications,
-    markNotificationRead
+    markNotificationRead,
+    markNotificationsRead
 } from '../utils/tenantRegistrationNotifications.js';
 import { confirmTerminate } from './contracts.js';
 
@@ -759,25 +760,26 @@ const VACANCY_PICK_KEY = 'pms-dashboard-vacancy-building';
 
 window.initDashboardInteractions = function() {
     document.querySelectorAll('.tenant-registration-view').forEach(btn => {
-        btn.addEventListener('click', () => {
-            markNotificationRead(btn.dataset.notificationId);
+        btn.addEventListener('click', async () => {
+            await markNotificationRead(btn.dataset.notificationId);
             window.refreshNotifications?.();
             window.openEntity?.('tenant', btn.dataset.tenantId);
         });
     });
 
     document.querySelectorAll('.tenant-registration-read').forEach(btn => {
-        btn.addEventListener('click', () => {
-            markNotificationRead(btn.dataset.notificationId);
+        btn.addEventListener('click', async () => {
+            await markNotificationRead(btn.dataset.notificationId);
             window.refreshNotifications?.();
             refreshView();
         });
     });
 
-    document.querySelector('.tenant-registration-read-all')?.addEventListener('click', () => {
-        listTenantRegistrationNotifications(mockData.tenants, {
+    document.querySelector('.tenant-registration-read-all')?.addEventListener('click', async () => {
+        const ids = listTenantRegistrationNotifications(mockData.tenants, {
             dismissedIds: getDismissedNotificationIds()
-        }).forEach(item => markNotificationRead(item.id));
+        }).map(item => item.id);
+        await markNotificationsRead(ids);
         window.refreshNotifications?.();
         refreshView();
         showToast('新的住客登記通知已全部標示為已讀', 'success', 3000);

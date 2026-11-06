@@ -38,6 +38,12 @@ const dashboard = readFileSync(new URL('../js/views/dashboard.js', import.meta.u
 assert.ok(topbar.includes('新住客登記：'), '右上角通知中心必須加入新住客登記');
 assert.ok(topbar.includes("window.__currentRole !== 'helper'"), '小幫手不可收到管理端登記通知');
 assert.ok(topbar.includes("window.addEventListener('bms:data-changed'"), '新登記必須透過即時資料事件跳通知');
+assert.ok(topbar.includes('hydrateNotificationReads'), '通知中心必須先載入雲端共用已讀狀態');
+assert.ok(topbar.includes('markNotificationsRead'), '全部清除必須同步寫入雲端共用已讀狀態');
+assert.ok(topbar.includes('subscribeToNotificationReads'), '其他帳號標示已讀後，已開啟的裝置也必須即時同步');
+assert.ok(topbar.includes('canHelperViewNotification'), '小幫手通知必須依頁面權限與授權館別過濾');
+assert.ok(topbar.includes("featureKey: 'dashboard_rent_collection'"), '未開收租功能的小幫手不可收到逾期帳款通知');
+assert.ok(topbar.includes('window.__helperBuildings'), '小幫手不可收到未授權館別通知');
 assert.ok(dashboard.includes('tenant-registration-alert'), '管理首頁必須顯示新登記提醒卡');
 assert.ok(dashboard.includes('tenant-registration-view'), '首頁通知必須可直接查看住客資料');
 

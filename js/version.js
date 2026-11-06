@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.20';
+export const APP_VERSION = '1.10.21';
 export const APP_BUILD_DATE = '2026-11-06';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.21', date: '2026-11-06', notes: '通知已讀狀態改存 Supabase 共用紀錄：任一工作帳號處理後，其他帳號及同帳號的電腦、手機會同步移除；所有通知點開即標示已讀，並保留即時同步與回到前景重新核對。小幫手通知只保留授權館別及已開放功能相關項目，不再抓取全系統通知；首頁同步新增垃圾值日表入口。' },
     { version: '1.10.20', date: '2026-11-06', notes: '簡化租客入住紀錄的歷史合約入口：保留合約編號本身可直接點擊瀏覽與編輯，移除旁邊的外連圖示。' },
     { version: '1.10.19', date: '2026-11-06', notes: '租客回傳簽署檔改為兩階段確認：LINE 檔案先進私密待審區，管理員預覽並確認有簽名後才正式歸檔及標記合約已簽署；可退回重傳，並補強 PDF 下載重試、格式辨識與失敗紀錄。租客入住紀錄的合約編號同步改為可點擊，可直接瀏覽及編輯歷史合約。' },
     { version: '1.10.18', date: '2026-11-04', notes: '新增公開的一頁式 PMS 完整功能介紹：以去識別化介面示意呈現住房、合約、帳務、LINE、小幫手、報表、代管、維修、租客與權限流程；登入畫面同步加入介紹入口。' },

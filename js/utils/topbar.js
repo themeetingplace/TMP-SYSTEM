@@ -4,9 +4,11 @@ import { showToast } from './ui.js';
 import {
     detectNewTenantRegistrations,
     getDismissedNotificationIds,
+    hydrateNotificationReads,
     listTenantRegistrationNotifications,
     markNotificationRead,
-    saveDismissedNotificationIds
+    markNotificationsRead,
+    subscribeToNotificationReads
 } from './tenantRegistrationNotifications.js';
 
 const TODAY = new Date().toISOString().split('T')[0];
@@ -153,13 +155,36 @@ function escapeRegex(s) {
 function getDismissedIds() {
     return getDismissedNotificationIds();
 }
-function saveDismissedIds(set) {
-    saveDismissedNotificationIds(set);
+
+function notificationBuildingId(record) {
+    if (!record) return '';
+    if (record.buildingId) return String(record.buildingId);
+    const property = mockData.properties.find(item =>
+        (record.propertyId && item.id === record.propertyId)
+        || (record.propertyName && item.name === record.propertyName)
+    );
+    if (property?.buildingId) return String(property.buildingId);
+    const contract = record.contractId
+        ? mockData.contracts.find(item => item.id === record.contractId)
+        : null;
+    return String(contract?.buildingId || '');
 }
 
-export function initNotifications() {
+function canHelperViewNotification(viewKey, record, { featureKey = '' } = {}) {
+    if (window.__currentRole !== 'helper') return true;
+    const views = Array.isArray(window.__helperViews) ? window.__helperViews : [];
+    if (viewKey && !views.includes(viewKey)) return false;
+    if (featureKey && !views.includes(featureKey)) return false;
+    const buildingId = notificationBuildingId(record);
+    const allowed = new Set((window.__helperBuildings || []).map(String));
+    return Boolean(buildingId && allowed.has(buildingId));
+}
+
+export async function initNotifications() {
     const btn = document.querySelector('.notification-btn');
     if (!btn) return;
+
+    await hydrateNotificationReads();
 
     let panel = null;
     let registrationSnapshotPrimed = false;
@@ -193,6 +218,7 @@ export function initNotifications() {
         // 逾期帳單
         mockData.invoices.filter(inv =>
             inv.status === '欠繳' && new Date(inv.dueDate) < new Date(TODAY)
+            && canHelperViewNotification('', inv, { featureKey: 'dashboard_rent_collection' })
         ).forEach(inv => {
             notifications.push({
                 id: `inv-overdue-${inv.id}`,
@@ -204,7 +230,9 @@ export function initNotifications() {
             });
         });
         // 待簽合約
-        mockData.contracts.filter(c => c.status === '待簽署').forEach(c => {
+        mockData.contracts.filter(c =>
+            c.status === '待簽署' && canHelperViewNotification('contracts', c)
+        ).forEach(c => {
             notifications.push({
                 id: `contract-pending-${c.id}`,
                 icon: 'ph-signature',
@@ -215,7 +243,9 @@ export function initNotifications() {
             });
         });
         // 待處理維修
-        mockData.maintenances.filter(m => m.status === '待處理').forEach(m => {
+        mockData.maintenances.filter(m =>
+            m.status === '待處理' && canHelperViewNotification('maintenance', m)
+        ).forEach(m => {
             notifications.push({
                 id: `maint-todo-${m.id}`,
                 icon: 'ph-wrench',
@@ -226,7 +256,9 @@ export function initNotifications() {
             });
         });
         // 即將到期合約
-        mockData.contracts.filter(c => c.status === '即將到期').forEach(c => {
+        mockData.contracts.filter(c =>
+            c.status === '即將到期' && canHelperViewNotification('contracts', c)
+        ).forEach(c => {
             notifications.push({
                 id: `contract-expiring-${c.id}`,
                 icon: 'ph-clock',
@@ -283,30 +315,28 @@ export function initNotifications() {
 
         // 個別 dismiss (X 鈕)
         panel.querySelectorAll('[data-action="dismiss"]').forEach(dbtn => {
-            dbtn.addEventListener('click', (e) => {
+            dbtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const id = dbtn.dataset.dismissId;
-                markNotificationRead(id);
+                await markNotificationRead(id);
                 open();  // 重新 render
             });
         });
         // 全部清除
-        panel.querySelector('[data-action="clear-all"]')?.addEventListener('click', (e) => {
+        panel.querySelector('[data-action="clear-all"]')?.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const dismissed = getDismissedIds();
-            items.forEach(n => dismissed.add(n.id));
-            saveDismissedIds(dismissed);
+            await markNotificationsRead(items.map(n => n.id));
             open();
+            if (window.location.hash.replace('#', '') === 'dashboard') window.refreshCurrentView?.();
         });
         // 點 item 進頁面 (X 鈕排除)
         panel.querySelectorAll('.notification-item').forEach(item => {
-            item.addEventListener('click', (e) => {
+            item.addEventListener('click', async (e) => {
                 if (e.target.closest('[data-action="dismiss"]')) return;
                 const link = item.dataset.link;
-                if (item.dataset.markRead === 'true') {
-                    markNotificationRead(item.dataset.notifId);
-                    refreshBadge();
-                }
+                // 所有通知一經開啟即列為已讀；狀態寫入雲端，跨帳號及裝置共用。
+                await markNotificationRead(item.dataset.notifId);
+                refreshBadge();
                 const entityType = item.dataset.entityType;
                 const entityId = item.dataset.entityId;
                 if (entityType && entityId && window.openEntity) window.openEntity(entityType, entityId);
@@ -351,8 +381,8 @@ export function initNotifications() {
                 );
                 toast.style.cursor = 'pointer';
                 toast.title = '點擊查看住客資料';
-                toast.addEventListener('click', () => {
-                    markNotificationRead(item.id);
+                toast.addEventListener('click', async () => {
+                    await markNotificationRead(item.id);
                     refreshBadge();
                     window.openEntity?.('tenant', tenant.id);
                 });
@@ -364,6 +394,29 @@ export function initNotifications() {
 
     window.refreshNotifications = refreshBadge;
     window.markNotificationRead = markNotificationRead;
+    subscribeToNotificationReads(() => {
+        refreshBadge();
+        if (window.location.hash.replace('#', '') === 'dashboard') window.refreshCurrentView?.();
+    }).catch(error => console.warn('[notifications] realtime subscription failed', error));
+
+    let readSyncBusy = false;
+    const refreshReadState = async () => {
+        if (readSyncBusy) return;
+        readSyncBusy = true;
+        try {
+            const result = await hydrateNotificationReads();
+            if (result.changed) {
+                refreshBadge();
+                if (window.location.hash.replace('#', '') === 'dashboard') window.refreshCurrentView?.();
+            }
+        } finally {
+            readSyncBusy = false;
+        }
+    };
+    window.addEventListener('focus', refreshReadState);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') refreshReadState();
+    });
     window.addEventListener('bms:data-changed', (event) => {
         const isInitialPull = !registrationSnapshotPrimed && event.detail?.source === 'pull';
         syncRegistrationSnapshot({ notify: !isInitialPull });
