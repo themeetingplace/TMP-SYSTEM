@@ -236,20 +236,25 @@ function calendarHtml() {
 
 export function renderHelperDashboard() {
     const name = document.querySelector('.user-profile .user-name')?.textContent?.trim() || '小幫手';
+    const today = new Date();
+    const dateLabel = `${today.getMonth() + 1} 月 ${today.getDate()} 日`;
+    const weekdayLabel = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][today.getDay()];
     return `
         <div class="helper-home">
             <section class="helper-home-hero">
                 <div>
                     <span class="helper-home-shift"><i class="ph ph-sun-horizon"></i> 今日值班台</span>
                     <h1>${esc(name)}，早安</h1>
-                    <p>記錄館務花費、核對零用金，並掌握最近的入住與退房。</p>
                 </div>
                 <div class="helper-home-hero-tools">
                     <a class="helper-duty-link" href="https://garbage-duty.pages.dev/" target="_blank" rel="noopener noreferrer">
                         <span><i class="ph ph-trash"></i><strong>垃圾值日表</strong></span>
                         <i class="ph ph-arrow-up-right" aria-hidden="true"></i>
                     </a>
-                    <div class="helper-home-date"><b>${new Date().getDate()}</b><span>${new Intl.DateTimeFormat('zh-TW', { month: 'long', weekday: 'short' }).format(new Date())}</span></div>
+                    <div class="helper-home-date" aria-label="今天是 ${dateLabel} ${weekdayLabel}">
+                        <span class="helper-home-date-icon"><i class="ph ph-calendar-blank" aria-hidden="true"></i></span>
+                        <span class="helper-home-date-copy"><strong>${dateLabel}</strong><small>${weekdayLabel}</small></span>
+                    </div>
                 </div>
             </section>
 

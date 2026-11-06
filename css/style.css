@@ -4243,7 +4243,6 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
     letter-spacing: 0.08em;
 }
 .helper-home-hero h1 { margin: 0.35rem 0 0; font-size: clamp(1.55rem, 3vw, 2.2rem); letter-spacing: -0.035em; }
-.helper-home-hero p { margin: 0.55rem 0 0; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.6; }
 .helper-home-hero-tools { position: relative; z-index: 1; display: flex; align-items: center; gap: 0.75rem; }
 .helper-duty-link {
     display: flex;
@@ -4267,18 +4266,19 @@ body[data-role="helper"] .occ-terminate-check { display: none !important; }
 .helper-home-date {
     position: relative;
     z-index: 1;
-    flex: 0 0 98px;
-    display: grid;
-    justify-items: center;
-    padding: 0.7rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 46px;
+    padding: 0.55rem 0.75rem;
     border: 1px solid var(--border-color);
-    border-top: 4px solid var(--color-primary);
-    border-radius: 0 0 var(--radius-md) var(--radius-md);
-    background: var(--color-surface);
-    box-shadow: var(--shadow-md);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
 }
-.helper-home-date b { color: var(--text-main); font: 700 2.5rem/1 'Outfit', sans-serif; }
-.helper-home-date span { margin-top: 0.35rem; color: var(--text-muted); font-size: var(--text-2xs); }
+.helper-home-date-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface)); color: var(--color-primary); font-size: 1rem; }
+.helper-home-date-copy { display: grid; gap: 0.08rem; min-width: 0; white-space: nowrap; }
+.helper-home-date-copy strong { color: var(--text-main); font: 700 var(--text-sm)/1.2 'Outfit', 'Noto Sans TC', sans-serif; letter-spacing: 0.01em; }
+.helper-home-date-copy small { color: var(--text-muted); font-size: 0.66rem; line-height: 1.2; }
 .helper-home-actions,
 .helper-cash-card,
 .helper-calendar-card,
@@ -4660,12 +4660,10 @@ body[data-role="helper"] .rent-report-action { display: inline-flex !important; 
     .helper-home { gap: 0.75rem; }
     .helper-home-hero { min-height: 0; padding: 1.05rem 1.05rem 1.05rem 1.2rem; }
     .helper-home-hero::after { display: none; }
-    .helper-home-hero p { font-size: var(--text-xs); }
     .helper-home-hero-tools { gap: 0.5rem; }
     .helper-duty-link { padding: 0.6rem 0.7rem; }
     .helper-duty-link > .ph-arrow-up-right { display: none; }
-    .helper-home-date { flex-basis: 76px; }
-    .helper-home-date b { font-size: 2rem; }
+    .helper-home-date { padding: 0.5rem 0.65rem; }
     .helper-home-actions,
     .helper-cash-card,
     .helper-calendar-card,
@@ -4698,9 +4696,9 @@ body[data-role="helper"] .rent-report-action { display: inline-flex !important; 
 
 @media (max-width: 470px) {
     .helper-home-hero { align-items: flex-start; flex-direction: column; gap: 0.85rem; }
-    .helper-home-hero-tools { width: 100%; }
+    .helper-home-hero-tools { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
     .helper-duty-link { width: 100%; justify-content: space-between; }
-    .helper-home-date { display: none; }
+    .helper-home-date { width: 100%; }
     .helper-home-quick-grid { grid-template-columns: 1fr; }
     .helper-home-quick small { white-space: normal; }
     .helper-calendar-head { align-items: flex-start; }
