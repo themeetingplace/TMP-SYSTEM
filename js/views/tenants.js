@@ -280,7 +280,12 @@ export function showTenantDetails(id) {
                         : `<small>應收 ${moneyAmount(payment.due)}</small>`;
             return `
                 <tr>
-                    <td style="font-family: monospace; font-size: var(--text-xs);">${c.id}</td>
+                    <td style="font-family: monospace; font-size: var(--text-xs);">
+                        <button type="button" class="tenant-history-contract-link" data-action="open-history-contract" data-contract-id="${escapeAttr(c.id)}" title="瀏覽合約 ${escapeAttr(c.id)}，並可進一步編輯">
+                            <span>${esc(c.id)}</span>
+                            <i class="ph ph-arrow-square-out" aria-hidden="true"></i>
+                        </button>
+                    </td>
                     <td>${(c.propertyName || '—').replace('聚空間 - ', '')}</td>
                     <td style="font-size: var(--text-xs); color: var(--text-secondary);">${c.startDate || '—'} ~ ${c.endDate || '—'}</td>
                     ${amountCell}
@@ -368,6 +373,14 @@ export function showTenantDetails(id) {
         ],
         extraHtml: historyHtml,
         onMount: (overlay, close) => {
+            overlay.querySelectorAll('[data-action="open-history-contract"]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const contractId = btn.dataset.contractId;
+                    close();
+                    const { showContractDetails } = await import('./contracts.js');
+                    setTimeout(() => showContractDetails(contractId), 80);
+                });
+            });
             overlay.querySelectorAll('[data-action="view-id-card"]').forEach(btn => {
                 btn.addEventListener('click', () => openIdCard(btn.dataset.path, btn.dataset.side));
             });

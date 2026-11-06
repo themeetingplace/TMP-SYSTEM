@@ -332,7 +332,7 @@ async function handlePostback(event: any) {
         }
 
         if (fileType === 'signed') {
-            // 找該租客最新一份「待簽署」合約 → 把 temp 檔搬到 signed key
+            // 找該租客最新一份「待簽署」合約 → 將 temp 檔加入後台待審清單
             const { data: contracts } = await supabase
                 .from('contracts').select('id, start_date, end_date, status')
                 .eq('tenant', bound.name)
@@ -346,13 +346,18 @@ async function handlePostback(event: any) {
                 }]);
                 return;
             }
-            // 直接把 temp 檔的 storage key 寫進 contract.signed_file_url + status='已簽署'
-            await supabase.from('contracts').update({
-                signed_file_url: tempKey,
-                status: '已簽署'
-            }).eq('id', target.id);
+            // 舊版「選擇檔案用途」入口也改走兩階段確認：先建立待審核紀錄，
+            // 管理員確認真的有簽名後，才會正式掛入合約。
+            const { error: reviewErr } = await supabase.from('contract_signature_submissions').upsert({
+                contract_id: target.id,
+                tenant_id: bound.id,
+                line_user_id: userId,
+                storage_path: tempKey,
+                status: 'pending'
+            }, { onConflict: 'storage_path', ignoreDuplicates: true });
+            if (reviewErr) throw new Error(`建立簽署檔待審紀錄失敗：${reviewErr.message}`);
             await lineReply(event.replyToken, [{
-                type: 'text', text: `✅ 已收到您的合約簽署檔\n\n合約：${target.id}\n租期：${target.start_date} ~ ${target.end_date}\n\n感謝您 ✨`, quickReply: tenantServiceQuickReply()
+                type: 'text', text: `✅ 已收到您的合約簽署檔\n\n合約：${target.id}\n租期：${target.start_date} ~ ${target.end_date}\n\n小編確認簽名後會完成登記，感謝您 ✨`, quickReply: tenantServiceQuickReply()
             }]);
         } else {
             // 'other' or unknown → 不動合約, 檔案留在 temp (小編可在 line_messages 表找到)
@@ -417,10 +422,11 @@ async function handlePostback(event: any) {
 // 限制：MAX_FILE_BYTES 以內，超過直接拒，避免 LINE 用戶傳超大檔耗光 Storage 配額
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 async function lineDownloadContent(messageId: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-    // 圖片/檔案下載給 15s timeout (檔案大過普通 API 久)
-    const r = await fetchWithTimeout(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+    // PDF 在 LINE Content API 偶爾會短暫 timeout/5xx；允許一次重試並拉長單次等待，
+    // 避免「LINE 有收到 file 紀錄，但 Storage 完全沒有檔案」。
+    const r = await fetchWithRetry(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
         headers: { 'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}` }
-    }, 15000);
+    }, 1, 20_000);
     if (!r.ok) throw new Error(`LINE content fetch ${r.status}`);
     // 先看 Content-Length，超過就直接拒，連讀都不讀
     const cl = parseInt(r.headers.get('content-length') || '0', 10);
@@ -458,11 +464,8 @@ async function handleMessage(event: any) {
     if (boundErr) throw new Error(`tenants lookup failed: ${boundErr.message}`);
 
     // ───────────── 圖片 / 檔案 ─────────────
-    // 自動分類規則 (2026-06-23 改版, 用戶定案):
-    //   1. PDF → 一律歸合約簽署檔 (一般人不會傳隨機 PDF 給房東)
-    //   2. Image (jpg/png) → 只有「待簽署合約 + contractSentAt 在 2 天內」才歸合約
-    //      (對應「客戶看完合約就拍照回傳」的典型 1-day 場景)
-    //   3. 其他 (沒待簽署 / 寄出超過 2 天 / 退租客戶) → 一律一般訊息, 存 admin 待檢視
+    // 圖片 / PDF 只有在最近一次合約發送後 24 小時內才進簽署檔待審流程；
+    // 其他檔案仍以一般訊息保存，避免把付款截圖誤掛到合約。
     if (event.message.type === 'image' || event.message.type === 'file') {
         await supabase.from('line_messages').insert({
             line_user_id: userId, direction: 'in', message_type: event.message.type,
@@ -481,17 +484,27 @@ async function handleMessage(event: any) {
             bytes = r.bytes; contentType = r.contentType;
         } catch (e: any) {
             console.error('[file download] failed:', e);
+            await supabase.from('line_messages').insert({
+                line_user_id: userId, direction: 'in', message_type: 'file_signature_failed',
+                content: `download_failed:${event.message.fileName || event.message.id}`,
+                raw: { messageId: event.message.id, fileName: event.message.fileName, reason: e.message }
+            });
             await lineReply(event.replyToken, [
                 { type: 'text', text: `❌ 檔案接收失敗: ${e.message}\n請聯絡小編協助。`, quickReply: tenantServiceQuickReply() }
             ]);
             return;
         }
-        const isPdf = contentType.includes('pdf');
+        const fileName = String(event.message.fileName || '');
+        const isPdfByName = /\.pdf$/i.test(fileName);
+        const isPdfByMagic = bytes.length >= 5
+            && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d;
+        const isPdf = contentType.includes('pdf') || isPdfByName || isPdfByMagic;
         const isImage = contentType.includes('jpeg') || contentType.includes('jpg') || contentType.includes('png');
         const ext = isPdf ? 'pdf'
                  : contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg'
                  : contentType.includes('png') ? 'png'
                  : 'bin';
+        const storageContentType = isPdf ? 'application/pdf' : contentType;
 
         // 找該租客 active 合約 (含「待簽署」「已簽署」, 因為多檔回傳第 2 張時合約已是已簽署狀態)
         // 用 contract_sent_at 為新近性判斷
@@ -519,39 +532,49 @@ async function handleMessage(event: any) {
         }
 
         if (treatAsContract) {
-            // 歸合約: 每張獨立 key 存進 storage (不覆寫前一張)
-            // DB signed_file_url 指向「最新一張」, 舊張仍在 storage 可查
-            // line_messages 加 message_type='file_signed' 記每張 key, 後台可列全部
-            const key = `signed_${pendingContract!.id}_${Date.now()}.${ext}`;
+            // 歸合約候選檔：先放私密待審路徑，不直接更新 contract。
+            // 管理員在合約管理確認「有簽名」後，才搬到 signed_* 正式路徑並標記已簽署。
+            const key = `pending-signatures/${pendingContract!.id}/signed_${pendingContract!.id}_${Date.now()}.${ext}`;
             try {
                 const { error: upErr } = await supabase.storage
                     .from('contract-pdfs')
-                    .upload(key, bytes, { contentType, upsert: false });
+                    .upload(key, bytes, { contentType: storageContentType, upsert: false });
                 if (upErr) throw new Error(`Storage 上傳失敗：${upErr.message}`);
 
-                // 記錄這張 signed 檔 (讓 admin 可以列出某合約的所有簽署檔)
+                const { error: submissionErr } = await supabase.from('contract_signature_submissions').insert({
+                    contract_id: pendingContract!.id,
+                    tenant_id: bound.id,
+                    line_user_id: userId,
+                    storage_path: key,
+                    original_file_name: fileName || null,
+                    content_type: storageContentType,
+                    file_size: bytes.byteLength,
+                    status: 'pending'
+                });
+                if (submissionErr) {
+                    await supabase.storage.from('contract-pdfs').remove([key]);
+                    throw new Error(`建立簽署檔待審紀錄失敗：${submissionErr.message}`);
+                }
+
                 await supabase.from('line_messages').insert({
                     line_user_id: userId, direction: 'in',
-                    message_type: 'file_signed',
-                    content: `signed:${key}`,
-                    raw: { messageId: event.message.id, key, contentType, fileName: event.message.fileName, contractId: pendingContract!.id }
+                    message_type: 'file_signature_pending',
+                    content: `pending:${key}`,
+                    raw: { messageId: event.message.id, key, contentType: storageContentType, fileName, contractId: pendingContract!.id }
                 });
 
-                // 更新 contract: signed_file_url 指向最新, status='已簽署' (idempotent)
-                const isFirstSigned = !pendingContract!.signed_file_url;
-                await supabase.from('contracts').update({
-                    signed_file_url: key,
-                    status: '已簽署'
-                }).eq('id', pendingContract!.id);
-
-                const replyText = isFirstSigned
-                    ? `✅ 已收到您的合約簽署檔\n\n合約：${pendingContract!.id}\n租期：${pendingContract!.start_date} ~ ${pendingContract!.end_date}\n\n如有其他補充檔案歡迎一起傳 ✨`
-                    : `✅ 已收到您的補充簽署檔 (合約 ${pendingContract!.id})\n感謝您 ✨`;
                 await lineReply(event.replyToken, [{
-                    type: 'text', text: replyText, quickReply: tenantServiceQuickReply()
+                    type: 'text',
+                    text: `✅ 已收到您的合約簽署檔\n\n合約：${pendingContract!.id}\n租期：${pendingContract!.start_date} ~ ${pendingContract!.end_date}\n\n小編確認簽名後會完成登記；如有其他補充檔案也可以一起傳 ✨`,
+                    quickReply: tenantServiceQuickReply()
                 }]);
             } catch (e: any) {
-                console.error('[file upload signed] failed:', e);
+                console.error('[file upload signature pending] failed:', e);
+                await supabase.from('line_messages').insert({
+                    line_user_id: userId, direction: 'in', message_type: 'file_signature_failed',
+                    content: `pending_failed:${fileName || event.message.id}`,
+                    raw: { messageId: event.message.id, fileName, reason: e.message, contractId: pendingContract!.id }
+                });
                 await lineReply(event.replyToken, [{
                     type: 'text', text: `❌ 檔案處理失敗: ${e.message}\n請聯絡小編協助。`, quickReply: tenantServiceQuickReply()
                 }]);
@@ -562,7 +585,7 @@ async function handleMessage(event: any) {
             try {
                 await supabase.storage
                     .from('contract-pdfs')
-                    .upload(key, bytes, { contentType, upsert: false });
+                    .upload(key, bytes, { contentType: storageContentType, upsert: false });
                 // log 給 admin 找
                 await supabase.from('line_messages').insert({
                     line_user_id: userId, direction: 'in',

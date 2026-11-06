@@ -4482,6 +4482,126 @@ body[data-role="helper"] .rent-report-action { display: inline-flex !important; 
 .tenant-history-scroll table { min-width: 760px; }
 .tenant-history-scroll th,
 .tenant-history-scroll td { white-space: nowrap; }
+
+.tenant-history-contract-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    padding: 0.18rem 0.35rem;
+    margin: -0.18rem -0.35rem;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--color-primary);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+.tenant-history-contract-link:hover,
+.tenant-history-contract-link:focus-visible {
+    background: var(--color-primary-light);
+    outline: none;
+}
+.tenant-history-contract-link i { font-size: 0.9em; }
+
+/* 合約簽署檔兩階段確認 */
+.signature-review-card {
+    margin-bottom: 1rem;
+    border-color: color-mix(in srgb, var(--color-warning) 45%, var(--border-color));
+    background: linear-gradient(135deg, color-mix(in srgb, var(--color-warning) 7%, var(--bg-primary)) 0%, var(--bg-primary) 60%);
+}
+.signature-review-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.85rem;
+}
+.signature-review-heading h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0.12rem 0 0.18rem;
+    font-size: var(--text-lg);
+}
+.signature-review-heading h2 strong {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.55rem;
+    height: 1.55rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: var(--color-warning);
+    color: #fff;
+    font-size: var(--text-xs);
+}
+.signature-review-heading p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+.signature-review-kicker {
+    color: var(--color-warning-text);
+    font-size: var(--text-2xs);
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+.signature-review-list { display: grid; gap: 0.6rem; }
+.signature-review-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 9px;
+    background: var(--bg-primary);
+}
+.signature-review-file-icon {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 8px;
+    background: var(--color-danger-light);
+    color: var(--color-danger);
+    font-size: 1.25rem;
+}
+.signature-review-title-line,
+.signature-review-meta,
+.signature-review-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+.signature-review-title-line > strong { font-family: monospace; font-size: var(--text-base); }
+.signature-review-title-line > span:not(.status-badge) { font-weight: 650; }
+.signature-review-meta {
+    margin-top: 0.25rem;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+.signature-review-meta span { display: inline-flex; align-items: center; gap: 0.22rem; }
+.signature-review-actions { justify-content: flex-end; }
+.signature-review-actions .btn { padding: 0.38rem 0.62rem; font-size: var(--text-xs); }
+.signature-review-loading,
+.signature-review-error {
+    margin-bottom: 1rem;
+    padding: 0.8rem 1rem;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+.signature-review-loading i { animation: spin 0.8s linear infinite; }
+.signature-review-error { color: var(--color-danger); }
+
+@media (max-width: 760px) {
+    .signature-review-heading { align-items: stretch; flex-direction: column; }
+    .signature-review-heading .btn { align-self: flex-start; }
+    .signature-review-item { grid-template-columns: auto minmax(0, 1fr); }
+    .signature-review-actions { grid-column: 1 / -1; justify-content: stretch; }
+    .signature-review-actions .btn { flex: 1 1 auto; }
+}
 .tenant-payment-cell {
     min-width: 220px;
     vertical-align: middle;

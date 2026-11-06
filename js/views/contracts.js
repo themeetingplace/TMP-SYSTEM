@@ -24,10 +24,225 @@ import { findRenewalSuccessor, hasContractRenewed } from '../utils/renewalSucces
 import { contractReceivableSummary, latestContractRentInvoice } from '../utils/invoicePaymentSummary.js';
 import { buildContractLineMessage } from '../utils/contractLineMessage.js';
 import { ensureContractTemplatePdf } from '../utils/contractTemplateLoader.js';
+import { supabase } from '../supabase.js';
 
 const CONTRACT_STATUSES = ['已簽署', '待簽署', '即將到期', '已終止'];
 const TODAY_DATE = new Date();
 const TODAY = TODAY_DATE.toISOString().split('T')[0];
+
+const SIGNATURE_REVIEW_BUCKET = 'contract-pdfs';
+const SIGNATURE_REVIEW_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function canReviewContractSignatures() {
+    return ['owner', 'admin'].includes(String(window.__currentRole || '').toLowerCase());
+}
+
+function signatureSubmissionFileSize(value) {
+    const bytes = Number(value) || 0;
+    if (!bytes) return '大小未記錄';
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function signatureSubmissionTime(value) {
+    if (!value) return '時間未記錄';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Intl.DateTimeFormat('zh-TW', {
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(date);
+}
+
+function signatureReviewHtml(rows) {
+    if (!rows.length) return '';
+    return `
+        <section class="card signature-review-card" aria-labelledby="signature-review-title">
+            <div class="signature-review-heading">
+                <div>
+                    <span class="signature-review-kicker">簽署檔確認</span>
+                    <h2 id="signature-review-title"><i class="ph ph-signature"></i> 待確認簽署檔 <strong>${rows.length}</strong></h2>
+                    <p>先預覽租客回傳的檔案；確認有簽名後，才會正式歸檔並將合約標記為已簽署。</p>
+                </div>
+                <button type="button" class="btn btn-outline" data-action="refresh-signature-reviews" title="重新載入待確認簽署檔">
+                    <i class="ph ph-arrow-clockwise"></i> 重新整理
+                </button>
+            </div>
+            <div class="signature-review-list">
+                ${rows.map(row => {
+                    const contract = mockData.contracts.find(c => c.id === row.contract_id);
+                    const tenant = mockData.tenants.find(t => t.id === row.tenant_id)
+                        || mockData.tenants.find(t => t.name === contract?.tenant);
+                    const fileName = row.original_file_name || row.storage_path?.split('/').pop() || '簽署檔';
+                    return `
+                        <article class="signature-review-item" data-signature-submission-id="${escapeAttr(row.id)}">
+                            <div class="signature-review-file-icon"><i class="ph-fill ph-file-pdf"></i></div>
+                            <div class="signature-review-copy">
+                                <div class="signature-review-title-line">
+                                    <strong>${esc(row.contract_id)}</strong>
+                                    <span>${esc(contract?.tenant || tenant?.name || '未知租客')}</span>
+                                    <span class="status-badge warning">待確認</span>
+                                </div>
+                                <div class="signature-review-meta">
+                                    <span><i class="ph ph-bed"></i> ${esc(String(contract?.propertyName || '床位未記錄').replace('聚空間 - ', ''))}</span>
+                                    <span><i class="ph ph-clock"></i> ${esc(signatureSubmissionTime(row.submitted_at))}</span>
+                                    <span><i class="ph ph-file"></i> ${esc(fileName)} · ${esc(signatureSubmissionFileSize(row.file_size))}</span>
+                                </div>
+                            </div>
+                            <div class="signature-review-actions">
+                                <button type="button" class="btn btn-outline" data-action="preview-signature-submission" data-submission-id="${escapeAttr(row.id)}">
+                                    <i class="ph ph-eye"></i> 預覽
+                                </button>
+                                <button type="button" class="btn btn-outline" data-action="reject-signature-submission" data-submission-id="${escapeAttr(row.id)}" data-write>
+                                    <i class="ph ph-arrow-counter-clockwise"></i> 退回重傳
+                                </button>
+                                <button type="button" class="btn btn-primary" data-action="approve-signature-submission" data-submission-id="${escapeAttr(row.id)}" data-write>
+                                    <i class="ph ph-check-circle"></i> 確認有簽名
+                                </button>
+                            </div>
+                        </article>`;
+                }).join('')}
+            </div>
+        </section>`;
+}
+
+async function expireOldSignatureSubmissions(rows) {
+    const cutoff = Date.now() - SIGNATURE_REVIEW_MAX_AGE_MS;
+    const stale = rows.filter(row => new Date(row.submitted_at).getTime() < cutoff);
+    if (!stale.length) return rows;
+    const expiredIds = new Set();
+    for (const row of stale) {
+        const { error: removeError } = await supabase.storage.from(SIGNATURE_REVIEW_BUCKET).remove([row.storage_path]);
+        if (removeError) {
+            console.warn('[signature-review] stale file cleanup failed', row.storage_path, removeError);
+            continue;
+        }
+        const { error: updateError } = await supabase.from('contract_signature_submissions')
+            .update({ status: 'expired', reviewed_at: new Date().toISOString(), review_note: '待確認超過 7 天，自動清除暫存檔' })
+            .eq('id', row.id)
+            .eq('status', 'pending');
+        if (updateError) console.warn('[signature-review] stale row update failed', row.id, updateError);
+        else expiredIds.add(row.id);
+    }
+    return rows.filter(row => !expiredIds.has(row.id));
+}
+
+async function loadSignatureReviewQueue(scope) {
+    const host = scope?.querySelector('#signature-review-queue');
+    if (!host || !canReviewContractSignatures()) return;
+    host.innerHTML = '<div class="card signature-review-loading"><i class="ph ph-circle-notch"></i> 正在載入待確認簽署檔…</div>';
+    const { data, error } = await supabase.from('contract_signature_submissions')
+        .select('*')
+        .eq('status', 'pending')
+        .order('submitted_at', { ascending: true });
+    if (error) {
+        console.error('[signature-review] load failed', error);
+        host.innerHTML = `<div class="card signature-review-error"><i class="ph ph-warning-circle"></i> 無法載入待確認簽署檔：${esc(error.message)}</div>`;
+        return;
+    }
+    const rows = await expireOldSignatureSubmissions(data || []);
+    host.innerHTML = signatureReviewHtml(rows);
+    if (!rows.length) return;
+
+    host.querySelector('[data-action="refresh-signature-reviews"]')?.addEventListener('click', () => loadSignatureReviewQueue(scope));
+    host.querySelectorAll('[data-action="preview-signature-submission"]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const row = rows.find(item => item.id === btn.dataset.submissionId);
+            if (!row) return;
+            btn.disabled = true;
+            try {
+                const { data: signed, error: signedError } = await supabase.storage
+                    .from(SIGNATURE_REVIEW_BUCKET).createSignedUrl(row.storage_path, 300);
+                if (signedError) throw signedError;
+                window.open(signed.signedUrl, '_blank', 'noopener');
+            } catch (e) {
+                showToast(`預覽失敗：${e.message}`, 'danger', 5000);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
+    host.querySelectorAll('[data-action="approve-signature-submission"]').forEach(btn => {
+        btn.addEventListener('click', () => approveSignatureSubmission(rows.find(item => item.id === btn.dataset.submissionId), scope));
+    });
+    host.querySelectorAll('[data-action="reject-signature-submission"]').forEach(btn => {
+        btn.addEventListener('click', () => rejectSignatureSubmission(rows.find(item => item.id === btn.dataset.submissionId), scope));
+    });
+}
+
+function approveSignatureSubmission(row, scope) {
+    if (!row) return;
+    const contract = mockData.contracts.find(c => c.id === row.contract_id);
+    const ext = (String(row.storage_path || '').split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+    const finalPath = `signed_${row.contract_id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    openConfirm({
+        title: '確認簽署檔已有簽名？',
+        message: `確認後，檔案會正式歸檔至合約 <strong>${esc(row.contract_id)}</strong>，並將合約狀態改為「已簽署」。<br><br><span style="color:var(--text-muted);font-size:var(--text-sm);">請先按「預覽」確認租客確實已簽名。</span>`,
+        confirmLabel: '確認有簽名並歸檔',
+        onConfirm: async () => {
+            try {
+                const { error: moveError } = await supabase.storage.from(SIGNATURE_REVIEW_BUCKET).move(row.storage_path, finalPath);
+                if (moveError) throw moveError;
+                const { error: approveError } = await supabase.rpc('approve_contract_signature_submission', {
+                    p_submission_id: row.id,
+                    p_final_storage_path: finalPath
+                });
+                if (approveError) {
+                    await supabase.storage.from(SIGNATURE_REVIEW_BUCKET).move(finalPath, row.storage_path);
+                    throw approveError;
+                }
+                if (contract) store.updateContract(contract.id, { signedFileUrl: finalPath, status: '已簽署' });
+                showToast(`✅ 合約 ${row.contract_id} 的簽署檔已確認並正式歸檔`, 'success', 5000);
+                await loadSignatureReviewQueue(scope);
+                return true;
+            } catch (e) {
+                console.error('[signature-review] approve failed', e);
+                showToast(`確認失敗：${e.message}`, 'danger', 6000);
+                return false;
+            }
+        }
+    });
+}
+
+function rejectSignatureSubmission(row, scope) {
+    if (!row) return;
+    const contract = mockData.contracts.find(c => c.id === row.contract_id);
+    const tenant = mockData.tenants.find(t => t.id === row.tenant_id)
+        || mockData.tenants.find(t => t.name === contract?.tenant);
+    openConfirm({
+        title: '退回並請租客重新上傳？',
+        message: `此檔案不會掛入合約 <strong>${esc(row.contract_id)}</strong>，合約會維持「待簽署」。系統會刪除暫存檔，並通知租客重新確認簽名後上傳。`,
+        confirmLabel: '退回重傳',
+        danger: true,
+        onConfirm: async () => {
+            try {
+                const { error: rejectError } = await supabase.rpc('reject_contract_signature_submission', {
+                    p_submission_id: row.id,
+                    p_note: '管理員確認檔案未完成簽名，請租客重新上傳'
+                });
+                if (rejectError) throw rejectError;
+                const { error: removeError } = await supabase.storage.from(SIGNATURE_REVIEW_BUCKET).remove([row.storage_path]);
+                if (removeError) console.warn('[signature-review] rejected file cleanup failed', removeError);
+                if (tenant?.lineUserId) {
+                    try {
+                        await pushToTenant(tenant.id, {
+                            message: `${tenant.name} 您好，合約 ${row.contract_id} 的回傳檔案尚未確認到完整簽名，麻煩確認簽名後重新上傳 PDF，謝謝您 🙏🏻`
+                        });
+                    } catch (pushError) {
+                        console.warn('[signature-review] reject notification failed', pushError);
+                        showToast('已退回，但 LINE 通知發送失敗，請人工聯絡租客', 'warning', 6000);
+                    }
+                }
+                showToast(`已退回合約 ${row.contract_id} 的簽署檔`, 'success', 4000);
+                await loadSignatureReviewQueue(scope);
+                return true;
+            } catch (e) {
+                console.error('[signature-review] reject failed', e);
+                showToast(`退回失敗：${e.message}`, 'danger', 6000);
+                return false;
+            }
+        }
+    });
+}
 
 // 「要續租」banner dismiss — 用 localStorage 記住已關過的最大 renew count
 // 如果 renew count 增加了 (有新的要續租) 再跳出來
@@ -176,7 +391,7 @@ function lifecycleBadge(state) {
 
 // 合約流程進度條 — 5 階段 (對齊用戶流程)
 // 1. 催繳 → 2. 客回末5碼 → 3. 核對入帳 → 4. 寄合約 → 5. 收簽署檔 (簽署完成)
-// 收簽署檔的同時 webhook 自動把 status 改成「已簽署」, 所以 step 5 = 全流程完成
+// LINE 回傳檔先進待審；管理員確認有簽名並正式歸檔後，step 5 才算完成。
 function contractProgressChip(c, lifecycle) {
     if (lifecycle === 'renewed' || lifecycle === 'terminated') return '';
     if (c.contractType && c.contractType !== 'cohousing') return '';
@@ -493,6 +708,7 @@ export function renderContracts() {
     }).join('');
 
     return `
+        <div id="signature-review-queue" aria-live="polite"></div>
         <div class="metrics-grid">
             <div class="card metric-card"><div class="metric-header"><span>進行中合約</span><div class="metric-icon success"><i class="ph ph-file-text"></i></div></div><div class="metric-value">${activeCount}</div><div class="metric-subtext">含即將到期/待決策</div></div>
             <div class="card metric-card ${decisionCount > 0 ? 'highlight-danger' : ''}"><div class="metric-header"><span>待決策</span><div class="metric-icon danger"><i class="ph ph-warning-circle"></i></div></div><div class="metric-value" style="color: ${decisionCount > 0 ? 'var(--color-danger)' : 'var(--text-main)'};">${decisionCount}</div><div class="metric-subtext">需要續租 / 退租決定</div></div>
@@ -1398,7 +1614,7 @@ function editProgressStep(contractId, stepKey, onDone) {
         sent:     { label: '寄合約',   hasDate: true,  isDone: !!c.contractSentAt, date: c.contractSentAt,
                     note: '線下傳合約 PDF 給租客時手動填。LINE 自動寄合約也會自動填這個。' },
         returned: { label: '收簽署檔', hasDate: false, isDone: !!c.signedFileUrl,
-                    note: '收到實體簽署檔 (line/email/紙本)時手動標記。若 LINE 自動傳檔, 系統會自動填 URL + 把 status 改成已簽署。' }
+                    note: '收到實體簽署檔 (LINE／Email／紙本)時完成。LINE 回傳檔會先進待確認區，管理員確認有簽名後才正式填入檔案並改為已簽署。' }
     };
     const meta = STEP_META[stepKey];
     if (!meta) return;
@@ -1938,6 +2154,8 @@ export function confirmSnooze(id) {
 }
 
 export function initContractActions(scope) {
+    loadSignatureReviewQueue(scope);
+
     // 新增合約 → 走統一的「新增入住」流程 (建合約+帳單+床位+租客+checkin 一氣呵成)
     scope.querySelector('#btn-new-contract')?.addEventListener('click', () => showCheckinAssignmentForm());
 
