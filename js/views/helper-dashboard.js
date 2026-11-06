@@ -247,7 +247,7 @@ export function renderHelperDashboard() {
                     <h1>${esc(name)}，早安</h1>
                 </div>
                 <div class="helper-home-hero-tools">
-                    <a class="helper-duty-link" href="https://garbage-duty.pages.dev/" target="_blank" rel="noopener noreferrer">
+                    <a class="helper-duty-link" href="https://garbage-duty-euw.pages.dev/" target="_blank" rel="noopener noreferrer">
                         <span><i class="ph ph-trash"></i><strong>垃圾值日表</strong></span>
                         <i class="ph ph-arrow-up-right" aria-hidden="true"></i>
                     </a>
