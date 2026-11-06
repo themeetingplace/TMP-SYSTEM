@@ -4486,7 +4486,6 @@ body[data-role="helper"] .rent-report-action { display: inline-flex !important; 
 .tenant-history-contract-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.28rem;
     padding: 0.18rem 0.35rem;
     margin: -0.18rem -0.35rem;
     border: 0;
@@ -4502,7 +4501,6 @@ body[data-role="helper"] .rent-report-action { display: inline-flex !important; 
     background: var(--color-primary-light);
     outline: none;
 }
-.tenant-history-contract-link i { font-size: 0.9em; }
 
 /* 合約簽署檔兩階段確認 */
 .signature-review-card {

@@ -283,7 +283,6 @@ export function showTenantDetails(id) {
                     <td style="font-family: monospace; font-size: var(--text-xs);">
                         <button type="button" class="tenant-history-contract-link" data-action="open-history-contract" data-contract-id="${escapeAttr(c.id)}" title="瀏覽合約 ${escapeAttr(c.id)}，並可進一步編輯">
                             <span>${esc(c.id)}</span>
-                            <i class="ph ph-arrow-square-out" aria-hidden="true"></i>
                         </button>
                     </td>
                     <td>${(c.propertyName || '—').replace('聚空間 - ', '')}</td>
