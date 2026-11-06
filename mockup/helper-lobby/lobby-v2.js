@@ -105,10 +105,19 @@
     const hair = look.gender === 'male' ? spriteAssets.hairMale : spriteAssets.hairFemale;
     const hairRow = Math.max(0, hairIds.indexOf(look.hair));
     const outfitRow = Math.max(0, outfitIds.indexOf(look.outfit));
+    // All layers share one 128px character rig. Generated sheets have different
+    // amounts of whitespace, so each trimmed layer must be aligned to the same
+    // head, shoulder and foot anchors instead of being expanded to fill the cell.
     const hairBoxes = look.gender === 'male'
-      ? [[29,-18,70,66],[24,-20,80,70],[27,-18,74,74],[28,-18,72,66]]
-      : [[20,-19,88,90],[25,-18,78,102],[28,-18,72,70],[22,-21,84,84]];
-    const outfitBoxes = [[23,25,82,100],[19,20,90,105],[25,27,78,96],[22,24,84,100],[26,27,76,96]];
+      ? [[29,-16,70,64],[25,-18,78,68],[27,-16,74,70],[28,-16,72,64]]
+      : [[21,-17,86,86],[25,-17,78,98],[28,-16,72,68],[23,-18,82,82]];
+    const outfitBoxes = [
+      [24,41,80,82],
+      [22,40,84,84],
+      [27,44,74,79],
+      [25,42,78,81],
+      [28,45,72,78]
+    ];
     drawLayer(ctx, body, 4, 4, frame % 4, dir, 'white', 31, 2, 66, 122);
     drawLayer(ctx, spriteAssets.outfits, 4, 5, dir, outfitRow, 'white', ...outfitBoxes[outfitRow], outfitColors[look.palette]);
     drawLayer(ctx, hair, 4, 4, dir, hairRow, 'green', ...hairBoxes[hairRow]);

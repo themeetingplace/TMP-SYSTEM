@@ -25,6 +25,8 @@ assert.ok(html.includes('data-player-doll'), '玩家角色必須使用分層紙�
 assert.ok(html.includes('data-hair-thumb'), '髮型選項必須顯示實際素材縮圖');
 assert.ok(html.includes('data-outfit-thumb'), '服裝選項必須顯示實際素材縮圖');
 assert.ok(js.includes('function drawPaperDoll'), '紙娃娃系統必須依圖層繪製角色');
+assert.ok(js.includes('All layers share one 128px character rig'), '身體、髮型與服裝必須共用角色骨架定位');
+assert.ok(js.includes('[28,45,72,78]'), '服裝圖層必須從肩線對齊，不可放大填滿角色畫布');
 assert.ok(js.includes("assetRoot = './assets/paper-doll/'"), '紙娃娃必須載入獨立角色素材');
 assert.ok(js.includes('renderOptionThumbnails()'), '紙娃娃選項縮圖必須隨素材與性別更新');
 assert.ok(!html.includes('supabase'), '本機原型不可連接正式 Supabase');
