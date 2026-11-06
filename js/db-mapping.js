@@ -280,7 +280,9 @@ export const fromDb = {
         idCardBackPath: r.id_card_back_path,
         idCardUploadedAt: r.id_card_uploaded_at,
         idCardStatus: r.id_card_status || (r.id_card_front_path ? 'uploaded' : 'missing'),
-        idCardFallbackDeclaredAt: r.id_card_fallback_declared_at
+        idCardFallbackDeclaredAt: r.id_card_fallback_declared_at,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at
     }),
     contract: r => ({
         id: r.id,

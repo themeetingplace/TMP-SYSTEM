@@ -7,11 +7,12 @@ import { rowAction, rowActionGroup } from '../utils/rowActions.js';
 import { entityCard } from '../utils/entityCard.js';
 import { emptyState } from '../utils/emptyState.js';
 import { contractPaymentStatus } from '../utils/contractPaymentStatus.js';
+import { resolveTenantBuildingName, tenantNewestFirst } from '../utils/tenantList.js';
 
 const TENANT_STATUSES = ['居住中', '待入住', '已退租'];
 
 export function renderTenants() {
-    const tenants = filterTenantsByMode(mockData.tenants);
+    const tenants = [...filterTenantsByMode(mockData.tenants)].sort(tenantNewestFirst);
 
     const totalTenants = tenants.length;
     const activeTenants = tenants.filter(t => t.status === '居住中').length;
@@ -22,6 +23,17 @@ export function renderTenants() {
     const activeBoundCount = tenants.filter(t => t.status === '居住中' && t.lineUserId).length;
     const activeUnboundCount = activeTenants - activeBoundCount;
     const bindRate = activeTenants > 0 ? Math.round(activeBoundCount / activeTenants * 100) : 0;
+    const buildingOrder = new Map((mockData.buildings || []).map((building, index) => [building.name, index]));
+    const buildingCounts = tenants.reduce((counts, tenant) => {
+        const name = resolveTenantBuildingName(tenant, { properties: mockData.properties, buildings: mockData.buildings });
+        counts.set(name, (counts.get(name) || 0) + 1);
+        return counts;
+    }, new Map());
+    const tenantBuildings = [...buildingCounts.keys()].sort((a, b) => {
+        if (a === '未分類') return 1;
+        if (b === '未分類') return -1;
+        return (buildingOrder.get(a) ?? 999) - (buildingOrder.get(b) ?? 999) || a.localeCompare(b, 'zh-Hant');
+    });
 
     const tableRows = tenants.map(t => {
         const hasStatus = !!t.status;
@@ -43,7 +55,8 @@ export function renderTenants() {
                 ? `<span class="status-badge warning" style="font-size: var(--text-2xs);"><i class="ph ph-warning"></i> 未綁定</span>`
                 : `<span style="color: var(--text-muted); font-size: var(--text-xs);">—</span>`);
 
-        const searchText = [t.name, t.phone, t.email, t.currentProperty || '', t.lineDisplayName || ''].join(' ').toLowerCase();
+        const buildingName = resolveTenantBuildingName(t, { properties: mockData.properties, buildings: mockData.buildings });
+        const searchText = [t.name, t.phone, t.email, t.currentProperty || '', buildingName, t.lineDisplayName || ''].join(' ').toLowerCase();
 
         // 共用 action HTML — 桌機 / mobile 都用
         const phoneAction = t.phone
@@ -57,7 +70,7 @@ export function renderTenants() {
         `);
 
         // shared tr data-attrs — 桌機 + mobile card 都帶, filter 才不會分裂
-        const rowAttrs = `data-row-id="${esc(t.id)}" data-status="${esc(t.status)}" data-line="${lineBound ? 'bound' : 'unbound'}" data-search="${escapeAttr(searchText)}"`;
+        const rowAttrs = `data-row-id="${esc(t.id)}" data-status="${esc(t.status)}" data-building="${escapeAttr(buildingName)}" data-line="${lineBound ? 'bound' : 'unbound'}" data-search="${escapeAttr(searchText)}"`;
 
         // LINE 綁定 chip (mobile card title 旁)
         const lineChip = lineBound
@@ -128,7 +141,10 @@ export function renderTenants() {
 
         <div class="card">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-users"></i> 租客清單</h2>
+                <div>
+                    <h2 class="card-title" style="margin-bottom: 0;"><i class="ph ph-users"></i> 租客清單</h2>
+                    <span class="tenant-sort-note"><i class="ph ph-sort-descending"></i> 最新新增優先</span>
+                </div>
                 <div class="flex gap-2">
                     <div class="search-bar" style="width: 250px;">
                         <i class="ph ph-magnifying-glass"></i>
@@ -146,6 +162,11 @@ export function renderTenants() {
                     <button class="filter-tab" data-filter-value="居住中">居住中 (${activeTenants})</button>
                     <button class="filter-tab" data-filter-value="待入住">待入住 (${pendingTenants})</button>
                     <button class="filter-tab" data-filter-value="已退租">已退租 (${inactiveTenants})</button>
+                </div>
+                <div class="tenant-building-filters" aria-label="依館別分類">
+                    <span class="tenant-building-filters__label"><i class="ph ph-buildings"></i> 館別</span>
+                    <button class="filter-chip active" data-filter-value="all" data-filter-group="building">全部館別 (${totalTenants})</button>
+                    ${tenantBuildings.map(name => `<button class="filter-chip" data-filter-value="${escapeAttr(name)}" data-filter-group="building">${esc(name)} (${buildingCounts.get(name) || 0})</button>`).join('')}
                 </div>
                 <div class="filter-chip-group" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                     ${activeUnboundCount > 0 ? `

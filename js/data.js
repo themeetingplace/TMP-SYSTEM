@@ -1504,7 +1504,7 @@ export const store = {
 
     // ----- tenants -----
     addTenant(payload) {
-        const item = { id: nextId('T', mockData.tenants), ...payload };
+        const item = { id: nextId('T', mockData.tenants), createdAt: new Date().toISOString(), ...payload };
         mockData.tenants.push(item);
         markDirty('tenants', item.id);
         persist();

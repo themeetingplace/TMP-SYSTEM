@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#302821">
+  <title>聚空間｜小幫手交班大廳</title>
+  <link rel="stylesheet" href="./lobby-v2.css?v=paper-doll-3">
+</head>
+<body>
+  <header class="game-bar">
+    <a class="game-brand" href="../../index.html#dashboard" aria-label="回到小幫手首頁">
+      <span class="brand-pixel">聚</span>
+      <span><strong>聚空間大廳</strong><small>MEETING PLACE STAFF LOBBY</small></span>
+    </a>
+    <div class="bar-center" aria-label="連線狀態"><i></i><span>本機測試模式</span><b>4</b> 人在大廳</div>
+    <div class="bar-actions"><button type="button" class="pixel-btn is-quiet" data-open-wardrobe>角色外觀</button><button type="button" class="pixel-btn is-orange" data-open-panel="chat">打開留言</button></div>
+  </header>
+
+  <main class="game-layout">
+    <section class="game-card" aria-label="聚空間共用大廳">
+      <div class="game-head">
+        <div><span class="chapter">MEETING PLACE · STAFF LOBBY</span></div>
+        <div class="game-help"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd><span>移動</span><i></i><span>或點擊地板</span></div>
+      </div>
+
+      <div class="game-viewport" data-game-viewport tabindex="0" aria-label="可自由移動的 2.5D 像素大廳，使用方向鍵或點擊地板移動">
+        <img class="lobby-map" src="./assets/meeting-place-lobby-v2.png" alt="16-bit 聚空間共用大廳">
+        <div class="map-shade" aria-hidden="true"></div>
+        <button class="hotspot reception-hotspot" type="button" data-hotspot="今天沒有新的入住登記需要處理。"><span>櫃檯</span></button>
+        <button class="hotspot wall-hotspot" type="button" data-open-panel="wall"><span>交班牆</span><b>3</b></button>
+        <button class="hotspot tour-hotspot" type="button" data-open-panel="tours"><span>帶看行程</span><b data-tour-count>2</b></button>
+        <button class="hotspot lounge-hotspot" type="button" data-hotspot="休息一下吧，這裡是大家的共用沙發區。"><span>休息區</span></button>
+
+        <button class="game-person npc palette-mint" type="button" style="--x:24;--y:55" data-name="安安" data-status="備品整理完成，正在大廳休息"><span class="sprite is-front" aria-hidden="true"></span><span class="nameplate"><i></i><strong>安安</strong><small>在線</small></span></button>
+        <button class="game-person npc palette-gold" type="button" style="--x:72;--y:49" data-name="小樂" data-status="公共區域已巡完，稍後更新交班牆"><span class="sprite is-left" aria-hidden="true"></span><span class="nameplate"><i></i><strong>小樂</strong><small>巡館完成</small></span></button>
+        <button class="game-person npc palette-blue" type="button" style="--x:78;--y:75" data-name="管理員" data-status="正在整理今日的交班事項"><span class="sprite is-back" aria-hidden="true"></span><span class="nameplate"><i></i><strong>管理員</strong><small>處理中</small></span></button>
+        <div class="game-person player" style="--x:48;--y:69" data-player><span class="speech-bubble" data-player-bubble>早安！</span><canvas class="paper-doll" width="128" height="128" data-player-doll aria-hidden="true"></canvas><span class="nameplate is-me"><i></i><strong>你</strong><small>值班中</small></span></div>
+        <div class="move-marker" data-move-marker aria-hidden="true"></div>
+        <div class="game-toast" data-game-toast role="status" aria-live="polite"></div>
+        <div class="mobile-dpad" aria-label="移動方向鍵"><button type="button" data-move="up" aria-label="向上">▲</button><button type="button" data-move="left" aria-label="向左">◀</button><button type="button" data-move="down" aria-label="向下">▼</button><button type="button" data-move="right" aria-label="向右">▶</button></div>
+      </div>
+      <footer class="game-statusbar"><span><i class="online-dot"></i>大廳連線正常</span><span>點擊角色查看近況</span><span class="save-note">外觀與測試留言只儲存在這台裝置</span></footer>
+    </section>
+
+    <aside class="hud-panel" data-hud-panel>
+      <div class="hud-tabs" role="tablist">
+        <button type="button" class="is-active" role="tab" aria-selected="true" data-panel-tab="chat">留言 <b>4</b></button><button type="button" role="tab" aria-selected="false" data-panel-tab="wall">交班 <b>3</b></button><button type="button" role="tab" aria-selected="false" data-panel-tab="tours">帶看 <b data-tour-count>2</b></button><button type="button" role="tab" aria-selected="false" data-panel-tab="people">在線 <b>4</b></button><button type="button" class="hud-close" data-close-panel aria-label="收合面板">×</button>
+      </div>
+      <section class="hud-view is-active" data-panel="chat">
+        <div class="pixel-date"><span>今天</span></div>
+        <div class="chat-scroll" data-message-list>
+          <article class="chat-line"><span class="portrait mint">安</span><div><header><strong>安安</strong><time>09:18</time></header><p>入住備品補好了，新的毛巾放在二樓櫃子最上層。</p><footer><button type="button">👍 2</button><button type="button">收到 1</button></footer></div></article>
+          <article class="chat-line"><span class="portrait gold">樂</span><div><header><strong>小樂</strong><time>09:46</time></header><p>3F 浴室燈有點閃，我先貼了提醒，已經放到交班牆。</p><footer><button type="button">👀 1</button></footer></div></article>
+          <article class="system-line"><b>交班牆</b><span>「飲水機濾芯」更新為處理中</span></article>
+          <article class="chat-line mine"><div><header><strong>你</strong><time>10:35</time></header><p>收到，今天退房的床位我會一起檢查。</p></div><span class="portrait coral">我</span></article>
+        </div>
+        <div class="quick-chat"><button type="button" data-quick="收到，我來處理！">收到</button><button type="button" data-quick="我先去現場看看。">去看看</button><button type="button" data-quick="已處理完成 ✓">已完成</button></div>
+        <form class="pixel-composer" data-message-form><label for="game-message">說點什麼</label><div><textarea id="game-message" rows="1" maxlength="160" placeholder="交班事項或打聲招呼…"></textarea><button type="submit">送出</button></div></form>
+      </section>
+      <section class="hud-view wall-list" data-panel="wall" hidden>
+        <div class="hud-title"><span>NOTICE BOARD</span><h2>交班事項</h2></div>
+        <article class="quest is-red"><header><span>待處理</span><time>今天 09:46</time></header><h3>3F 浴室燈閃爍</h3><p>小樂回報，已先張貼提醒。</p><footer><button type="button">我來處理</button><small>古亭一館</small></footer></article>
+        <article class="quest is-gold"><header><span>處理中</span><time>昨天</time></header><h3>飲水機濾芯更換</h3><p>耗材已下單，送達後更換。</p><footer><button type="button">標示完成</button><small>管理員</small></footer></article>
+        <article class="quest is-green"><header><span>完成</span><time>11/05</time></header><h3>二樓入住備品</h3><p>毛巾與衛生紙已補齊。</p><footer><small>安安完成</small></footer></article>
+        <button class="new-quest" type="button">＋ 新增交班事項</button>
+      </section>
+      <section class="hud-view tour-view" data-panel="tours" hidden>
+        <div class="tour-head"><div><span>HOUSE TOUR LOG</span><h2>帶看安排</h2><p>所有館別的預約集中在這裡。</p></div><button type="button" data-open-tour-form>＋ 安排帶看</button></div>
+        <div class="tour-list" data-tour-list></div>
+      </section>
+      <section class="hud-view people-list" data-panel="people" hidden>
+        <div class="hud-title"><span>WHO'S HERE</span><h2>聚空間大廳</h2><p>所有館別的小幫手都在同一個空間。</p></div>
+        <button type="button" data-find-person="24,55"><span class="portrait mint">安</span><span><strong>安安</strong><small>備品整理完成</small></span><i>前往</i></button>
+        <button type="button" data-find-person="72,49"><span class="portrait gold">樂</span><span><strong>小樂</strong><small>巡館完成</small></span><i>前往</i></button>
+        <button type="button" data-find-person="78,75"><span class="portrait blue">管</span><span><strong>管理員</strong><small>整理交班事項</small></span><i>前往</i></button>
+        <button type="button" data-find-person="48,69"><span class="portrait coral">我</span><span><strong>你</strong><small>值班中</small></span><i>定位</i></button>
+      </section>
+    </aside>
+  </main>
+
+  <div class="modal-backdrop" data-wardrobe hidden>
+    <section class="wardrobe-window" role="dialog" aria-modal="true" aria-labelledby="wardrobe-title">
+      <header><div><span>CHARACTER CUSTOMIZE</span><h2 id="wardrobe-title">角色外觀</h2></div><button type="button" data-close-wardrobe aria-label="關閉">×</button></header>
+      <div class="wardrobe-grid">
+        <div class="character-stage"><canvas class="preview-doll" width="128" height="128" data-preview-doll aria-hidden="true"></canvas><span data-preview-label>女生 · 新手布衣</span></div>
+        <div class="custom-controls">
+          <fieldset><legend>角色性別</legend><div class="chip-options gender-options"><button class="is-selected" type="button" data-look="gender" data-value="female">女生</button><button type="button" data-look="gender" data-value="male">男生</button></div></fieldset>
+          <fieldset><legend>髮型</legend><div class="hair-options"><button class="is-selected" type="button" data-look="hair" data-value="hair-1"><canvas class="asset-thumb" width="64" height="64" data-hair-thumb="0" aria-hidden="true"></canvas><span data-hair-label="0">雙馬尾</span></button><button type="button" data-look="hair" data-value="hair-2"><canvas class="asset-thumb" width="64" height="64" data-hair-thumb="1" aria-hidden="true"></canvas><span data-hair-label="1">長直髮</span></button><button type="button" data-look="hair" data-value="hair-3"><canvas class="asset-thumb" width="64" height="64" data-hair-thumb="2" aria-hidden="true"></canvas><span data-hair-label="2">短鮑伯</span></button><button type="button" data-look="hair" data-value="hair-4"><canvas class="asset-thumb" width="64" height="64" data-hair-thumb="3" aria-hidden="true"></canvas><span data-hair-label="3">高馬尾</span></button></div></fieldset>
+          <fieldset><legend>服裝款式</legend><div class="outfit-options"><button type="button" data-look="outfit" data-value="knight"><canvas class="asset-thumb" width="64" height="64" data-outfit-thumb="0" aria-hidden="true"></canvas><span>騎士鎧甲</span></button><button type="button" data-look="outfit" data-value="mage"><canvas class="asset-thumb" width="64" height="64" data-outfit-thumb="1" aria-hidden="true"></canvas><span>法師斗篷</span></button><button type="button" data-look="outfit" data-value="rogue"><canvas class="asset-thumb" width="64" height="64" data-outfit-thumb="2" aria-hidden="true"></canvas><span>盜賊皮裝</span></button><button type="button" data-look="outfit" data-value="royal"><canvas class="asset-thumb" width="64" height="64" data-outfit-thumb="3" aria-hidden="true"></canvas><span>皇家禮服</span></button><button class="is-selected" type="button" data-look="outfit" data-value="novice"><canvas class="asset-thumb" width="64" height="64" data-outfit-thumb="4" aria-hidden="true"></canvas><span>新手布衣</span></button></div></fieldset>
+          <fieldset><legend>服裝配色</legend><div class="palette-options"><button class="is-selected coral" type="button" data-look="palette" data-value="palette-coral"><i></i><span>珊瑚</span></button><button class="mint" type="button" data-look="palette" data-value="palette-mint"><i></i><span>薄荷</span></button><button class="blue" type="button" data-look="palette" data-value="palette-blue"><i></i><span>暮藍</span></button><button class="gold" type="button" data-look="palette" data-value="palette-gold"><i></i><span>暖金</span></button></div></fieldset>
+          <fieldset><legend>配件</legend><div class="chip-options"><button class="is-selected" type="button" data-look="accessory" data-value="none">不配戴</button><button type="button" data-look="accessory" data-value="glasses">像素眼鏡</button><button type="button" data-look="accessory" data-value="cap">值班帽</button></div></fieldset>
+          <fieldset><legend>目前狀態</legend><div class="chip-options"><button class="is-selected" type="button" data-look="status" data-value="值班中">值班中</button><button type="button" data-look="status" data-value="巡館中">巡館中</button><button type="button" data-look="status" data-value="休息一下">休息一下</button></div></fieldset>
+          <p>紙娃娃會分層套用性別輪廓、髮型、服裝、顏色與配件，並同步至四方向步行動畫。</p>
+        </div>
+      </div>
+      <footer><button type="button" class="pixel-btn is-quiet" data-reset-look>恢復預設</button><button type="button" class="pixel-btn is-orange" data-save-look>儲存外觀</button></footer>
+    </section>
+  </div>
+  <div class="modal-backdrop" data-tour-modal hidden>
+    <section class="tour-window" role="dialog" aria-modal="true" aria-labelledby="tour-form-title">
+      <header><div><span>NEW HOUSE TOUR</span><h2 id="tour-form-title">安排帶看</h2></div><button type="button" data-close-tour-form aria-label="關閉">×</button></header>
+      <form data-tour-form>
+        <div class="tour-form-grid">
+          <label><span>日期 *</span><input name="date" type="date" required></label>
+          <label><span>時間 *</span><input name="time" type="time" required></label>
+          <label><span>館別 *</span><select name="building" required><option value="">請選擇</option><option>古亭一館</option><option>古亭二館</option><option>師大館</option><option>中山館</option><option>松山館</option><option>信義館</option></select></label>
+          <label><span>房間／床位 *</span><input name="room" type="text" maxlength="30" placeholder="例如 R3-B" required></label>
+          <label><span>看房人姓名 *</span><input name="visitor" type="text" maxlength="30" placeholder="如何稱呼" required></label>
+          <label><span>聯絡方式</span><input name="contact" type="text" maxlength="40" placeholder="電話或 LINE 名稱"></label>
+          <label><span>負責小幫手 *</span><select name="helper" required><option>我</option><option>安安</option><option>小樂</option><option>管理員</option></select></label>
+          <label><span>狀態</span><select name="status"><option>待確認</option><option>已確認</option></select></label>
+          <label class="form-wide"><span>備註</span><textarea name="note" rows="2" maxlength="100" placeholder="交通方式、想看的房型或其他提醒"></textarea></label>
+        </div>
+        <p class="local-form-note">本機原型：資料只會保留在這台裝置，不會通知看房人。</p>
+        <footer><button type="button" class="pixel-btn is-quiet" data-close-tour-form>取消</button><button type="submit" class="pixel-btn is-orange">儲存帶看安排</button></footer>
+      </form>
+    </section>
+  </div>
+  <script src="./lobby-v2.js?v=paper-doll-7"></script>
+</body>
+</html>
