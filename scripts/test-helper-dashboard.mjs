@@ -12,10 +12,9 @@ assert.match(
 );
 assert.ok(helperDashboardSource.includes("window.__helperViews.includes('dashboard_rent_collection')"), '首頁收租進度必須由獨立小幫手權限控制');
 assert.ok(helperDashboardSource.includes("canViewRentCollection() ? `<section class=\"helper-rent-card\""), '未開權限時不應渲染首頁收租進度');
-assert.ok(appShellSource.includes('class="helper-world-portal"'), '小幫手側欄必須提供遊戲世界式大廳入口');
-assert.ok(appShellSource.includes('mockup/helper-lobby/'), '大廳入口必須連到角色大廳');
-assert.ok(appCssSource.includes('body[data-role="helper"] .helper-world-portal'), '大廳入口只能在小幫手角色顯示');
-assert.ok(appCssSource.includes('meeting-place-lobby-thumb.png'), '大廳入口必須使用輕量像素場景預覽，而不是一般按鈕或完整大圖');
+assert.ok(!appShellSource.includes('mockup/helper-lobby/'), '已撤下的像素大廳不可繼續出現在側欄');
+assert.ok(!appShellSource.includes('admin-lobby-link'), '管理端不可繼續顯示已撤下的大廳留言入口');
+assert.ok(!appCssSource.includes('helper-world-portal'), '已撤下的像素大廳樣式必須同步移除');
 
 const adminUsersSource = readFileSync(new URL('../js/views/admin-users.js', import.meta.url), 'utf8');
 assert.ok(adminUsersSource.includes("key: 'dashboard_rent_collection'"), '帳號管理必須提供首頁收租進度權限');
