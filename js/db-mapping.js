@@ -87,6 +87,8 @@ export const toDb = {
         terminated_date: c.terminatedDate ?? null,
         decision_taken_at: c.decisionTakenAt ?? null,
         decision_note: c.decisionNote ?? null,
+        payment_channel: c.paymentChannel ?? 'self',
+        platform_name: c.paymentChannel === 'platform' ? (c.platformName ?? null) : null,
         // 續租意願 (LINE 自動詢問)
         renew_intent: c.renewIntent ?? null,
         renew_asked_at: c.renewAskedAt ?? null,
@@ -303,6 +305,8 @@ export const fromDb = {
         terminatedDate: r.terminated_date,
         decisionTakenAt: r.decision_taken_at,
         decisionNote: r.decision_note,
+        paymentChannel: r.payment_channel ?? 'self',
+        platformName: r.platform_name,
         renewIntent: r.renew_intent,
         renewAskedAt: r.renew_asked_at,
         renewResponseAt: r.renew_response_at,

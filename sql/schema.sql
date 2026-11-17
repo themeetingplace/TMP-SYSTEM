@@ -119,6 +119,8 @@ CREATE TABLE contracts (
     terminated_date      date,
     decision_taken_at    timestamptz,
     decision_note        text,
+    payment_channel      text NOT NULL DEFAULT 'self' CHECK (payment_channel IN ('self', 'platform')),
+    platform_name        text,
     created_at           timestamptz DEFAULT now(),
     updated_at           timestamptz DEFAULT now()
 );

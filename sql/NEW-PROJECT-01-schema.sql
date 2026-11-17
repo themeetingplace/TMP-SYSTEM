@@ -101,6 +101,8 @@ create table if not exists public.contracts (
   terminated_date date,
   decision_taken_at timestamp with time zone,
   decision_note text,
+  payment_channel text not null default 'self'::text check (payment_channel in ('self', 'platform')),
+  platform_name text,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now(),
   renew_intent text,
