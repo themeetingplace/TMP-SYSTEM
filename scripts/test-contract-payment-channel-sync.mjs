@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { toDb, fromDb } from '../js/db-mapping.js';
 
 const platformDb = toDb.contract({
@@ -24,4 +25,28 @@ assert.equal(platformJs.platformName, 'Airbnb');
 const legacyJs = fromDb.contract({ id: 'C001' });
 assert.equal(legacyJs.paymentChannel, 'self', '舊合約沒有欄位時必須視為自行收款');
 
-console.log('contract payment-channel cloud mapping checks passed');
+// 防止未來新增 contracts 欄位卻漏掉前端雲端 mapping，造成「只有某台瀏覽器看得到」。
+const schema = await readFile(new URL('../sql/NEW-PROJECT-01-schema.sql', import.meta.url), 'utf8');
+const contractBlock = schema.match(/create table if not exists public\.contracts\s*\(([\s\S]*?)\n\);/i)?.[1];
+assert.ok(contractBlock, '必須能讀到 contracts schema');
+const serverManaged = new Set(['created_at', 'updated_at']);
+const dbColumns = contractBlock
+    .split(/\r?\n/)
+    .map(line => line.match(/^\s{2}([a-z][a-z0-9_]*)\s+/i)?.[1])
+    .filter(Boolean)
+    .filter(column => !serverManaged.has(column));
+
+const toDbKeys = new Set(Object.keys(toDb.contract({})));
+dbColumns.forEach(column => {
+    assert.ok(toDbKeys.has(column), `contracts.${column} 缺少 JS → DB mapping`);
+});
+
+const snakeToCamel = value => value.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+const rawContract = Object.fromEntries(dbColumns.map(column => [column, `__${column}__`]));
+const mappedContract = fromDb.contract(rawContract);
+dbColumns.forEach(column => {
+    const jsField = snakeToCamel(column);
+    assert.equal(mappedContract[jsField], rawContract[column], `contracts.${column} 缺少 DB → JS mapping`);
+});
+
+console.log('contract cloud mapping parity checks passed');
