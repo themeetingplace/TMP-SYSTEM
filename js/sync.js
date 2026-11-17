@@ -539,9 +539,11 @@ function startRealtime() {
                 realtimeEverSubscribed = true;
                 reconnectAttempt = 0;  // 連上了重置重試次數
                 clearTimeout(reconnectTimer);
-                // 重連回來後拉一次最新資料 (期間可能有別人改了)
-                if (isReconnect && state.lastSync) {
-                    pullAll({ mode: 'incremental', reason: 'realtime-reconnect' })
+                // 每次訂閱成功後都補拉一次：bootstrap full pull 與 Realtime 訂閱之間
+                // 存在短暫空窗，另一個帳號若剛好在這時更新，事件不會被收到。
+                // 首次連線也核對，避免同床位／租客名稱在不同帳號留下兩個版本。
+                if (state.lastSync) {
+                    pullAll({ mode: 'incremental', reason: isReconnect ? 'realtime-reconnect' : 'realtime-subscribe' })
                         .catch(e => console.warn('[reconnect] pull 失敗:', e));
                 }
             } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
@@ -715,11 +717,8 @@ async function reconcileDevices(reason) {
             return;
         }
         if (hasDirtyRows()) await pushAll();
-        // Realtime 正常連線代表前景期間的變更已逐筆收到；不要每次點回瀏覽器就下載全部資料。
-        if (foreground && state.realtimeConnected) {
-            console.log(`[sync] 略過前景 pull：Realtime 已連線 (${reason})`);
-            return;
-        }
+        // 即使 Realtime 顯示已連線，手機休眠／瀏覽器凍結期間仍可能漏掉事件。
+        // 前景事件已做五分鐘節流，這裡保留一次輕量增量核對，確保跨帳號一致。
         const needsFullReconcile = Date.now() - lastFullPullAt >= FULL_RECONCILE_INTERVAL_MS;
         await pullAll({ mode: needsFullReconcile ? 'full' : 'incremental', reason });
         startRealtime();
@@ -742,6 +741,7 @@ document.addEventListener('visibilitychange', () => {
     else void reconcileDevices('visible');
 });
 window.addEventListener('focus', () => { void reconcileDevices('focus'); });
+window.addEventListener('pageshow', () => { void reconcileDevices('pageshow'); });
 window.addEventListener('pagehide', () => flushBeforeSuspend('pagehide'));
 window.addEventListener('offline', () => {
     state.online = false;

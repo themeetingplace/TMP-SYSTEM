@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.26';
-export const APP_BUILD_DATE = '2026-11-06';
+export const APP_VERSION = '1.10.27';
+export const APP_BUILD_DATE = '2026-11-17';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.27', date: '2026-11-17', notes: '修正不同帳號的住房姓名可能不同步：Realtime 首次訂閱後補做增量核對，電腦、手機或背景分頁回到前景時即使顯示已連線仍會核對雲端，並支援頁面從瀏覽器快取恢復時重新同步。' },
     { version: '1.10.26', date: '2026-11-12', notes: '撤下成效未達預期的小幫手像素大廳：移除小幫手側欄入口、管理端大廳留言入口、建置中頁面及相關角色素材；既有館務、帳務、住客行程與其他小幫手功能維持不變。' },
     { version: '1.10.25', date: '2026-11-06', notes: '正式站的角色大廳暫時改為「建置中」頁面；本機測試網址仍保留完整角色、移動與留言功能，後續角色調整確認完成前不再公開。' },
     { version: '1.10.24', date: '2026-11-06', notes: '修正小幫手大廳紙娃娃圖層錯位：身體、髮型與服裝改用同一組頭部、肩線及腳底骨架定位，不再各自放大後擠成一團；同步校正男女角色、四種髮型與五套服裝的預覽及移動顯示。' },
