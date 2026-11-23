@@ -1,6 +1,14 @@
 // camelCase (JS / mockData) ↔ snake_case (Postgres) 雙向轉換
 // 被 migrate-to-supabase.js 跟 sync.js 共用
 
+// HTML 日期／時間欄位清空後會留下空字串；Postgres 的 date/timestamptz 不接受 ""。
+// 統一在 mapping 邊界轉成 null，避免一筆空日期讓同批資料全部無法同步。
+const nullableDate = value => (
+    value == null || (typeof value === 'string' && value.trim() === '')
+        ? null
+        : value
+);
+
 // === JS → DB ===
 export const toDb = {
     building: b => ({
@@ -21,8 +29,8 @@ export const toDb = {
         tax_reported: !!b.taxReported,
         developer: b.developer ?? null,
         manager: b.manager ?? null,
-        managed_start_date: b.managedStartDate ?? null,
-        managed_end_date: b.managedEndDate ?? null,
+        managed_start_date: nullableDate(b.managedStartDate),
+        managed_end_date: nullableDate(b.managedEndDate),
         fee_type: b.feeType ?? 'fixed',
         fee_config: Object.fromEntries(Object.entries(b.feeConfig ?? {}).filter(([key]) => key !== 'pettyCashMonthlyBudget')),
         energy_mode: b.energyMode ?? null,
@@ -42,7 +50,7 @@ export const toDb = {
         rent: p.rent != null ? Number(p.rent) : null,
         tenant: p.tenant ?? null,
         contract_id: p.contractId ?? null,
-        contract_end: p.contractEnd ?? null,
+        contract_end: nullableDate(p.contractEnd),
         room_number: p.roomNumber != null ? Number(p.roomNumber) : null,
         bed_letter: p.bedLetter ?? null,
         gender: p.gender ?? null,
@@ -60,43 +68,43 @@ export const toDb = {
         line_user_id: t.lineUserId ?? null,
         line_display_name: t.lineDisplayName ?? null,
         line_picture_url: t.linePictureUrl ?? null,
-        line_bound_at: t.lineBoundAt ?? null,
+        line_bound_at: nullableDate(t.lineBoundAt),
         note: t.note ?? null,
         id_card_front_path: t.idCardFrontPath ?? null,
         id_card_back_path: t.idCardBackPath ?? null,
-        id_card_uploaded_at: t.idCardUploadedAt ?? null,
+        id_card_uploaded_at: nullableDate(t.idCardUploadedAt),
         id_card_status: t.idCardStatus ?? (t.idCardFrontPath ? 'uploaded' : 'missing'),
-        id_card_fallback_declared_at: t.idCardFallbackDeclaredAt ?? null
+        id_card_fallback_declared_at: nullableDate(t.idCardFallbackDeclaredAt)
     }),
     contract: c => ({
         id: c.id,
         property_id: c.propertyId ?? null,
         property_name: c.propertyName ?? null,
         tenant: c.tenant ?? null,
-        sign_date: c.signDate ?? null,
-        start_date: c.startDate ?? null,
-        end_date: c.endDate ?? null,
+        sign_date: nullableDate(c.signDate),
+        start_date: nullableDate(c.startDate),
+        end_date: nullableDate(c.endDate),
         term_months: c.termMonths ?? null,
         status: c.status ?? null,
         amount: c.amount ?? null,
         deposit_amount: c.depositAmount ?? 0,
         parent_contract_id: c.parentContractId ?? null,
         renewal_state: c.renewalState ?? 'active',
-        snooze_until: c.snoozeUntil ?? null,
+        snooze_until: nullableDate(c.snoozeUntil),
         signed_file_url: c.signedFileUrl ?? null,
-        terminated_date: c.terminatedDate ?? null,
-        decision_taken_at: c.decisionTakenAt ?? null,
+        terminated_date: nullableDate(c.terminatedDate),
+        decision_taken_at: nullableDate(c.decisionTakenAt),
         decision_note: c.decisionNote ?? null,
         payment_channel: c.paymentChannel ?? 'self',
         platform_name: c.paymentChannel === 'platform' ? (c.platformName ?? null) : null,
-        contract_sent_at: c.contractSentAt ?? null,
-        pending_termination_date: c.pendingTerminationDate ?? null,
+        contract_sent_at: nullableDate(c.contractSentAt),
+        pending_termination_date: nullableDate(c.pendingTerminationDate),
         bundle_parent_contract_id: c.bundleParentContractId ?? null,
         bundle_original_amount: c.bundleOriginalAmount ?? null,
         // 續租意願 (LINE 自動詢問)
         renew_intent: c.renewIntent ?? null,
-        renew_asked_at: c.renewAskedAt ?? null,
-        renew_response_at: c.renewResponseAt ?? null,
+        renew_asked_at: nullableDate(c.renewAskedAt),
+        renew_response_at: nullableDate(c.renewResponseAt),
         renew_note: c.renewNote ?? null,
         // === 代管合約欄位 (R4 / sql/23-contract-types-2026-06-17.sql) ===
         // contract_type: 'cohousing' | 'managed-owner' | 'managed-tenant'
@@ -114,11 +122,11 @@ export const toDb = {
         tenant: i.tenant ?? null,
         type: i.type,
         amount: i.amount,
-        due_date: i.dueDate ?? null,
+        due_date: nullableDate(i.dueDate),
         status: i.status ?? null,
-        paid_date: i.paidDate ?? null,
-        period_start: i.periodStart ?? null,
-        period_end: i.periodEnd ?? null,
+        paid_date: nullableDate(i.paidDate),
+        period_start: nullableDate(i.periodStart),
+        period_end: nullableDate(i.periodEnd),
         note: i.note ?? null,
         bank_last5: i.bankLast5 ?? null,
         bank_verified: i.bankVerified ?? false,
@@ -134,7 +142,7 @@ export const toDb = {
         building_id: m.buildingId ?? null,
         issue: m.issue ?? null,
         reporter: m.reporter ?? null,
-        report_date: m.reportDate ?? null,
+        report_date: nullableDate(m.reportDate),
         status: m.status ?? null,
         cost: m.cost ?? null
     }),
@@ -142,7 +150,7 @@ export const toDb = {
         id: c.id,
         tenant_name: c.tenantName ?? null,
         property_name: c.propertyName ?? null,
-        scheduled_date: c.scheduledDate ?? null,
+        scheduled_date: nullableDate(c.scheduledDate),
         status: c.status ?? null,
         tasks: c.tasks ?? null
     }),
@@ -167,7 +175,7 @@ export const toDb = {
         building_id: ct.buildingId,
         file_name: ct.fileName ?? null,
         pdf_base64: ct.pdfBase64 ?? null,
-        uploaded_at: ct.uploadedAt ?? null
+        uploaded_at: nullableDate(ct.uploadedAt)
     }),
     rentRule: r => ({
         id: r.id,
@@ -191,9 +199,9 @@ export const toDb = {
         how_known_other: o.howKnownOther ?? '',
         note: o.note ?? '',
         status: o.status ?? 'active',
-        submitted_at: o.submittedAt ?? null,
+        submitted_at: nullableDate(o.submittedAt),
         reviewed_by: o.reviewedBy ?? null,
-        reviewed_at: o.reviewedAt ?? null
+        reviewed_at: nullableDate(o.reviewedAt)
     }),
     deposit: d => ({
         id: d.id,
@@ -203,8 +211,8 @@ export const toDb = {
         building_id: d.buildingId ?? null,
         amount: Number(d.amount) || 0,
         holder: d.holder ?? 'pms',
-        collected_date: d.collectedDate ?? null,
-        transferred_date: d.transferredDate ?? null,
+        collected_date: nullableDate(d.collectedDate),
+        transferred_date: nullableDate(d.transferredDate),
         note: d.note ?? ''
     }),
     settlement: s => ({
@@ -218,7 +226,7 @@ export const toDb = {
         deposit_transferred_this_month: Number(s.depositTransferredThisMonth) || 0,
         owner_holding_deposit_total: Number(s.ownerHoldingDepositTotal) || 0,
         status: s.status ?? 'draft',
-        sent_at: s.sentAt ?? null
+        sent_at: nullableDate(s.sentAt)
     })
 };
 

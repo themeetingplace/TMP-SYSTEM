@@ -54,7 +54,8 @@ const state = {
     error: null,
     online: navigator.onLine,
     realtimeConnected: false,
-    pendingChanges: 0
+    pendingChanges: 0,
+    pendingByTable: {}
 };
 
 // ⚠ 防資料復活: 首次 pull 完成才允許 push 上雲
@@ -124,8 +125,16 @@ function emit() { listeners.forEach(fn => { try { fn({ ...state }); } catch {} }
 function countDirtyRows() {
     return Object.values(dirtyRows).reduce((sum, ids) => sum + (ids?.size || 0), 0);
 }
+function getPendingByTable() {
+    return Object.fromEntries(
+        Object.entries(dirtyRows)
+            .filter(([, ids]) => (ids?.size || 0) > 0)
+            .map(([table, ids]) => [table, ids.size])
+    );
+}
 function setStatus(s, error = null) {
     state.pendingChanges = countDirtyRows();
+    state.pendingByTable = getPendingByTable();
     // 仍有待上雲資料時不能亮綠燈。舊流程會被下一次成功 pull 蓋回「已同步」。
     if (s === 'idle' && state.pendingChanges > 0) {
         state.status = 'error';
@@ -321,19 +330,44 @@ async function pushSmall() {
                         throw new Error(msg);
                     }
                 }
-                const { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
-                if (error) {
-                    // 失敗 → 印出具體是哪些 row + 錯誤細節, 方便診斷 (dirty 保留下次 retry)
-                    console.error(`[sync] ${t.key} push 失敗:`, error);
-                    console.error(`  失敗的 rows (${rows.length} 筆):`, rows);
-                    console.error(`  dirtyIds:`, dirtyIds);
-                    // 若 batch 失敗且只有 1 筆 → 該筆有問題, 印詳細內容
-                    if (rows.length === 1) {
-                        console.error(`  ⚠ 這筆 row 內容有問題 (可能: 欄位缺 required / FK 對不到 / RLS 阻擋):`, JSON.stringify(rows[0], null, 2));
+                let { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
+                if (error && rows.length > 1) {
+                    // 批次中只要一筆格式錯誤，Postgres 會整批退回。改逐筆補送，
+                    // 讓正常資料先完成，只保留真正錯誤的 ID 在 dirty journal。
+                    console.warn(`[sync] ${t.key} 批次上傳失敗，改為逐筆隔離:`, error.message);
+                    const succeededIds = [];
+                    const isolatedReturned = [];
+                    const rowErrors = [];
+                    for (const row of rows) {
+                        const rowId = row[t.pk];
+                        const { data: oneReturned, error: oneError } = await supabase
+                            .from(t.key)
+                            .upsert([row], { onConflict: t.pk })
+                            .select('*');
+                        if (oneError) {
+                            rowErrors.push({ id: rowId, error: oneError.message });
+                        } else {
+                            succeededIds.push(rowId);
+                            isolatedReturned.push(...(oneReturned || []));
+                        }
                     }
+                    clearDirty(t.src, succeededIds, dirtyRevisionSnapshot);
+                    returned = isolatedReturned;
+                    if (rowErrors.length > 0) {
+                        const detail = rowErrors.map(item => `${item.id}: ${item.error}`).join('；');
+                        console.error(`[sync] ${t.key} 單筆上傳失敗:`, rowErrors);
+                        error = new Error(detail);
+                    } else {
+                        error = null;
+                    }
+                } else if (!error) {
+                    clearDirty(t.src, dirtyIds, dirtyRevisionSnapshot);
+                }
+                if (error) {
+                    console.error(`[sync] ${t.key} push 失敗:`, error);
+                    console.error(`  dirtyIds:`, dirtyIds);
                     throw new Error(error.message);
                 }
-                clearDirty(t.src, dirtyIds, dirtyRevisionSnapshot);
                 markJustPushed();
                 (returned || []).forEach(r => {
                     if (r?.[t.pk] && r?.updated_at) markRowPushed(t.key, r[t.pk], r.updated_at);
@@ -350,9 +384,11 @@ async function pushSmall() {
             }
             setStatus('idle');
             pushSucceeded = true;
+            return { success: true };
         } catch (e) {
             setStatus('error', e.message);
             console.error('[sync] push 失敗:', e);
+            return { success: false, error: e.message };
         }
     })().finally(() => {
         pushInFlight = null;
@@ -414,18 +450,23 @@ async function pushLarge() {
             });
         }
         setStatus('idle');
+        return { success: true };
     } catch (e) {
         setStatus('error', e.message);
         console.error('[sync] push 大表失敗:', e);
+        return { success: false, error: e.message };
     }
 }
 
 export async function pushAll() {
-    await pushSmall();
-    await pushLarge();
+    const smallResult = await pushSmall();
+    const largeResult = await pushLarge();
     const remaining = countDirtyRows();
     if (remaining > 0) {
-        const message = `仍有 ${remaining} 筆本機變更尚未上傳`;
+        const details = [smallResult?.error, largeResult?.error].filter(Boolean);
+        const message = details.length > 0
+            ? details.join('；')
+            : `仍有 ${remaining} 筆本機變更尚未上傳`;
         setStatus('error', message);
         scheduleAutoRetry();
         throw new Error(message);

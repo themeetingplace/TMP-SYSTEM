@@ -1192,8 +1192,18 @@ function renderSyncTab() {
         error: '⚠️ 錯誤',
         offline: '🚫 離線'
     }[s.status] || s.status;
+    const syncTableLabels = {
+        tenants: '租客', contracts: '合約', invoices: '帳單', properties: '床位',
+        buildings: '館別', maintenances: '維修', checkins: '入住', owners: '屋主',
+        deposits: '押金', settlements: '結算', invoiceTypes: '帳務分類',
+        tenantSources: '租客來源', paymentMethods: '付款方式', rentRules: '租金規則',
+        contractTemplates: '合約範本'
+    };
+    const pendingBreakdown = Object.entries(s.pendingByTable || {})
+        .map(([table, count]) => `${syncTableLabels[table] || table} ${count}`)
+        .join('、');
     const pendingText = Number(s.pendingChanges) > 0
-        ? `<div style="font-size: var(--text-xs); color: var(--color-danger); margin-top: 0.5rem;">待上傳：${s.pendingChanges} 筆</div>`
+        ? `<div style="font-size: var(--text-xs); color: var(--color-danger); margin-top: 0.5rem;">待上傳：${s.pendingChanges} 筆${pendingBreakdown ? `（${pendingBreakdown}）` : ''}</div>`
         : '';
 
     return `

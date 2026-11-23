@@ -25,6 +25,23 @@ assert.equal(platformJs.platformName, 'Airbnb');
 const legacyJs = fromDb.contract({ id: 'C001' });
 assert.equal(legacyJs.paymentChannel, 'self', '舊合約沒有欄位時必須視為自行收款');
 
+// 日期／時間輸入清空時必須送 null；空字串會被 Postgres date/timestamptz 拒絕，
+// 並讓同一批所有租客或合約一起卡在待上傳。
+const blankTenantDates = toDb.tenant({
+    id: 'T019',
+    name: '測試',
+    lineBoundAt: '',
+    idCardUploadedAt: '   ',
+    idCardFallbackDeclaredAt: ''
+});
+assert.equal(blankTenantDates.line_bound_at, null);
+assert.equal(blankTenantDates.id_card_uploaded_at, null);
+assert.equal(blankTenantDates.id_card_fallback_declared_at, null);
+const blankContractDates = toDb.contract({ id: 'C999', startDate: '', endDate: '', contractSentAt: '' });
+assert.equal(blankContractDates.start_date, null);
+assert.equal(blankContractDates.end_date, null);
+assert.equal(blankContractDates.contract_sent_at, null);
+
 // 防止未來新增 contracts 欄位卻漏掉前端雲端 mapping，造成「只有某台瀏覽器看得到」。
 const schema = await readFile(new URL('../sql/NEW-PROJECT-01-schema.sql', import.meta.url), 'utf8');
 const contractBlock = schema.match(/create table if not exists public\.contracts\s*\(([\s\S]*?)\n\);/i)?.[1];
