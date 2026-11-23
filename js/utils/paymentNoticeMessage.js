@@ -8,7 +8,7 @@
 import { mockData, applyRentRules, leaseEndISO } from '../data.js';
 import { invoiceAdjustments, invoiceDueAmount } from './invoicePaymentSummary.js';
 
-const PAYMENT_ACCOUNT = '台新銀行(812)／敦南分行／戶名：陳麒峰／帳號：28881003694287';
+const PAYMENT_ACCOUNT = '合庫銀行(006)／延平分行／戶名：聚空間租賃管理顧問有限公司／帳號：0040898000631';
 
 function findRentInvoice(contract) {
     if (!contract?.id) return null;
@@ -114,8 +114,7 @@ ${greeting}
 📅 合約期間：${periodSlash}
 月租金：$${monthlyRent.toLocaleString()}${adjLines ? '\n細項：\n' + adjLines : ''}
 ${formulaLine}
-收款帳號：
-${PAYMENT_ACCOUNT}
+匯款帳戶：${PAYMENT_ACCOUNT}
 
 繳款完成後，請回傳「銀行帳戶末 5 碼」(5 位數字就好)，
 系統會自動記錄，查帳確認後會再傳送合約給您 ✨`;
