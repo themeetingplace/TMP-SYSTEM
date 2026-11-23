@@ -34,6 +34,9 @@ const LEGACY_LAST_SYNC_KEY = 'bms-last-sync';
 const CONTRACT_TEMPLATE_METADATA_COLUMNS = 'building_id,file_name,uploaded_at,created_at,updated_at';
 const FOREGROUND_RECONCILE_MIN_MS = 5 * 60 * 1000;
 const FULL_RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+// 增量同步看不到「雲端不存在」的本機孤兒資料。住房畫面以合約為核心，
+// 前景每五分鐘額外完整核對 contracts；只多抓一張小表，避免重抓全部資料。
+const CONTRACT_FULL_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 
 // 一次性 migrate：新 key 沒值就讀舊 key (bms-last-sync) 並刪舊
 (function migrateLastSyncKey() {
@@ -50,7 +53,8 @@ const state = {
     lastSync: localStorage.getItem(LAST_SYNC_KEY) || null,
     error: null,
     online: navigator.onLine,
-    realtimeConnected: false
+    realtimeConnected: false,
+    pendingChanges: 0
 };
 
 // ⚠ 防資料復活: 首次 pull 完成才允許 push 上雲
@@ -74,7 +78,7 @@ function scheduleAutoRetry() {
     retryTimer = setTimeout(() => {
         pushAll().then(() => {
             if (state.status === 'idle') retryAttempt = 0;  // 成功 → 重置計數
-        });
+        }).catch(() => {}); // pushAll 已顯示錯誤，避免未處理 Promise
     }, delay);
 }
 // 成功 push 後重置重試計數 (外部觸發)
@@ -117,9 +121,19 @@ function dedupeById(arr, srcKey) {
 
 const listeners = new Set();
 function emit() { listeners.forEach(fn => { try { fn({ ...state }); } catch {} }); }
+function countDirtyRows() {
+    return Object.values(dirtyRows).reduce((sum, ids) => sum + (ids?.size || 0), 0);
+}
 function setStatus(s, error = null) {
-    state.status = s;
-    state.error = error;
+    state.pendingChanges = countDirtyRows();
+    // 仍有待上雲資料時不能亮綠燈。舊流程會被下一次成功 pull 蓋回「已同步」。
+    if (s === 'idle' && state.pendingChanges > 0) {
+        state.status = 'error';
+        state.error = error || `仍有 ${state.pendingChanges} 筆本機變更尚未上傳`;
+    } else {
+        state.status = s;
+        state.error = error;
+    }
     emit();
 }
 function markPullComplete(cursor) {
@@ -143,7 +157,8 @@ export function syncStatus() { return { ...state }; }
 // 的 demo 預設 (含「王大明」等假資料)，UI 直接看到 mock 跑出來 — 比讓部分表更新還糟。
 let pullInFlight = null;
 let lastFullPullAt = 0;
-export async function pullAll({ mode = 'full', reason = 'manual' } = {}) {
+let lastContractFullPullAt = 0;
+export async function pullAll({ mode = 'full', reason = 'manual', tableKeys = null } = {}) {
     if (pullInFlight) return pullInFlight;
     pullInFlight = (async () => {
         if (!navigator.onLine) { setStatus('offline'); throw new Error('離線'); }
@@ -151,10 +166,14 @@ export async function pullAll({ mode = 'full', reason = 'manual' } = {}) {
         const lastPullAt = state.lastSync || '1970-01-01T00:00:00Z';
         const pullCursor = new Date().toISOString();
         const incremental = mode === 'incremental' && Boolean(state.lastSync);
+        const selectedTables = Array.isArray(tableKeys)
+            ? TABLES.filter(t => tableKeys.includes(t.key))
+            : TABLES;
+        const isFullScope = !Array.isArray(tableKeys);
         console.group(`[sync] ${incremental ? 'incremental' : 'full'} pull (${reason}, cursor = ${lastPullAt})`);
         const tableErrors = [];
         try {
-            for (const t of TABLES) {
+            for (const t of selectedTables) {
                 try {
                     const columns = t.src === 'contractTemplates'
                         ? CONTRACT_TEMPLATE_METADATA_COLUMNS
@@ -210,15 +229,21 @@ export async function pullAll({ mode = 'full', reason = 'manual' } = {}) {
             runMigration();
             window.dispatchEvent(new CustomEvent('bms:data-changed', { detail: { source: 'pull' } }));
             if (tableErrors.length === 0) {
-                firstPullDone = true;  // ✅ bootstrap pull 過關，允許 push (防資料復活第一道閘)
-                markPullComplete(pullCursor);
-                if (!incremental) lastFullPullAt = Date.now();
+                if (isFullScope) {
+                    firstPullDone = true;  // ✅ bootstrap pull 過關，允許 push (防資料復活第一道閘)
+                    markPullComplete(pullCursor);
+                    if (!incremental) lastFullPullAt = Date.now();
+                }
+                if (!incremental && selectedTables.some(t => t.key === 'contracts')) {
+                    lastContractFullPullAt = Date.now();
+                }
                 setStatus('idle');
                 console.log('✅ pull 完成 (firstPullDone=true，push 解鎖)');
             } else {
                 setStatus('error', `${tableErrors.length} 表 pull 失敗 (其他成功)`);
                 console.warn(`⚠ pull 部分失敗:`, tableErrors);
             }
+            return { success: tableErrors.length === 0, tableErrors };
         } catch (e) {
             setStatus('error', e.message);
             console.error('[sync] pull 失敗:', e);
@@ -252,8 +277,10 @@ async function pushSmall() {
         //   若某表 push 失敗 throw, 已經 upsert 成功的表 echo 還是會回來;
         //   原本 markJustPushed 在 loop 之後才執行 → 這些 echo 變「外人改的」 → 觸發 re-render → 畫面跳
         markJustPushed();
+        const tableErrors = [];
         try {
             for (const t of SMALL_TABLES) {
+                try {
                 // ⚠ 防呆: 本機 mockData 若有同 ID 重複 row → upsert batch 內同 PK 多筆會被 PostgreSQL 拒收 (ON CONFLICT DO UPDATE cannot affect row a second time)
                 // 推之前先 dedupe + 同步修正 mockData 本身
                 // === Dirty-row filter: 只推有標記的 row ===
@@ -291,7 +318,7 @@ async function pushSmall() {
                         console.warn(`[sync] ${msg}`);
                         if (window.showToast) window.showToast(msg, 'danger', 12000);
                         setStatus('error', msg);
-                        return;
+                        throw new Error(msg);
                     }
                 }
                 const { data: returned, error } = await supabase.from(t.key).upsert(rows, { onConflict: t.pk }).select('*');
@@ -304,21 +331,28 @@ async function pushSmall() {
                     if (rows.length === 1) {
                         console.error(`  ⚠ 這筆 row 內容有問題 (可能: 欄位缺 required / FK 對不到 / RLS 阻擋):`, JSON.stringify(rows[0], null, 2));
                     }
-                    throw new Error(`${t.key}: ${error.message}`);
+                    throw new Error(error.message);
                 }
                 clearDirty(t.src, dirtyIds, dirtyRevisionSnapshot);
                 markJustPushed();
                 (returned || []).forEach(r => {
                     if (r?.[t.pk] && r?.updated_at) markRowPushed(t.key, r[t.pk], r.updated_at);
                 });
+                } catch (tableError) {
+                    // 單一表失敗不能阻擋後面的表；否則前面的資料若有問題，
+                    // contracts 會永遠沒有機會上雲，形成只有一個帳號看得到的合約。
+                    tableErrors.push({ table: t.key, error: tableError.message });
+                    console.error(`[sync] ${t.key} push 跳過，繼續處理其他表:`, tableError);
+                }
+            }
+            if (tableErrors.length > 0) {
+                throw new Error(tableErrors.map(e => `${e.table}: ${e.error}`).join('；'));
             }
             setStatus('idle');
-            resetRetryCounter();  // 成功 → 停止 auto-retry backoff
             pushSucceeded = true;
         } catch (e) {
             setStatus('error', e.message);
             console.error('[sync] push 失敗:', e);
-            scheduleAutoRetry();
         }
     })().finally(() => {
         pushInFlight = null;
@@ -380,23 +414,34 @@ async function pushLarge() {
             });
         }
         setStatus('idle');
-        resetRetryCounter();
     } catch (e) {
         setStatus('error', e.message);
         console.error('[sync] push 大表失敗:', e);
-        scheduleAutoRetry();
     }
 }
 
-export async function pushAll() { await pushSmall(); await pushLarge(); }
+export async function pushAll() {
+    await pushSmall();
+    await pushLarge();
+    const remaining = countDirtyRows();
+    if (remaining > 0) {
+        const message = `仍有 ${remaining} 筆本機變更尚未上傳`;
+        setStatus('error', message);
+        scheduleAutoRetry();
+        throw new Error(message);
+    }
+    resetRetryCounter();
+    setStatus('idle');
+    return { success: true };
+}
 
 let pushTimer = null;
 function schedulePush(delay = 300) {
     clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => pushSmall(), delay);
+    pushTimer = setTimeout(() => { pushAll().catch(() => {}); }, delay);
 }
 window.addEventListener('bms:persist', () => schedulePush());
-window.addEventListener('bms:template-changed', () => pushLarge());
+window.addEventListener('bms:template-changed', () => { pushAll().catch(() => {}); });
 
 // 刪除事件 → 直接送 DELETE 到 Supabase (upsert 不會處理刪除，否則本機刪了雲端還在，下次 pull 又拉回)
 // P2-7: 用 in-flight Set 去重，避免連點刪除按鈕送 N 次 DELETE
@@ -657,12 +702,17 @@ function stopRealtime() {
 // === Bootstrap：開機呼叫，必拉完才回 ===
 export async function bootstrap() {
     try {
-        await pullAll({ mode: 'full', reason: 'bootstrap' });
+        const pullResult = await pullAll({ mode: 'full', reason: 'bootstrap' });
+        if (!pullResult?.success) {
+            throw new Error(pullResult?.tableErrors?.map(e => `${e.table}: ${e.error}`).join('；') || '雲端資料未完整載入');
+        }
         // pullAll 會保留 dirty journal 中的本機 row；確認雲端可讀後立刻補送。
         if (hasDirtyRows()) await pushAll();
         startRealtime();
         return { success: true };
     } catch (e) {
+        // 某筆待上傳資料失敗時仍保持 Realtime，其他帳號的正常更新才能繼續進來。
+        startRealtime();
         // 失敗時 caller 決定要 fallback 還是 retry
         return { success: false, error: e };
     }
@@ -720,7 +770,14 @@ async function reconcileDevices(reason) {
         // 即使 Realtime 顯示已連線，手機休眠／瀏覽器凍結期間仍可能漏掉事件。
         // 前景事件已做五分鐘節流，這裡保留一次輕量增量核對，確保跨帳號一致。
         const needsFullReconcile = Date.now() - lastFullPullAt >= FULL_RECONCILE_INTERVAL_MS;
-        await pullAll({ mode: needsFullReconcile ? 'full' : 'incremental', reason });
+        if (needsFullReconcile) {
+            await pullAll({ mode: 'full', reason });
+        } else {
+            await pullAll({ mode: 'incremental', reason });
+            if (Date.now() - lastContractFullPullAt >= CONTRACT_FULL_RECONCILE_INTERVAL_MS) {
+                await pullAll({ mode: 'full', reason: `${reason}-contract-reconcile`, tableKeys: ['contracts'] });
+            }
+        }
         startRealtime();
     })().catch(e => {
         console.warn(`[sync] 跨裝置重新核對失敗 (${reason}):`, e);
@@ -733,7 +790,7 @@ function flushBeforeSuspend(reason) {
     clearTimeout(pushTimer);
     pushTimer = null;
     console.log(`[sync] 頁面即將暫停，立即補送 (${reason})`);
-    void pushAll();
+    void pushAll().catch(() => {});
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -764,7 +821,7 @@ function renderSyncIndicator() {
         idle:    { icon: 'ph-cloud-check',       label: `${live} 已同步 ${fmtTime(state.lastSync)}` },
         pulling: { icon: 'ph-cloud-arrow-down',  label: '下載中…' },
         pushing: { icon: 'ph-cloud-arrow-up',    label: '上傳中…' },
-        error:   { icon: 'ph-cloud-warning',     label: '同步錯誤' },
+        error:   { icon: 'ph-cloud-warning',     label: state.pendingChanges > 0 ? `待上傳 ${state.pendingChanges} 筆` : '同步錯誤' },
         offline: { icon: 'ph-cloud-slash',       label: '離線' }
     }[state.status] || { icon: 'ph-cloud', label: state.status };
 
@@ -773,7 +830,7 @@ function renderSyncIndicator() {
     labelEl.textContent = config.label;
     el.title = state.error
         ? `錯誤：${state.error}`
-        : `Realtime：${state.realtimeConnected ? '已連線' : '未連線'}\n上次同步：${state.lastSync || '尚未'}\n點擊前往設定`;
+        : `Realtime：${state.realtimeConnected ? '已連線' : '未連線'}\n待上傳：${state.pendingChanges || 0} 筆\n上次同步：${state.lastSync || '尚未'}\n點擊前往設定`;
 }
 
 function bindSyncIndicatorClick() {

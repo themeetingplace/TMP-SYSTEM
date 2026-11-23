@@ -1,12 +1,13 @@
 // 應用程式版本資訊 — 顯示在 sidebar footer + 「關於」彈窗
 // 改版時更新這裡 + index.html 的 ?v= cache-bust 字串
-export const APP_VERSION = '1.10.30';
+export const APP_VERSION = '1.10.31';
 export const APP_BUILD_DATE = '2026-11-23';
 export const APP_NAME = '聚空間 PMS';
 export const APP_COPYRIGHT = '© 2026 聚空間 THE MEETING PLACE';
 
 // 主要版本紀錄 — 給「關於」彈窗顯示
 export const APP_CHANGELOG = [
+    { version: '1.10.31', date: '2026-11-23', notes: '修正不同帳號仍可能顯示不同住房狀態：單一資料表上傳失敗不再阻擋合約等其他資料上雲，前景會定期完整核對合約清單並移除雲端不存在的本機舊資料；只要仍有待上傳變更，同步狀態會明確顯示錯誤，不再誤亮綠燈。' },
     { version: '1.10.30', date: '2026-11-23', notes: '更新所有 LINE 繳款通知的匯款帳戶：改為合作金庫銀行延平分行、戶名「聚空間租賃管理顧問有限公司」及新帳號；續租、一般繳款與重發通知共用同一份資料。' },
     { version: '1.10.29', date: '2026-11-17', notes: '全面補強合約跨帳號同步：補齊合約發送時間、預定退租日、綁定主合約與原始綁定金額等雲端欄位；新增合約資料庫欄位與前端 mapping 完整性測試，未來若新增欄位卻漏接雲端將直接阻止部署。' },
     { version: '1.10.28', date: '2026-11-17', notes: '修正外部平台代收標記只留在單一瀏覽器的問題：合約收費對象與平台名稱正式寫入 Supabase，所有工作帳號統一顯示；同步更正信義館 R3-B 住客姓名為蘇慶松。' },

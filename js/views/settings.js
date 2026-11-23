@@ -1192,6 +1192,9 @@ function renderSyncTab() {
         error: '⚠️ 錯誤',
         offline: '🚫 離線'
     }[s.status] || s.status;
+    const pendingText = Number(s.pendingChanges) > 0
+        ? `<div style="font-size: var(--text-xs); color: var(--color-danger); margin-top: 0.5rem;">待上傳：${s.pendingChanges} 筆</div>`
+        : '';
 
     return `
         <div class="card">
@@ -1205,6 +1208,7 @@ function renderSyncTab() {
                 <div style="padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                     <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 0.5rem;">同步狀態</div>
                     <div style="font-size: 1.1rem; font-weight: 600;">${statusLabel}</div>
+                    ${pendingText}
                     ${s.error ? `<div style="font-size: var(--text-xs); color: var(--color-danger); margin-top: 0.5rem;">錯誤：${s.error}</div>` : ''}
                 </div>
                 <div style="padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
